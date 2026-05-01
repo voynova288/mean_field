@@ -1,0 +1,54 @@
+# Python build/cache artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Local environments and notebooks
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# Heavy local data and generated outputs
+benchmarks/
+results/
+logs/
+reference/
+path/
+outputs/
+
+# Slurm/runtime artifacts
+*.out
+*.err
+*.log
+
+# Code-agent work notes and temporary project documents
+*工作文档*.md
+*当前指令*.md
+*项目文档*.md
+*公式参考*.md
+*哈密顿量构造方法*.md
+*代码映射参考*.md
+docs/session_handoff_*.md
+docs/Code Agent*.md
+docs/*工作文档*.md
+
+# Generated numerical artifacts
+*.npz
+*.npy
+*.jld2
+*.h5
+*.hdf5
+*.tsv
+*.csv
+*.png
+*.pdf
