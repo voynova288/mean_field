@@ -27,15 +27,20 @@ Optional Numba acceleration:
 python -m pip install -e ".[dev,perf]"
 ```
 
-## Tests
+## Validation
 
-Run the lightweight test suite from the repository root:
+This public snapshot keeps the core package, stable dispatchers, and a small
+set of durable docs. Local regression tests and benchmark data are not included
+in the published repository.
+
+A lightweight syntax check can be run from the repository root:
 
 ```bash
-PYTHONPATH=src python -m pytest -q
+python -m compileall -q src scripts
 ```
 
-Heavy self-consistent HF calculations should be submitted to a compute node through Slurm rather than run on a login node.
+Heavy self-consistent HF calculations should be submitted to a compute node
+through Slurm rather than run on a login node.
 
 ## Command Surface
 
@@ -57,7 +62,6 @@ sbatch scripts/submit_mean_field.sbatch python scripts/mean_field_tools.py run_h
 
 - `src/mean_field/`: installable Python package.
 - `scripts/`: stable entrypoints only.
-- `tests/`: lightweight regression and structural tests.
 - `docs/`: stable architecture and migration notes.
 
 The following local directories are ignored by design:
@@ -66,5 +70,6 @@ The following local directories are ignored by design:
 - `results/`
 - `logs/`
 - `reference/`
+- `tests/`
 - Python/Jupyter/cache artifacts
 - task-specific work documents and temporary handoff notes

@@ -75,7 +75,14 @@ from .hf_runners import (
     write_hf_path_tsv,
 )
 from .plotting import write_bm_band_plot, write_hf_band_plot, write_hf_scf_band_plot, write_path_band_plot
-from .path import build_b0_benchmark_kpath, build_fig6_kpath, build_kpath_from_nodes, build_kpath_from_reference_nodes, select_adjacent_m_point
+from .path import (
+    build_b0_benchmark_kpath,
+    build_fig6_kpath,
+    build_gamma_m_k_gamma_kprime_kpath,
+    build_kpath_from_nodes,
+    build_kpath_from_reference_nodes,
+    select_adjacent_m_point,
+)
 from .path_advisor import (
     KPathCandidate,
     KPathCompatibility,
@@ -145,6 +152,7 @@ __all__ = [
     "build_restricted_hf_scf_path_plot_result",
     "build_restricted_hf_path_hamiltonian",
     "build_fig6_kpath",
+    "build_gamma_m_k_gamma_kprime_kpath",
     "build_h0_from_bm",
     "build_kpath_from_nodes",
     "build_kpath_from_reference_nodes",

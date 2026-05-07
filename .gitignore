@@ -23,6 +23,7 @@ benchmarks/
 results/
 logs/
 reference/
+tests/
 path/
 outputs/
 

@@ -8,6 +8,8 @@ GRAPHENE_LATTICE_CONSTANT_NM = 0.246
 DEFAULT_FERMI_VELOCITY_M_PER_S = 1.03e6
 DEFAULT_TUNNELING_EV = 0.105
 DEFAULT_KAPPA = 0.7
+KWAN_2023_FERMI_VELOCITY_M_PER_S = 8.8e5
+KWAN_2023_TUNNELING_EV = 0.110
 HBAR_EV_S = 6.582119569e-16
 VALID_VALLEYS = (-1, 1)
 
@@ -47,6 +49,15 @@ class HTGParams:
         return cls(kappa=kappa, model_name="default")
 
     @classmethod
+    def kwan2023(cls, *, kappa: float = DEFAULT_KAPPA) -> "HTGParams":
+        return cls(
+            fermi_velocity_m_per_s=KWAN_2023_FERMI_VELOCITY_M_PER_S,
+            w_ev=KWAN_2023_TUNNELING_EV,
+            kappa=kappa,
+            model_name="kwan2023",
+        )
+
+    @classmethod
     def chiral(cls, *, zeta_rad: float = 0.0) -> "HTGParams":
         return cls(kappa=0.0, zeta_rad=float(zeta_rad), model_name="chiral")
 
@@ -67,7 +78,7 @@ class InteractionParams:
     subtraction: str = "average"
     n_k: int = 12
     g_shells: int = 1
-    finite_zero_limit: bool = True
+    finite_zero_limit: bool = False
     zero_cutoff_nm_inv: float = 1.0e-12
 
     def __post_init__(self) -> None:

@@ -15,7 +15,7 @@ from .hf import (
     build_overlap_block_set,
 )
 from .model import BMSolution, solve_bm_model
-from .path import build_fig6_kpath, project_kvec_onto_path
+from .path import build_fig6_kpath
 
 
 @dataclass(frozen=True)
@@ -80,26 +80,21 @@ def build_restricted_hf_scf_path_plot_result(
     init_mode: str | None = None,
     path_tolerance: float = 1e-12,
 ) -> HFSCFPathPlotResult:
-    # Diagnostic-only view: keep only converged SCF grid points that already lie
-    # on the requested path. Off-path points are not snapped or projected onto
-    # the high-symmetry line.
+    # Diagnostic-only view: keep only path samples that are exact SCF grid
+    # points. This preserves repeated path coordinates, such as Gamma appearing
+    # at both the start and middle of a high-symmetry path, without recomputing
+    # any off-grid Hamiltonians.
     grid_kvec = np.asarray(grid_solution.lattice_kvec, dtype=np.complex128)
     if path.kvec.size == 0:
         raise ValueError("At least two path nodes are required to build an SCF path plot.")
 
-    projected_kdist_all, projected_kvec_all, distance_to_path_all = project_kvec_onto_path(path, grid_kvec)
-    on_path_mask = distance_to_path_all <= float(path_tolerance)
-    indices = np.flatnonzero(on_path_mask)
-    order = np.argsort(projected_kdist_all[indices], kind="stable")
-    indices = indices[order]
-    projected_kdist = projected_kdist_all[indices]
-    projected_kvec = projected_kvec_all[indices]
-    distance_to_path = distance_to_path_all[indices]
-    if indices.size == 0:
-        path_indices = np.asarray([], dtype=int)
-    else:
-        distance_matrix = np.abs(path.kvec[:, None] - projected_kvec[None, :])
-        path_indices = np.argmin(distance_matrix, axis=0).astype(int)
+    distance_matrix = np.abs(np.asarray(path.kvec, dtype=np.complex128)[:, None] - grid_kvec[None, :])
+    nearest_grid_indices = np.argmin(distance_matrix, axis=1).astype(int)
+    nearest_grid_distances = distance_matrix[np.arange(path.kvec.size), nearest_grid_indices]
+    path_indices = np.flatnonzero(nearest_grid_distances <= float(path_tolerance)).astype(int)
+    indices = nearest_grid_indices[path_indices].astype(int)
+    path_kvec = np.asarray(path.kvec[path_indices], dtype=np.complex128)
+    distance_to_path = np.asarray(nearest_grid_distances[path_indices], dtype=float)
     selected_hamiltonian = np.asarray(hf_run.state.hamiltonian[:, :, indices], dtype=np.complex128)
     band_data = build_flavor_band_data(
         selected_hamiltonian,
@@ -111,11 +106,11 @@ def build_restricted_hf_scf_path_plot_result(
     return HFSCFPathPlotResult(
         params=grid_solution.params,
         path=path,
-        kdist=np.asarray(projected_kdist, dtype=float),
-        projected_kvec=np.asarray(projected_kvec, dtype=np.complex128),
+        kdist=np.asarray(path.kdist[path_indices], dtype=float),
+        projected_kvec=np.asarray(path_kvec, dtype=np.complex128),
         distance_to_path=np.asarray(distance_to_path, dtype=float),
         path_sample_indices=path_indices,
-        path_kvec=np.asarray(projected_kvec, dtype=np.complex128),
+        path_kvec=np.asarray(path_kvec, dtype=np.complex128),
         grid_kvec=np.asarray(grid_kvec[indices], dtype=np.complex128),
         grid_indices=indices,
         band_data=band_data,
@@ -334,6 +329,7 @@ def write_hf_scf_path_tsv(path: Path, result: HFSCFPathPlotResult) -> None:
 
 
 def write_hf_path_summary(path: Path, result: HFPathResult, *, hf_state_path: str = "") -> None:
+    path_label = "-".join(result.path.labels)
     entries = [
         ("hf_path", hf_state_path),
         ("theta_deg", f"{result.params.dtheta_rad * 180.0 / np.pi:.2f}"),
@@ -353,7 +349,7 @@ def write_hf_path_summary(path: Path, result: HFPathResult, *, hf_state_path: st
         ("points_per_segment", str(result.points_per_segment)),
         ("mu", f"{result.mu}"),
         ("exit_reason", result.exit_reason),
-        ("path", "M-K-Gamma-M"),
+        ("path", path_label),
     ]
     with path.open("w", encoding="utf-8") as handle:
         for key, value in entries:

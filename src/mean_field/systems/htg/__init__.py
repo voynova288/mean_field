@@ -32,9 +32,11 @@ from .mean_field_adapter import (
     build_htg_projected_basis_for_kvec,
     compute_background_densities,
     compute_background_density,
+    centered_projection_band_indices,
     evaluate_htg_hf_path,
     evaluate_htg_interaction_path,
     hermitian_residual,
+    htg_band_reference_occupations,
     htg_flavor_occupation_counts_for_init_mode,
     htg_filling_from_density,
     htg_gap_estimate,
@@ -42,6 +44,7 @@ from .mean_field_adapter import (
     htg_occupation_mask_from_density,
     htg_occupied_bands_per_k,
     htg_occupied_state_count,
+    htg_projector_from_density,
     initialize_htg_density,
     moire_cell_area_nm2,
     normalize_htg_init_mode,
@@ -50,7 +53,14 @@ from .mean_field_adapter import (
     scan_htg_ground_state,
 )
 from .model import HTGModel
-from .params import HTGParams, InteractionParams, theta_deg_from_alpha, velocity_m_per_s_to_ev_nm
+from .params import (
+    HTGParams,
+    InteractionParams,
+    KWAN_2023_FERMI_VELOCITY_M_PER_S,
+    KWAN_2023_TUNNELING_EV,
+    theta_deg_from_alpha,
+    velocity_m_per_s_to_ev_nm,
+)
 from .plot import (
     HTGPathPlotTrace,
     write_htg_fig3b_plot,
@@ -87,6 +97,8 @@ __all__ = [
     "HTGProjectedBasisData",
     "HTGStrongCouplingClassification",
     "InteractionParams",
+    "KWAN_2023_FERMI_VELOCITY_M_PER_S",
+    "KWAN_2023_TUNNELING_EV",
     "MAGIC_ALPHA_ZETA0",
     "MoireCouplingEntry",
     "PathBandsResult",
@@ -107,6 +119,7 @@ __all__ = [
     "build_paper_hf_kpath",
     "build_standard_kpath",
     "centered_band_indices",
+    "centered_projection_band_indices",
     "classify_htg_family",
     "classify_htg_strong_coupling_state",
     "compute_bands_along_path",
@@ -123,6 +136,7 @@ __all__ = [
     "flavor_band_occupations",
     "flavor_occupations",
     "hermitian_residual",
+    "htg_band_reference_occupations",
     "htg_flavor_occupation_counts_for_init_mode",
     "htg_filling_from_density",
     "htg_gap_estimate",
@@ -130,6 +144,7 @@ __all__ = [
     "htg_occupation_mask_from_density",
     "htg_occupied_bands_per_k",
     "htg_occupied_state_count",
+    "htg_projector_from_density",
     "initialize_htg_density",
     "moire_coupling_matrix",
     "moire_cell_area_nm2",

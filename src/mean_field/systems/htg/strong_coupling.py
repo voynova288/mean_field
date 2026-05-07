@@ -33,6 +33,17 @@ class HTGStrongCouplingClassification:
         }
 
 
+def _band_reference_occupations(n_band: int) -> np.ndarray:
+    n_band = int(n_band)
+    if n_band < 2 or n_band % 2 != 0:
+        raise ValueError(f"n_band must be an even integer >= 2, got {n_band}")
+    lower_count = (n_band - 2) // 2
+    reference = np.zeros(n_band, dtype=float)
+    reference[:lower_count] = 1.0
+    reference[lower_count : lower_count + 2] = 0.5
+    return reference
+
+
 def flavor_band_occupations(
     density: np.ndarray,
     *,
@@ -53,9 +64,15 @@ def flavor_band_occupations(
     if nt != n_spin * n_eta * n_band:
         raise ValueError(f"Density dimension {nt} is incompatible with n_spin={n_spin}, n_eta={n_eta}, n_band={n_band}")
 
+    reference = _band_reference_occupations(n_band)
+    idx = np.arange(nt, dtype=int).reshape((n_spin, n_eta, n_band), order="F")
     projector_diagonal = np.zeros((nt, nk), dtype=float)
     for ik in range(nk):
-        projector_diagonal[:, ik] = np.real(np.diag(density[:, :, ik])) + 0.5
+        projector_diagonal[:, ik] = np.real(np.diag(density[:, :, ik]))
+    for ispin in range(n_spin):
+        for ieta in range(n_eta):
+            for iband in range(n_band):
+                projector_diagonal[int(idx[ispin, ieta, iband]), :] += float(reference[iband])
     return np.mean(projector_diagonal, axis=1).reshape((n_spin, n_eta, n_band), order="F")
 
 
@@ -91,14 +108,18 @@ def classify_htg_strong_coupling_state(
     occupation_threshold: float = 0.5,
 ) -> HTGStrongCouplingClassification:
     band_occ = flavor_band_occupations(density, n_spin=n_spin, n_eta=n_eta, n_band=n_band)
-    flavor_occ = np.sum(band_occ, axis=2).reshape(-1, order="C")
+    if int(n_band) < 2 or int(n_band) % 2 != 0:
+        raise ValueError(f"n_band must be an even integer >= 2, got {n_band}")
+    lower_remote_count = (int(n_band) - 2) // 2
+    central_bands = band_occ[:, :, lower_remote_count : lower_remote_count + 2]
+    flavor_occ = np.sum(central_bands, axis=2).reshape(-1, order="C")
     family, pattern = classify_htg_family(flavor_occ)
 
     n_d = 0
     n_a = 0
     n_b = 0
     n_empty = 0
-    for occ_a, occ_b in band_occ.reshape((n_spin * n_eta, n_band), order="C"):
+    for occ_a, occ_b in central_bands.reshape((n_spin * n_eta, 2), order="C"):
         a_filled = float(occ_a) > occupation_threshold
         b_filled = float(occ_b) > occupation_threshold
         if a_filled and b_filled:
@@ -120,7 +141,7 @@ def classify_htg_strong_coupling_state(
     if not pieces:
         pieces.append("empty")
     class_label = "[" + " ".join(pieces) + "]"
-    nu_z = float(np.sum(band_occ[:, :, 0] - band_occ[:, :, 1]))
+    nu_z = float(np.sum(central_bands[:, :, 0] - central_bands[:, :, 1]))
 
     return HTGStrongCouplingClassification(
         family=family,

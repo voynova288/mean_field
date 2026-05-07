@@ -268,13 +268,16 @@ def build_paper_hf_kpath(lattice: HTGLattice, points_per_segment: int = 120) -> 
     """High-symmetry path used for Kwan et al. HF band/potential figures.
 
     The HF figures in Kwan et al. 2023 extend the usual
-    ``Gamma-kappa-kappa_prime-Gamma-M`` path by returning from ``M`` to
-    ``Gamma``.
+    ``Gamma-kappa-kappa_prime-Gamma-M`` path through the mBZ edge midpoint
+    ``M`` to the adjacent reciprocal-lattice-equivalent ``Gamma``.  Returning
+    to the original central-zone Gamma would retrace the same segment and hide
+    the two-sided dispersion along the paper's gamma-m-gamma line.
     """
 
     kappa_prime_edge = _paper_edge_kappa_prime(lattice)
+    gamma_across_m = lattice.gamma_m + lattice.b_m1
     return build_kpath_from_nodes(
-        (lattice.gamma_m, lattice.kappa_m, kappa_prime_edge, lattice.gamma_m, lattice.m_m, lattice.gamma_m),
+        (lattice.gamma_m, lattice.kappa_m, kappa_prime_edge, lattice.gamma_m, lattice.m_m, gamma_across_m),
         ("Gamma", "kappa", "kappa_prime", "Gamma", "M", "Gamma"),
         points_per_segment,
     )

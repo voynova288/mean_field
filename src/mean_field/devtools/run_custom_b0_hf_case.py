@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from datetime import datetime
+import os
 from pathlib import Path
 import socket
 from time import perf_counter
@@ -18,15 +19,23 @@ from mean_field.systems.tbg.zero_field import (
     RestrictedHartreeFockState,
     build_b0_uniform_lattice,
     build_fig6_kpath,
+    build_gamma_m_k_gamma_kprime_kpath,
     build_h0_from_bm,
     build_overlap_block_set,
+    build_restricted_hf_scf_path_plot_result,
+    moire_bz_vertices,
     run_full_hartree_fock,
+    sampled_cell_vertices,
     solve_bm_model,
     write_hf_band_plot,
     write_hf_path_nodes_tsv,
     write_hf_path_summary,
     write_hf_path_tsv,
+    write_hf_scf_band_plot,
+    write_hf_scf_path_tsv,
 )
+from mean_field.systems.tbg.zero_field.path import project_kvec_onto_path
+from mean_field.devtools.resample_b0_density_stack import resample_density_stack
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -147,7 +156,19 @@ def _combine_summary_parts(root_dir: Path) -> int:
     return len(rows)
 
 
-def _load_initial_density(path: Path | None) -> tuple[np.ndarray | None, list[tuple[str, str]]]:
+def _infer_lk_from_density_nk(nk: int) -> int:
+    side = int(round(np.sqrt(nk)))
+    if side * side != nk or side < 2:
+        raise ValueError(f"Cannot infer an inclusive B0 square-grid lk from nk={nk}")
+    return side - 1
+
+
+def _load_initial_density(
+    path: Path | None,
+    *,
+    target_lk: int,
+    resample_method: str,
+) -> tuple[np.ndarray | None, list[tuple[str, str]]]:
     if path is None:
         return None, []
     if not path.exists():
@@ -162,7 +183,146 @@ def _load_initial_density(path: Path | None) -> tuple[np.ndarray | None, list[tu
                 continue
             value = np.asarray(data[key]).reshape(-1)[0]
             metadata.append((f"initial_state_{key}", str(value)))
+        target_nk = (int(target_lk) + 1) ** 2
+        if density.shape[2] != target_nk:
+            if resample_method == "none":
+                raise SystemExit(
+                    f"Initial state density nk={density.shape[2]} does not match target lk={target_lk} "
+                    f"(nk={target_nk}). Pass --initial-state-resample bilinear or nearest to continue branches across lk."
+                )
+            if "lk" in data:
+                source_lk = int(np.asarray(data["lk"]).reshape(-1)[0])
+            else:
+                source_lk = _infer_lk_from_density_nk(int(density.shape[2]))
+            density = resample_density_stack(
+                density,
+                source_lk=source_lk,
+                target_lk=int(target_lk),
+                method=resample_method,
+                hermitize=True,
+            )
+            metadata.extend(
+                [
+                    ("initial_state_resampled", "true"),
+                    ("initial_state_source_lk", str(source_lk)),
+                    ("initial_state_target_lk", str(int(target_lk))),
+                    ("initial_state_resample_method", resample_method),
+                ]
+            )
+        else:
+            metadata.append(("initial_state_resampled", "false"))
     return density, metadata
+
+
+def _build_path(params: TBGParameters, *, path_kind: str, points_per_segment: int):
+    if path_kind == "fig6":
+        return build_fig6_kpath(params, points_per_segment)
+    if path_kind == "gamma-m-k-gamma-kprime":
+        return build_gamma_m_k_gamma_kprime_kpath(params, points_per_segment)
+    raise ValueError(f"Unsupported path kind: {path_kind}")
+
+
+def _segment_counts_for_exact_path_points(path, exact_kdist: np.ndarray) -> tuple[int, ...]:
+    node_edges = np.asarray([float(node.k_dist) for node in path.nodes], dtype=float)
+    segment_counts = np.zeros(max(node_edges.size - 1, 0), dtype=int)
+    if exact_kdist.size > 0 and segment_counts.size > 0:
+        segment_indices = np.searchsorted(node_edges[1:], exact_kdist, side="right")
+        segment_indices = np.clip(segment_indices, 0, segment_counts.size - 1)
+        for iseg in segment_indices:
+            segment_counts[int(iseg)] += 1
+    return tuple(int(value) for value in segment_counts)
+
+
+def _write_kmesh_path_overlay(output_dir: Path, *, params: TBGParameters, grid, path, path_kind: str, exact_tolerance: float = 1e-12) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    projected_kdist, _, distance_to_path = project_kvec_onto_path(path, grid.kvec)
+    exact_mask = distance_to_path <= float(exact_tolerance)
+    exact_indices = np.flatnonzero(exact_mask)
+    if exact_indices.size > 0:
+        order = np.argsort(projected_kdist[exact_indices], kind="stable")
+        exact_indices = exact_indices[order]
+    exact_kdist = np.asarray(projected_kdist[exact_indices], dtype=float)
+    exact_grid_kvec = np.asarray(grid.kvec[exact_indices], dtype=np.complex128)
+    node_min_distances = np.asarray(
+        [float(np.min(np.abs(grid.kvec - complex(node.kvec)))) for node in path.nodes],
+        dtype=float,
+    )
+    segment_counts = _segment_counts_for_exact_path_points(path, exact_kdist)
+
+    stem = f"kmesh_path_overlay_{path_kind.replace('-', '_')}_lk{int(grid.lk)}"
+    summary_path = output_dir / f"{stem}_summary.txt"
+    _write_key_value_file(
+        summary_path,
+        [
+            ("path_kind", path_kind),
+            ("path_labels", "-".join(path.labels)),
+            ("lk", str(int(grid.lk))),
+            ("nk", str(int(grid.nk))),
+            ("exact_tolerance", f"{float(exact_tolerance):.16e}"),
+            ("exact_count", str(int(exact_indices.size))),
+            ("exact_segment_counts", ",".join(str(value) for value in segment_counts)),
+            ("exact_node_hit_count", str(int(np.count_nonzero(node_min_distances <= exact_tolerance)))),
+            ("node_min_distances", ",".join(f"{value:.16e}" for value in node_min_distances)),
+        ],
+    )
+
+    nodes_tsv = output_dir / f"{stem}_nodes.tsv"
+    with nodes_tsv.open("w", encoding="utf-8") as handle:
+        handle.write("label\tindex\tk_dist\tkx\tky\tnearest_grid_distance\n")
+        for node, distance in zip(path.nodes, node_min_distances, strict=True):
+            handle.write(
+                f"{node.label}\t{node.index}\t{node.k_dist:.16f}\t{node.kx:.16f}\t{node.ky:.16f}\t{distance:.16e}\n"
+            )
+
+    os.environ.setdefault("MPLCONFIGDIR", "/tmp/mplconfig_mean_field")
+    os.environ.setdefault("MPLBACKEND", "Agg")
+    import matplotlib
+
+    matplotlib.use(os.environ["MPLBACKEND"])
+    import matplotlib.pyplot as plt
+
+    grid_kvec = np.asarray(grid.kvec, dtype=np.complex128)
+    path_kvec = np.asarray(path.kvec, dtype=np.complex128)
+    node_kvec = np.asarray([complex(node.kvec) for node in path.nodes], dtype=np.complex128)
+    cell_vertices = np.asarray(sampled_cell_vertices(params), dtype=np.complex128)
+    cell_loop = np.concatenate([cell_vertices, cell_vertices[:1]])
+    bz_vertices = np.asarray(moire_bz_vertices(params), dtype=np.complex128)
+    bz_loop = np.concatenate([bz_vertices, bz_vertices[:1]])
+
+    fig, ax = plt.subplots(figsize=(5.2, 4.8))
+    ax.scatter(grid_kvec.real, grid_kvec.imag, s=10, color="#c7c7c7", alpha=0.82, linewidths=0.0, label="kmesh")
+    ax.plot(cell_loop.real, cell_loop.imag, color="#7f7f7f", lw=1.0, ls="--", label="sampled cell")
+    ax.plot(bz_loop.real, bz_loop.imag, color="#9467bd", lw=1.25, alpha=0.95, label="moire BZ")
+    ax.plot(path_kvec.real, path_kvec.imag, color="#1f77b4", lw=1.7, label="path")
+    if exact_grid_kvec.size > 0:
+        ax.scatter(
+            exact_grid_kvec.real,
+            exact_grid_kvec.imag,
+            s=24,
+            color="#d62728",
+            edgecolors="#ffffff",
+            linewidths=0.35,
+            zorder=3,
+            label="grid points on path",
+        )
+    ax.scatter(node_kvec.real, node_kvec.imag, s=28, color="#111111", zorder=4, label="path nodes")
+    label_map = {"Gamma": "Γ", "Kprime": "K'"}
+    for node in path.nodes:
+        ax.text(node.kx, node.ky, f" {label_map.get(node.label, node.label)}", fontsize=8, va="bottom")
+
+    ax.set_aspect("equal")
+    ax.set_xlabel("kx")
+    ax.set_ylabel("ky")
+    ax.set_title(
+        f"lk={int(grid.lk)} {path_kind}\n"
+        f"exact={int(exact_indices.size)}, segments={segment_counts}",
+        fontsize=10,
+    )
+    ax.legend(loc="upper right", fontsize=7, frameon=False)
+    fig.tight_layout()
+    fig.savefig(output_dir / f"{stem}.png", dpi=300, bbox_inches="tight")
+    fig.savefig(output_dir / f"{stem}.pdf", bbox_inches="tight")
+    plt.close(fig)
 
 
 def parse_args() -> argparse.Namespace:
@@ -184,6 +344,23 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help="Optional prior .npz state to warm-start from its density array.",
+    )
+    parser.add_argument(
+        "--initial-state-resample",
+        choices=("none", "bilinear", "nearest"),
+        default="none",
+        help="Resample initial-state density if its lk differs from --lk.",
+    )
+    parser.add_argument(
+        "--path-kind",
+        choices=("fig6", "gamma-m-k-gamma-kprime"),
+        default="fig6",
+        help="High-symmetry path to use for reconstructed and SCF-grid band artifacts.",
+    )
+    parser.add_argument(
+        "--write-scf-path",
+        action="store_true",
+        help="Also write unreconstructed SCF-grid-only path TSV and band plot for grid points on the chosen path.",
     )
     parser.add_argument(
         "--summary-mode",
@@ -256,7 +433,11 @@ def main() -> int:
     screening_lm = tanh_argument_scale_a / 2.0
     finite_zero_limit = args.zero_limit == "finite"
     init_specs = _parse_init_specs(args.init_specs)
-    initial_density, initial_state_entries = _load_initial_density(args.initial_state)
+    initial_density, initial_state_entries = _load_initial_density(
+        args.initial_state,
+        target_lk=lk,
+        resample_method=str(args.initial_state_resample),
+    )
 
     state_dir = root_dir / "states"
     path_dir = root_dir / "path_bands"
@@ -274,6 +455,8 @@ def main() -> int:
     )
     if initial_density is not None:
         print(f"[stage] resume initial_state={args.initial_state}", flush=True)
+        if any(key == "initial_state_resampled" and value == "true" for key, value in initial_state_entries):
+            print(f"[stage] resume initial_state_resample={args.initial_state_resample} target_lk={lk}", flush=True)
 
     params = TBGParameters.from_degrees(
         theta_deg,
@@ -303,13 +486,18 @@ def main() -> int:
     print(f"[stage] grid_overlap done elapsed_sec={overlap_elapsed:.3f} shifts={len(grid_overlap.shifts)}", flush=True)
 
     path_start = perf_counter()
-    path = build_fig6_kpath(params, int(args.points_per_segment))
+    path = _build_path(params, path_kind=str(args.path_kind), points_per_segment=int(args.points_per_segment))
     path_solution = solve_bm_model(params, path.kvec, lg=lg, sigma_rotation=True)
     path_h0 = build_h0_from_bm(path_solution)
     path_overlap = build_overlap_block_set(path_solution, lg=overlap_lg, **screening_kwargs)
     path_grid_overlap = build_overlap_block_set(path_solution, source_solution=grid_solution, lg=overlap_lg, **screening_kwargs)
     path_setup_elapsed = perf_counter() - path_start
-    print(f"[stage] path_setup done elapsed_sec={path_setup_elapsed:.3f} path_points={path.kvec.size}", flush=True)
+    _write_kmesh_path_overlay(path_dir, params=params, grid=grid, path=path, path_kind=str(args.path_kind))
+    print(
+        f"[stage] path_setup done elapsed_sec={path_setup_elapsed:.3f} "
+        f"path_kind={args.path_kind} path_points={path.kvec.size}",
+        flush=True,
+    )
 
     rows: list[dict[str, str]] = []
     for spec in init_specs:
@@ -318,6 +506,7 @@ def main() -> int:
         path_tsv = path_dir / f"{tag}_hf_path.tsv"
         nodes_tsv = path_dir / f"{tag}_hf_path_nodes.tsv"
         path_summary = path_dir / f"{tag}_hf_path_summary.txt"
+        scf_path_tsv = path_dir / f"{tag}_hf_scf_path.tsv"
 
         print(f"[stage] hf:start init={spec.init_mode} seed={spec.seed}", flush=True)
         hf_start = perf_counter()
@@ -414,6 +603,23 @@ def main() -> int:
         write_hf_path_tsv(path_tsv, path_result)
         write_hf_path_nodes_tsv(nodes_tsv, path_result)
         write_hf_path_summary(path_summary, path_result, hf_state_path=str(state_path))
+        scf_path_elapsed = 0.0
+        if args.write_scf_path:
+            scf_path_start = perf_counter()
+            scf_path_result = build_restricted_hf_scf_path_plot_result(
+                hf_run,
+                grid_solution,
+                path=path,
+                init_mode=spec.init_mode,
+            )
+            write_hf_scf_path_tsv(scf_path_tsv, scf_path_result)
+            write_hf_scf_band_plot(path_dir, scf_path_result, stem=f"{tag}_scf_grid_band_plot")
+            scf_path_elapsed = perf_counter() - scf_path_start
+            print(
+                f"[stage] scf_path:done init={spec.init_mode} seed={spec.seed} "
+                f"elapsed_sec={scf_path_elapsed:.3f} scf_path_tsv={scf_path_tsv}",
+                flush=True,
+            )
         _append_key_value_file(
             path_summary,
             [
@@ -425,6 +631,11 @@ def main() -> int:
                 ("screening_lm", f"{screening_lm:.16g}"),
                 ("interaction_model", "double_gate_tanh_q0limit" if finite_zero_limit else "double_gate_tanh_zero_q0"),
                 ("q_zero_limit", str(finite_zero_limit).lower()),
+                ("path_kind", str(args.path_kind)),
+                ("path_labels", "-".join(path.labels)),
+                ("write_scf_path", str(bool(args.write_scf_path)).lower()),
+                ("scf_path_tsv", str(scf_path_tsv) if args.write_scf_path else ""),
+                ("scf_path_elapsed_sec", f"{scf_path_elapsed:.16e}"),
                 *initial_state_entries,
             ],
         )
@@ -467,6 +678,10 @@ def main() -> int:
         ("lg", str(lg)),
         ("overlap_lg", str(overlap_lg)),
         ("points_per_segment", str(int(args.points_per_segment))),
+        ("path_kind", str(args.path_kind)),
+        ("path_labels", "-".join(path.labels)),
+        ("write_scf_path", str(bool(args.write_scf_path)).lower()),
+        ("initial_state_resample", str(args.initial_state_resample)),
         ("max_iter", str(int(args.max_iter))),
         ("precision", f"{float(args.precision):.16g}"),
         ("w0_meV", f"{float(args.w0):.16g}"),

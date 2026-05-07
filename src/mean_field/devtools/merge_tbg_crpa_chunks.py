@@ -1,0 +1,186 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+
+def _load_json(path: Path) -> dict[str, object]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _save_npz(path: Path, **arrays: np.ndarray) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(path, **arrays)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Merge q-point TBG cRPA chunk artifact directories.")
+    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--chunk", type=Path, action="append", required=True, help="Chunk artifact directory.")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = build_parser().parse_args(argv)
+    chunks = [Path(item) for item in args.chunk]
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    params = _load_json(chunks[0] / "crpa_params.json")
+    q_indices_list = []
+    q_tilde_real_list = []
+    q_tilde_imag_list = []
+    chi0_list = []
+    epsilon_list = []
+    epsilon_inv_list = []
+    screened_v_list = []
+    effective_list = []
+    q_real_list = []
+    q_imag_list = []
+    q_abs_list = []
+    q_abs_nm_inv_list = []
+    q_shifts_ref = None
+
+    for chunk in chunks:
+        chunk_params = _load_json(chunk / "crpa_params.json")
+        comparable_keys = ("theta_deg", "lk", "lg", "q_lg", "bands_per_valley", "eta_mev", "coulomb_params")
+        for key in comparable_keys:
+            if chunk_params.get(key) != params.get(key):
+                raise ValueError(f"Chunk {chunk} has incompatible {key}: {chunk_params.get(key)!r} != {params.get(key)!r}")
+
+        with np.load(chunk / "chi0_q.npz") as chi0_npz:
+            q_indices_list.append(np.asarray(chi0_npz["q_indices"], dtype=int))
+            q_tilde_real_list.append(np.asarray(chi0_npz["q_tilde_real"], dtype=float))
+            q_tilde_imag_list.append(np.asarray(chi0_npz["q_tilde_imag"], dtype=float))
+            chi0_list.append(np.asarray(chi0_npz["chi0"], dtype=np.complex128))
+            q_shifts = np.asarray(chi0_npz["q_shifts"], dtype=int)
+            if q_shifts_ref is None:
+                q_shifts_ref = q_shifts
+            elif not np.array_equal(q_shifts_ref, q_shifts):
+                raise ValueError(f"Chunk {chunk} has incompatible q_shifts")
+
+        with np.load(chunk / "dielectric_matrix.npz") as eps_npz:
+            epsilon_list.append(np.asarray(eps_npz["epsilon"], dtype=np.complex128))
+            epsilon_inv_list.append(np.asarray(eps_npz["epsilon_inv"], dtype=np.complex128))
+
+        with np.load(chunk / "screened_coulomb.npz") as screened_npz:
+            screened_v_list.append(np.asarray(screened_npz["screened_v"], dtype=np.complex128))
+
+        with np.load(chunk / "effective_epsilon.npz") as effective_npz:
+            effective_list.append(np.asarray(effective_npz["effective_epsilon"], dtype=float))
+            q_real_list.append(np.asarray(effective_npz["q_real"], dtype=float))
+            q_imag_list.append(np.asarray(effective_npz["q_imag"], dtype=float))
+            q_abs_list.append(np.asarray(effective_npz["q_abs"], dtype=float))
+            q_abs_nm_inv_list.append(np.asarray(effective_npz["q_abs_nm_inv"], dtype=float))
+
+    if q_shifts_ref is None:
+        raise ValueError("No chunks supplied")
+
+    q_indices = np.concatenate(q_indices_list, axis=0)
+    order = np.lexsort((q_indices[:, 0], q_indices[:, 1]))
+    q_indices = q_indices[order]
+    q_tilde_real = np.concatenate(q_tilde_real_list, axis=0)[order]
+    q_tilde_imag = np.concatenate(q_tilde_imag_list, axis=0)[order]
+    chi0 = np.concatenate(chi0_list, axis=0)[order]
+    epsilon = np.concatenate(epsilon_list, axis=0)[order]
+    epsilon_inv = np.concatenate(epsilon_inv_list, axis=0)[order]
+    screened_v = np.concatenate(screened_v_list, axis=0)[order]
+    effective = np.concatenate(effective_list, axis=0)[order]
+    q_real = np.concatenate(q_real_list, axis=0)[order]
+    q_imag = np.concatenate(q_imag_list, axis=0)[order]
+    q_abs = np.concatenate(q_abs_list, axis=0)[order]
+    q_abs_nm_inv = np.concatenate(q_abs_nm_inv_list, axis=0)[order]
+
+    params["q_point_count"] = int(q_indices.shape[0])
+    params["q_shift_count"] = int(q_shifts_ref.shape[0])
+    (output_dir / "crpa_params.json").write_text(json.dumps(params, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    _save_npz(
+        output_dir / "chi0_q.npz",
+        chi0=chi0,
+        q_indices=q_indices,
+        q_tilde_real=q_tilde_real,
+        q_tilde_imag=q_tilde_imag,
+        q_shifts=q_shifts_ref,
+    )
+    _save_npz(
+        output_dir / "dielectric_matrix.npz",
+        epsilon=epsilon,
+        epsilon_inv=epsilon_inv,
+        q_indices=q_indices,
+        q_shifts=q_shifts_ref,
+    )
+    epsilon_bn = float(params["coulomb_params"]["epsilon_bn"])
+    _save_npz(
+        output_dir / "effective_epsilon.npz",
+        effective_epsilon=effective,
+        epsilon_times_bn=effective * epsilon_bn,
+        q_abs=q_abs,
+        q_abs_nm_inv=q_abs_nm_inv,
+        q_real=q_real,
+        q_imag=q_imag,
+        q_indices=q_indices,
+        q_shifts=q_shifts_ref,
+    )
+    _save_npz(
+        output_dir / "screened_coulomb.npz",
+        screened_v=screened_v,
+        effective_epsilon=effective,
+        q_indices=q_indices,
+        q_shifts=q_shifts_ref,
+        q_abs_nm_inv=q_abs_nm_inv,
+        q_vectors_real=q_real,
+        q_vectors_imag=q_imag,
+    )
+
+    np.savetxt(
+        output_dir / "epsilon_vs_q.tsv",
+        np.column_stack([q_abs.reshape(-1), q_abs_nm_inv.reshape(-1), effective.reshape(-1), (effective * epsilon_bn).reshape(-1)]),
+        delimiter="\t",
+        header="q_abs_dimless\tq_abs_nm_inv\teffective_epsilon\teffective_epsilon_times_epsilon_bn",
+        comments="",
+    )
+
+    q_flat = q_abs_nm_inv.reshape(-1)
+    eps_flat = (effective * epsilon_bn).reshape(-1)
+    plot_order = np.argsort(q_flat)
+    fig, ax = plt.subplots(figsize=(5.2, 3.6), constrained_layout=True)
+    ax.scatter(q_flat[plot_order], eps_flat[plot_order], s=12, linewidths=0.0, alpha=0.8)
+    ax.set_xlabel(r"$|\mathbf{q}|$ (nm$^{-1}$)")
+    ax.set_ylabel(r"$\epsilon(\mathbf{q})\,\epsilon_{\rm BN}$")
+    ax.set_title("cRPA effective dielectric constant")
+    ax.grid(alpha=0.25)
+    fig.savefig(output_dir / "epsilon_vs_q.pdf")
+    plt.close(fig)
+
+    report = [
+        "# cRPA merged chunk validation report",
+        "",
+        "## Parameters",
+        "",
+        f"- theta_deg: {params['theta_deg']}",
+        f"- lk: {params['lk']}",
+        f"- lg: {params['lg']}",
+        f"- q_lg: {params['q_lg']}",
+        f"- q_point_count: {params['q_point_count']}",
+        "",
+        "## Checks",
+        "",
+        f"- effective_epsilon_times_bn_min: {float(np.min(effective * epsilon_bn)):.12g}",
+        f"- effective_epsilon_times_bn_max: {float(np.max(effective * epsilon_bn)):.12g}",
+        "",
+        "## Chunks",
+        "",
+    ]
+    report.extend(f"- `{chunk}`" for chunk in chunks)
+    (output_dir / "validation_report.md").write_text("\n".join(report) + "\n", encoding="utf-8")
+    print(f"[crpa-merge] wrote merged artifact to {output_dir}", flush=True)
+    print(f"[crpa-merge] q_point_count={params['q_point_count']} chunks={len(chunks)}", flush=True)
+
+
+if __name__ == "__main__":
+    main()

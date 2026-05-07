@@ -96,6 +96,25 @@ def build_b0_benchmark_kpath(params: TBGParameters, points_per_segment: int) -> 
     )
 
 
+def build_gamma_m_k_gamma_kprime_kpath(params: TBGParameters, points_per_segment: int) -> KPath:
+    """Build an unreconstructed high-symmetry path inside the sampled cell.
+
+    The node representatives have fractional coordinates
+    Gamma=(0,0), M=(1/2,1/2), K=(2/3,1/3), and K'=(1/3,2/3)
+    in the inclusive g1/g2 mesh cell. Thus lk=24 hits all nodes exactly.
+    """
+
+    gamma = 0.0 + 0.0j
+    m_point = (params.g1 + params.g2) / 2.0
+    k_point = (2.0 * params.g1 + params.g2) / 3.0
+    kprime_point = (params.g1 + 2.0 * params.g2) / 3.0
+    return build_kpath_from_nodes(
+        [gamma, m_point, k_point, gamma, kprime_point],
+        ("Gamma", "M", "K", "Gamma", "Kprime"),
+        points_per_segment,
+    )
+
+
 def path_segment_indices_for_samples(path: KPath, sample_indices: Iterable[int]) -> np.ndarray:
     samples = np.asarray(list(sample_indices), dtype=int)
     if samples.size == 0:

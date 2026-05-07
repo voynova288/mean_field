@@ -19,7 +19,6 @@ from ...core.hf import (
     calculate_projected_overlap_between,
     compute_hf_energy,
     find_chemical_potential,
-    identity_block,
     occupied_state_mask,
     real_space_cell_area_nm2_from_reciprocal,
     run_projected_hartree_fock,
@@ -47,6 +46,7 @@ class HTGProjectedBasisData:
     sigma_z: np.ndarray
     band_sigma_z: np.ndarray
     central_band_indices: tuple[int, int]
+    projected_band_indices: tuple[int, ...]
     reciprocal_grid_shape: tuple[int, int]
     reciprocal_grid_origin: tuple[int, int]
     moire_cell_area_nm2: float
@@ -164,6 +164,9 @@ class HTGHartreeFockState:
             nu=float(nu),
             v0=1.0 / float(basis_data.moire_cell_area_nm2),
             precision=float(precision),
+            n_spin=int(basis_data.basis.n_spin),
+            n_eta=int(basis_data.basis.n_flavor),
+            n_band=int(basis_data.basis.n_band),
             occupation_counts=occupation_counts,
         )
 
@@ -196,6 +199,9 @@ class HTGDensityBuilder:
     nu: float
     sigma_z: np.ndarray | None = None
     occupation_counts: tuple[int, ...] | None = None
+    n_spin: int = 2
+    n_eta: int = 2
+    n_band: int = 2
 
     def __call__(self, hamiltonian: np.ndarray) -> DensityUpdateResult:
         density, energies, sigma_z_expectation, mu, occupation_mask = build_htg_density_from_hamiltonian(
@@ -203,6 +209,9 @@ class HTGDensityBuilder:
             nu=self.nu,
             sigma_z=self.sigma_z,
             occupation_counts=self.occupation_counts,
+            n_spin=self.n_spin,
+            n_eta=self.n_eta,
+            n_band=self.n_band,
         )
         return DensityUpdateResult(
             density=density,
@@ -219,8 +228,105 @@ def moire_cell_area_nm2(lattice: HTGLattice) -> float:
     return real_space_cell_area_nm2_from_reciprocal(lattice.b_m1, lattice.b_m2)
 
 
-def htg_occupied_state_count(nu: float, nt: int, nk: int) -> int:
-    raw = (float(nu) + 4.0) / 8.0 * int(nt) * int(nk)
+def _infer_htg_band_count(nt: int, *, n_spin: int = 2, n_eta: int = 2) -> int:
+    n_flavor = int(n_spin) * int(n_eta)
+    if int(nt) % n_flavor != 0:
+        raise ValueError(f"Projected dimension nt={nt} is incompatible with n_spin={n_spin}, n_eta={n_eta}")
+    n_band = int(nt) // n_flavor
+    if n_band < 2 or n_band % 2 != 0:
+        raise ValueError(f"HTG projected band count must be an even integer >= 2, got {n_band}")
+    return n_band
+
+
+def _remote_band_count_per_side(n_band: int) -> int:
+    n_band = int(n_band)
+    if n_band < 2 or n_band % 2 != 0:
+        raise ValueError(f"HTG projected band count must be an even integer >= 2, got {n_band}")
+    return (n_band - 2) // 2
+
+
+def _central_projected_band_indices(n_band: int) -> tuple[int, int]:
+    lower_count = _remote_band_count_per_side(n_band)
+    return int(lower_count), int(lower_count + 1)
+
+
+def htg_band_reference_occupations(n_band: int) -> np.ndarray:
+    """Reference occupations for HTG density matrices.
+
+    For the central two-band model this is the usual half-filled reference.
+    When remote bands are included, the physically neutral reference keeps the
+    lower remote bands filled, the central pair half filled, and the upper
+    remote bands empty.
+    """
+
+    n_band = int(n_band)
+    lower_count = _remote_band_count_per_side(n_band)
+    reference = np.zeros(n_band, dtype=float)
+    reference[:lower_count] = 1.0
+    reference[lower_count : lower_count + 2] = 0.5
+    return reference
+
+
+def _htg_reference_density_diagonal(
+    nt: int,
+    nk: int,
+    *,
+    n_spin: int = 2,
+    n_eta: int = 2,
+) -> np.ndarray:
+    n_spin = int(n_spin)
+    n_eta = int(n_eta)
+    n_band = _infer_htg_band_count(nt, n_spin=n_spin, n_eta=n_eta)
+    band_reference = htg_band_reference_occupations(n_band)
+    idx = np.arange(int(nt), dtype=int).reshape((n_spin, n_eta, n_band), order="F")
+    diagonal = np.zeros((int(nt), int(nk)), dtype=float)
+    for ispin in range(n_spin):
+        for ieta in range(n_eta):
+            for iband in range(n_band):
+                diagonal[int(idx[ispin, ieta, iband]), :] = float(band_reference[iband])
+    return diagonal
+
+
+def _htg_reference_density_blocks(
+    nt: int,
+    nk: int,
+    *,
+    n_spin: int = 2,
+    n_eta: int = 2,
+) -> np.ndarray:
+    diagonal = _htg_reference_density_diagonal(nt, nk, n_spin=n_spin, n_eta=n_eta)
+    reference = np.zeros((int(nt), int(nt), int(nk)), dtype=np.complex128)
+    rows = np.arange(int(nt), dtype=int)
+    for ik in range(int(nk)):
+        reference[rows, rows, ik] = diagonal[:, ik]
+    return reference
+
+
+def htg_projector_from_density(
+    density: np.ndarray,
+    *,
+    n_spin: int = 2,
+    n_eta: int = 2,
+) -> np.ndarray:
+    density = np.asarray(density, dtype=np.complex128)
+    nt, nt_rhs, nk = density.shape
+    if nt != nt_rhs:
+        raise ValueError(f"Expected square density blocks, got {density.shape}")
+    return density + _htg_reference_density_blocks(nt, nk, n_spin=n_spin, n_eta=n_eta)
+
+
+def htg_occupied_state_count(
+    nu: float,
+    nt: int,
+    nk: int,
+    *,
+    n_spin: int = 2,
+    n_eta: int = 2,
+) -> int:
+    n_flavor = int(n_spin) * int(n_eta)
+    n_band = _infer_htg_band_count(nt, n_spin=n_spin, n_eta=n_eta)
+    lower_remote_per_flavor = _remote_band_count_per_side(n_band)
+    raw = (float(lower_remote_per_flavor) * n_flavor + float(nu) + float(n_flavor)) * int(nk)
     rounded = int(round(raw))
     if abs(raw - rounded) > 1.0e-9:
         raise ValueError(f"Filling nu={nu} gives non-integer occupied-state count {raw}")
@@ -229,8 +335,17 @@ def htg_occupied_state_count(nu: float, nt: int, nk: int) -> int:
     return rounded
 
 
-def htg_occupied_bands_per_k(nu: float, nt: int) -> int:
-    raw = (float(nu) + 4.0) / 8.0 * int(nt)
+def htg_occupied_bands_per_k(
+    nu: float,
+    nt: int,
+    *,
+    n_spin: int = 2,
+    n_eta: int = 2,
+) -> int:
+    n_flavor = int(n_spin) * int(n_eta)
+    n_band = _infer_htg_band_count(nt, n_spin=n_spin, n_eta=n_eta)
+    lower_remote_per_flavor = _remote_band_count_per_side(n_band)
+    raw = float(lower_remote_per_flavor) * n_flavor + float(nu) + float(n_flavor)
     rounded = int(round(raw))
     if abs(raw - rounded) > 1.0e-9:
         raise ValueError(f"Filling nu={nu} gives non-integer per-k occupation {raw}")
@@ -239,21 +354,37 @@ def htg_occupied_bands_per_k(nu: float, nt: int) -> int:
     return rounded
 
 
-def htg_filling_from_density(density: np.ndarray) -> float:
+def htg_filling_from_density(
+    density: np.ndarray,
+    *,
+    n_spin: int = 2,
+    n_eta: int = 2,
+) -> float:
     density = np.asarray(density, dtype=np.complex128)
     nt, _, nk = density.shape
-    total_particles = float(np.trace(density, axis1=0, axis2=1).real.sum() + 0.5 * nt * nk)
-    return float(8.0 * total_particles / (nt * nk) - 4.0)
+    n_flavor = int(n_spin) * int(n_eta)
+    n_band = _infer_htg_band_count(nt, n_spin=n_spin, n_eta=n_eta)
+    lower_remote_per_flavor = _remote_band_count_per_side(n_band)
+    projector = htg_projector_from_density(density, n_spin=n_spin, n_eta=n_eta)
+    total_particles = float(np.trace(projector, axis1=0, axis2=1).real.sum())
+    particles_per_k = total_particles / float(nk)
+    central_particles_per_k = particles_per_k - float(lower_remote_per_flavor) * n_flavor
+    return float(central_particles_per_k - float(n_flavor))
 
 
-def projector_idempotency_residual(density: np.ndarray) -> float:
+def projector_idempotency_residual(
+    density: np.ndarray,
+    *,
+    n_spin: int = 2,
+    n_eta: int = 2,
+) -> float:
     density = np.asarray(density, dtype=np.complex128)
     nt, _, nk = density.shape
-    ident = identity_block(nt)
+    projector = htg_projector_from_density(density, n_spin=n_spin, n_eta=n_eta)
     residual = 0.0
     for ik in range(nk):
-        projector = density[:, :, ik] + 0.5 * ident
-        residual = max(residual, float(np.max(np.abs(projector @ projector - projector))))
+        projector_block = projector[:, :, ik]
+        residual = max(residual, float(np.max(np.abs(projector_block @ projector_block - projector_block))))
     return float(residual)
 
 
@@ -283,14 +414,21 @@ def htg_gap_from_occupation_mask(energies: np.ndarray, occupation_mask: np.ndarr
     return float(np.min(energies[~occupied]) - np.max(energies[occupied]))
 
 
-def htg_occupation_mask_from_density(density: np.ndarray, *, threshold: float = 0.0) -> np.ndarray:
+def htg_occupation_mask_from_density(
+    density: np.ndarray,
+    *,
+    threshold: float = 0.0,
+    n_spin: int = 2,
+    n_eta: int = 2,
+) -> np.ndarray:
     density = np.asarray(density, dtype=np.complex128)
     nt, nt_rhs, nk = density.shape
     if nt != nt_rhs:
         raise ValueError(f"Expected square density blocks, got {density.shape}")
+    projector = htg_projector_from_density(density, n_spin=n_spin, n_eta=n_eta)
     mask = np.zeros((nt, nk), dtype=bool)
     for ik in range(nk):
-        occupations = np.linalg.eigvalsh(density[:, :, ik]).real + 0.5
+        occupations = np.linalg.eigvalsh(projector[:, :, ik]).real
         mask[:, ik] = occupations > float(threshold)
     return mask
 
@@ -327,20 +465,36 @@ def normalize_htg_init_mode(init_mode: str) -> str:
 
 def _flavor_priority(flag: str, idx: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     flavors = ((0, 0), (0, 1), (1, 0), (1, 1))
+    n_band = int(idx.shape[2])
+    lower_count = _remote_band_count_per_side(n_band)
+    lower_bands = tuple(range(lower_count))
+    central_a, central_b = _central_projected_band_indices(n_band)
+    upper_bands = tuple(range(central_b + 1, n_band))
+
+    def by_bands(bands: tuple[int, ...], flavor_order=flavors) -> list[int]:
+        return [int(idx[ispin, ieta, iband]) for iband in bands for ispin, ieta in flavor_order]
+
+    def by_flavors(bands: tuple[int, ...], flavor_order=flavors) -> list[int]:
+        return [int(idx[ispin, ieta, iband]) for ispin, ieta in flavor_order for iband in bands]
+
+    lower_states = by_bands(lower_bands)
+    upper_states = by_bands(upper_bands)
     if flag in {"flavor", "fb", "chern"}:
-        ordered = [int(idx[ispin, ieta, iband]) for iband in range(idx.shape[2]) for ispin, ieta in flavors]
+        ordered = lower_states + by_bands((central_a, central_b)) + upper_states
         return np.asarray(ordered, dtype=int)
     if flag == "fi":
-        ordered = [int(idx[ispin, ieta, iband]) for ispin, ieta in flavors for iband in range(idx.shape[2])]
+        ordered = lower_states + by_flavors((central_a, central_b)) + upper_states
         return np.asarray(ordered, dtype=int)
     if flag == "vp":
-        ordered = [int(idx[ispin, ieta, iband]) for ieta in range(idx.shape[1]) for ispin in range(idx.shape[0]) for iband in range(idx.shape[2])]
+        flavor_order = tuple((ispin, ieta) for ieta in range(idx.shape[1]) for ispin in range(idx.shape[0]))
+        ordered = by_bands(lower_bands, flavor_order) + by_flavors((central_a, central_b), flavor_order) + by_bands(upper_bands, flavor_order)
         return np.asarray(ordered, dtype=int)
     if flag == "sp":
-        ordered = [int(idx[ispin, ieta, iband]) for ispin in range(idx.shape[0]) for ieta in range(idx.shape[1]) for iband in range(idx.shape[2])]
+        flavor_order = tuple((ispin, ieta) for ispin in range(idx.shape[0]) for ieta in range(idx.shape[1]))
+        ordered = by_bands(lower_bands, flavor_order) + by_flavors((central_a, central_b), flavor_order) + by_bands(upper_bands, flavor_order)
         return np.asarray(ordered, dtype=int)
     if flag == "sublattice":
-        ordered = [int(idx[ispin, ieta, iband]) for iband in reversed(range(idx.shape[2])) for ispin, ieta in flavors]
+        ordered = lower_states + by_bands((central_b, central_a)) + upper_states
         return np.asarray(ordered, dtype=int)
     if flag == "random":
         return rng.permutation(idx.ravel(order="F"))
@@ -369,7 +523,7 @@ def htg_flavor_occupation_counts_for_init_mode(
         return None
 
     nt = int(n_spin) * int(n_eta) * int(n_band)
-    occupied_per_k = htg_occupied_bands_per_k(nu, nt)
+    occupied_per_k = htg_occupied_bands_per_k(nu, nt, n_spin=n_spin, n_eta=n_eta)
     rng = np.random.default_rng(seed)
     idx = np.arange(nt, dtype=int).reshape((n_spin, n_eta, n_band), order="F")
     order = _flavor_priority(normalized, idx, rng)
@@ -397,13 +551,20 @@ def _random_unitary(dim: int, rng: np.random.Generator) -> np.ndarray:
     return np.asarray(vecs, dtype=np.complex128)
 
 
-def _apply_random_rotation(density: np.ndarray, *, alpha: float, seed: int) -> None:
+def _apply_random_rotation(
+    density: np.ndarray,
+    *,
+    reference_density: np.ndarray,
+    alpha: float,
+    seed: int,
+) -> None:
     rng = np.random.default_rng(seed)
     nt = density.shape[0]
     for ik in range(density.shape[2]):
         unitary = _random_unitary(nt, rng)
-        block = density[:, :, ik]
-        density[:, :, ik] = (1.0 - alpha) * block + alpha * (unitary.conjugate().T @ block @ unitary)
+        projector = density[:, :, ik] + reference_density[:, :, ik]
+        rotated_density = unitary.conjugate().T @ projector @ unitary - reference_density[:, :, ik]
+        density[:, :, ik] = (1.0 - alpha) * density[:, :, ik] + alpha * rotated_density
 
 
 def initialize_htg_density(
@@ -423,14 +584,20 @@ def initialize_htg_density(
         raise ValueError(f"H0 dimension {nt} is incompatible with n_spin={n_spin}, n_eta={n_eta}, n_band={n_band}")
 
     if init_mode == "bm":
-        return build_htg_density_from_hamiltonian(h0, nu=nu)[0]
+        return build_htg_density_from_hamiltonian(
+            h0,
+            nu=nu,
+            n_spin=n_spin,
+            n_eta=n_eta,
+            n_band=n_band,
+        )[0]
     if init_mode == "diag_random":
         init_mode = "random"
 
     rng = np.random.default_rng(seed)
+    reference_density = _htg_reference_density_blocks(nt, nk, n_spin=n_spin, n_eta=n_eta)
     density = np.zeros_like(h0)
-    ident = identity_block(nt)
-    total_occupied = htg_occupied_state_count(nu, nt, nk)
+    total_occupied = htg_occupied_state_count(nu, nt, nk, n_spin=n_spin, n_eta=n_eta)
     idx = np.arange(nt, dtype=int).reshape((n_spin, n_eta, n_band), order="F")
 
     if init_mode == "random":
@@ -440,10 +607,10 @@ def initialize_htg_density(
             unitary = _random_unitary(nt, rng)
             occupied = np.flatnonzero(occ_mask[:, ik])
             if occupied.size == 0:
-                density[:, :, ik] = -0.5 * ident
+                density[:, :, ik] = -reference_density[:, :, ik]
             else:
                 occupied_vecs = unitary[:, occupied]
-                density[:, :, ik] = occupied_vecs.conjugate() @ occupied_vecs.T - 0.5 * ident
+                density[:, :, ik] = occupied_vecs.conjugate() @ occupied_vecs.T - reference_density[:, :, ik]
         return density
 
     flag = "flavor" if init_mode == "perturbed" else init_mode
@@ -458,11 +625,10 @@ def initialize_htg_density(
         state_index = int(order[full_states])
         occupied_k = rng.permutation(nk)[:partial_count]
         density[state_index, state_index, occupied_k] = 1.0
-    for ik in range(nk):
-        density[:, :, ik] -= 0.5 * ident
+    density -= reference_density
 
     if init_mode == "perturbed":
-        _apply_random_rotation(density, alpha=0.05, seed=seed)
+        _apply_random_rotation(density, reference_density=reference_density, alpha=0.05, seed=seed)
     return density
 
 
@@ -486,7 +652,7 @@ def build_htg_density_from_hamiltonian(
     energies = np.zeros((nt, nk), dtype=float)
     sigma_z_expectation = np.zeros((nt, nk), dtype=float)
     density = np.zeros_like(hamiltonian)
-    ident = identity_block(nt)
+    reference_density = _htg_reference_density_blocks(nt, nk, n_spin=n_spin, n_eta=n_eta)
 
     if occupation_counts is not None:
         counts = np.asarray(occupation_counts, dtype=int).reshape(-1)
@@ -501,21 +667,22 @@ def build_htg_density_from_hamiltonian(
             )
         if np.any(counts < 0) or np.any(counts > int(n_band)):
             raise ValueError(f"Flavor occupation counts must lie in [0, {int(n_band)}], got {counts.tolist()}")
-        if int(np.sum(counts)) != htg_occupied_bands_per_k(nu, nt):
+        if int(np.sum(counts)) != htg_occupied_bands_per_k(nu, nt, n_spin=n_spin, n_eta=n_eta):
             raise ValueError(
                 f"Flavor occupation counts sum to {int(np.sum(counts))}, "
-                f"but nu={nu} requires {htg_occupied_bands_per_k(nu, nt)} occupied bands per k"
+                f"but nu={nu} requires {htg_occupied_bands_per_k(nu, nt, n_spin=n_spin, n_eta=n_eta)} occupied bands per k"
             )
 
         idx = np.arange(nt, dtype=int).reshape((n_spin, n_eta, n_band), order="F")
         counts_2d = counts.reshape((n_spin, n_eta), order="C")
         occ_mask = np.zeros((nt, nk), dtype=bool)
         for ik in range(nk):
-            density[:, :, ik] = -0.5 * ident
+            density[:, :, ik] = -reference_density[:, :, ik]
             for ispin in range(n_spin):
                 for ieta in range(n_eta):
                     block_indices = np.asarray(idx[ispin, ieta, :], dtype=int)
                     block = hamiltonian[:, :, ik][np.ix_(block_indices, block_indices)]
+                    reference_block = reference_density[:, :, ik][np.ix_(block_indices, block_indices)]
                     eigvals, eigvecs = np.linalg.eigh(block)
                     energies[block_indices, ik] = eigvals
                     if sigma_z is not None:
@@ -527,7 +694,7 @@ def build_htg_density_from_hamiltonian(
                     if n_occ > 0:
                         occupied_vecs = eigvecs[:, :n_occ]
                         density[:, :, ik][np.ix_(block_indices, block_indices)] = (
-                            occupied_vecs.conjugate() @ occupied_vecs.T - 0.5 * identity_block(int(n_band))
+                            occupied_vecs.conjugate() @ occupied_vecs.T - reference_block
                         )
                         occ_mask[block_indices[:n_occ], ik] = True
 
@@ -545,17 +712,17 @@ def build_htg_density_from_hamiltonian(
         if sigma_z is not None:
             sigma_z_expectation[:, ik] = np.real(np.diag(eigvecs.conjugate().T @ sigma_z[:, :, ik] @ eigvecs))
 
-    total_occupied = htg_occupied_state_count(nu, nt, nk)
+    total_occupied = htg_occupied_state_count(nu, nt, nk, n_spin=n_spin, n_eta=n_eta)
     occ_mask = occupied_state_mask(energies, total_occupied)
-    mu = find_chemical_potential(energies, (float(nu) + 4.0) / 8.0)
+    mu = find_chemical_potential(energies, float(total_occupied) / float(energies.size))
 
     for ik in range(nk):
         occupied = np.flatnonzero(occ_mask[:, ik])
         if occupied.size == 0:
-            density[:, :, ik] = -0.5 * ident
+            density[:, :, ik] = -reference_density[:, :, ik]
             continue
         occupied_vecs = vecs[:, occupied, ik]
-        density[:, :, ik] = occupied_vecs.conjugate() @ occupied_vecs.T - 0.5 * ident
+        density[:, :, ik] = occupied_vecs.conjugate() @ occupied_vecs.T - reference_density[:, :, ik]
 
     return density, energies, sigma_z_expectation, float(mu), occ_mask
 
@@ -611,6 +778,77 @@ def _central_chern_basis_at_k(
     return wavefunctions, h_projected, sigma_projected, sigma_eigs[order]
 
 
+def _hybrid_projected_basis_at_k(
+    k_tilde: complex,
+    lattice: HTGLattice,
+    params: HTGParams,
+    interaction: InteractionParams,
+    *,
+    valley: int,
+    projected_indices: tuple[int, ...],
+    central_pair: tuple[int, int],
+    sigma_z_operator: np.ndarray,
+    layer_potential: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    projected_indices_array = np.asarray(projected_indices, dtype=int)
+    central_pair_array = np.asarray(central_pair, dtype=int)
+    if projected_indices_array.ndim != 1 or projected_indices_array.size < 2:
+        raise ValueError(f"Expected at least two projected band indices, got {projected_indices}")
+    if not set(int(index) for index in central_pair).issubset(set(int(index) for index in projected_indices)):
+        raise ValueError(f"Projected indices {projected_indices} must contain central pair {central_pair}")
+
+    hmat = build_hamiltonian(k_tilde, lattice, params, valley=valley)
+    if interaction.U_ev != 0.0:
+        hmat = hmat + layer_potential
+    evals_all, evecs_all = np.linalg.eigh(hmat)
+
+    central_evals = np.asarray(evals_all[central_pair_array], dtype=float)
+    central_evecs = np.asarray(evecs_all[:, central_pair_array], dtype=np.complex128)
+    projected_sigma = central_evecs.conjugate().T @ sigma_z_operator @ central_evecs
+    sigma_eigs, sigma_rot = np.linalg.eigh(projected_sigma)
+    central_order = np.asarray([int(np.argmax(sigma_eigs)), int(np.argmin(sigma_eigs))], dtype=int)
+    central_rot = np.asarray(sigma_rot[:, central_order], dtype=np.complex128)
+    central_wavefunctions = central_evecs @ central_rot
+    central_h = central_rot.conjugate().T @ np.diag(central_evals) @ central_rot
+
+    lower_indices = tuple(int(index) for index in projected_indices if int(index) < int(central_pair[0]))
+    upper_indices = tuple(int(index) for index in projected_indices if int(index) > int(central_pair[1]))
+    ordered_vectors: list[np.ndarray] = []
+    ordered_h_columns: list[np.ndarray] = []
+    ordered_raw_indices: list[int] = []
+    for index in lower_indices:
+        ordered_vectors.append(np.asarray(evecs_all[:, index], dtype=np.complex128))
+        ordered_raw_indices.append(int(index))
+    for col in range(2):
+        ordered_vectors.append(np.asarray(central_wavefunctions[:, col], dtype=np.complex128))
+        ordered_raw_indices.append(int(central_pair[col]))
+    for index in upper_indices:
+        ordered_vectors.append(np.asarray(evecs_all[:, index], dtype=np.complex128))
+        ordered_raw_indices.append(int(index))
+
+    wavefunctions = np.column_stack(ordered_vectors).astype(np.complex128, copy=False)
+    n_projected = wavefunctions.shape[1]
+    h_projected = np.zeros((n_projected, n_projected), dtype=np.complex128)
+    for out_pos, index in enumerate(lower_indices):
+        h_projected[out_pos, out_pos] = float(evals_all[index])
+    central_start = len(lower_indices)
+    h_projected[central_start : central_start + 2, central_start : central_start + 2] = central_h
+    for offset, index in enumerate(upper_indices):
+        pos = central_start + 2 + offset
+        h_projected[pos, pos] = float(evals_all[index])
+
+    sigma_projected = wavefunctions.conjugate().T @ sigma_z_operator @ wavefunctions
+    sigma_diagonal = np.real(np.diag(sigma_projected))
+    return wavefunctions, h_projected, sigma_projected, sigma_diagonal
+
+
+def centered_projection_band_indices(matrix_dim: int, projected_band_count: int) -> tuple[int, ...]:
+    projected_band_count = int(projected_band_count)
+    if projected_band_count < 2 or projected_band_count % 2 != 0:
+        raise ValueError(f"projected_band_count must be an even integer >= 2, got {projected_band_count}")
+    return tuple(int(index) for index in centered_band_indices(int(matrix_dim), projected_band_count))
+
+
 def _build_htg_projected_basis_from_kvec(
     model: HTGModel,
     interaction: InteractionParams,
@@ -618,29 +856,33 @@ def _build_htg_projected_basis_from_kvec(
     *,
     mesh_size: int,
     k_grid_frac: np.ndarray,
+    projected_band_count: int = 2,
 ) -> HTGProjectedBasisData:
     lattice = model.lattice
     central_pair_raw = centered_band_indices(lattice.matrix_dim, 2)
     central_pair = (int(central_pair_raw[0]), int(central_pair_raw[1]))
+    projected_indices = centered_projection_band_indices(lattice.matrix_dim, projected_band_count)
+    n_projected = len(projected_indices)
     kvec = np.asarray(kvec, dtype=np.complex128).reshape(-1)
 
     grid_shape, origin, positions = _rectangular_g_embedding(lattice)
     nx, ny = grid_shape
-    embedded = np.zeros((6, nx, ny, 2, 2, kvec.size), dtype=np.complex128)
-    h_projected = np.zeros((2, 2, 2, kvec.size), dtype=np.complex128)
+    embedded = np.zeros((6, nx, ny, n_projected, 2, kvec.size), dtype=np.complex128)
+    h_projected = np.zeros((n_projected, n_projected, 2, kvec.size), dtype=np.complex128)
     sigma_projected = np.zeros_like(h_projected)
-    band_sigma_z = np.zeros((2, 2, kvec.size), dtype=float)
+    band_sigma_z = np.zeros((n_projected, 2, kvec.size), dtype=float)
     sigma_z_operator = sublattice_sigma_z(lattice)
     layer_potential = _layer_potential_operator(lattice, interaction.U_ev)
 
     for iflavor, valley in enumerate(VALLEY_SEQUENCE):
         for ik, kval in enumerate(kvec):
-            wavefunctions, h_block, sigma_block, sigma_eigs = _central_chern_basis_at_k(
+            wavefunctions, h_block, sigma_block, sigma_values = _hybrid_projected_basis_at_k(
                 complex(kval),
                 lattice,
                 model.params,
                 interaction,
                 valley=valley,
+                projected_indices=projected_indices,
                 central_pair=central_pair,
                 sigma_z_operator=sigma_z_operator,
                 layer_potential=layer_potential,
@@ -651,9 +893,9 @@ def _build_htg_projected_basis_from_kvec(
                 embedded[:, ix, iy, :, iflavor, ik] = wavefunctions[start : start + 6, :]
             h_projected[:, :, iflavor, ik] = h_block
             sigma_projected[:, :, iflavor, ik] = sigma_block
-            band_sigma_z[:, iflavor, ik] = np.real(sigma_eigs)
+            band_sigma_z[:, iflavor, ik] = np.real(sigma_values)
 
-    wavefunction_array = embedded.reshape((6 * nx * ny, 2, 2, kvec.size), order="F")
+    wavefunction_array = embedded.reshape((6 * nx * ny, n_projected, 2, kvec.size), order="F")
     basis = ProjectedWavefunctionBasis(
         wavefunctions=wavefunction_array,
         grid_shape=grid_shape,
@@ -664,7 +906,7 @@ def _build_htg_projected_basis_from_kvec(
 
     h0 = np.zeros((basis.nt, basis.nt, basis.nk), dtype=np.complex128)
     sigma_z = np.zeros_like(h0)
-    idx = np.arange(basis.nt, dtype=int).reshape((2, 2, 2), order="F")
+    idx = np.arange(basis.nt, dtype=int).reshape((2, 2, n_projected), order="F")
     for ik in range(basis.nk):
         for ispin in range(2):
             for iflavor in range(2):
@@ -683,6 +925,7 @@ def _build_htg_projected_basis_from_kvec(
         sigma_z=sigma_z,
         band_sigma_z=band_sigma_z,
         central_band_indices=central_pair,
+        projected_band_indices=projected_indices,
         reciprocal_grid_shape=grid_shape,
         reciprocal_grid_origin=origin,
         moire_cell_area_nm2=moire_cell_area_nm2(lattice),
@@ -695,6 +938,7 @@ def build_htg_projected_basis(
     *,
     mesh_size: int | None = None,
     frac_shift: tuple[float, float] = (0.0, 0.0),
+    projected_band_count: int = 2,
 ) -> HTGProjectedBasisData:
     resolved_interaction = interaction if interaction is not None else InteractionParams()
     resolved_mesh = resolved_interaction.n_k if mesh_size is None else int(mesh_size)
@@ -709,6 +953,7 @@ def build_htg_projected_basis(
         kvec,
         mesh_size=resolved_mesh,
         k_grid_frac=k_grid_frac,
+        projected_band_count=projected_band_count,
     )
 
 
@@ -716,6 +961,8 @@ def build_htg_projected_basis_for_kvec(
     model: HTGModel,
     interaction: InteractionParams,
     kvec: np.ndarray,
+    *,
+    projected_band_count: int = 2,
 ) -> HTGProjectedBasisData:
     kvec_array = np.asarray(kvec, dtype=np.complex128).reshape(-1)
     return _build_htg_projected_basis_from_kvec(
@@ -724,6 +971,7 @@ def build_htg_projected_basis_for_kvec(
         kvec_array,
         mesh_size=0,
         k_grid_frac=np.zeros((kvec_array.size, 2), dtype=float),
+        projected_band_count=projected_band_count,
     )
 
 
@@ -936,6 +1184,7 @@ def evaluate_htg_interaction_path(
         source_basis_data.model,
         source_basis_data.interaction,
         resolved_path.kvec,
+        projected_band_count=hf_run.state.n_band,
     )
     source_overlap_blocks = hf_run.overlap_blocks
     target_overlap_blocks = build_htg_overlap_blocks(path_basis_data, g_shells=resolved_g_shells)
@@ -1044,6 +1293,7 @@ def evaluate_htg_hf_path(
         source_basis_data.model,
         source_basis_data.interaction,
         resolved_path.kvec,
+        projected_band_count=hf_run.state.n_band,
     )
     source_overlap_blocks = hf_run.overlap_blocks
     target_overlap_blocks = build_htg_overlap_blocks(path_basis_data, g_shells=resolved_g_shells)
@@ -1102,26 +1352,40 @@ def compute_background_densities(overlap_blocks: HFOverlapBlockSet) -> dict[tupl
 
 
 def _update_htg_diagnostics_from_density(state: HTGHartreeFockState) -> None:
-    state.diagnostics["filling"] = htg_filling_from_density(state.density)
-    state.diagnostics["projector_idempotency_residual"] = projector_idempotency_residual(state.density)
+    state.diagnostics["filling"] = htg_filling_from_density(
+        state.density,
+        n_spin=state.n_spin,
+        n_eta=state.n_eta,
+    )
+    state.diagnostics["projector_idempotency_residual"] = projector_idempotency_residual(
+        state.density,
+        n_spin=state.n_spin,
+        n_eta=state.n_eta,
+    )
 
 
 def _update_htg_hf_density_update_state(state: HTGHartreeFockState, density_update: DensityUpdateResult) -> None:
     _update_htg_diagnostics_from_density(state)
     occupation_mask = density_update.observables.get("occupation_mask")
-    state.diagnostics["hf_gap"] = htg_gap_estimate(state.energies, state.nu)
     if occupation_mask is not None:
-        state.diagnostics["sector_gap"] = htg_gap_from_occupation_mask(
+        sector_gap = htg_gap_from_occupation_mask(
             state.energies,
             np.asarray(occupation_mask, dtype=bool),
         )
+        state.diagnostics["sector_gap"] = sector_gap
+        state.diagnostics["hf_gap"] = sector_gap
+    else:
+        state.diagnostics["hf_gap"] = htg_gap_estimate(state.energies, state.nu)
     state.diagnostics["hamiltonian_hermitian_residual"] = hermitian_residual(state.hamiltonian)
     sigma_z = density_update.observables.get("sigma_z")
     if sigma_z is not None:
         occupied = (
             np.asarray(occupation_mask, dtype=bool)
             if occupation_mask is not None
-            else occupied_state_mask(state.energies, htg_occupied_state_count(state.nu, state.nt, state.nk))
+            else occupied_state_mask(
+                state.energies,
+                htg_occupied_state_count(state.nu, state.nt, state.nk, n_spin=state.n_spin, n_eta=state.n_eta),
+            )
         )
         if np.any(occupied):
             state.diagnostics["occupied_sigma_z_mean"] = float(np.mean(np.asarray(sigma_z, dtype=float)[occupied]))
@@ -1145,6 +1409,9 @@ def build_htg_hf_kernel(
             state.nu,
             sigma_z=state.sigma_z,
             occupation_counts=state.occupation_counts,
+            n_spin=state.n_spin,
+            n_eta=state.n_eta,
+            n_band=state.n_band,
         ),
         energy_functional=compute_hf_energy,
         oda_parameterizer="default",
@@ -1170,16 +1437,25 @@ def run_htg_hf(
     oda_stall_threshold: float = 1.0e-3,
     mesh_size: int | None = None,
     g_shells: int | None = None,
+    projected_band_count: int = 2,
     initial_density: np.ndarray | None = None,
     use_numba: bool | None = None,
 ) -> HTGHartreeFockRun:
     normalized_init_mode = normalize_htg_init_mode(init_mode)
+    basis_data = build_htg_projected_basis(
+        model,
+        interaction,
+        mesh_size=mesh_size,
+        projected_band_count=projected_band_count,
+    )
     occupation_counts = htg_flavor_occupation_counts_for_init_mode(
         normalized_init_mode,
         nu=nu,
         seed=seed,
+        n_spin=basis_data.basis.n_spin,
+        n_eta=basis_data.basis.n_flavor,
+        n_band=basis_data.basis.n_band,
     )
-    basis_data = build_htg_projected_basis(model, interaction, mesh_size=mesh_size)
     state = HTGHartreeFockState.from_projected_basis(
         basis_data,
         nu=nu,
@@ -1190,7 +1466,14 @@ def run_htg_hf(
     base_run = run_projected_hartree_fock(
         state,
         initializer=HTGInitializer(initial_density=initial_density),
-        density_builder=HTGDensityBuilder(nu, sigma_z=state.sigma_z, occupation_counts=occupation_counts),
+        density_builder=HTGDensityBuilder(
+            nu,
+            sigma_z=state.sigma_z,
+            occupation_counts=occupation_counts,
+            n_spin=state.n_spin,
+            n_eta=state.n_eta,
+            n_band=state.n_band,
+        ),
         overlap_blocks=overlap_blocks,
         init_mode=normalized_init_mode,
         seed=seed,
@@ -1232,9 +1515,15 @@ def scan_htg_ground_state(
     oda_stall_threshold: float = 1.0e-3,
     mesh_size: int | None = None,
     g_shells: int | None = None,
+    projected_band_count: int = 2,
     use_numba: bool | None = None,
 ) -> HTGGroundStateScan:
-    basis_data = build_htg_projected_basis(model, interaction, mesh_size=mesh_size)
+    basis_data = build_htg_projected_basis(
+        model,
+        interaction,
+        mesh_size=mesh_size,
+        projected_band_count=projected_band_count,
+    )
     overlap_blocks = build_htg_overlap_blocks(basis_data, g_shells=g_shells)
     runs: list[HTGHartreeFockRun] = []
     for init_mode in init_modes:
@@ -1244,6 +1533,9 @@ def scan_htg_ground_state(
                 normalized,
                 nu=nu,
                 seed=int(seed),
+                n_spin=basis_data.basis.n_spin,
+                n_eta=basis_data.basis.n_flavor,
+                n_band=basis_data.basis.n_band,
             )
             state = HTGHartreeFockState.from_projected_basis(
                 basis_data,
@@ -1254,7 +1546,14 @@ def scan_htg_ground_state(
             base_run = run_projected_hartree_fock(
                 state,
                 initializer=HTGInitializer(),
-                density_builder=HTGDensityBuilder(nu, sigma_z=state.sigma_z, occupation_counts=occupation_counts),
+                density_builder=HTGDensityBuilder(
+                    nu,
+                    sigma_z=state.sigma_z,
+                    occupation_counts=occupation_counts,
+                    n_spin=state.n_spin,
+                    n_eta=state.n_eta,
+                    n_band=state.n_band,
+                ),
                 overlap_blocks=overlap_blocks,
                 init_mode=normalized,
                 seed=int(seed),

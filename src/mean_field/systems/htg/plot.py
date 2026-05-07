@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import permutations
 import os
 from pathlib import Path
 import tempfile
 from typing import Literal
 
 import numpy as np
+from scipy.optimize import linear_sum_assignment
 
 from .bands import PathBandsResult
 
@@ -180,11 +182,15 @@ def _spin_sector_path_bands(
     spin_index: int,
     n_spin: int = 2,
     n_eta: int = 2,
-    n_band: int = 2,
+    n_band: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     hamiltonian = np.asarray(hamiltonian, dtype=np.complex128)
     sigma_z_operator = np.asarray(sigma_z_operator, dtype=np.complex128)
     nt, _, nk = hamiltonian.shape
+    if n_band is None:
+        if nt % (int(n_spin) * int(n_eta)) != 0:
+            raise ValueError(f"Hamiltonian dimension {nt} is incompatible with n_spin={n_spin}, n_eta={n_eta}")
+        n_band = nt // (int(n_spin) * int(n_eta))
     if nt != int(n_spin) * int(n_eta) * int(n_band):
         raise ValueError(f"Hamiltonian dimension {nt} is incompatible with n_spin={n_spin}, n_eta={n_eta}, n_band={n_band}")
     if sigma_z_operator.shape != hamiltonian.shape:
@@ -196,13 +202,47 @@ def _spin_sector_path_bands(
     block_indices = np.asarray(idx[int(spin_index), :, :].reshape(-1, order="C"), dtype=int)
     energies = np.zeros((nk, block_indices.size), dtype=float)
     sigma_z = np.zeros_like(energies)
+    previous_vectors: np.ndarray | None = None
     for ik in range(nk):
         h_block = hamiltonian[:, :, ik][np.ix_(block_indices, block_indices)]
         sigma_block = sigma_z_operator[:, :, ik][np.ix_(block_indices, block_indices)]
         eigvals, eigvecs = np.linalg.eigh(h_block)
+        if previous_vectors is not None:
+            order = _best_eigenvector_overlap_order(previous_vectors, eigvecs)
+            eigvals = eigvals[order]
+            eigvecs = eigvecs[:, order]
         energies[ik, :] = eigvals
         sigma_z[ik, :] = np.real(np.diag(eigvecs.conjugate().T @ sigma_block @ eigvecs))
+        previous_vectors = eigvecs
     return energies, sigma_z
+
+
+def _best_eigenvector_overlap_order(previous_vectors: np.ndarray, current_vectors: np.ndarray) -> np.ndarray:
+    previous_vectors = np.asarray(previous_vectors, dtype=np.complex128)
+    current_vectors = np.asarray(current_vectors, dtype=np.complex128)
+    if previous_vectors.shape != current_vectors.shape or previous_vectors.ndim != 2:
+        raise ValueError(
+            f"Expected matching 2D eigensystem shapes, got {previous_vectors.shape} and {current_vectors.shape}"
+        )
+
+    n_band = previous_vectors.shape[1]
+    overlap = np.abs(previous_vectors.conjugate().T @ current_vectors) ** 2
+    best_order: tuple[int, ...] | None = None
+    best_score = -np.inf
+    if n_band <= 6:
+        for order in permutations(range(n_band)):
+            score = float(np.sum(overlap[np.arange(n_band), np.asarray(order, dtype=int)]))
+            if score > best_score:
+                best_score = score
+                best_order = tuple(int(index) for index in order)
+    else:
+        rows, cols = linear_sum_assignment(-overlap)
+        ordered_cols = np.zeros(n_band, dtype=int)
+        ordered_cols[np.asarray(rows, dtype=int)] = np.asarray(cols, dtype=int)
+        best_order = tuple(int(index) for index in ordered_cols)
+    if best_order is None:
+        raise ValueError("Could not determine a band-tracking permutation.")
+    return np.asarray(best_order, dtype=int)
 
 
 def write_htg_fig7_spin_resolved_plot(

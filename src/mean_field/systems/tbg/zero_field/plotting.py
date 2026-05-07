@@ -44,7 +44,7 @@ def _load_plot_backend():
 
 
 def _display_node_label(label: str) -> str:
-    return {"Gamma": "Γ", "M": "M", "K": "K"}.get(label, label)
+    return {"Gamma": "Γ", "M": "M", "K": "K", "Kprime": "K'"}.get(label, label)
 
 
 def _flavor_from_band_label(band_label: str) -> str | None:
@@ -97,6 +97,8 @@ def write_path_band_plot(
         raise ValueError(f"Expected a 2D energy array, got {energies.shape}")
     if energies.shape[0] != kdist.size:
         raise ValueError(f"Expected {kdist.size} path points, got {energies.shape[0]}")
+    if mu is not None:
+        energies = energies - float(mu)
 
     fig, ax = plt.subplots(figsize=(6.4, 4.4))
     recognized_flavors: set[str] = set()
@@ -124,12 +126,12 @@ def write_path_band_plot(
     for xpos in node_x:
         ax.axvline(x=xpos, color="#999999", ls=":", lw=0.8)
     if mu is not None:
-        ax.axhline(y=float(mu), color="#444444", ls="--", lw=0.9)
+        ax.axhline(y=0.0, color="#444444", ls="--", lw=0.9)
 
     ax.set_xticks(node_x)
     ax.set_xticklabels(node_labels)
     ax.set_xlim(float(node_x[0]), float(node_x[-1]))
-    ax.set_ylabel("Energy (meV)")
+    ax.set_ylabel("Energy - E_F (meV)" if mu is not None else "Energy (meV)")
     ax.set_xlabel("k-path")
     if title:
         title_pad = 26 if recognized_flavors else 12

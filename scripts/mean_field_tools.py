@@ -29,6 +29,7 @@ MODULE_COMMANDS = {
     "run_custom_b0_hf_case": ("mean_field.devtools.run_custom_b0_hf_case", ()),
     "run_htg_hf": ("mean_field.devtools.run_htg_hf", ()),
     "run_htg_paper_figures": ("mean_field.devtools.run_htg_paper_figures", ()),
+    "run_tbg_crpa_hf_case": ("mean_field.devtools.run_tbg_crpa_hf_case", ()),
     "run_tdbg_fig3_chern_band_plot": ("mean_field.devtools.run_tdbg_fig3_chern_band_plot", ()),
     "run_tdbg_reference_band_plot": ("mean_field.devtools.run_tdbg_reference_band_plot", ()),
     "run_tmbg_fig2_band_plot": ("mean_field.devtools.run_tmbg_fig2_band_plot", ()),

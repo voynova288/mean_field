@@ -14,6 +14,8 @@ from mean_field.systems.htg import (
     HTGModel,
     HTGParams,
     InteractionParams,
+    KWAN_2023_FERMI_VELOCITY_M_PER_S,
+    KWAN_2023_TUNNELING_EV,
     build_htg_interaction_components,
     classify_htg_strong_coupling_state,
     evaluate_htg_hf_path,
@@ -30,6 +32,8 @@ from mean_field.systems.htg import (
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "results" / "HTG"
+KWAN_2023_WAA_EV = 0.075
+KWAN_2023_KAPPA = KWAN_2023_WAA_EV / KWAN_2023_TUNNELING_EV
 
 
 def _parse_csv_ints(text: str) -> tuple[int, ...]:
@@ -50,8 +54,20 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the projected Hartree-Fock HTG adapter for one parameter point.")
     parser.add_argument("--output-dir", type=Path, default=None)
     parser.add_argument("--theta-deg", type=float, default=1.80)
-    parser.add_argument("--kappa", type=float, default=0.7)
-    parser.add_argument("--w-ev", type=float, default=0.105)
+    parser.add_argument("--kappa", type=float, default=KWAN_2023_KAPPA)
+    parser.add_argument("--w-ev", type=float, default=KWAN_2023_TUNNELING_EV)
+    parser.add_argument(
+        "--w-aa-mev",
+        type=float,
+        default=None,
+        help="AA tunneling in meV. When set, this overrides --kappa via kappa = wAA / wAB.",
+    )
+    parser.add_argument("--fermi-velocity-m-per-s", type=float, default=KWAN_2023_FERMI_VELOCITY_M_PER_S)
+    parser.add_argument(
+        "--include-pauli-twist",
+        action="store_true",
+        help="Use layer-rotated Dirac matrices sigma_{+theta,0,-theta}. Kwan Fig. 7 Eq. (1) omits this by default.",
+    )
     parser.add_argument("--n-shells", type=int, default=3)
     parser.add_argument("--nu", type=float, default=2.0)
     parser.add_argument("--epsilon-r", type=float, default=8.0)
@@ -59,7 +75,15 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--u-ev", type=float, default=0.0)
     parser.add_argument("--n-k", type=int, default=6)
     parser.add_argument("--g-shells", type=int, default=1)
-    parser.add_argument("--init-modes", type=_parse_csv_strings, default=("fb", "fi", "bm", "perturbed"))
+    parser.add_argument(
+        "--projected-band-count",
+        type=int,
+        default=2,
+        help="Number of projected bands per spin/valley flavor. Use 4 for flat bands plus nearest lower/upper remote bands, or 6 for two remote bands on each side.",
+    )
+    parser.add_argument("--finite-zero-limit", action="store_true")
+    parser.add_argument("--zero-cutoff-nm-inv", type=float, default=1.0e-12)
+    parser.add_argument("--init-modes", type=_parse_csv_strings, default=("sublattice", "fb", "fi", "bm", "perturbed"))
     parser.add_argument("--seeds", type=_parse_csv_ints, default=(1, 2))
     parser.add_argument("--max-iter", type=int, default=80)
     parser.add_argument("--precision", type=float, default=1.0e-6)
@@ -120,6 +144,16 @@ def _run_payload(run) -> dict[str, object]:
     }
 
 
+def _occupation_constraint_payload(mode: str, *, nu: float, seed: int, n_band: int) -> list[int] | None:
+    counts = htg_flavor_occupation_counts_for_init_mode(
+        mode,
+        nu=nu,
+        seed=int(seed),
+        n_band=int(n_band),
+    )
+    return None if counts is None else [int(value) for value in counts]
+
+
 def main() -> None:
     start = perf_counter()
     args = _parse_args()
@@ -130,13 +164,27 @@ def main() -> None:
     output_dir = Path(args.output_dir).resolve() if args.output_dir is not None else _default_output_dir().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    params = HTGParams(w_ev=args.w_ev, kappa=args.kappa)
+    w_aa_ev = float(args.w_ev) * float(args.kappa)
+    if args.w_aa_mev is not None:
+        w_aa_ev = float(args.w_aa_mev) / 1000.0
+    kappa = float(w_aa_ev / float(args.w_ev))
+    zeta_rad = None if args.include_pauli_twist else 0.0
+
+    params = HTGParams(
+        fermi_velocity_m_per_s=args.fermi_velocity_m_per_s,
+        w_ev=args.w_ev,
+        kappa=kappa,
+        zeta_rad=zeta_rad,
+        model_name="kwan2023_hf",
+    )
     interaction = InteractionParams(
         epsilon_r=args.epsilon_r,
         d_sc_nm=args.d_sc_nm,
         U_ev=args.u_ev,
         n_k=args.n_k,
         g_shells=args.g_shells,
+        finite_zero_limit=args.finite_zero_limit,
+        zero_cutoff_nm_inv=args.zero_cutoff_nm_inv,
     )
     model = HTGModel.from_config(args.theta_deg, n_shells=args.n_shells, params=params)
     scan = scan_htg_ground_state(
@@ -149,6 +197,7 @@ def main() -> None:
         max_iter=args.max_iter,
         precision=args.precision,
         oda_stall_threshold=args.oda_stall_threshold,
+        projected_band_count=args.projected_band_count,
         use_numba=False if args.disable_numba else None,
     )
     best = scan.best_run
@@ -156,23 +205,35 @@ def main() -> None:
 
     hf_params = {
         "theta_deg": float(args.theta_deg),
+        "fermi_velocity_m_per_s": float(args.fermi_velocity_m_per_s),
+        "vf_ev_nm": float(params.vf_ev_nm),
         "w_ev": float(args.w_ev),
-        "kappa": float(args.kappa),
-        "wAA_ev": float(args.w_ev * args.kappa),
+        "kappa": float(kappa),
+        "wAA_ev": float(w_aa_ev),
+        "wAA_mev": float(1000.0 * w_aa_ev),
+        "include_pauli_twist": bool(args.include_pauli_twist),
+        "zeta_rad": None if zeta_rad is None else float(zeta_rad),
         "n_shells": int(args.n_shells),
         "nu": float(args.nu),
         "epsilon_r": float(args.epsilon_r),
         "d_sc_nm": float(args.d_sc_nm),
         "U_ev": float(args.u_ev),
+        "finite_zero_limit": bool(args.finite_zero_limit),
+        "drop_q0_coulomb": bool(not args.finite_zero_limit),
+        "zero_cutoff_nm_inv": float(args.zero_cutoff_nm_inv),
         "n_k": int(args.n_k),
         "g_shells": int(args.g_shells),
+        "projected_band_count": int(best.state.n_band),
+        "central_band_indices": [int(index) for index in best.basis_data.central_band_indices],
+        "projected_band_indices": [int(index) for index in best.basis_data.projected_band_indices],
         "init_modes": list(args.init_modes),
         "seeds": [int(seed) for seed in args.seeds],
         "flavor_occupation_constraints": {
-            f"{mode}:seed{int(seed)}": (
-                None
-                if htg_flavor_occupation_counts_for_init_mode(mode, nu=args.nu, seed=int(seed)) is None
-                else list(htg_flavor_occupation_counts_for_init_mode(mode, nu=args.nu, seed=int(seed)))
+            f"{mode}:seed{int(seed)}": _occupation_constraint_payload(
+                mode,
+                nu=args.nu,
+                seed=int(seed),
+                n_band=best.state.n_band,
             )
             for mode in args.init_modes
             for seed in args.seeds
@@ -255,7 +316,7 @@ def main() -> None:
             path_result,
             stem="fig7_spin_resolved_bands",
             title=rf"$\nu={args.nu:+.0f}$",
-            ylim=(-abs(args.hf_band_window_mev), min(abs(args.hf_band_window_mev), 40.0)),
+            ylim=(-abs(args.hf_band_window_mev), abs(args.hf_band_window_mev)),
         )
         path_artifacts = {
             "hf_bands_path_npz": str(output_dir / "hf_bands_path.npz"),
@@ -343,6 +404,7 @@ def main() -> None:
             "best_seed": int(best.seed),
             "best_exit_reason": best.exit_reason,
             "best_converged": bool(best.converged),
+            "projected_band_count": int(best.state.n_band),
             "path_band_gap_ev": path_band_gap_ev,
             "strong_coupling": strong_coupling.to_dict(),
         },
@@ -370,6 +432,7 @@ def main() -> None:
         f"- `hf_gap_ev = {best.state.diagnostics.get('hf_gap', np.nan)}`",
         f"- `strong_coupling_family = {strong_coupling.family}`",
         f"- `strong_coupling_class = {strong_coupling.class_label}`",
+        f"- `projected_band_count = {best.state.n_band}`",
         f"- `hf_bands_path_npz = {path_artifacts.get('hf_bands_path_npz', '')}`",
             f"- `hf_bands_path_png = {path_artifacts.get('hf_bands_path_png', '')}`",
             f"- `hartree_fock_potentials_npz = {potential_artifact}`",

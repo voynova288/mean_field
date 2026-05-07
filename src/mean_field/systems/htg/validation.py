@@ -84,11 +84,11 @@ def validate_hf_state(
     """Validate the system-independent hard constraints for an HTG HF state."""
 
     h_residual = hermitian_residual(state.hamiltonian)
-    p_residual = projector_idempotency_residual(state.density)
-    filling = htg_filling_from_density(state.density)
+    p_residual = projector_idempotency_residual(state.density, n_spin=state.n_spin, n_eta=state.n_eta)
+    filling = htg_filling_from_density(state.density, n_spin=state.n_spin, n_eta=state.n_eta)
     filling_error = abs(filling - float(state.nu))
     gap_ev = htg_gap_estimate(state.energies, state.nu)
-    occupied_count = htg_occupied_state_count(state.nu, state.nt, state.nk)
+    occupied_count = htg_occupied_state_count(state.nu, state.nt, state.nk, n_spin=state.n_spin, n_eta=state.n_eta)
     if occupied_count <= 0 or occupied_count >= state.nt * state.nk:
         gap_check = ValidationCheck("hf_gap_ev", True, "not_applicable_full_or_empty_projected_space", None)
     else:

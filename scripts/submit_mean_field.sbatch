@@ -15,7 +15,13 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ -d "${PWD}/src/mean_field" ]]; then
+  REPO_ROOT="${PWD}"
+elif [[ -n "${SLURM_SUBMIT_DIR:-}" && -d "${SLURM_SUBMIT_DIR}/src/mean_field" ]]; then
+  REPO_ROOT="${SLURM_SUBMIT_DIR}"
+else
+  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
 
 if [[ $# -eq 0 ]]; then
   echo "Usage: sbatch scripts/submit_mean_field.sbatch <command> [args...]" >&2
