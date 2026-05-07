@@ -19,6 +19,7 @@ from .benchmarks import (
     load_bm_unstrained_runtime_benchmarks,
 )
 from .systems.atmg import ATMGModel, ATMGParameters
+from .systems.RnG_hBN import RLGhBNModel, RLGhBNParams
 from .systems.tbg import TBGParameters
 from .systems.tdbg import TDBGModel, TDBGParameters
 from .systems.tmbg import TMBGModel, TMBGParameters
@@ -34,6 +35,8 @@ __all__ = [
     "PathNodeReference",
     "OverlapReference",
     "RuntimeBenchmarkRecord",
+    "RLGhBNModel",
+    "RLGhBNParams",
     "TBGParameters",
     "TDBGModel",
     "TDBGParameters",

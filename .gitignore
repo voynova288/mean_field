@@ -42,6 +42,9 @@ outputs/
 docs/session_handoff_*.md
 docs/Code Agent*.md
 docs/*工作文档*.md
+docs/benchmark_strategy.md
+docs/julia_to_python_map.md
+docs/translation_plan.md
 
 # Generated numerical artifacts
 *.npz

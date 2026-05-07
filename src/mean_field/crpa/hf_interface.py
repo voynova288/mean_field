@@ -38,6 +38,7 @@ def build_fock_screened_overlap_blocks(
     lattice_kvec: np.ndarray,
     params: TBGParameters,
     crpa_screening: CRPAScreenedCoulomb,
+    fock_interpolation: str = "linear",
     relative_permittivity: float = 4.0,
     screening_lm: float,
     finite_zero_limit: bool = True,
@@ -61,8 +62,9 @@ def build_fock_screened_overlap_blocks(
             zero_cutoff=zero_cutoff,
             finite_zero_limit=finite_zero_limit,
         )
-        eps = np.vectorize(crpa_screening.nearest_fock_epsilon, otypes=[float])(
-            kvec[None, :] - kvec[:, None] + complex(gvec)
+        eps = crpa_screening.fock_epsilon_array(
+            kvec[None, :] - kvec[:, None] + complex(gvec),
+            method=fock_interpolation,
         )
         fock_screening[shift] = bare / eps
 
@@ -179,6 +181,7 @@ def build_full_crpa_hf_kernel(
     screening_lm: float | None = None,
     finite_zero_limit: bool | None = None,
     zero_cutoff: float | None = None,
+    fock_interpolation: str = "linear",
     use_numba: bool | None = None,
 ) -> HartreeFockKernel:
     """Build a full-HF kernel using Zhang cRPA screened interactions."""
@@ -195,6 +198,7 @@ def build_full_crpa_hf_kernel(
         lattice_kvec=np.asarray(lattice_kvec, dtype=np.complex128),
         params=params,
         crpa_screening=crpa_screening,
+        fock_interpolation=fock_interpolation,
         relative_permittivity=resolved_relative_permittivity,
         screening_lm=resolved_screening_lm,
         finite_zero_limit=resolved_finite_zero_limit,
@@ -243,6 +247,7 @@ def run_full_crpa_hartree_fock(
     screening_lm: float | None = None,
     finite_zero_limit: bool | None = None,
     zero_cutoff: float | None = None,
+    fock_interpolation: str = "linear",
     use_numba: bool | None = None,
 ) -> RestrictedHartreeFockRun:
     normalized_init_mode = normalize_full_init_mode(init_mode)
@@ -260,6 +265,7 @@ def run_full_crpa_hartree_fock(
         screening_lm=screening_lm,
         finite_zero_limit=finite_zero_limit,
         zero_cutoff=zero_cutoff,
+        fock_interpolation=fock_interpolation,
         use_numba=use_numba,
     )
     base_run = run_hartree_fock_problem(
