@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 import json
 from pathlib import Path
 from time import strftime
@@ -35,6 +35,7 @@ class CRPAResult:
     epsilon_inv: np.ndarray
     screened_v: np.ndarray
     effective_epsilon: np.ndarray
+    metadata: dict[str, object] = field(default_factory=dict)
 
 
 def _normalize_q_indices(q_indices: list[int | tuple[int, int]] | tuple[int | tuple[int, int], ...] | None, grid: CRPAKGrid) -> np.ndarray:
@@ -63,6 +64,8 @@ def compute_crpa(
     eta_mev: float = 1.0,
     sigma_rotation: bool = True,
     periodic_g_grid: bool = False,
+    form_factor_mode: str = "zhang_zero_fill",
+    occupation_mode: str = "cnp_index",
     flat_method: str = "center",
 ) -> CRPAResult:
     coulomb = CRPACoulombParams() if coulomb_params is None else coulomb_params
@@ -86,6 +89,20 @@ def compute_crpa(
         q_indices=q_indices,
         coulomb_params=coulomb,
         eta_mev=eta_mev,
+        form_factor_mode=form_factor_mode,
+        occupation_mode=occupation_mode,
+        flat_method=flat_method,
+        metadata={
+            "vf": float(params.vf),
+            "w0": float(params.w0),
+            "w1": float(params.w1),
+            "sigma_rotation": bool(sigma_rotation),
+            "periodic_g_grid": bool(periodic_g_grid),
+            "form_factor_mode": str(form_factor_mode),
+            "occupation_mode": str(occupation_mode),
+            "flat_band_classifier": str(flat_method),
+            "k_grid_kind": "uniform_crpa",
+        },
     )
 
 
@@ -100,6 +117,10 @@ def compute_crpa_from_solution(
     q_indices: list[int | tuple[int, int]] | tuple[int | tuple[int, int], ...] | None,
     coulomb_params: CRPACoulombParams,
     eta_mev: float,
+    form_factor_mode: str = "zhang_zero_fill",
+    occupation_mode: str = "cnp_index",
+    flat_method: str = "center",
+    metadata: dict[str, object] | None = None,
 ) -> CRPAResult:
     q_shift_labels, q_shift_coords = build_q_shift_table(q_lg)
     q_vecs = q_shift_vectors(solution.params, q_shift_labels)
@@ -122,6 +143,8 @@ def compute_crpa_from_solution(
             (int(qi), int(qj)),
             q_shift_labels,
             eta_mev=eta_mev,
+            form_factor_mode=form_factor_mode,
+            occupation_mode=occupation_mode,
         )
         v_q = coulomb_potential_table_mev(q_tilde, q_vecs, solution.params, coulomb_params)
         dielectric = compute_dielectric(chi0, v_q)
@@ -132,6 +155,30 @@ def compute_crpa_from_solution(
         eff_list.append(dielectric.effective_epsilon)
         q_tilde_list.append(q_tilde)
         physical_q_list.append(q_tilde + q_vecs)
+
+    resolved_metadata: dict[str, object] = {
+        "vf": float(solution.params.vf),
+        "w0": float(solution.params.w0),
+        "w1": float(solution.params.w1),
+        "sigma_rotation": bool(solution.sigma_rotation),
+        "periodic_g_grid": bool(solution.periodic_g_grid),
+        "form_factor_mode": str(form_factor_mode),
+        "occupation_mode": str(occupation_mode),
+        "flat_band_classifier": str(flat_method),
+        "k_grid_kind": str(solution.k_grid_kind),
+        "n_valleys_explicit": int(solution.n_eta),
+        "spin_degeneracy": 2.0,
+        "spin_degeneracy_handling": "implicit factor 2 in chi0 prefactor",
+        "valley_degeneracy_handling": "explicit valley sum over BM solution valleys",
+        "temperature_mev": 0.0,
+        "fermi_level_mev": 0.0,
+        "flat_band_count_per_valley": 2,
+        "band_start": int(solution.band_start),
+        "band_stop": int(solution.band_stop),
+        "basis_dimension_per_valley": int(solution.basis_dimension),
+    }
+    if metadata:
+        resolved_metadata.update(metadata)
 
     return CRPAResult(
         theta_deg=float(theta_deg),
@@ -151,6 +198,7 @@ def compute_crpa_from_solution(
         epsilon_inv=np.asarray(eps_inv_list, dtype=np.complex128),
         screened_v=np.asarray(screened_list, dtype=np.complex128),
         effective_epsilon=np.asarray(eff_list, dtype=float),
+        metadata=resolved_metadata,
     )
 
 
@@ -176,6 +224,7 @@ def write_crpa_outputs(result: CRPAResult, output_dir: Path | str) -> Path:
         "coulomb_params": asdict(result.coulomb_params),
         "q_point_count": int(result.q_indices.shape[0]),
         "q_shift_count": int(result.q_shifts.shape[0]),
+        "metadata": result.metadata,
     }
     (out / "crpa_params.json").write_text(json.dumps(params_json, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     np.savez_compressed(
@@ -270,4 +319,5 @@ def load_crpa_result(output_dir: Path | str) -> CRPAResult:
         epsilon_inv=epsilon_inv,
         screened_v=screened_v,
         effective_epsilon=effective_epsilon,
+        metadata=dict(params_json.get("metadata", {})),
     )

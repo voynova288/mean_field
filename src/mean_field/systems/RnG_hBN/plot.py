@@ -21,6 +21,7 @@ class RLGhBNPathPlotTrace:
     linestyle: str = "-"
     linewidth: float = 0.8
     alpha: float = 0.85
+    energy_shift_mev: float = 0.0
 
 
 def _load_plot_backend():
@@ -72,7 +73,7 @@ def write_rlg_hbn_path_band_plot(
         for band_index in range(energies.shape[1]):
             ax.plot(
                 trace.path_result.path.kdist,
-                energies[:, band_index],
+                energies[:, band_index] - float(trace.energy_shift_mev),
                 color=trace.color,
                 linestyle=trace.linestyle,
                 linewidth=trace.linewidth,
@@ -90,7 +91,10 @@ def write_rlg_hbn_path_band_plot(
     if ylim is not None:
         ax.set_ylim(*ylim)
     ax.set_xlabel("k-path")
-    ax.set_ylabel("Energy (meV)")
+    ylabel = "Energy (meV)"
+    if any(abs(float(trace.energy_shift_mev)) > 0.0 for trace in traces):
+        ylabel = "Energy - E_neutral (meV)"
+    ax.set_ylabel(ylabel)
     resolved_title = title
     if resolved_title is None and lattice is not None and params is not None:
         bandwidth = path_bandwidth_mev(traces[0].path_result, lattice, params)

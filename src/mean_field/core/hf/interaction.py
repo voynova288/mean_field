@@ -210,22 +210,18 @@ def build_projected_hf_kernel(
         use_numba=use_numba,
     )
     if oda_parameterizer == "default":
-        resolved_oda_parameterizer = lambda state_obj, delta_density: compute_projected_oda_parameter(
-            state_obj,
-            delta_density,
-            overlap_blocks,
-            v0=interaction_scale,
-            beta=beta,
-            use_numba=use_numba,
-        )
+        resolved_oda_parameterizer = None
+        resolved_oda_delta_interaction_builder = interaction_builder
     else:
         resolved_oda_parameterizer = oda_parameterizer
+        resolved_oda_delta_interaction_builder = None
 
     return HartreeFockKernel(
         interaction_builder=interaction_builder,
         density_builder=density_builder,
         energy_functional=energy_functional,
         oda_parameterizer=resolved_oda_parameterizer,
+        oda_delta_interaction_builder=resolved_oda_delta_interaction_builder,
         hamiltonian_postprocessor=hamiltonian_postprocessor,
         density_postprocessor=density_postprocessor,
         step_callback=step_callback,

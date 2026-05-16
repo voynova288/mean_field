@@ -33,6 +33,7 @@ class HartreeFockKernel:
     density_builder: ProjectedDensityBuilderProtocol
     energy_functional: Callable[[np.ndarray, np.ndarray, np.ndarray], float]
     oda_parameterizer: Callable[[HartreeFockStateProtocol, np.ndarray], float] | None = None
+    oda_delta_interaction_builder: Callable[[np.ndarray], np.ndarray] | None = None
     hamiltonian_postprocessor: Callable[[np.ndarray], None] | None = None
     density_postprocessor: Callable[[np.ndarray], None] | None = None
     step_callback: Callable[[HartreeFockStateProtocol, HartreeFockStepResult], None] | None = None
@@ -64,6 +65,7 @@ def run_hartree_fock_problem(
         density_builder=problem.kernel.density_builder,
         energy_functional=problem.kernel.energy_functional,
         oda_parameterizer=problem.kernel.oda_parameterizer,
+        oda_delta_interaction_builder=problem.kernel.oda_delta_interaction_builder,
         hamiltonian_postprocessor=problem.kernel.hamiltonian_postprocessor,
         density_postprocessor=problem.kernel.density_postprocessor,
         step_callback=problem.kernel.step_callback,

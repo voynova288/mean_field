@@ -4,14 +4,13 @@ import argparse
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from datetime import datetime
-import json
 import os
 from pathlib import Path
-import socket
 from time import perf_counter
 
 import numpy as np
 
+from mean_field.devtools._runtime import ensure_not_running_compute_on_login_node, select_flat_pair_window, write_json
 from mean_field.runtime import collect_runtime_environment, current_timestamp
 from mean_field.systems.tmbg import (
     PathBandsResult,
@@ -142,16 +141,6 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _ensure_not_running_compute_on_login_node(workload_name: str) -> None:
-    if os.environ.get("SLURM_JOB_ID"):
-        return
-    hostname = socket.gethostname().strip().lower()
-    if hostname.startswith("login001") or hostname.startswith("login002"):
-        raise SystemExit(
-            f"Refusing to run {workload_name} on login node {hostname}; submit it through Slurm from login002."
-        )
-
-
 def _positive_int_from_env(name: str) -> int | None:
     text = os.environ.get(name)
     if text is None or not text.strip():
@@ -225,16 +214,6 @@ def _delta_panel_dirname(delta_ev: float) -> str:
 
 def _delta_key(delta_ev: float) -> float:
     return round(float(delta_ev), 3)
-
-
-def _select_band_window_around_flat_pair(
-    total_bands: int,
-    flat_pair: tuple[int, int],
-    bands_per_side: int,
-) -> tuple[int, ...]:
-    lower = max(0, int(flat_pair[0]) - int(bands_per_side))
-    upper = min(int(total_bands), int(flat_pair[1]) + int(bands_per_side) + 1)
-    return tuple(range(lower, upper))
 
 
 def _display_k_label(label: str) -> str:
@@ -528,21 +507,20 @@ def _write_panel_arrays(
         **arrays,
     )
 
-    with (panel_dir / "chern_numbers.json").open("w", encoding="utf-8") as handle:
-        json.dump(
-            {
-                "delta_ev": float(delta_ev),
-                "flat_band_indices": list(int(index) for index in flat_pair),
-                "selected_band_indices": list(int(index) for index in selected_band_indices),
-                "topology_mode": metadata.topology_mode,
-                "chern": chern_payload,
-                "expected": metadata.expected_payload,
-                "status": metadata.status,
-                "annotation": metadata.annotation,
-            },
-            handle,
-            indent=2,
-        )
+    write_json(
+        panel_dir / "chern_numbers.json",
+        {
+            "delta_ev": float(delta_ev),
+            "flat_band_indices": list(int(index) for index in flat_pair),
+            "selected_band_indices": list(int(index) for index in selected_band_indices),
+            "topology_mode": metadata.topology_mode,
+            "chern": chern_payload,
+            "expected": metadata.expected_payload,
+            "status": metadata.status,
+            "annotation": metadata.annotation,
+        },
+        sort_keys=False,
+    )
 
     berry_fields: dict[str, np.ndarray | int | float] = {}
     for key, entry in chern_payload.items():
@@ -600,7 +578,7 @@ def _compute_panel(
         primary_label = f"valley {int(args.valley):+d}"
         overlay_label = f"valley {other_valley:+d}"
     flat_pair = infer_flat_band_indices(path_result.energies)
-    selected_band_indices = _select_band_window_around_flat_pair(
+    selected_band_indices = select_flat_pair_window(
         path_result.energies.shape[1],
         flat_pair,
         args.bands_per_side,
@@ -762,7 +740,7 @@ def _report_lines(
 
 def main() -> None:
     args = _parse_args()
-    _ensure_not_running_compute_on_login_node("tMBG Fig. 2 Chern band plot")
+    ensure_not_running_compute_on_login_node("tMBG Fig. 2 Chern band plot")
 
     deltas = tuple(float(value) for value in args.deltas_ev)
     panel_workers = _resolve_panel_workers(args, len(deltas))
@@ -840,8 +818,7 @@ def main() -> None:
         )
 
     if reference_model is not None:
-        with (output_dir / "lattice_info.json").open("w", encoding="utf-8") as handle:
-            json.dump(reference_model.lattice_summary(), handle, indent=2)
+        write_json(output_dir / "lattice_info.json", reference_model.lattice_summary(), sort_keys=False)
         write_tmbg_lattice_plot(
             output_dir,
             reference_model.lattice,
@@ -910,8 +887,7 @@ def main() -> None:
             "lattice_info_json": str(output_dir / "lattice_info.json"),
         },
     }
-    with (output_dir / "run_metadata.json").open("w", encoding="utf-8") as handle:
-        json.dump(metadata, handle, indent=2)
+    write_json(output_dir / "run_metadata.json", metadata, sort_keys=False)
 
     failed = [item for item in panel_metadata if item.status == "fail"]
     status = "fail" if failed else "pass"

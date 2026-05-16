@@ -164,9 +164,17 @@ def build_rlg_hbn_lattice(
     g_indices, g_vectors = _build_g_shell(g_complex_basis[0], g_complex_basis[1], cutoff_nm_inv=resolved_cutoff)
 
     gamma_m = 0.0 + 0.0j
-    k_m = complex((g_complex_basis[0] + g_complex_basis[1]) / 3.0)
-    kprime_m = complex(2.0 * g_complex_basis[0] / 3.0 - g_complex_basis[1] / 3.0)
-    m_m = complex(g_complex_basis[0] / 2.0)
+    # g_m1 and g_m2 are chosen with a 120 degree angle.  In this basis every
+    # edge midpoint has two adjacent corners.  Fig. 2 of 2312.11617v1 follows
+    # the edge centered at M=(g_m1+g_m2)/2; the adjacent corners are
+    # (2*g_m1+g_m2)/3 and (g_m1+2*g_m2)/3.  This convention matches the
+    # paper's remote-band cusp near M in the xi=0, V=48 meV panel.
+    #
+    # The opposite M orbit is not equivalent in a single valley because time
+    # reversal relates K valley at k to K' valley at -k, not K valley to itself.
+    k_m = complex((2.0 * g_complex_basis[0] + g_complex_basis[1]) / 3.0)
+    kprime_m = complex((g_complex_basis[0] + 2.0 * g_complex_basis[1]) / 3.0)
+    m_m = complex((g_complex_basis[0] + g_complex_basis[1]) / 2.0)
     real_a1, real_a2 = _real_space_vectors_from_reciprocal(g_complex_basis[0], g_complex_basis[1])
     g_norm = float(abs(g_complex_basis[0]))
     moire_period_nm = float(4.0 * math.pi / (math.sqrt(3.0) * g_norm))

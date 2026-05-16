@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime
-import json
 import os
 from pathlib import Path
 import socket
@@ -11,6 +10,7 @@ from time import perf_counter
 import numpy as np
 
 from mean_field.core.lattice import KPath, cumulative_distance
+from mean_field.devtools._runtime import ensure_not_running_compute_on_login_node, write_json
 from mean_field.systems.tdbg import (
     PathBandsResult,
     TDBGModel,
@@ -44,16 +44,6 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _ensure_not_running_compute_on_login_node(workload_name: str) -> None:
-    if os.environ.get("SLURM_JOB_ID"):
-        return
-    hostname = socket.gethostname().strip().lower()
-    if hostname.startswith("login001") or hostname.startswith("login002"):
-        raise SystemExit(
-            f"Refusing to run {workload_name} on login node {hostname}; submit it through Slurm from login002."
-        )
-
-
 def _default_output_dir() -> Path:
     job_id = os.environ.get("SLURM_JOB_ID")
     if job_id:
@@ -79,14 +69,10 @@ def _reference_path_from_npz(path: Path, labels: tuple[str, ...], node_indices: 
     )
 
 
-def _save_json(path: Path, payload: dict[str, object]) -> None:
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-
 def main() -> None:
     total_start = perf_counter()
     args = _parse_args()
-    _ensure_not_running_compute_on_login_node("TDBG reference band plot")
+    ensure_not_running_compute_on_login_node("TDBG reference band plot")
 
     output_dir = Path(args.output_dir).resolve() if args.output_dir is not None else _default_output_dir().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -191,7 +177,7 @@ def main() -> None:
         "hostname": socket.gethostname(),
         "slurm_job_id": os.environ.get("SLURM_JOB_ID", ""),
     }
-    _save_json(output_dir / "alignment_summary.json", summary)
+    write_json(output_dir / "alignment_summary.json", summary)
 
     report_lines = [
         "# TDBG Reference Alignment",

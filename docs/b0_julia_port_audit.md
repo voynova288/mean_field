@@ -32,11 +32,11 @@ Scope rules:
 | `B0/libs/helpers.jl` | partial | split across `params.py`, `path.py`, `runners.py` | No single helper module mirrors the Julia utility surface. |
 | `B0/libs/plot_helpers.jl` | partial | `plotting.py`, `runners.py` | Common plotting/report helpers are present, but not all helper entry points are mirrored one-to-one. |
 | `B0/libs/HF_mod_test.jl` | partial | `tests/test_b0_hf_helpers.py`, `tests/test_b0_hf_benchmark_runner.py` | Convention and runner coverage exists, but not as a direct Julia test-port suite. |
-| `B0/libs/DensityMatrix_reduction.jl` | partial | `hf.py`, `devtools/compare_b0_hf_*`, `devtools/inspect_b0_hf_*` | Some density diagnostics exist, but there is no dedicated reduction module yet. |
+| `B0/libs/DensityMatrix_reduction.jl` | partial | `hf.py`, `devtools/compare_b0_hf_*` | Matrix-level density comparisons exist, but there is no dedicated reduction module yet. |
 | `B0/proj/run_hf.jl` | partial | `src/mean_field/systems/tbg/zero_field/hf.py` | The full-HF solver exists, but the surrounding user-facing workflow is not mirrored as a separate runner script. |
 | `B0/proj/run_fig6_b0_hf_full.jl` | partial | `hf.py`, `runners.py` | Full-HF dispatch is supported, but the Julia script-level workflow and follow-up analysis surface are not matched one-to-one. |
 | `B0/proj/run_fig6_b0_hf_scf_points_case.jl` | partial | `hf_runners.py`, `plotting.py` | SCF-grid path extraction exists, but not as an exact script clone. |
-| `B0/proj/diagnose_fig6_b0_hf_case.jl` | partial | `src/mean_field/devtools/compare_b0_hf_*`, `inspect_b0_hf_*` | Diagnostics are present but remain fragmented across several devtools scripts. |
+| `B0/proj/diagnose_fig6_b0_hf_case.jl` | partial | `src/mean_field/devtools/compare_b0_hf_*` | Diagnostics are concentrated in the benchmark comparison helpers rather than one-off inspect scripts. |
 | `B0/proj/hf_order_parameter_analysis.jl` | partial | `hf.py` diagnostics, benchmark summaries, devtools | Order-parameter quantities are exposed only in limited form. |
 | `B0/proj/run_hf_analysis.jl` | partial | `runners.py`, devtools scripts | Summary output exists, but not the full Julia analysis script. |
 | `B0/proj/summarize_fig6_b0_hf_restricted.jl` | partial | `write_b0_hf_suite_summary`, `write_hf_path_summary` | Similar summaries exist, but not the exact Julia post-processing workflow. |

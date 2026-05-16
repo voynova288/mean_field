@@ -50,10 +50,12 @@ def write_validation_report(
         f"- ds_angstrom: {result.coulomb_params.ds_angstrom:.12g}",
         f"- eta_mev: {result.eta_mev:.12g}",
         f"- bands_per_valley: {result.bands_per_valley}",
-        "",
-        "## Checks",
-        "",
     ]
+    if result.metadata:
+        lines.extend(["", "## Convention Metadata", ""])
+        for key in sorted(result.metadata):
+            lines.append(f"- {key}: {result.metadata[key]}")
+    lines.extend(["", "## Checks", ""])
     for key, value in summary.items():
         lines.append(f"- {key}: {value:.16g}")
     if extra_checks:
@@ -87,6 +89,9 @@ def compute_c1_cross_check(
     q_index: tuple[int, int] = (1, 0),
     eta_mev: float = 1.0,
     sigma_rotation: bool = True,
+    periodic_g_grid: bool = False,
+    form_factor_mode: str = "zhang_zero_fill",
+    occupation_mode: str = "cnp_index",
 ) -> dict[str, float | int | list[int]]:
     """Check constrained direct summing against full minus flat-flat."""
 
@@ -97,6 +102,7 @@ def compute_c1_cross_check(
         lg=lg,
         bands_per_valley=bands_per_valley,
         sigma_rotation=sigma_rotation,
+        periodic_g_grid=periodic_g_grid,
     )
     classification = classify_flat_bands(solution.spectrum, method="center")
     q_shifts, _ = build_q_shift_table(q_lg)
@@ -108,6 +114,8 @@ def compute_c1_cross_check(
         q_index,
         q_shifts,
         eta_mev=eta_mev,
+        form_factor_mode=form_factor_mode,
+        occupation_mode=occupation_mode,
     )
     subtraction = compute_constrained_chi0_by_subtraction(
         solution,
@@ -116,6 +124,8 @@ def compute_c1_cross_check(
         q_index,
         q_shifts,
         eta_mev=eta_mev,
+        form_factor_mode=form_factor_mode,
+        occupation_mode=occupation_mode,
     )
     diff = direct - subtraction
     return {
@@ -127,4 +137,7 @@ def compute_c1_cross_check(
         "c1_lg": int(lg),
         "c1_q_lg": int(q_lg),
         "c1_bands_per_valley": -1 if bands_per_valley is None else int(bands_per_valley),
+        "c1_periodic_g_grid": int(bool(periodic_g_grid)),
+        "c1_form_factor_mode": str(form_factor_mode),
+        "c1_occupation_mode": str(occupation_mode),
     }

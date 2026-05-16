@@ -3,13 +3,20 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from datetime import datetime
+import json
 from pathlib import Path
 import socket
 from time import perf_counter
 
 import numpy as np
 
-from mean_field.crpa import CRPAScreenedCoulomb, load_crpa_result, run_full_crpa_hartree_fock
+from mean_field.crpa import (
+    CRPAScreenedCoulomb,
+    load_crpa_result,
+    run_full_crpa_hartree_fock,
+    validate_hf_compatible_crpa,
+)
+from mean_field.devtools.resample_b0_density_stack import resample_density_stack
 from mean_field.systems.tbg import TBGParameters
 from mean_field.systems.tbg.zero_field import (
     RestrictedHartreeFockState,
@@ -56,11 +63,58 @@ def _parse_init_state_spec(raw: str) -> InitSpec:
     return InitSpec("bm", 0, safe_label, state_path)
 
 
-def _load_initial_density(path: Path) -> np.ndarray:
+def _infer_inclusive_lk_from_nk(nk: int) -> int:
+    side = int(round(np.sqrt(int(nk))))
+    if side * side != int(nk) or side < 2:
+        raise ValueError(f"Cannot infer inclusive square-grid lk from nk={nk}")
+    return side - 1
+
+
+def _load_initial_density(
+    path: Path,
+    *,
+    target_lk: int,
+    resample_method: str,
+) -> tuple[np.ndarray, list[tuple[str, str]]]:
     with np.load(path) as data:
         if "density" not in data:
             raise ValueError(f"Restart state {path} does not contain a density array")
-        return np.asarray(data["density"], dtype=np.complex128)
+        density = np.asarray(data["density"], dtype=np.complex128)
+        metadata: list[tuple[str, str]] = [("initial_state_path", str(path))]
+        source_lk = int(np.asarray(data["lk"]).reshape(-1)[0]) if "lk" in data else _infer_inclusive_lk_from_nk(density.shape[2])
+        target_lk = int(target_lk)
+        target_nk = (target_lk + 1) * (target_lk + 1)
+        if density.shape[2] != target_nk:
+            if resample_method == "none":
+                raise ValueError(
+                    f"Restart state density nk={density.shape[2]} does not match target lk={target_lk} "
+                    f"(nk={target_nk}). Use --initial-state-resample bilinear or nearest to continue across lk."
+                )
+            density = resample_density_stack(
+                density,
+                source_lk=source_lk,
+                target_lk=target_lk,
+                method=resample_method,
+                hermitize=True,
+            )
+            metadata.extend(
+                [
+                    ("initial_state_resampled", "true"),
+                    ("initial_state_source_lk", str(source_lk)),
+                    ("initial_state_target_lk", str(target_lk)),
+                    ("initial_state_resample_method", str(resample_method)),
+                ]
+            )
+        else:
+            metadata.extend(
+                [
+                    ("initial_state_resampled", "false"),
+                    ("initial_state_source_lk", str(source_lk)),
+                    ("initial_state_target_lk", str(target_lk)),
+                    ("initial_state_resample_method", "none"),
+                ]
+            )
+        return density, metadata
 
 
 def _theta_tag(theta_deg: float) -> str:
@@ -124,6 +178,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--w1", type=float, default=97.4)
     parser.add_argument("--vf", type=float, default=2135.4)
     parser.add_argument(
+        "--fock-interpolation",
+        choices=("matrix_diagonal", "linear", "nearest"),
+        default="matrix_diagonal",
+        help="cRPA Fock lookup. Use matrix_diagonal for production HF.",
+    )
+    parser.add_argument(
+        "--initial-state-resample",
+        choices=("none", "bilinear", "nearest"),
+        default="none",
+        help="Resample --init-state density when its inclusive lk differs from --lk.",
+    )
+    parser.add_argument(
+        "--allow-incompatible-crpa",
+        action="store_true",
+        help="Bypass HF-compatible cRPA metadata checks. Intended only for debugging old artifacts.",
+    )
+    parser.add_argument(
         "--init",
         dest="init_specs",
         action="append",
@@ -163,8 +234,6 @@ def main(argv: list[str] | None = None) -> int:
     started = datetime.now()
     total_start = perf_counter()
 
-    crpa_result = load_crpa_result(args.crpa_dir)
-    crpa_screening = CRPAScreenedCoulomb(crpa_result)
     params = TBGParameters.from_degrees(
         theta_deg,
         vf=float(args.vf),
@@ -174,6 +243,10 @@ def main(argv: list[str] | None = None) -> int:
         alpha=0.5,
         deformation_potential=0.0,
     )
+    crpa_result = load_crpa_result(args.crpa_dir)
+    if not bool(args.allow_incompatible_crpa):
+        validate_hf_compatible_crpa(crpa_result, params, theta_deg=theta_deg, overlap_lg=overlap_lg)
+    crpa_screening = CRPAScreenedCoulomb(crpa_result)
 
     print(
         "[stage] setup "
@@ -206,9 +279,16 @@ def main(argv: list[str] | None = None) -> int:
         tag = _case_tag(theta_deg, nu, spec.label, spec.seed, lk, lg)
         state_path = state_dir / f"{tag}.npz"
         initial_density = None
+        initial_density_metadata: list[tuple[str, str]] = []
         if spec.initial_state_path is not None:
-            initial_density = _load_initial_density(spec.initial_state_path)
+            initial_density, initial_density_metadata = _load_initial_density(
+                spec.initial_state_path,
+                target_lk=lk,
+                resample_method=str(args.initial_state_resample),
+            )
         restart_suffix = "" if spec.initial_state_path is None else f" restart_from={spec.initial_state_path}"
+        if any(key == "initial_state_resampled" and value == "true" for key, value in initial_density_metadata):
+            restart_suffix += f" resample={args.initial_state_resample}"
         print(f"[stage] hf:start init={spec.label} seed={spec.seed}{restart_suffix}", flush=True)
         state = RestrictedHartreeFockState.from_bm_solution(grid_solution, nu=nu, precision=float(args.precision))
         state.diagnostics["overlap_lg"] = float(overlap_lg)
@@ -225,6 +305,7 @@ def main(argv: list[str] | None = None) -> int:
             beta=float(args.beta),
             max_iter=int(args.max_iter),
             oda_stall_threshold=float(args.oda_stall_threshold),
+            fock_interpolation=str(args.fock_interpolation),
         )
         hf_elapsed = perf_counter() - hf_start
         print(
@@ -251,6 +332,16 @@ def main(argv: list[str] | None = None) -> int:
             normalized_init_mode=np.asarray([hf_run.init_mode]),
             seed=np.asarray([spec.seed], dtype=int),
             initial_state_path=np.asarray(["" if spec.initial_state_path is None else str(spec.initial_state_path)]),
+            initial_state_resampled=np.asarray(
+                [
+                    any(
+                        key == "initial_state_resampled" and value == "true"
+                        for key, value in initial_density_metadata
+                    )
+                ]
+            ),
+            initial_state_resample_method=np.asarray([str(args.initial_state_resample)]),
+            initial_state_metadata_json=np.asarray([json.dumps(dict(initial_density_metadata), sort_keys=True)]),
             converged=np.asarray([hf_run.converged]),
             exit_reason=np.asarray([hf_run.exit_reason]),
             theta_deg=np.asarray([theta_deg], dtype=float),
@@ -264,6 +355,8 @@ def main(argv: list[str] | None = None) -> int:
             crpa_lk=np.asarray([crpa_result.lk], dtype=int),
             crpa_lg=np.asarray([crpa_result.lg], dtype=int),
             crpa_q_lg=np.asarray([crpa_result.q_lg], dtype=int),
+            crpa_metadata_json=np.asarray([json.dumps(crpa_result.metadata, sort_keys=True)]),
+            fock_interpolation=np.asarray([str(args.fock_interpolation)]),
             epsilon_bn=np.asarray([float(crpa_result.coulomb_params.epsilon_bn)], dtype=float),
             ds_angstrom=np.asarray([float(crpa_result.coulomb_params.ds_angstrom)], dtype=float),
             max_iter=np.asarray([int(args.max_iter)], dtype=int),
@@ -304,10 +397,14 @@ def main(argv: list[str] | None = None) -> int:
             ("w1_meV", f"{float(args.w1):.16g}"),
             ("vf_meV", f"{float(args.vf):.16g}"),
             ("interaction_model", "zhang_crpa_screened"),
+            ("fock_interpolation", str(args.fock_interpolation)),
+            ("initial_state_resample", str(args.initial_state_resample)),
+            ("allow_incompatible_crpa", str(bool(args.allow_incompatible_crpa)).lower()),
             ("crpa_dir", str(args.crpa_dir)),
             ("crpa_lk", str(crpa_result.lk)),
             ("crpa_lg", str(crpa_result.lg)),
             ("crpa_q_lg", str(crpa_result.q_lg)),
+            ("crpa_metadata_json", json.dumps(crpa_result.metadata, sort_keys=True)),
             ("epsilon_bn", f"{float(crpa_result.coulomb_params.epsilon_bn):.16g}"),
             ("ds_angstrom", f"{float(crpa_result.coulomb_params.ds_angstrom):.16g}"),
             (

@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime
-import json
 import os
 from pathlib import Path
-import socket
 from time import perf_counter
 
 import numpy as np
 
+from mean_field.devtools._runtime import ensure_not_running_compute_on_login_node, select_flat_pair_window, write_json
 from mean_field.systems.tmbg import (
     TMBGBandPlotPanel,
     TMBGModel,
@@ -33,16 +32,6 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _ensure_not_running_compute_on_login_node(workload_name: str) -> None:
-    if os.environ.get("SLURM_JOB_ID"):
-        return
-    hostname = socket.gethostname().strip().lower()
-    if hostname.startswith("login001") or hostname.startswith("login002"):
-        raise SystemExit(
-            f"Refusing to run {workload_name} on login node {hostname}; submit it through Slurm from login002."
-        )
-
-
 def _default_output_dir() -> Path:
     job_id = os.environ.get("SLURM_JOB_ID")
     if job_id:
@@ -59,13 +48,6 @@ def _panel_label(delta_ev: float) -> str:
     if delta_mev < 0:
         return f"Δ = {delta_mev} meV"
     return "Δ = 0 meV"
-
-
-def _select_band_window_around_flat_pair(total_bands: int, flat_pair: tuple[int, int], bands_per_side: int) -> tuple[int, ...]:
-    center = (int(flat_pair[0]) + int(flat_pair[1])) // 2
-    start = max(0, center - bands_per_side)
-    stop = min(total_bands, center + bands_per_side + 2)
-    return tuple(range(start, stop))
 
 
 def _display_k_label(label: str) -> str:
@@ -96,7 +78,7 @@ def main() -> None:
     start_time = datetime.now().isoformat(timespec="seconds")
     total_start = perf_counter()
     args = _parse_args()
-    _ensure_not_running_compute_on_login_node("tMBG Fig. 2-like band plot")
+    ensure_not_running_compute_on_login_node("tMBG Fig. 2-like band plot")
     args.output_dir = Path(args.output_dir).resolve() if args.output_dir is not None else _default_output_dir().resolve()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     valley_label = "K" if args.valley == 1 else "K'"
@@ -139,10 +121,11 @@ def main() -> None:
             n_bands=model.lattice.matrix_dim,
         )
         flat_pair = infer_flat_band_indices(path_result.energies)
-        selected_indices = _select_band_window_around_flat_pair(
+        selected_indices = select_flat_pair_window(
             path_result.energies.shape[1],
             flat_pair,
             args.bands_per_side,
+            mode="center",
         )
         selected_energies = np.asarray(path_result.energies[:, selected_indices], dtype=float)
         local_lookup = {int(index): ilocal for ilocal, index in enumerate(selected_indices)}
@@ -236,8 +219,7 @@ def main() -> None:
         "total_elapsed_sec": total_elapsed,
     }
 
-    with (args.output_dir / "run_metadata.json").open("w", encoding="utf-8") as handle:
-        json.dump(metadata, handle, indent=2)
+    write_json(args.output_dir / "run_metadata.json", metadata, sort_keys=False)
 
     print(f"[done] output_dir={args.output_dir}")
     for key, value in plot_paths.items():

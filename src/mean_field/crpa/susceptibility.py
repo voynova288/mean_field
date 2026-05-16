@@ -23,6 +23,48 @@ def occupation_step(
     return occ
 
 
+def cnp_index_occupation(classification: BandClassification, ieta: int, ik: int) -> np.ndarray:
+    """Return Zhang CNP reference occupations by band index.
+
+    The two CNP flat bands are classified explicitly: remote valence and the
+    lower flat band are occupied; the upper flat band and remote conduction
+    bands are empty.  This avoids assigning f=1/2 at numerical Dirac zeroes.
+    """
+
+    if classification.flat_indices.shape[2] != 2:
+        raise ValueError(
+            "cnp_index occupation expects exactly two flat bands per valley/k; "
+            f"got {classification.flat_indices.shape[2]}."
+        )
+    occ = np.zeros(classification.n_band, dtype=float)
+    occ[np.asarray(classification.remote_below_mask[int(ieta), int(ik)], dtype=bool)] = 1.0
+    lower_flat = int(np.min(classification.flat_indices[int(ieta), int(ik)]))
+    occ[lower_flat] = 1.0
+    return occ
+
+
+def _occupation_for_mode(
+    energies_mev: np.ndarray,
+    classification: BandClassification,
+    ieta: int,
+    ik: int,
+    *,
+    occupation_mode: str,
+    fermi_level_mev: float,
+    fermi_tol_mev: float,
+) -> np.ndarray:
+    mode = str(occupation_mode).strip().lower().replace("-", "_")
+    if mode in {"cnp_index", "index", "zhang_cnp"}:
+        return cnp_index_occupation(classification, ieta, ik)
+    if mode in {"energy_step", "step", "fermi_step"}:
+        return occupation_step(
+            energies_mev,
+            fermi_level_mev=fermi_level_mev,
+            fermi_tol_mev=fermi_tol_mev,
+        )
+    raise ValueError(f"Unsupported cRPA occupation_mode: {occupation_mode!r}")
+
+
 def lindhard_matrix(
     left_energies_mev: np.ndarray,
     right_energies_mev: np.ndarray,
@@ -30,13 +72,25 @@ def lindhard_matrix(
     eta_mev: float = 1.0,
     fermi_level_mev: float = 0.0,
     fermi_tol_mev: float = 1.0e-10,
+    left_occupations: np.ndarray | None = None,
+    right_occupations: np.ndarray | None = None,
 ) -> np.ndarray:
     """Return chi0_mn(q) with rows at k+q and columns at k."""
 
     left_e = np.asarray(left_energies_mev, dtype=float)
     right_e = np.asarray(right_energies_mev, dtype=float)
-    f_left = occupation_step(left_e, fermi_level_mev=fermi_level_mev, fermi_tol_mev=fermi_tol_mev)
-    f_right = occupation_step(right_e, fermi_level_mev=fermi_level_mev, fermi_tol_mev=fermi_tol_mev)
+    if left_occupations is None:
+        f_left = occupation_step(left_e, fermi_level_mev=fermi_level_mev, fermi_tol_mev=fermi_tol_mev)
+    else:
+        f_left = np.asarray(left_occupations, dtype=float)
+    if right_occupations is None:
+        f_right = occupation_step(right_e, fermi_level_mev=fermi_level_mev, fermi_tol_mev=fermi_tol_mev)
+    else:
+        f_right = np.asarray(right_occupations, dtype=float)
+    if f_left.shape != left_e.shape:
+        raise ValueError(f"left occupation shape {f_left.shape} does not match left energies {left_e.shape}")
+    if f_right.shape != right_e.shape:
+        raise ValueError(f"right occupation shape {f_right.shape} does not match right energies {right_e.shape}")
     numerator = f_left[:, None] - f_right[None, :]
     denominator = right_e[None, :] - left_e[:, None]
     if eta_mev <= 0.0:
@@ -59,7 +113,10 @@ def _compute_chi0(
     eta_mev: float = 1.0,
     spin_degeneracy: float = 2.0,
     fermi_level_mev: float = 0.0,
+    fermi_tol_mev: float = 1.0e-10,
     symmetrize: bool = True,
+    form_factor_mode: str = "zhang_zero_fill",
+    occupation_mode: str = "cnp_index",
 ) -> np.ndarray:
     """Compute static polarizability for one q_tilde."""
 
@@ -84,13 +141,35 @@ def _compute_chi0(
                 grid_shape=solution.grid_shape,
                 q_shifts=wrapped_q_shifts,
                 local_basis_size=solution.nlocal,
+                form_factor_mode=form_factor_mode,
             )
             lambdas = np.moveaxis(lambda_stack, 0, -1)
+            left_energies = solution.spectrum[:, ieta, ikq]
+            right_energies = solution.spectrum[:, ieta, ik]
             lindhard = lindhard_matrix(
-                solution.spectrum[:, ieta, ikq],
-                solution.spectrum[:, ieta, ik],
+                left_energies,
+                right_energies,
                 eta_mev=eta_mev,
                 fermi_level_mev=fermi_level_mev,
+                fermi_tol_mev=fermi_tol_mev,
+                left_occupations=_occupation_for_mode(
+                    left_energies,
+                    classification,
+                    ieta,
+                    ikq,
+                    occupation_mode=occupation_mode,
+                    fermi_level_mev=fermi_level_mev,
+                    fermi_tol_mev=fermi_tol_mev,
+                ),
+                right_occupations=_occupation_for_mode(
+                    right_energies,
+                    classification,
+                    ieta,
+                    ik,
+                    occupation_mode=occupation_mode,
+                    fermi_level_mev=fermi_level_mev,
+                    fermi_tol_mev=fermi_tol_mev,
+                ),
             )
             left_flat = classification.flat_mask[ieta, ikq]
             right_flat = classification.flat_mask[ieta, ik]

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime
-import json
 import os
 from pathlib import Path
 import socket
@@ -10,6 +9,7 @@ from time import perf_counter
 
 import numpy as np
 
+from mean_field.devtools._runtime import ensure_not_running_compute_on_login_node, write_json
 from mean_field.systems.htg import (
     HTGModel,
     HTGParams,
@@ -58,16 +58,6 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _ensure_not_running_compute_on_login_node(workload_name: str) -> None:
-    if os.environ.get("SLURM_JOB_ID"):
-        return
-    hostname = socket.gethostname().strip().lower()
-    if hostname.startswith("login001") or hostname.startswith("login002"):
-        raise SystemExit(
-            f"Refusing to run {workload_name} on login node {hostname}; submit it through Slurm from login002."
-        )
-
-
 def _default_output_dir() -> Path:
     job_id = os.environ.get("SLURM_JOB_ID")
     if job_id:
@@ -75,10 +65,6 @@ def _default_output_dir() -> Path:
     else:
         stem = f"htg_fig2b_fig3b_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     return DEFAULT_OUTPUT_ROOT / stem
-
-
-def _save_json(path: Path, payload: dict[str, object]) -> None:
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _save_path_npz(path: Path, result, **metadata: object) -> None:
@@ -107,7 +93,7 @@ def _format_metric_mev(value: float | None) -> str:
 def main() -> None:
     total_start = perf_counter()
     args = _parse_args()
-    _ensure_not_running_compute_on_login_node("HTG Fig. 2b/Fig. 3b reproduction")
+    ensure_not_running_compute_on_login_node("HTG Fig. 2b/Fig. 3b reproduction")
 
     output_dir = Path(args.output_dir).resolve() if args.output_dir is not None else _default_output_dir().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -129,7 +115,7 @@ def main() -> None:
         return_eigenvectors=False,
     )
     fig2_metrics = estimate_central_band_metrics(fig2_result, model_fig2.matrix_dim)
-    _save_json(output_dir / "lattice_info.json", model_fig2.lattice_summary())
+    write_json(output_dir / "lattice_info.json", model_fig2.lattice_summary())
     _save_path_npz(
         output_dir / "fig2b_bands_path.npz",
         fig2_result,
@@ -177,7 +163,7 @@ def main() -> None:
             frac_shift=(0.5, 0.5),
         )
         topology_payload = topology_result.to_dict()
-        _save_json(output_dir / "chern_numbers.json", topology_payload)
+        write_json(output_dir / "chern_numbers.json", topology_payload)
 
     fig3_panels = []
     fig3_summaries: list[dict[str, object]] = []
@@ -260,7 +246,7 @@ def main() -> None:
     if topology_payload is not None:
         summary["fig2b"]["chern_basis"] = topology_payload
 
-    _save_json(output_dir / "run_metadata.json", summary)
+    write_json(output_dir / "run_metadata.json", summary)
 
     report_lines = [
         "# HTG Fig. 2b / Fig. 3b Reproduction",

@@ -7,8 +7,9 @@
 #SBATCH -p regular
 #SBATCH -N 1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=28
-#SBATCH --mem=128G
+#SBATCH --cpus-per-task=56
+#SBATCH --mem=0
+#SBATCH --exclusive
 #SBATCH -t 04:00:00
 #SBATCH -o logs/mean_field_%j.out
 #SBATCH -e logs/mean_field_%j.err

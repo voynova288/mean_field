@@ -45,6 +45,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--q-range", default=None, help="Flat q-index range start:stop, stop exclusive.")
     parser.add_argument("--chunk-index", type=int, default=None)
     parser.add_argument("--chunk-count", type=int, default=None)
+    parser.add_argument(
+        "--form-factor-mode",
+        choices=("zhang_zero_fill", "hf_periodic"),
+        default="zhang_zero_fill",
+        help="Plane-wave form-factor convention for this chunk.",
+    )
+    parser.add_argument(
+        "--hf-compatible",
+        action="store_true",
+        help="Alias for --form-factor-mode=hf_periodic; requires a periodic-G BM cache.",
+    )
+    parser.add_argument(
+        "--occupation-mode",
+        choices=("cnp_index", "energy_step"),
+        default="cnp_index",
+        help="Reference occupation for cRPA. Production Zhang/HF chunks use cnp_index.",
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     return parser
 
@@ -72,6 +89,9 @@ def main(argv: list[str] | None = None) -> None:
         raise ValueError(f"Empty q chunk after clipping: {start}:{stop}")
 
     q_indices = [grid.unravel_index(iq) for iq in range(start, stop)]
+    form_factor_mode = "hf_periodic" if args.hf_compatible else str(args.form_factor_mode)
+    if form_factor_mode == "hf_periodic" and not bool(solution.periodic_g_grid):
+        raise ValueError("HF-compatible cRPA chunks require a BM cache prepared with --periodic-g-grid.")
     classification = classify_flat_bands(solution.spectrum, method="center")
     coulomb = CRPACoulombParams(epsilon_bn=float(args.epsilon_bn), ds_angstrom=float(args.ds_angstrom))
     bands_per_valley = None if solution.nb == solution.basis_dimension else int(solution.nb)
@@ -80,7 +100,8 @@ def main(argv: list[str] | None = None) -> None:
     print(
         "[crpa-chunk] start "
         f"bm={args.bm_solution} lk={lk} lg={solution.lg} q_lg={args.q_lg} "
-        f"q_range={start}:{stop} q_points={len(q_indices)}",
+        f"q_range={start}:{stop} q_points={len(q_indices)} form_factor_mode={form_factor_mode} "
+        f"occupation_mode={args.occupation_mode}",
         flush=True,
     )
     result = compute_crpa_from_solution(
@@ -93,6 +114,9 @@ def main(argv: list[str] | None = None) -> None:
         q_indices=q_indices,
         coulomb_params=coulomb,
         eta_mev=float(args.eta_mev),
+        form_factor_mode=form_factor_mode,
+        occupation_mode=str(args.occupation_mode),
+        flat_method="center",
     )
     out = write_crpa_outputs(result, args.output_dir)
     write_epsilon_vs_q_plot(result, out / "epsilon_vs_q.pdf")

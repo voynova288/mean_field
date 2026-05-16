@@ -7,6 +7,9 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+from mean_field.crpa.diagnostics import write_all_epsilon_diagnostics
+from mean_field.crpa.workflow import load_crpa_result
+
 
 def _load_json(path: Path) -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -47,7 +50,7 @@ def main(argv: list[str] | None = None) -> None:
 
     for chunk in chunks:
         chunk_params = _load_json(chunk / "crpa_params.json")
-        comparable_keys = ("theta_deg", "lk", "lg", "q_lg", "bands_per_valley", "eta_mev", "coulomb_params")
+        comparable_keys = ("theta_deg", "lk", "lg", "q_lg", "bands_per_valley", "eta_mev", "coulomb_params", "metadata")
         for key in comparable_keys:
             if chunk_params.get(key) != params.get(key):
                 raise ValueError(f"Chunk {chunk} has incompatible {key}: {chunk_params.get(key)!r} != {params.get(key)!r}")
@@ -168,18 +171,36 @@ def main(argv: list[str] | None = None) -> None:
         f"- q_lg: {params['q_lg']}",
         f"- q_point_count: {params['q_point_count']}",
         "",
-        "## Checks",
-        "",
-        f"- effective_epsilon_times_bn_min: {float(np.min(effective * epsilon_bn)):.12g}",
-        f"- effective_epsilon_times_bn_max: {float(np.max(effective * epsilon_bn)):.12g}",
-        "",
-        "## Chunks",
+        "## Convention Metadata",
         "",
     ]
+    for key, value in sorted(dict(params.get("metadata", {})).items()):
+        report.append(f"- {key}: {value}")
+    report.extend(
+        [
+            "",
+            "## Checks",
+            "",
+            f"- effective_epsilon_times_bn_min: {float(np.min(effective * epsilon_bn)):.12g}",
+            f"- effective_epsilon_times_bn_max: {float(np.max(effective * epsilon_bn)):.12g}",
+            "",
+            "## Chunks",
+            "",
+        ]
+    )
     report.extend(f"- `{chunk}`" for chunk in chunks)
     (output_dir / "validation_report.md").write_text("\n".join(report) + "\n", encoding="utf-8")
+    diagnostic_summary = write_all_epsilon_diagnostics(load_crpa_result(output_dir), output_dir)
     print(f"[crpa-merge] wrote merged artifact to {output_dir}", flush=True)
     print(f"[crpa-merge] q_point_count={params['q_point_count']} chunks={len(chunks)}", flush=True)
+    print(
+        "[crpa-merge] diagnostics "
+        f"q_peak_nm_inv={diagnostic_summary.q_peak_nm_inv:.6g} "
+        f"eps_total_peak={diagnostic_summary.eps_total_peak:.6g} "
+        f"eps_total_q12={diagnostic_summary.eps_total_q12:.6g} "
+        f"eps_diag_imag_max_abs={diagnostic_summary.eps_diag_imag_max_abs:.6g}",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

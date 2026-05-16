@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Iterable
 
 import numpy as np
+from scipy.linalg import eigh
 
 from ...core.hf import (
     DensityUpdateResult,
@@ -442,8 +443,12 @@ def normalize_htg_init_mode(init_mode: str) -> str:
         "diag_random": "diag_random",
         "flavor": "flavor",
         "fb": "fb",
+        "d3a": "fb",
+        "fb_d3a": "fb",
         "fb_d2a2": "fb",
         "d2a2": "fb",
+        "d3b": "sublattice",
+        "fb_d3b": "sublattice",
         "fb_d2b2": "sublattice",
         "d2b2": "sublattice",
         "fi": "fi",
@@ -458,7 +463,8 @@ def normalize_htg_init_mode(init_mode: str) -> str:
     if normalized not in aliases:
         raise ValueError(
             f"Unsupported HTG HF init mode: {init_mode}. "
-            "Supported modes: bm, random, diag_random, flavor, fb, fi, vp, sp, chern, sublattice, perturbed"
+            "Supported modes: bm, random, diag_random, flavor, fb/d3a, fi, vp, sp, chern, "
+            "sublattice/d3b, perturbed"
         )
     return aliases[normalized]
 
@@ -763,9 +769,10 @@ def _central_chern_basis_at_k(
     hmat = build_hamiltonian(k_tilde, lattice, params, valley=valley)
     if interaction.U_ev != 0.0:
         hmat = hmat + layer_potential
-    evals_all, evecs_all = np.linalg.eigh(hmat)
-    central_evals = np.asarray(evals_all[np.asarray(central_pair, dtype=int)], dtype=float)
-    central_evecs = np.asarray(evecs_all[:, np.asarray(central_pair, dtype=int)], dtype=np.complex128)
+    subset = (int(central_pair[0]), int(central_pair[1]))
+    central_evals, central_evecs = eigh(hmat, subset_by_index=subset, driver="evr")
+    central_evals = np.asarray(central_evals, dtype=float)
+    central_evecs = np.asarray(central_evecs, dtype=np.complex128)
 
     projected_sigma = central_evecs.conjugate().T @ sigma_z_operator @ central_evecs
     sigma_eigs, sigma_rot = np.linalg.eigh(projected_sigma)
@@ -800,10 +807,16 @@ def _hybrid_projected_basis_at_k(
     hmat = build_hamiltonian(k_tilde, lattice, params, valley=valley)
     if interaction.U_ev != 0.0:
         hmat = hmat + layer_potential
-    evals_all, evecs_all = np.linalg.eigh(hmat)
+    subset = (int(np.min(projected_indices_array)), int(np.max(projected_indices_array)))
+    evals_subset, evecs_subset = eigh(hmat, subset_by_index=subset, driver="evr")
+    evals_subset = np.asarray(evals_subset, dtype=float)
+    evecs_subset = np.asarray(evecs_subset, dtype=np.complex128)
+    local_position = {int(index): int(index - subset[0]) for index in projected_indices_array}
 
-    central_evals = np.asarray(evals_all[central_pair_array], dtype=float)
-    central_evecs = np.asarray(evecs_all[:, central_pair_array], dtype=np.complex128)
+    central_evals = np.asarray([evals_subset[local_position[int(index)]] for index in central_pair_array], dtype=float)
+    central_evecs = np.column_stack(
+        [evecs_subset[:, local_position[int(index)]] for index in central_pair_array]
+    ).astype(np.complex128, copy=False)
     projected_sigma = central_evecs.conjugate().T @ sigma_z_operator @ central_evecs
     sigma_eigs, sigma_rot = np.linalg.eigh(projected_sigma)
     central_order = np.asarray([int(np.argmax(sigma_eigs)), int(np.argmin(sigma_eigs))], dtype=int)
@@ -814,28 +827,23 @@ def _hybrid_projected_basis_at_k(
     lower_indices = tuple(int(index) for index in projected_indices if int(index) < int(central_pair[0]))
     upper_indices = tuple(int(index) for index in projected_indices if int(index) > int(central_pair[1]))
     ordered_vectors: list[np.ndarray] = []
-    ordered_h_columns: list[np.ndarray] = []
-    ordered_raw_indices: list[int] = []
     for index in lower_indices:
-        ordered_vectors.append(np.asarray(evecs_all[:, index], dtype=np.complex128))
-        ordered_raw_indices.append(int(index))
+        ordered_vectors.append(np.asarray(evecs_subset[:, local_position[index]], dtype=np.complex128))
     for col in range(2):
         ordered_vectors.append(np.asarray(central_wavefunctions[:, col], dtype=np.complex128))
-        ordered_raw_indices.append(int(central_pair[col]))
     for index in upper_indices:
-        ordered_vectors.append(np.asarray(evecs_all[:, index], dtype=np.complex128))
-        ordered_raw_indices.append(int(index))
+        ordered_vectors.append(np.asarray(evecs_subset[:, local_position[index]], dtype=np.complex128))
 
     wavefunctions = np.column_stack(ordered_vectors).astype(np.complex128, copy=False)
     n_projected = wavefunctions.shape[1]
     h_projected = np.zeros((n_projected, n_projected), dtype=np.complex128)
     for out_pos, index in enumerate(lower_indices):
-        h_projected[out_pos, out_pos] = float(evals_all[index])
+        h_projected[out_pos, out_pos] = float(evals_subset[local_position[index]])
     central_start = len(lower_indices)
     h_projected[central_start : central_start + 2, central_start : central_start + 2] = central_h
     for offset, index in enumerate(upper_indices):
         pos = central_start + 2 + offset
-        h_projected[pos, pos] = float(evals_all[index])
+        h_projected[pos, pos] = float(evals_subset[local_position[index]])
 
     sigma_projected = wavefunctions.conjugate().T @ sigma_z_operator @ wavefunctions
     sigma_diagonal = np.real(np.diag(sigma_projected))

@@ -5,11 +5,9 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
-import json
 import math
 import os
 from pathlib import Path
-import socket
 from time import perf_counter
 
 import matplotlib
@@ -19,6 +17,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
 
+from mean_field.devtools._runtime import (
+    ensure_not_running_compute_on_login_node,
+    select_energy_window_bands,
+    write_json,
+)
 from mean_field.runtime import collect_runtime_environment, current_timestamp
 from mean_field.systems.atmg import ATMGModel, ATMGParameters
 from mean_field.systems.atmg.bilayer_map import build_atmg_via_tbg_sum
@@ -69,16 +72,6 @@ class PanelResult:
     realistic: CurveResult
     direct_node_max_abs_diff_ev: float | None
     elapsed_sec: float
-
-
-def _ensure_not_running_compute_on_login_node(workload_name: str) -> None:
-    if os.environ.get("SLURM_JOB_ID"):
-        return
-    hostname = socket.gethostname().strip().lower()
-    if hostname.startswith("login001") or hostname.startswith("login002"):
-        raise RuntimeError(
-            f"Refusing to run {workload_name} on login node {hostname}; submit it through Slurm from login002."
-        )
 
 
 def _parse_args() -> argparse.Namespace:
@@ -364,27 +357,15 @@ def _compute_panel_worker(payload: tuple[Fig3PanelSpec, float, int, int, bool, i
     )
 
 
-def _select_window_bands(energies: np.ndarray, *, ymin: float, ymax: float, fallback_each_side: int) -> np.ndarray:
-    energies = np.asarray(energies, dtype=float)
-    band_min = np.min(energies, axis=0)
-    band_max = np.max(energies, axis=0)
-    indices = np.nonzero((band_max >= ymin) & (band_min <= ymax))[0]
-    if indices.size > 0:
-        return indices
-    center = energies.shape[1] // 2
-    lower = max(0, center - fallback_each_side)
-    upper = min(energies.shape[1], center + fallback_each_side)
-    return np.arange(lower, upper, dtype=int)
-
-
 def _plot_curve(axis, panel: PanelResult, curve: CurveResult, *, color: str, linestyle: str, label: str) -> None:
     scale = float(curve.moire_energy_scale_ev)
     energies_scaled = np.asarray(curve.combined_energies_ev, dtype=float) / scale
-    band_indices = _select_window_bands(
+    band_indices = select_energy_window_bands(
         energies_scaled,
-        ymin=-float(panel.spec.y_window_scaled),
-        ymax=float(panel.spec.y_window_scaled),
+        emin=-float(panel.spec.y_window_scaled),
+        emax=float(panel.spec.y_window_scaled),
         fallback_each_side=12,
+        fallback_include_center=False,
     )
     for band in band_indices:
         axis.plot(
@@ -502,10 +483,6 @@ def _curve_summary(curve: CurveResult, *, target_tbg_alpha: float) -> dict[str, 
     }
 
 
-def _write_json(path: Path, payload: dict[str, object]) -> None:
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-
 def _write_report(
     path: Path,
     *,
@@ -555,7 +532,7 @@ def _write_report(
 def main() -> int:
     total_start = perf_counter()
     args = _parse_args()
-    _ensure_not_running_compute_on_login_node("ATMG Fig. 3 band reproduction")
+    ensure_not_running_compute_on_login_node("ATMG Fig. 3 band reproduction")
 
     output_dir = Path(args.output_dir).resolve() if args.output_dir is not None else _default_output_dir().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -663,7 +640,7 @@ def main() -> int:
             for panel in panel_results
         },
     }
-    _write_json(summary_json, summary_payload)
+    write_json(summary_json, summary_payload)
     _write_report(
         report_md,
         output_dir=output_dir,

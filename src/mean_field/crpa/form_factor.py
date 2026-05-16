@@ -19,7 +19,16 @@ def reshape_plane_wave_vectors(
     return vecs.reshape(int(local_basis_size), nx, ny, vecs.shape[1], order="F")
 
 
-def _shift_plane_wave_coefficients(values: np.ndarray, dm: int, dn: int) -> np.ndarray:
+def _normalize_form_factor_mode(mode: str) -> str:
+    normalized = str(mode).strip().lower().replace("-", "_")
+    if normalized in {"zhang", "zhang_zero_fill", "zero_fill"}:
+        return "zhang_zero_fill"
+    if normalized in {"hf", "hf_periodic", "periodic"}:
+        return "hf_periodic"
+    raise ValueError(f"Unsupported cRPA form-factor mode: {mode!r}")
+
+
+def _shift_plane_wave_coefficients_zero_fill(values: np.ndarray, dm: int, dn: int) -> np.ndarray:
     """Shift plane-wave coefficients with zero fill, not periodic wrapping."""
 
     arr = np.asarray(values, dtype=np.complex128)
@@ -47,6 +56,13 @@ def _shift_plane_wave_coefficients(values: np.ndarray, dm: int, dn: int) -> np.n
     return out
 
 
+def _shift_plane_wave_coefficients(values: np.ndarray, dm: int, dn: int, *, mode: str = "zhang_zero_fill") -> np.ndarray:
+    resolved_mode = _normalize_form_factor_mode(mode)
+    if resolved_mode == "hf_periodic":
+        return np.roll(np.asarray(values, dtype=np.complex128), shift=(0, -int(dm), -int(dn), 0), axis=(0, 1, 2, 3))
+    return _shift_plane_wave_coefficients_zero_fill(values, dm, dn)
+
+
 def compute_lambda_stack(
     left_eigenvectors: np.ndarray,
     right_eigenvectors: np.ndarray,
@@ -56,6 +72,7 @@ def compute_lambda_stack(
     local_basis_size: int = 4,
     left_band_indices: np.ndarray | None = None,
     right_band_indices: np.ndarray | None = None,
+    form_factor_mode: str = "zhang_zero_fill",
 ) -> np.ndarray:
     """Compute lambda matrices for one ``k+q`` and one ``k``.
 
@@ -82,8 +99,9 @@ def compute_lambda_stack(
 
     left_conj = left.conjugate()
     out = np.zeros((len(q_shifts), left.shape[-1], right.shape[-1]), dtype=np.complex128)
+    resolved_mode = _normalize_form_factor_mode(form_factor_mode)
     for iq, (dm, dn) in enumerate(q_shifts):
-        shifted_right = _shift_plane_wave_coefficients(right, int(dm), int(dn))
+        shifted_right = _shift_plane_wave_coefficients(right, int(dm), int(dn), mode=resolved_mode)
         out[iq] = np.einsum("lxyi,lxyj->ij", left_conj, shifted_right, optimize=True)
     return out
 
@@ -93,6 +111,7 @@ def q0_identity_error(
     *,
     grid_shape: tuple[int, int],
     local_basis_size: int = 4,
+    form_factor_mode: str = "zhang_zero_fill",
 ) -> float:
     lam = compute_lambda_stack(
         eigenvectors,
@@ -100,5 +119,6 @@ def q0_identity_error(
         grid_shape=grid_shape,
         q_shifts=((0, 0),),
         local_basis_size=local_basis_size,
+        form_factor_mode=form_factor_mode,
     )[0]
     return float(np.max(np.abs(lam - np.eye(lam.shape[0], dtype=np.complex128))))

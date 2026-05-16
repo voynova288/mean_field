@@ -43,6 +43,8 @@ class HartreeFockStepResult:
     norm_mixed: float
     norm_selected: float
     energy: float
+    delta_interaction_h: np.ndarray | None = None
+    interaction_h_from_cache: bool = False
 
     @property
     def density_new(self) -> np.ndarray:
@@ -77,10 +79,16 @@ def compute_oda_parameter(
     state: HartreeFockStateProtocol,
     delta_density: np.ndarray,
     *,
-    interaction_builder: Callable[[np.ndarray], np.ndarray],
+    interaction_builder: Callable[[np.ndarray], np.ndarray] | None = None,
+    delta_h: np.ndarray | None = None,
+    interaction_h: np.ndarray | None = None,
 ) -> float:
-    delta_h = interaction_builder(delta_density)
-    interaction_h = state.hamiltonian - state.h0
+    if delta_h is None:
+        if interaction_builder is None:
+            raise ValueError("Either interaction_builder or delta_h must be provided for ODA.")
+        delta_h = interaction_builder(delta_density)
+    if interaction_h is None:
+        interaction_h = state.hamiltonian - state.h0
     # Match Julia B0's stored-projector convention:
     # `tr(transpose(delta_P) * delta_H) == sum_ab delta_P[a,b] * delta_H[a,b]`.
     a = np.einsum("abk,abk->", delta_density, delta_h, optimize=True)
@@ -114,6 +122,7 @@ def run_hartree_fock_iterations(
     density_builder: Callable[[np.ndarray], DensityUpdateResult],
     energy_functional: Callable[[np.ndarray, np.ndarray, np.ndarray], float],
     oda_parameterizer: Callable[[HartreeFockStateProtocol, np.ndarray], float] | None = None,
+    oda_delta_interaction_builder: Callable[[np.ndarray], np.ndarray] | None = None,
     hamiltonian_postprocessor: Callable[[np.ndarray], None] | None = None,
     density_postprocessor: Callable[[np.ndarray], None] | None = None,
     step_callback: Callable[[HartreeFockStateProtocol, HartreeFockStepResult], None] | None = None,
@@ -129,19 +138,40 @@ def run_hartree_fock_iterations(
     iter_err: list[float] = []
     iter_oda: list[float] = []
     exit_reason = "max_iter"
+    cached_interaction_h: np.ndarray | None = None
 
     for iteration in range(1, max_iter + 1):
         previous_density = state.density.copy()
         state.hamiltonian[:, :, :] = state.h0
-        interaction_h = interaction_builder(previous_density)
+        interaction_h_from_cache = cached_interaction_h is not None
+        if cached_interaction_h is None:
+            interaction_h = interaction_builder(previous_density)
+        else:
+            interaction_h = cached_interaction_h
+        cached_interaction_h = None
         state.hamiltonian[:, :, :] += interaction_h
+        oda_base_interaction_h = interaction_h
         if hamiltonian_postprocessor is not None:
             hamiltonian_postprocessor(state.hamiltonian)
+            oda_base_interaction_h = state.hamiltonian - state.h0
 
         energy = float(energy_functional(interaction_h, state.h0, previous_density))
         density_update = density_builder(state.hamiltonian)
         delta_density = density_update.density - previous_density
-        oda_lambda = 1.0 if oda_parameterizer is None else float(oda_parameterizer(state, delta_density))
+        delta_interaction_h: np.ndarray | None = None
+        if oda_delta_interaction_builder is not None:
+            delta_interaction_h = oda_delta_interaction_builder(delta_density)
+            if hamiltonian_postprocessor is not None:
+                delta_interaction_h = np.asarray(delta_interaction_h, dtype=np.complex128).copy()
+                hamiltonian_postprocessor(delta_interaction_h)
+            oda_lambda = compute_oda_parameter(
+                state,
+                delta_density,
+                delta_h=delta_interaction_h,
+                interaction_h=oda_base_interaction_h,
+            )
+        else:
+            oda_lambda = 1.0 if oda_parameterizer is None else float(oda_parameterizer(state, delta_density))
         mixed_density = oda_lambda * density_update.density + (1.0 - oda_lambda) * previous_density
 
         norm_raw = float(calculate_norm_convergence(density_update.density, previous_density))
@@ -151,6 +181,8 @@ def run_hartree_fock_iterations(
         state.density[:, :, :] = mixed_density
         if density_postprocessor is not None:
             density_postprocessor(state.density)
+        elif delta_interaction_h is not None and hamiltonian_postprocessor is None:
+            cached_interaction_h = interaction_h + oda_lambda * delta_interaction_h
         state.energies[:, :] = density_update.energies
         state.mu = float(density_update.mu)
         state.diagnostics["hf_energy"] = energy
@@ -169,6 +201,8 @@ def run_hartree_fock_iterations(
             norm_mixed=norm_mixed,
             norm_selected=norm_selected,
             energy=energy,
+            delta_interaction_h=delta_interaction_h,
+            interaction_h_from_cache=interaction_h_from_cache,
         )
         if step_callback is not None:
             step_callback(state, step_result)
@@ -187,7 +221,10 @@ def run_hartree_fock_iterations(
             exit_reason = "converged"
             break
 
-    final_interaction_h = interaction_builder(state.density)
+    if cached_interaction_h is None:
+        final_interaction_h = interaction_builder(state.density)
+    else:
+        final_interaction_h = cached_interaction_h
     state.hamiltonian[:, :, :] = state.h0
     state.hamiltonian[:, :, :] += final_interaction_h
     if hamiltonian_postprocessor is not None:

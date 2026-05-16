@@ -8,6 +8,7 @@ import time
 import numpy as np
 
 from mean_field.crpa import CRPACoulombParams, compute_crpa, write_crpa_outputs
+from mean_field.crpa.diagnostics import write_all_epsilon_diagnostics
 from mean_field.crpa.plotting import write_epsilon_vs_q_plot
 from mean_field.crpa.validation import compute_c1_cross_check, validation_summary, write_validation_report
 from mean_field.crpa.workflow import default_crpa_output_dir
@@ -47,6 +48,23 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Use the legacy B0/Jacobian benchmark periodic G-grid tunneling convention instead of physical zero-fill.",
     )
+    parser.add_argument(
+        "--form-factor-mode",
+        choices=("zhang_zero_fill", "hf_periodic"),
+        default="zhang_zero_fill",
+        help="Plane-wave form-factor convention. Use hf_periodic only for HF-compatible cRPA artifacts.",
+    )
+    parser.add_argument(
+        "--hf-compatible",
+        action="store_true",
+        help="Generate an HF-compatible cRPA artifact: periodic G-grid BM plus HF-periodic form factors.",
+    )
+    parser.add_argument(
+        "--occupation-mode",
+        choices=("cnp_index", "energy_step"),
+        default="cnp_index",
+        help="Reference occupation for cRPA. Production Zhang/HF artifacts use cnp_index.",
+    )
     parser.add_argument("--q-stride", type=int, default=1)
     parser.add_argument("--max-q-points", type=int, default=None)
     parser.add_argument("--check-c1", action="store_true", help="Run direct constrained vs full-minus-flat-flat chi0 check.")
@@ -66,6 +84,12 @@ def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     output_dir = args.output_dir if args.output_dir is not None else default_crpa_output_dir(Path("outputs"))
     q_indices = _q_indices_for_run(args.lk, args.q_stride, args.max_q_points)
+    periodic_g_grid = bool(args.periodic_g_grid or args.hf_compatible)
+    form_factor_mode = "hf_periodic" if args.hf_compatible else str(args.form_factor_mode)
+    if form_factor_mode == "hf_periodic" and not periodic_g_grid:
+        raise ValueError("HF-periodic form factors require --periodic-g-grid or --hf-compatible.")
+    if args.hf_compatible and (int(args.q_stride) != 1 or args.max_q_points is not None):
+        raise ValueError("--hf-compatible requires the full q table: use --q-stride 1 and omit --max-q-points.")
 
     params = TBGParameters.from_degrees(
         args.theta_deg,
@@ -81,7 +105,9 @@ def main(argv: list[str] | None = None) -> None:
     print(
         "[crpa] starting "
         f"theta={args.theta_deg} lk={args.lk} lg={args.lg} q_lg={args.q_lg} "
-        f"bands_per_valley={args.bands_per_valley} q_points={len(q_indices)}",
+        f"bands_per_valley={args.bands_per_valley} q_points={len(q_indices)} "
+        f"periodic_g_grid={str(periodic_g_grid).lower()} form_factor_mode={form_factor_mode} "
+        f"occupation_mode={args.occupation_mode}",
         flush=True,
     )
     start = time.perf_counter()
@@ -96,7 +122,9 @@ def main(argv: list[str] | None = None) -> None:
         coulomb_params=coulomb,
         eta_mev=float(args.eta_mev),
         sigma_rotation=True,
-        periodic_g_grid=bool(args.periodic_g_grid),
+        periodic_g_grid=periodic_g_grid,
+        form_factor_mode=form_factor_mode,
+        occupation_mode=str(args.occupation_mode),
     )
     elapsed = time.perf_counter() - start
 
@@ -114,9 +142,13 @@ def main(argv: list[str] | None = None) -> None:
             q_index=_parse_q_index(args.c1_q_index),
             eta_mev=float(args.eta_mev),
             sigma_rotation=True,
+            periodic_g_grid=periodic_g_grid,
+            form_factor_mode=form_factor_mode,
+            occupation_mode=str(args.occupation_mode),
         )
         (out / "c1_cross_check.json").write_text(json.dumps(extra_checks, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     report_path = write_validation_report(result, out / "validation_report.md", extra_checks=extra_checks)
+    diagnostic_summary = write_all_epsilon_diagnostics(result, out)
     summary = validation_summary(result)
     np.savetxt(
         out / "epsilon_vs_q.tsv",
@@ -135,6 +167,14 @@ def main(argv: list[str] | None = None) -> None:
     print(f"[crpa] wrote outputs to {out}", flush=True)
     print(f"[crpa] plot={plot_path}", flush=True)
     print(f"[crpa] report={report_path}", flush=True)
+    print(
+        "[crpa] diagnostics "
+        f"q_peak_nm_inv={diagnostic_summary.q_peak_nm_inv:.6g} "
+        f"eps_total_peak={diagnostic_summary.eps_total_peak:.6g} "
+        f"eps_total_q12={diagnostic_summary.eps_total_q12:.6g} "
+        f"eps_diag_imag_max_abs={diagnostic_summary.eps_diag_imag_max_abs:.6g}",
+        flush=True,
+    )
     print(
         "[crpa] summary "
         f"eps_min={summary['effective_epsilon_min']:.6g} "

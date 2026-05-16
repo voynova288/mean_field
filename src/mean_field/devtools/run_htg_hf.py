@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime
-import json
 import os
 from pathlib import Path
 import socket
@@ -10,6 +9,7 @@ from time import perf_counter
 
 import numpy as np
 
+from mean_field.devtools._runtime import ensure_not_running_compute_on_login_node, write_json
 from mean_field.systems.htg import (
     HTGModel,
     HTGParams,
@@ -98,16 +98,6 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _ensure_not_running_compute_on_login_node(workload_name: str) -> None:
-    if os.environ.get("SLURM_JOB_ID"):
-        return
-    hostname = socket.gethostname().strip().lower()
-    if hostname.startswith("login001") or hostname.startswith("login002"):
-        raise SystemExit(
-            f"Refusing to run {workload_name} on login node {hostname}; submit it through Slurm from login002."
-        )
-
-
 def _default_output_dir() -> Path:
     job_id = os.environ.get("SLURM_JOB_ID")
     if job_id:
@@ -115,10 +105,6 @@ def _default_output_dir() -> Path:
     else:
         stem = f"htg_hf_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     return DEFAULT_OUTPUT_ROOT / stem
-
-
-def _save_json(path: Path, payload: object) -> None:
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _complex_to_pairs(values: np.ndarray) -> np.ndarray:
@@ -157,7 +143,7 @@ def _occupation_constraint_payload(mode: str, *, nu: float, seed: int, n_band: i
 def main() -> None:
     start = perf_counter()
     args = _parse_args()
-    _ensure_not_running_compute_on_login_node("HTG projected Hartree-Fock")
+    ensure_not_running_compute_on_login_node("HTG projected Hartree-Fock")
     if args.disable_numba:
         os.environ["MEAN_FIELD_HF_DISABLE_NUMBA"] = "1"
 
@@ -253,8 +239,8 @@ def main() -> None:
         "lattice": model.lattice_summary(),
         "moire_cell_area_nm2": float(best.basis_data.moire_cell_area_nm2),
     }
-    _save_json(output_dir / "hf_params.json", hf_params)
-    _save_json(
+    write_json(output_dir / "hf_params.json", hf_params)
+    write_json(
         output_dir / "hf_convergence.json",
         {
             "runtime": {
@@ -390,7 +376,7 @@ def main() -> None:
         n_band=best.state.n_band,
     )
 
-    _save_json(
+    write_json(
         output_dir / "order_parameters.json",
         {
             "nu": float(args.nu),
@@ -411,7 +397,7 @@ def main() -> None:
     )
 
     validation = [check.to_dict() for check in validate_hf_state(best.state)]
-    _save_json(output_dir / "validation_checks.json", validation)
+    write_json(output_dir / "validation_checks.json", validation)
     report_lines = [
         "# HTG Projected Hartree-Fock Run",
         "",

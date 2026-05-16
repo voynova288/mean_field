@@ -21,15 +21,33 @@ CLI_ALIASES = {
     "run_tmbg_ktilde_diagnostics": ("tmbg", "diagnose-ktilde-symmetry"),
 }
 MODULE_COMMANDS = {
+    "compare_tbg_crpa_fig1e": ("mean_field.devtools.compare_tbg_crpa_fig1e", ()),
     "compare_b0_lk24_python_julia_outputs": ("mean_field.devtools.compare_b0_lk24_python_julia_outputs", ()),
+    "diagnose_tbg_crpa_epsilon": ("mean_field.devtools.diagnose_tbg_crpa_epsilon", ()),
+    "merge_tbg_crpa_chunks": ("mean_field.devtools.merge_tbg_crpa_chunks", ()),
+    "merge_rlg_hbn_parallel_hf": ("mean_field.devtools.merge_rlg_hbn_parallel_hf", ()),
+    "prepare_tbg_crpa_bm": ("mean_field.devtools.prepare_tbg_crpa_bm", ()),
     "resample_b0_density_stack": ("mean_field.devtools.resample_b0_density_stack", ()),
     "run_atmg_fig3_band_plot": ("mean_field.devtools.run_atmg_fig3_band_plot", ()),
     "run_b0_bm_benchmark": ("mean_field.devtools.run_b0_bm_benchmark", ()),
     "run_b0_restricted_hf_benchmark_case": ("mean_field.devtools.run_b0_restricted_hf_benchmark_case", ()),
     "run_custom_b0_hf_case": ("mean_field.devtools.run_custom_b0_hf_case", ()),
     "run_htg_hf": ("mean_field.devtools.run_htg_hf", ()),
+    "run_htg_fig9b_boundary_targeted_diagnostic": (
+        "mean_field.devtools.run_htg_fig9b_boundary_targeted_diagnostic",
+        (),
+    ),
+    "run_htg_fig9b_exact_anchor_scan": ("mean_field.devtools.run_htg_fig9b_exact_anchor_scan", ()),
     "run_htg_paper_figures": ("mean_field.devtools.run_htg_paper_figures", ()),
+    "run_rlg_hbn_paper_fig2_band_plot": ("mean_field.devtools.run_rlg_hbn_paper_fig2_band_plot", ()),
+    "run_tbg_crpa_chunk": ("mean_field.devtools.run_tbg_crpa_chunk", ()),
+    "run_tbg_crpa_convergence_scan": ("mean_field.devtools.run_tbg_crpa_convergence_scan", ()),
+    "run_tbg_crpa_epsilon": ("mean_field.devtools.run_tbg_crpa_epsilon", ()),
     "run_tbg_crpa_hf_case": ("mean_field.devtools.run_tbg_crpa_hf_case", ()),
+    "run_bare_hf_framework_band_plots_against_liu_ref": (
+        "mean_field.devtools.run_bare_hf_framework_band_plots_against_liu_ref",
+        (),
+    ),
     "run_tdbg_fig3_chern_band_plot": ("mean_field.devtools.run_tdbg_fig3_chern_band_plot", ()),
     "run_tdbg_reference_band_plot": ("mean_field.devtools.run_tdbg_reference_band_plot", ()),
     "run_tmbg_fig2_band_plot": ("mean_field.devtools.run_tmbg_fig2_band_plot", ()),
@@ -38,6 +56,10 @@ MODULE_COMMANDS = {
     "sync_b0_benchmark": ("mean_field.devtools.sync_benchmarks", ("b0",)),
     "sync_b0_benchmarks": ("mean_field.devtools.sync_benchmarks", ("b0",)),
     "sync_bm_unstrained_benchmark": ("mean_field.devtools.sync_benchmarks", ("bm-unstrained",)),
+    "validate_bare_hf_frameworks_against_liu_ref": (
+        "mean_field.devtools.validate_bare_hf_frameworks_against_liu_ref",
+        (),
+    ),
 }
 
 

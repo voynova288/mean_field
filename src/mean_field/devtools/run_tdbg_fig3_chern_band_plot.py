@@ -18,6 +18,7 @@ import numpy as np
 from matplotlib.lines import Line2D
 
 from mean_field.core.lattice import KPath
+from mean_field.devtools._runtime import ensure_not_running_compute_on_login_node, write_json
 from mean_field.runtime import collect_runtime_environment
 from mean_field.systems.tdbg import (
     PathBandsResult,
@@ -126,16 +127,6 @@ def _parse_args() -> argparse.Namespace:
         help="Reuse bands_path.npz and chern_numbers.json files under --output-dir and only redraw reports/figures.",
     )
     return parser.parse_args()
-
-
-def _ensure_not_running_compute_on_login_node(workload_name: str) -> None:
-    if os.environ.get("SLURM_JOB_ID"):
-        return
-    hostname = socket.gethostname().strip().lower()
-    if hostname.startswith("login001") or hostname.startswith("login002"):
-        raise SystemExit(
-            f"Refusing to run {workload_name} on login node {hostname}; submit it through Slurm from login002."
-        )
 
 
 def _default_output_dir() -> Path:
@@ -844,10 +835,6 @@ def _plot_fig3_grid(
     return {"fig3_chern_bands_png": str(png_path), "fig3_chern_bands_pdf": str(pdf_path)}
 
 
-def _write_json(path: Path, payload: dict[str, object]) -> None:
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-
 def _write_report(
     path: Path,
     *,
@@ -913,7 +900,7 @@ def main() -> None:
     total_start = perf_counter()
     args = _parse_args()
     if not args.reuse_existing:
-        _ensure_not_running_compute_on_login_node("TDBG Fig. 3 Chern band reproduction")
+        ensure_not_running_compute_on_login_node("TDBG Fig. 3 Chern band reproduction")
 
     output_dir = Path(args.output_dir).resolve() if args.output_dir is not None else _default_output_dir().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -966,7 +953,7 @@ def main() -> None:
                 topology_boundary=str(args.topology_boundary),
                 central_touching_threshold_ev=float(args.central_touching_threshold_ev),
             )
-            _write_json(panel_dir / "chern_numbers.json", chern_by_key[spec.key])
+            write_json(panel_dir / "chern_numbers.json", chern_by_key[spec.key])
 
     figure_paths = _plot_fig3_grid(
         output_dir,
@@ -1014,8 +1001,8 @@ def main() -> None:
         "panel_npz_paths": panel_npz_paths,
         "chern_by_panel": chern_by_key,
     }
-    _write_json(output_dir / "chern_numbers.json", chern_by_key)
-    _write_json(output_dir / "summary.json", summary)
+    write_json(output_dir / "chern_numbers.json", chern_by_key)
+    write_json(output_dir / "summary.json", summary)
     _write_report(output_dir / "fig3_chern_report.md", summary=summary, chern_by_key=chern_by_key)
 
     print(f"[done] output_dir={output_dir}")

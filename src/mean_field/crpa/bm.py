@@ -35,6 +35,9 @@ class AllBandBMSolution:
     gvec: np.ndarray
     band_start: int
     band_stop: int
+    sigma_rotation: bool = True
+    periodic_g_grid: bool = False
+    k_grid_kind: str = "uniform_crpa"
 
     @property
     def nk(self) -> int:
@@ -74,7 +77,6 @@ def write_all_band_bm_solution(
     compressed: bool = False,
 ) -> Path:
     path = Path(output_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
     metadata = {
         "params": _params_init_dict(solution.params),
         "lg": int(solution.lg),
@@ -84,7 +86,20 @@ def write_all_band_bm_solution(
         "nk": int(solution.nk),
         "band_start": int(solution.band_start),
         "band_stop": int(solution.band_stop),
+        "sigma_rotation": bool(solution.sigma_rotation),
+        "periodic_g_grid": bool(solution.periodic_g_grid),
+        "k_grid_kind": str(solution.k_grid_kind),
     }
+    if not path.suffix or path.is_dir():
+        path.mkdir(parents=True, exist_ok=True)
+        (path / "metadata.json").write_text(json.dumps(metadata, sort_keys=True) + "\n", encoding="utf-8")
+        np.save(path / "lattice_kvec.npy", np.asarray(solution.lattice_kvec, dtype=np.complex128))
+        np.save(path / "spectrum.npy", np.asarray(solution.spectrum, dtype=float))
+        np.save(path / "uk.npy", np.asarray(solution.uk, dtype=np.complex128))
+        np.save(path / "gvec.npy", np.asarray(solution.gvec, dtype=np.complex128))
+        return path
+
+    path.parent.mkdir(parents=True, exist_ok=True)
     writer = np.savez_compressed if compressed else np.savez
     writer(
         path,
@@ -98,7 +113,32 @@ def write_all_band_bm_solution(
 
 
 def read_all_band_bm_solution(path: Path | str) -> AllBandBMSolution:
-    with np.load(Path(path)) as data:
+    path = Path(path)
+    if path.is_dir():
+        metadata = json.loads((path / "metadata.json").read_text(encoding="utf-8"))
+        params = TBGParameters(**metadata["params"])
+        lattice_kvec = np.load(path / "lattice_kvec.npy")
+        spectrum = np.load(path / "spectrum.npy")
+        uk = np.load(path / "uk.npy")
+        gvec = np.load(path / "gvec.npy")
+        return AllBandBMSolution(
+            params=params,
+            lattice_kvec=np.asarray(lattice_kvec, dtype=np.complex128),
+            lg=int(metadata["lg"]),
+            nlocal=int(metadata["nlocal"]),
+            n_eta=int(metadata["n_eta"]),
+            nb=int(metadata["nb"]),
+            spectrum=np.asarray(spectrum, dtype=float),
+            uk=np.asarray(uk, dtype=np.complex128),
+            gvec=np.asarray(gvec, dtype=np.complex128),
+            band_start=int(metadata["band_start"]),
+            band_stop=int(metadata["band_stop"]),
+            sigma_rotation=bool(metadata.get("sigma_rotation", True)),
+            periodic_g_grid=bool(metadata.get("periodic_g_grid", False)),
+            k_grid_kind=str(metadata.get("k_grid_kind", "uniform_crpa")),
+        )
+
+    with np.load(path) as data:
         metadata = json.loads(str(np.asarray(data["metadata_json"]).item()))
         params = TBGParameters(**metadata["params"])
         lattice_kvec = np.asarray(data["lattice_kvec"], dtype=np.complex128)
@@ -117,6 +157,9 @@ def read_all_band_bm_solution(path: Path | str) -> AllBandBMSolution:
         gvec=gvec,
         band_start=int(metadata["band_start"]),
         band_stop=int(metadata["band_stop"]),
+        sigma_rotation=bool(metadata.get("sigma_rotation", True)),
+        periodic_g_grid=bool(metadata.get("periodic_g_grid", False)),
+        k_grid_kind=str(metadata.get("k_grid_kind", "uniform_crpa")),
     )
 
 
@@ -238,4 +281,7 @@ def solve_all_band_bm_model(
         gvec=gvec,
         band_start=band_start,
         band_stop=band_stop,
+        sigma_rotation=bool(sigma_rotation),
+        periodic_g_grid=bool(periodic_g_grid),
+        k_grid_kind="uniform_crpa",
     )

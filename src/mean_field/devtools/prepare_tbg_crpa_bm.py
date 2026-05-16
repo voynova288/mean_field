@@ -23,6 +23,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Use the legacy B0/Jacobian benchmark periodic G-grid tunneling convention instead of physical zero-fill.",
     )
+    parser.add_argument(
+        "--hf-compatible",
+        action="store_true",
+        help="Alias for --periodic-g-grid when preparing a BM cache for HF-compatible cRPA chunks.",
+    )
     parser.add_argument("--compressed", action="store_true", help="Use compressed npz output. Smaller but slower for large lg.")
     parser.add_argument("--output-path", type=Path, required=True)
     return parser
@@ -40,10 +45,11 @@ def main(argv: list[str] | None = None) -> None:
         deformation_potential=0.0,
     )
     grid = build_uniform_crpa_grid(params, int(args.lk))
+    periodic_g_grid = bool(args.periodic_g_grid or args.hf_compatible)
     print(
         "[bm-cache] solving "
         f"theta={args.theta_deg} lk={args.lk} lg={args.lg} "
-        f"bands_per_valley={args.bands_per_valley}",
+        f"bands_per_valley={args.bands_per_valley} periodic_g_grid={str(periodic_g_grid).lower()}",
         flush=True,
     )
     start = time.perf_counter()
@@ -53,7 +59,7 @@ def main(argv: list[str] | None = None) -> None:
         lg=int(args.lg),
         bands_per_valley=args.bands_per_valley,
         sigma_rotation=True,
-        periodic_g_grid=bool(args.periodic_g_grid),
+        periodic_g_grid=periodic_g_grid,
     )
     solve_elapsed = time.perf_counter() - start
     write_start = time.perf_counter()
