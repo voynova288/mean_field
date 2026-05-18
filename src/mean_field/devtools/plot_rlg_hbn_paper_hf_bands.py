@@ -9,6 +9,7 @@ from time import perf_counter
 
 import numpy as np
 
+from mean_field.core.lattice import KPath
 from mean_field.devtools._runtime import ensure_not_running_compute_on_login_node, write_json
 from mean_field.devtools.run_rlg_hbn_paper_hf import PAPER_CONFIGS
 from mean_field.systems.RnG_hBN import (
@@ -20,7 +21,13 @@ from mean_field.systems.RnG_hBN import (
     build_rlg_hbn_layer_overlap_blocks,
     build_rlg_hbn_projected_basis_for_kvec,
     evaluate_rlg_hbn_hf_path,
+    load_layer_overlap_blocks_cache,
+    load_path_band_cache,
+    load_projected_basis_cache,
+    path_cache_key,
     rlg_hbn_occupied_state_count,
+    save_path_band_cache,
+    update_cache_manifest_file,
 )
 
 
@@ -38,6 +45,8 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--source-dir", type=Path, required=True)
     parser.add_argument("--paper-target", choices=tuple(PAPER_CONFIGS), default=None)
+    parser.add_argument("--cache-dir", type=Path, default=None)
+    parser.add_argument("--cache-policy", choices=("reuse", "refresh", "off"), default="reuse")
     parser.add_argument("--points-per-segment", type=int, default=48)
     parser.add_argument("--chunk-size", type=int, default=4)
     parser.add_argument("--spin-index", type=int, default=0)
@@ -70,7 +79,7 @@ def _build_interaction(config: dict[str, object]) -> RLGhBNInteractionParams:
         active_conduction_bands=int(config["active_conduction_bands"]),
         k_mesh_size=int(config["k_mesh_size"]),
         interaction_cutoff_q1=float(config["interaction_cutoff_q1"]),
-        use_screened_basis=True,
+        use_screened_basis=bool(config.get("use_screened_basis", True)),
     )
 
 
@@ -81,7 +90,23 @@ def _screened_u_from_convergence(convergence: dict[str, object], fallback_v_mev:
     return float(fallback_v_mev)
 
 
-def _reconstruct_run(panel_dir: Path, config: dict[str, object]) -> RLGhBNHartreeFockRun:
+def _string_from_archive(archive: np.lib.npyio.NpzFile, key: str) -> str:
+    if key not in archive.files:
+        return ""
+    value = archive[key]
+    try:
+        return str(value.item())
+    except Exception:
+        return str(value)
+
+
+def _reconstruct_run(
+    panel_dir: Path,
+    config: dict[str, object],
+    *,
+    cache_dir: Path | None = None,
+    cache_policy: str = "reuse",
+) -> RLGhBNHartreeFockRun:
     xi, v_mev = _panel_values(panel_dir)
     state_path = panel_dir / "hf_ground_state.npz"
     convergence_path = panel_dir / "hf_convergence.json"
@@ -108,13 +133,34 @@ def _reconstruct_run(panel_dir: Path, config: dict[str, object]) -> RLGhBNHartre
     )
     interaction = _build_interaction(config)
     archive = np.load(state_path)
-    basis_data = build_rlg_hbn_projected_basis_for_kvec(
-        basis_model,
-        interaction,
-        _complex_from_pairs(archive["kvec_nm_inv"]),
-        physical_model=physical_model,
-        active_band_indices=tuple(int(value) for value in np.asarray(archive["active_band_indices"], dtype=int)),
-    )
+    basis_data = None
+    overlap_blocks = None
+    if cache_dir is not None and cache_policy != "off":
+        basis_key = str(convergence.get("basis_cache_key") or _string_from_archive(archive, "cache_key_basis"))
+        overlap_key = str(convergence.get("overlap_cache_key") or _string_from_archive(archive, "cache_key_overlap"))
+        if basis_key:
+            try:
+                basis_data = load_projected_basis_cache(cache_dir, basis_key)
+                print(f"[cache-hit] source basis {basis_key}", flush=True)
+            except Exception as exc:
+                print(f"[cache-miss] source basis {basis_key}: {exc}", flush=True)
+                basis_data = None
+        if overlap_key:
+            try:
+                overlap_blocks = load_layer_overlap_blocks_cache(cache_dir, overlap_key)
+                print(f"[cache-hit] source overlap {overlap_key}", flush=True)
+            except Exception as exc:
+                print(f"[cache-miss] source overlap {overlap_key}: {exc}", flush=True)
+                overlap_blocks = None
+    if basis_data is None:
+        basis_data = build_rlg_hbn_projected_basis_for_kvec(
+            basis_model,
+            interaction,
+            _complex_from_pairs(archive["kvec_nm_inv"]),
+            physical_model=physical_model,
+            active_band_indices=tuple(int(value) for value in np.asarray(archive["active_band_indices"], dtype=int)),
+        )
+        print("[cache-miss] source basis fallback rebuilt from archive k grid", flush=True)
     state = RLGhBNHartreeFockState.from_projected_basis(
         basis_data,
         nu=float(config["nu"]),
@@ -124,7 +170,9 @@ def _reconstruct_run(panel_dir: Path, config: dict[str, object]) -> RLGhBNHartre
     state.hamiltonian[:, :, :] = np.asarray(archive["hamiltonian"], dtype=np.complex128)
     state.h0[:, :, :] = np.asarray(archive["h0"], dtype=np.complex128)
     state.energies[:, :] = np.asarray(archive["energies_mev"], dtype=float)
-    overlap_blocks = build_rlg_hbn_layer_overlap_blocks(basis_data)
+    if overlap_blocks is None:
+        overlap_blocks = build_rlg_hbn_layer_overlap_blocks(basis_data)
+        print("[cache-miss] source overlap fallback rebuilt from source basis", flush=True)
     best = convergence.get("best", {})
     if not isinstance(best, dict):
         best = {}
@@ -144,13 +192,22 @@ def _reconstruct_run(panel_dir: Path, config: dict[str, object]) -> RLGhBNHartre
 
 def _paper_hf_path(model: RLGhBNModel, points_per_segment: int):
     lattice = model.lattice
+    g1 = lattice.g_m1
+    g2 = lattice.g_m2
+    # Use the paper geometry: Gamma -> K -> K' -> Gamma is a 120-degree-apex
+    # isosceles triangle, Gamma -> M' -> M -> Gamma is equilateral, and the
+    # two perpendicular bisectors are collinear.  The two M representatives are
+    # both in the sampled cell.
+    kprime_fig6 = (-g1 + g2) / 3.0
+    mprime_fig6 = g2 / 2.0
+    m_fig6 = lattice.m_m
     nodes = (
         lattice.gamma_m,
         lattice.k_m,
-        lattice.kprime_m,
+        kprime_fig6,
         lattice.gamma_m,
-        -lattice.m_m,
-        lattice.m_m,
+        mprime_fig6,
+        m_fig6,
         lattice.gamma_m,
     )
     labels = ("$\\Gamma_M$", "$K_M$", "$K'_M$", "$\\Gamma_M$", "$M'_M$", "$M_M$", "$\\Gamma_M$")
@@ -190,6 +247,23 @@ def _source_mu_mev(run: RLGhBNHartreeFockRun) -> float:
     return float(0.5 * (values[total_occupied - 1] + values[total_occupied]))
 
 
+def _source_mu_from_archive(path: Path, config: dict[str, object]) -> float:
+    archive = np.load(path)
+    energies = np.asarray(archive["energies_mev"], dtype=float)
+    total_occupied = rlg_hbn_occupied_state_count(
+        float(config["nu"]),
+        energies.shape[0],
+        energies.shape[1],
+        active_valence_bands=int(config["active_valence_bands"]),
+        n_spin=2,
+        n_eta=2,
+    )
+    values = np.sort(energies.reshape(-1))
+    if total_occupied <= 0 or total_occupied >= values.size:
+        return 0.0
+    return float(0.5 * (values[total_occupied - 1] + values[total_occupied]))
+
+
 def _parse_ylim(text: str | None, paper_target: str) -> tuple[float, float]:
     if text is None:
         if paper_target == "fig5":
@@ -199,6 +273,30 @@ def _parse_ylim(text: str | None, paper_target: str) -> tuple[float, float]:
     if len(pieces) != 2:
         raise argparse.ArgumentTypeError("--ylim-mev must be formatted as lower,upper")
     return float(pieces[0]), float(pieces[1])
+
+
+def _path_cache_payload(path, *, points_per_segment: int) -> dict[str, object]:
+    return {
+        "labels": list(path.labels),
+        "node_indices": [int(value) for value in path.node_indices],
+        "points_per_segment": int(points_per_segment),
+        "kvec_nm_inv": [
+            [float(complex(value).real), float(complex(value).imag)]
+            for value in np.asarray(path.kvec, dtype=np.complex128)
+        ],
+    }
+
+
+def _panel_bands_payload(panel_result: dict[str, object]) -> dict[str, object]:
+    path = panel_result["path"]
+    return {
+        "kdist": np.asarray(path.kdist, dtype=float),
+        "kvec_nm_inv": np.stack([np.asarray(path.kvec).real, np.asarray(path.kvec).imag], axis=-1),
+        "all_energies_mev": np.asarray(panel_result["all_energies_mev"], dtype=float),
+        "spin_up_K_energies_mev": np.asarray(panel_result["k_energies_mev"], dtype=float),
+        "spin_up_Kprime_energies_mev": np.asarray(panel_result["kprime_energies_mev"], dtype=float),
+        "energy_zero_mev": np.asarray(float(panel_result["mu_mev"])),
+    }
 
 
 def _plot_panel(ax, panel_result: dict[str, object], *, ylim_mev: tuple[float, float], show_ylabel: bool) -> None:
@@ -236,15 +334,7 @@ def _write_panel_outputs(panel_dir: Path, panel_result: dict[str, object], *, dp
     import matplotlib.pyplot as plt
 
     path = panel_result["path"]
-    np.savez_compressed(
-        panel_dir / "hf_bands_path.npz",
-        kdist=np.asarray(path.kdist, dtype=float),
-        kvec_nm_inv=np.stack([np.asarray(path.kvec).real, np.asarray(path.kvec).imag], axis=-1),
-        all_energies_mev=np.asarray(panel_result["all_energies_mev"], dtype=float),
-        spin_up_K_energies_mev=np.asarray(panel_result["k_energies_mev"], dtype=float),
-        spin_up_Kprime_energies_mev=np.asarray(panel_result["kprime_energies_mev"], dtype=float),
-        energy_zero_mev=float(panel_result["mu_mev"]),
-    )
+    np.savez_compressed(panel_dir / "hf_bands_path.npz", **_panel_bands_payload(panel_result))
     write_json(
         panel_dir / "hf_bands_path_summary.json",
         {
@@ -311,6 +401,11 @@ def main() -> None:
         raise ValueError(f"Unsupported paper target {paper_target!r}")
     if not args.dry_run:
         ensure_not_running_compute_on_login_node(f"RLG/hBN {paper_target} HF band plotting")
+    cache_dir = (
+        Path(args.cache_dir).resolve()
+        if args.cache_dir is not None
+        else Path(str(config.get("cache_dir", source_dir / "cache"))).resolve()
+    )
 
     panel_dirs = sorted(path for path in source_dir.iterdir() if path.is_dir() and (path / "hf_ground_state.npz").exists())
     if not panel_dirs:
@@ -327,6 +422,8 @@ def main() -> None:
             "spin_index": int(args.spin_index),
             "ylim_mev": list(ylim_mev),
             "hostname": socket.gethostname(),
+            "cache_dir": str(cache_dir),
+            "cache_policy": str(args.cache_policy),
         },
     )
     if args.dry_run:
@@ -339,40 +436,126 @@ def main() -> None:
         panel_start = perf_counter()
         xi, v_mev = _panel_values(panel_dir)
         print(f"[panel] plot start {panel_dir.name}", flush=True)
-        run = _reconstruct_run(panel_dir, config)
-        path = _paper_hf_path(run.basis_data.basis_model, int(args.points_per_segment))
-        path_result = evaluate_rlg_hbn_hf_path(
-            run,
-            path,
-            beta=float(config.get("beta", 1.0)),
-            chunk_size=int(args.chunk_size),
+        source_archive = panel_dir / "hf_ground_state.npz"
+        convergence = _read_json(panel_dir / "hf_convergence.json")
+        screened_u_mev = _screened_u_from_convergence(convergence, v_mev)
+        physical_model_for_key = RLGhBNModel.from_config(
+            layer_count=int(config["layer_count"]),
+            xi=int(xi),
+            theta_deg=float(config["theta_deg"]),
+            displacement_field_mev=float(v_mev),
+            shell_count=int(config["shell_count"]),
         )
+        basis_model_for_key = RLGhBNModel.from_config(
+            layer_count=int(config["layer_count"]),
+            xi=int(xi),
+            theta_deg=float(config["theta_deg"]),
+            displacement_field_mev=float(screened_u_mev),
+            shell_count=int(config["shell_count"]),
+        )
+        interaction_for_key = _build_interaction(config)
+        path = _paper_hf_path(basis_model_for_key, int(args.points_per_segment))
+        path_payload = _path_cache_payload(path, points_per_segment=int(args.points_per_segment))
+        cache_key, cache_manifest = path_cache_key(
+            physical_model_for_key,
+            interaction_for_key,
+            source_archive=source_archive,
+            path_payload=path_payload,
+            chunk_size=int(args.chunk_size),
+            beta=float(config.get("beta", 1.0)),
+            spin_index=int(args.spin_index),
+            panel=panel_dir.name,
+        )
+        path_cache_hit = False
+        cached_path = None
+        if args.cache_policy == "reuse":
+            try:
+                cached_path = load_path_band_cache(cache_dir, cache_key)
+                path_cache_hit = True
+                print(f"[cache-hit] path_bands {cache_key}", flush=True)
+            except Exception as exc:
+                print(f"[cache-miss] path_bands {cache_key}: {exc}", flush=True)
+        if cached_path is not None:
+            labels_payload = cached_path["labels"]
+            path = KPath(
+                kvec=np.asarray(cached_path["kvec"], dtype=np.complex128),
+                kdist=np.asarray(cached_path["kdist"], dtype=float),
+                labels=tuple(str(value) for value in labels_payload["labels"]),
+                node_indices=tuple(int(value) for value in labels_payload["node_indices"]),
+            )
+            path_hamiltonian = np.asarray(cached_path["hamiltonian"], dtype=np.complex128)
+            path_energies = np.asarray(cached_path["energies"], dtype=float)
+            mu_mev = _source_mu_from_archive(source_archive, config)
+            n_spin = 2
+            n_eta = 2
+            n_band = int(path_hamiltonian.shape[0]) // (n_spin * n_eta)
+        else:
+            run = _reconstruct_run(panel_dir, config, cache_dir=cache_dir, cache_policy=str(args.cache_policy))
+            path_result = evaluate_rlg_hbn_hf_path(
+                run,
+                path,
+                beta=float(config.get("beta", 1.0)),
+                chunk_size=int(args.chunk_size),
+            )
+            path_hamiltonian = path_result.hamiltonian
+            path_energies = path_result.energies
+            mu_mev = _source_mu_mev(run)
+            n_spin = run.state.n_spin
+            n_eta = run.state.n_eta
+            n_band = run.state.n_band
         k_energies = _sector_energies(
-            path_result.hamiltonian,
-            n_spin=run.state.n_spin,
-            n_eta=run.state.n_eta,
-            n_band=run.state.n_band,
+            path_hamiltonian,
+            n_spin=n_spin,
+            n_eta=n_eta,
+            n_band=n_band,
             spin=int(args.spin_index),
             eta=0,
         )
         kprime_energies = _sector_energies(
-            path_result.hamiltonian,
-            n_spin=run.state.n_spin,
-            n_eta=run.state.n_eta,
-            n_band=run.state.n_band,
+            path_hamiltonian,
+            n_spin=n_spin,
+            n_eta=n_eta,
+            n_band=n_band,
             spin=int(args.spin_index),
             eta=1,
         )
         panel_result = {
             "panel": panel_dir.name,
             "title": f"$\\xi={xi}$, $V={v_mev:.0f}$ meV",
-            "path": path_result.path,
-            "all_energies_mev": path_result.energies,
+            "path": path,
+            "all_energies_mev": path_energies,
             "k_energies_mev": k_energies,
             "kprime_energies_mev": kprime_energies,
-            "mu_mev": _source_mu_mev(run),
+            "mu_mev": mu_mev,
             "elapsed_sec": float(perf_counter() - panel_start),
+            "path_cache_key": cache_key,
+            "path_cache_hit": bool(path_cache_hit),
         }
+        if cached_path is None and args.cache_policy != "off":
+            save_path_band_cache(
+                cache_dir,
+                cache_key,
+                cache_manifest,
+                path_hamiltonian=path_hamiltonian,
+                path_energies=path_energies,
+                path_kvec=np.asarray(path.kvec, dtype=np.complex128),
+                kdist=np.asarray(path.kdist, dtype=float),
+                labels_payload={
+                    "labels": list(path.labels),
+                    "node_indices": [int(value) for value in path.node_indices],
+                },
+                hf_bands_payload=_panel_bands_payload(panel_result),
+            )
+            print(f"[cache-miss] path_bands saved {cache_key}", flush=True)
+        update_cache_manifest_file(
+            source_dir / "cache_manifest.json",
+            cache_dir=cache_dir,
+            kind="path_bands",
+            key=cache_key,
+            hit=path_cache_hit,
+            path=None if args.cache_policy == "off" else cache_dir / "path_bands" / cache_key,
+            panel=panel_dir.name,
+        )
         _write_panel_outputs(panel_dir, panel_result, dpi=int(args.dpi), ylim_mev=ylim_mev)
         panel_results.append(panel_result)
         print(f"[panel] plot done {panel_dir.name} elapsed_sec={panel_result['elapsed_sec']:.3f}", flush=True)
@@ -392,6 +575,8 @@ def main() -> None:
                     "panel": str(result["panel"]),
                     "elapsed_sec": float(result["elapsed_sec"]),
                     "energy_zero_mev": float(result["mu_mev"]),
+                    "path_cache_key": str(result["path_cache_key"]),
+                    "path_cache_hit": bool(result["path_cache_hit"]),
                 }
                 for result in panel_results
             ],

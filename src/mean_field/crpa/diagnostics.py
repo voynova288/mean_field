@@ -62,10 +62,11 @@ def _representative_curve(
     xs: list[float] = [0.0] if np.any(zero) else []
     ys: list[float] = [float(np.median(eps[zero]))] if np.any(zero) else []
     counts: list[int] = [int(np.count_nonzero(zero))] if np.any(zero) else []
+    nonzero = ~zero
     for lo, hi in zip(bins[:-1], bins[1:], strict=True):
-        in_bin = (q > lo) & (q < hi)
+        in_bin = nonzero & (q >= lo) & (q < hi)
         if hi >= float(x_max_nm_inv):
-            in_bin = (q > lo) & (q <= hi)
+            in_bin = nonzero & (q >= lo) & (q <= hi)
         if not np.any(in_bin):
             continue
         xs.append(float(np.median(q[in_bin])))
@@ -74,6 +75,24 @@ def _representative_curve(
 
     order = np.argsort(xs)
     return np.asarray(xs, dtype=float)[order], np.asarray(ys, dtype=float)[order], np.asarray(counts, dtype=int)[order]
+
+
+def representative_fig1e_window_curve(
+    result: CRPAResult,
+    *,
+    x_max_nm_inv: float = 1.2,
+    bin_width_nm_inv: float = 0.0125,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return the radial median curve used for the Zhang Fig. 1(e) sanity gate."""
+
+    eps_total = np.asarray(result.effective_epsilon, dtype=float) * float(result.coulomb_params.epsilon_bn)
+    q_abs_nm_inv = np.abs(_nm_inv(result.physical_q_vectors, result.coulomb_params.graphene_lattice_angstrom)).real
+    return _representative_curve(
+        q_abs_nm_inv,
+        eps_total,
+        x_max_nm_inv=float(x_max_nm_inv),
+        bin_width_nm_inv=float(bin_width_nm_inv),
+    )
 
 
 def write_crpa_epsilon_diagnostics_csv(result: CRPAResult, output_path: Path | str) -> Path:
@@ -273,9 +292,8 @@ def write_diagnostic_plots_and_report(
     shell = np.asarray([q_shell_index(row) for row in np.asarray(result.q_shifts, dtype=int)], dtype=int)
     shell_flat = np.broadcast_to(shell[None, :], result.effective_epsilon.shape).reshape(-1)
 
-    xs, ys, counts = _representative_curve(
-        q_abs_nm_inv,
-        eps_total,
+    xs, ys, counts = representative_fig1e_window_curve(
+        result,
         x_max_nm_inv=1.2,
         bin_width_nm_inv=bin_width_nm_inv,
     )

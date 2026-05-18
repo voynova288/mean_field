@@ -66,6 +66,7 @@ HF_EXCLUSIVE="${HF_EXCLUSIVE:-1}"
 HF_ARRAY_CONCURRENCY="${HF_ARRAY_CONCURRENCY:-2}"
 FILLINGS_CSV_OVERRIDE="${FILLINGS_CSV_OVERRIDE:-}"
 DEPENDENCY="${DEPENDENCY:-}"
+CRPA_DEPENDENCY="${CRPA_DEPENDENCY:-}"
 DRY_RUN="${DRY_RUN:-0}"
 BM_NODELIST="${BM_NODELIST:-}"
 BM_EXCLUDE="${BM_EXCLUDE:-node023,node024}"
@@ -97,6 +98,9 @@ submit_crpa() {
 
   local bm_job array_job merge_job
   local bm_place_args=()
+  if [[ -n "${CRPA_DEPENDENCY}" ]]; then
+    bm_place_args+=(--dependency="${CRPA_DEPENDENCY}")
+  fi
   if [[ -n "${BM_NODELIST}" ]]; then
     bm_place_args+=(--nodelist="${BM_NODELIST}")
   fi
@@ -192,10 +196,13 @@ submit_crpa() {
 
   {
     printf "stage\tjob_id\tdependency\tpartition\tcpus\tmem\ttime\tpath\n"
-    printf "bm\t%s\tnone\t%s\t%s\t%s\t%s\t%s\n" "${bm_job}" "${PARTITION}" "${BM_CPUS}" "${BM_MEM}" "${BM_TIME}" "${BM_SOLUTION}"
+    printf "bm\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "${bm_job}" "${CRPA_DEPENDENCY:-none}" "${PARTITION}" "${BM_CPUS}" "${BM_MEM}" "${BM_TIME}" "${BM_SOLUTION}"
     printf "chunks\t%s\tafterok:%s\t%s\t%s\t%s\t%s\t%s\n" "${array_job}" "${bm_job}" "${PARTITION}" "${CHUNK_CPUS}" "${CHUNK_MEM}" "${CHUNK_TIME}" "${CHUNK_ROOT} chunks_per_node=${CHUNKS_PER_NODE}"
     printf "merge\t%s\tafterok:%s\t%s\t%s\t%s\t%s\t%s\n" "${merge_job}" "${array_job}" "${MERGE_PARTITION}" "${MERGE_CPUS}" "${MERGE_MEM}" "${MERGE_TIME}" "${MERGED_DIR}"
     printf "convention\t%s\tnone\t%s\t%s\t%s\t%s\t%s\n" "${CRPA_CONVENTION_TAG}" "${PARTITION}" "-" "-" "-" "hf_compatible=${CRPA_HF_COMPATIBLE}"
+    if [[ -n "${CRPA_DEPENDENCY}" ]]; then
+      printf "pre_gate\t%s\tnone\t%s\t%s\t%s\t%s\t%s\n" "${CRPA_DEPENDENCY}" "${PARTITION}" "-" "-" "-" "crpa_dependency"
+    fi
   } > "${CRPA_MANIFEST}"
 
   echo "submitted bm_job=${bm_job}"

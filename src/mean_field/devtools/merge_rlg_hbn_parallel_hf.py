@@ -52,6 +52,42 @@ def _copy_selected_panel(source: Path, destination: Path) -> None:
     destination.mkdir(parents=True, exist_ok=True)
     for filename in ("panel_config.json", "hf_convergence.json", "hf_ground_state.npz"):
         shutil.copy2(source / filename, destination / filename)
+    for filename in ("screening_result.json",):
+        source_path = source / filename
+        if source_path.exists():
+            shutil.copy2(source_path, destination / filename)
+
+
+def _merge_cache_manifests(tasks_root: Path) -> dict[str, object]:
+    merged: dict[str, object] = {"cache_dir": "", "entries": [], "summary": {}}
+    entries = merged["entries"]
+    summary = merged["summary"]
+    if not isinstance(entries, list) or not isinstance(summary, dict):
+        raise TypeError("Internal cache manifest accumulator has unexpected type.")
+
+    for manifest_path in sorted(tasks_root.glob("*/cache_manifest.json")):
+        payload = _read_json(manifest_path)
+        if not merged["cache_dir"] and payload.get("cache_dir"):
+            merged["cache_dir"] = str(payload["cache_dir"])
+        task_name = manifest_path.parent.name
+        raw_entries = payload.get("entries", [])
+        if not isinstance(raw_entries, list):
+            continue
+        for raw_entry in raw_entries:
+            if not isinstance(raw_entry, dict):
+                continue
+            entry = dict(raw_entry)
+            entry["source_manifest"] = str(manifest_path)
+            entry["source_task"] = task_name
+            entries.append(entry)
+            kind = str(entry.get("kind", "unknown"))
+            kind_summary = summary.setdefault(kind, {"hit": 0, "miss": 0})
+            if not isinstance(kind_summary, dict):
+                kind_summary = {"hit": 0, "miss": 0}
+                summary[kind] = kind_summary
+            bucket = "hit" if bool(entry.get("hit", False)) else "miss"
+            kind_summary[bucket] = int(kind_summary.get(bucket, 0)) + 1
+    return merged
 
 
 def main() -> None:
@@ -113,20 +149,35 @@ def main() -> None:
     first_config_path = next(path for path in tasks_root.glob("*/paper_hf_config.json"))
     first_config = _read_json(first_config_path)
     base = dict(PAPER_CONFIGS[str(args.paper_target)])
+    if args.paper_target == "fig6":
+        init_modes = ["flavor", "bm", "perturbed", "random"]
+        seeds = [1, 2, 3, 4]
+    else:
+        init_modes = ["flavor", "bm", "perturbed"]
+        seeds = [1]
     merged_config = {
         **base,
         "paper_target": str(args.paper_target),
-        "init_modes": ["flavor", "bm", "perturbed"],
-        "seeds": [1],
+        "init_modes": init_modes,
+        "seeds": seeds,
         "max_iter": int(first_config.get("max_iter", 80)),
         "precision": float(first_config.get("precision", 1.0e-6)),
         "beta": float(first_config.get("beta", 1.0)),
         "oda_stall_threshold": float(first_config.get("oda_stall_threshold", 1.0e-3)),
         "screening_mesh_size": first_config.get("screening_mesh_size"),
+        "screening_solver": first_config.get("screening_solver"),
+        "screening_u_min_mev": first_config.get("screening_u_min_mev"),
+        "screening_u_max_mev": first_config.get("screening_u_max_mev"),
+        "screening_u_grid_points": first_config.get("screening_u_grid_points"),
+        "cache_dir": first_config.get("cache_dir"),
+        "cache_policy": first_config.get("cache_policy"),
+        "skip_screening_check": first_config.get("skip_screening_check", True),
+        "use_screened_basis": first_config.get("use_screened_basis", base.get("use_screened_basis", True)),
         "parallel_selection": True,
         "tasks_root": str(tasks_root),
     }
     write_json(source_root / "paper_hf_config.json", merged_config)
+    write_json(source_root / "cache_manifest.json", _merge_cache_manifests(tasks_root))
     write_json(
         source_root / "parallel_selection_summary.json",
         {

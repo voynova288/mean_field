@@ -12,6 +12,7 @@ SELECTED_MANIFEST="$1"
 TARGET_NU="$2"
 OUTPUT_ROOT="${OUTPUT_ROOT:-/data/home/ziyuzhu/Mean_Field/results/TBG_HF_cRPA/hf_crpa_production_runs}"
 CRPA_DIR="${CRPA_DIR:-/data/home/ziyuzhu/Mean_Field/results/TBG_HF_cRPA/crpa_lk24_lg9_q11_hf_compatible_cnpindex_packed_20260515_merged}"
+CRPA_PHYSICS_REFERENCE_DIR="${CRPA_PHYSICS_REFERENCE_DIR:-/data/home/ziyuzhu/Mean_Field/results/TBG_HF_cRPA/crpa_lk24_lg9_q11_zhang_appendix_fig4_merged}"
 CRPA_RUN_TAG_SUFFIX="${CRPA_RUN_TAG_SUFFIX:-crpa_hfcompat_cnp_packed_lk24_q11_20260515_gamma_m_k_gamma_kprime}"
 MAX_ITER="${MAX_ITER:-3000}"
 TARGET_LK="${TARGET_LK:-24}"
@@ -35,6 +36,7 @@ echo "[selected-crpa-lk24] target_nu=${TARGET_NU}"
 echo "[selected-crpa-lk24] selected_manifest=${SELECTED_MANIFEST}"
 echo "[selected-crpa-lk24] output_root=${OUTPUT_ROOT}"
 echo "[selected-crpa-lk24] crpa_dir=${CRPA_DIR}"
+echo "[selected-crpa-lk24] crpa_physics_reference_dir=${CRPA_PHYSICS_REFERENCE_DIR}"
 echo "[selected-crpa-lk24] max_iter=${MAX_ITER}"
 echo "[selected-crpa-lk24] target_lk=${TARGET_LK}"
 echo "[selected-crpa-lk24] overlap_lg=${OVERLAP_LG}"
@@ -84,6 +86,7 @@ while IFS=$'\t' read -r theta_deg nu init_mode seed initial_state source_lk targ
     --initial-state-resample "${INITIAL_STATE_RESAMPLE}" \
     --summary-mode parts \
     --crpa-dir "${CRPA_DIR}" \
+    --crpa-physics-reference-dir "${CRPA_PHYSICS_REFERENCE_DIR}" \
     --fock-interpolation "${FOCK_INTERPOLATION}"
 done < "${SELECTED_MANIFEST}"
 

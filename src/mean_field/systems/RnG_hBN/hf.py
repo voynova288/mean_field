@@ -25,7 +25,12 @@ from .hamiltonian import build_hamiltonian, diagonalize_hamiltonian, valence_ban
 from .interaction import RLGhBNInteractionParams, VALID_INTERACTION_SCHEMES, layer_coulomb_matrix_mev_nm2
 from .lattice import RLGhBNLattice, build_moire_k_grid
 from .model import RLGhBNModel
-from .screening import ScreenedInterlayerPotentialResult, moire_cell_area_nm2, solve_screened_interlayer_potential
+from .screening import (
+    ScreenedInterlayerPotentialResult,
+    moire_cell_area_nm2,
+    solve_screened_interlayer_potential,
+    solve_screened_interlayer_potential_grid,
+)
 
 try:
     from numba import njit, prange
@@ -464,19 +469,55 @@ def _screened_basis_model(
     screening_max_iter: int,
     screening_tolerance_mev: float,
     screening_mixing: float,
+    screening_solver: str = "fixed_point",
+    screening_result: ScreenedInterlayerPotentialResult | None = None,
+    screening_u_min_mev: float = -100.0,
+    screening_u_max_mev: float = 200.0,
+    screening_u_grid_points: int = 121,
+    screening_root_tolerance_mev: float = 1.0e-5,
 ) -> tuple[RLGhBNModel, ScreenedInterlayerPotentialResult | None]:
     if not interaction.use_screened_basis:
         return model, None
-    screening = solve_screened_interlayer_potential(
-        model,
-        interaction,
-        mesh_size=screening_mesh_size,
-        max_iter=screening_max_iter,
-        tolerance_mev=screening_tolerance_mev,
-        mixing=screening_mixing,
-    )
+    if screening_result is not None:
+        screening = screening_result
+    elif screening_solver == "grid":
+        screening = solve_screened_interlayer_potential_grid(
+            model,
+            interaction,
+            mesh_size=screening_mesh_size,
+            u_min_mev=screening_u_min_mev,
+            u_max_mev=screening_u_max_mev,
+            n_grid=screening_u_grid_points,
+            root_tolerance_mev=screening_root_tolerance_mev,
+        )
+    elif screening_solver == "fixed_point":
+        screening = solve_screened_interlayer_potential(
+            model,
+            interaction,
+            mesh_size=screening_mesh_size,
+            max_iter=screening_max_iter,
+            tolerance_mev=screening_tolerance_mev,
+            mixing=screening_mixing,
+        )
+    else:
+        raise ValueError(f"screening_solver must be 'grid' or 'fixed_point', got {screening_solver!r}")
     screened_params = replace(model.params, displacement_field_mev=screening.screened_u_mev)
     return RLGhBNModel(lattice=model.lattice, params=screened_params), screening
+
+
+def _assert_average_remote_hamiltonian_contract(basis_data: RLGhBNProjectedBasisData) -> None:
+    if basis_data.interaction.scheme != "average":
+        return
+    if basis_data.physical_h0 is None:
+        raise AssertionError("average scheme requires physical_h0")
+    if basis_data.fixed_remote_hamiltonian is None:
+        raise AssertionError("average scheme requires fixed_remote_hamiltonian")
+    expected = np.asarray(basis_data.physical_h0, dtype=np.complex128) + np.asarray(
+        basis_data.fixed_remote_hamiltonian,
+        dtype=np.complex128,
+    )
+    if not np.allclose(np.asarray(basis_data.h0, dtype=np.complex128), expected, atol=1.0e-9, rtol=1.0e-9):
+        raise AssertionError("average scheme h0 must equal physical_h0 + fixed_remote_hamiltonian")
 
 
 def _project_physical_hamiltonian(
@@ -873,6 +914,12 @@ def build_rlg_hbn_projected_basis(
     screening_max_iter: int = 50,
     screening_tolerance_mev: float = 1.0e-6,
     screening_mixing: float = 0.5,
+    screening_solver: str = "fixed_point",
+    screening_result: ScreenedInterlayerPotentialResult | None = None,
+    screening_u_min_mev: float = -100.0,
+    screening_u_max_mev: float = 200.0,
+    screening_u_grid_points: int = 121,
+    screening_root_tolerance_mev: float = 1.0e-5,
 ) -> RLGhBNProjectedBasisData:
     resolved_interaction = interaction if interaction is not None else RLGhBNInteractionParams()
     resolved_mesh = resolved_interaction.k_mesh_size if mesh_size is None else int(mesh_size)
@@ -889,6 +936,12 @@ def build_rlg_hbn_projected_basis(
         screening_max_iter=screening_max_iter,
         screening_tolerance_mev=screening_tolerance_mev,
         screening_mixing=screening_mixing,
+        screening_solver=screening_solver,
+        screening_result=screening_result,
+        screening_u_min_mev=screening_u_min_mev,
+        screening_u_max_mev=screening_u_max_mev,
+        screening_u_grid_points=screening_u_grid_points,
+        screening_root_tolerance_mev=screening_root_tolerance_mev,
     )
     k_grid_frac, kvec_grid = build_moire_k_grid(basis_model.lattice, resolved_mesh, endpoint=False, frac_shift=frac_shift)
     kvec = np.asarray(kvec_grid.reshape(-1), dtype=np.complex128)
@@ -906,11 +959,13 @@ def build_rlg_hbn_projected_basis(
         name="rlg_hbn_screened_active",
     )
     fixed_remote = build_rlg_hbn_remote_average_hamiltonian(basis_data)
-    return replace(
+    completed = replace(
         basis_data,
         h0=np.asarray(basis_data.physical_h0, dtype=np.complex128) + fixed_remote,
         fixed_remote_hamiltonian=fixed_remote,
     )
+    _assert_average_remote_hamiltonian_contract(completed)
+    return completed
 
 
 def build_rlg_hbn_projected_basis_for_kvec(
@@ -1448,6 +1503,7 @@ def evaluate_rlg_hbn_hf_path(
             h0=np.asarray(target_basis_data.physical_h0, dtype=np.complex128) + fixed_remote,
             fixed_remote_hamiltonian=fixed_remote,
         )
+        _assert_average_remote_hamiltonian_contract(target_basis_data)
         target_overlap_blocks = build_rlg_hbn_layer_overlap_blocks(
             target_basis_data,
             shifts=source_overlap_blocks.shifts,

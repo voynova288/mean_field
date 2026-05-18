@@ -27,6 +27,7 @@ from mean_field.crpa import (
     run_full_crpa_hartree_fock,
     validate_hf_compatible_crpa,
 )
+from mean_field.crpa.validation import compare_fig1e_window_to_paper_points, fig1e_paper_point_gate_failures
 from mean_field.devtools._runtime import ensure_not_running_compute_on_login_node
 from mean_field.devtools.resample_b0_density_stack import resample_density_stack
 from mean_field.systems.tbg import TBGParameters
@@ -58,6 +59,9 @@ from mean_field.systems.tbg.zero_field.path import project_kvec_onto_path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "results" / "TBG_HF" / "custom_b0_hf_targeted_runs"
 DEFAULT_RUN_TAG = "eps4_gate400a_ds400over2p46_q0limit_w0_79p7_w1_97p5_vf_2135p4_20260425_meanfield"
+DEFAULT_CRPA_PHYSICS_REFERENCE_DIR = (
+    REPO_ROOT / "results" / "TBG_HF_cRPA" / "crpa_lk24_lg9_q11_zhang_appendix_fig4_merged"
+)
 GRAPHENE_LATTICE_A_ANGSTROM = 2.46
 
 
@@ -568,6 +572,21 @@ def parse_args() -> argparse.Namespace:
         help="Deprecated compatibility flag; HF-compatible cRPA validation is now the default unless --allow-incompatible-crpa is set.",
     )
     parser.add_argument(
+        "--crpa-physics-reference-dir",
+        type=Path,
+        default=DEFAULT_CRPA_PHYSICS_REFERENCE_DIR,
+        help="Deprecated: retained for CLI compatibility. The production physics gate uses corrected Fig. 1(e) paper anchors.",
+    )
+    parser.add_argument(
+        "--skip-crpa-physics-gate",
+        action="store_true",
+        help="Bypass the Fig. 1(e) cRPA physics gate. This is only for diagnostics and should not be used for production HF+cRPA.",
+    )
+    parser.add_argument("--crpa-fig1e-max-rmse", type=float, default=0.8)
+    parser.add_argument("--crpa-fig1e-max-abs", type=float, default=1.5)
+    parser.add_argument("--crpa-fig1e-max-mean-abs", type=float, default=0.7)
+    parser.add_argument("--crpa-fig1e-min-paper-points", type=int, default=5)
+    parser.add_argument(
         "--fock-interpolation",
         choices=("matrix_diagonal", "linear", "nearest"),
         default="matrix_diagonal",
@@ -671,10 +690,33 @@ def main() -> int:
     )
     crpa_result = None
     crpa_screening = None
+    crpa_physics_gate: dict[str, float | int | str] = {}
     if args.crpa_dir is not None:
         crpa_result = load_crpa_result(args.crpa_dir)
         if not bool(args.allow_incompatible_crpa):
             validate_hf_compatible_crpa(crpa_result, params, theta_deg=theta_deg, overlap_lg=overlap_lg)
+        if not bool(args.skip_crpa_physics_gate):
+            comparison = compare_fig1e_window_to_paper_points(crpa_result)
+            failures = fig1e_paper_point_gate_failures(
+                comparison,
+                max_rmse=float(args.crpa_fig1e_max_rmse),
+                max_abs=float(args.crpa_fig1e_max_abs),
+                max_mean_abs=float(args.crpa_fig1e_max_mean_abs),
+                min_points=int(args.crpa_fig1e_min_paper_points),
+            )
+            crpa_physics_gate = {key: float(value) if isinstance(value, float) else int(value) for key, value in comparison.items()}
+            crpa_physics_gate["gate_type"] = "corrected_fig1e_paper_points"
+            if failures:
+                detail = "; ".join(failures)
+                raise SystemExit(f"cRPA Fig. 1(e) physics gate failed for {args.crpa_dir}: {detail}")
+            print(
+                "[stage] crpa_physics_gate "
+                "reference=corrected_fig1e_paper_points "
+                f"fig1e_paper_rmse={float(comparison['fig1e_paper_rmse']):.6g} "
+                f"fig1e_paper_max_abs={float(comparison['fig1e_paper_max_abs']):.6g} "
+                f"fig1e_paper_mean_abs={float(comparison['fig1e_paper_mean_abs']):.6g}",
+                flush=True,
+            )
         if str(args.fock_interpolation).strip().lower() == "matrix_diagonal":
             required_q_lg = overlap_lg + 2 if overlap_lg % 2 == 1 else overlap_lg
             if int(crpa_result.q_lg) < int(required_q_lg):
@@ -880,6 +922,7 @@ def main() -> int:
             crpa_metadata_json=np.asarray(["" if crpa_result is None else json.dumps(crpa_result.metadata, sort_keys=True)]),
             fock_interpolation=np.asarray([str(args.fock_interpolation)]),
             q_lookup_diagnostics_json=np.asarray([json.dumps(q_lookup_diagnostics, sort_keys=True)]),
+            crpa_physics_gate_json=np.asarray([json.dumps(crpa_physics_gate, sort_keys=True)]),
             energy_summary_json=np.asarray([json.dumps(energy_summary, sort_keys=True)]),
             order_parameters_json=np.asarray([json.dumps(order_summary, sort_keys=True)]),
             indirect_gap_mev=np.asarray([float(gap_summary["indirect_gap_mev"])], dtype=float),
@@ -980,6 +1023,7 @@ def main() -> int:
                 ("crpa_lk", "" if crpa_result is None else str(crpa_result.lk)),
                 ("crpa_lg", "" if crpa_result is None else str(crpa_result.lg)),
                 ("crpa_q_lg", "" if crpa_result is None else str(crpa_result.q_lg)),
+                ("crpa_physics_gate_json", json.dumps(crpa_physics_gate, sort_keys=True)),
                 ("fock_interpolation", str(args.fock_interpolation)),
                 ("path_fock_interpolation", str(args.path_fock_interpolation)),
                 ("path_kind", str(args.path_kind)),
@@ -1103,9 +1147,10 @@ def main() -> int:
         ("crpa_lk", "" if crpa_result is None else str(crpa_result.lk)),
         ("crpa_lg", "" if crpa_result is None else str(crpa_result.lg)),
         ("crpa_q_lg", "" if crpa_result is None else str(crpa_result.q_lg)),
-        ("crpa_metadata_json", "" if crpa_result is None else json.dumps(crpa_result.metadata, sort_keys=True)),
-        ("fock_interpolation", str(args.fock_interpolation)),
-        ("path_fock_interpolation", str(args.path_fock_interpolation)),
+                ("crpa_metadata_json", "" if crpa_result is None else json.dumps(crpa_result.metadata, sort_keys=True)),
+                ("crpa_physics_gate_json", json.dumps(crpa_physics_gate, sort_keys=True)),
+                ("fock_interpolation", str(args.fock_interpolation)),
+                ("path_fock_interpolation", str(args.path_fock_interpolation)),
         ("init_specs", ",".join(f"{spec.init_mode}:{spec.seed}" for spec in init_specs)),
         *initial_state_entries,
         ("start_time", started.strftime("%Y-%m-%dT%H:%M:%S")),

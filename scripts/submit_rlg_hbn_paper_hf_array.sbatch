@@ -1,28 +1,37 @@
 #!/bin/bash
 # Submit with:
 #   sbatch --array=0-11%6 scripts/submit_rlg_hbn_paper_hf_array.sbatch fig5 results/RnG_hBN/rlg_hbn_fig5_parallel
-#   sbatch --array=0-5%6 scripts/submit_rlg_hbn_paper_hf_array.sbatch fig6 results/RnG_hBN/rlg_hbn_fig6_parallel
+#   sbatch --array=0-31%8 scripts/submit_rlg_hbn_paper_hf_array.sbatch fig6 results/RnG_hBN/rlg_hbn_fig6_parallel 120 results/RnG_hBN/cache_fig6
 
 #SBATCH -J rlg_hbn_hf
-#SBATCH -p regular
+#SBATCH -p regular6430
 #SBATCH -N 1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=56
-#SBATCH --mem=90G
-#SBATCH -t 2-00:00:00
+#SBATCH --cpus-per-task=64
+#SBATCH --mem=0
+#SBATCH -t 7-00:00:00
 #SBATCH -o logs/rlg_hbn_hf_%A_%a.out
 #SBATCH -e logs/rlg_hbn_hf_%A_%a.err
 
 set -euo pipefail
 
 if [[ $# -lt 2 ]]; then
-  echo "Usage: sbatch --array=... scripts/submit_rlg_hbn_paper_hf_array.sbatch <fig5|fig6> <output-root> [max_iter]" >&2
+  echo "Usage: sbatch --array=... scripts/submit_rlg_hbn_paper_hf_array.sbatch <fig5|fig6> <output-root> [max_iter] [cache-root]" >&2
   exit 2
 fi
 
 PAPER_TARGET="$1"
 OUTPUT_ROOT="$2"
 MAX_ITER="${3:-80}"
+CACHE_ROOT="${4:-${OUTPUT_ROOT}/cache}"
+CACHE_POLICY="${CACHE_POLICY:-reuse}"
+SCREENING_SOLVER="${SCREENING_SOLVER:-grid}"
+SCREENING_U_MIN_MEV="${SCREENING_U_MIN_MEV:--100}"
+SCREENING_U_MAX_MEV="${SCREENING_U_MAX_MEV:-200}"
+SCREENING_U_GRID_POINTS="${SCREENING_U_GRID_POINTS:-121}"
+PRECISION="${PRECISION:-1e-6}"
+BETA="${BETA:-1.0}"
+ODA_STALL_THRESHOLD="${ODA_STALL_THRESHOLD:-1e-3}"
 
 if [[ -n "${SLURM_SUBMIT_DIR:-}" && -d "${SLURM_SUBMIT_DIR}/src/mean_field" ]]; then
   REPO_ROOT="${SLURM_SUBMIT_DIR}"
@@ -45,8 +54,13 @@ case "${PAPER_TARGET}" in
     exit 2
     ;;
 esac
-INIT_MODES=(flavor bm perturbed)
-SEEDS=(1)
+if [[ "${PAPER_TARGET}" == "fig6" ]]; then
+  INIT_MODES=(flavor bm perturbed random)
+  SEEDS=(1 2 3 4)
+else
+  INIT_MODES=(flavor bm perturbed)
+  SEEDS=(1)
+fi
 
 PANEL_COUNT=$((${#XI_VALUES[@]} * ${#V_VALUES[@]}))
 TASKS_PER_PANEL=$((${#INIT_MODES[@]} * ${#SEEDS[@]}))
@@ -70,7 +84,7 @@ INIT_MODE="${INIT_MODES[$INIT_INDEX]}"
 SEED="${SEEDS[$SEED_INDEX]}"
 PANEL="xi${XI}_V$(printf "%03d" "${V_MEV}")meV"
 
-mkdir -p "${REPO_ROOT}/logs" "${OUTPUT_ROOT}/tasks"
+mkdir -p "${REPO_ROOT}/logs" "${OUTPUT_ROOT}/tasks" "${CACHE_ROOT}"
 
 export PYTHONNOUSERSITE=1
 export PYTHONPATH="${REPO_ROOT}/src"
@@ -88,6 +102,7 @@ export OMP_DYNAMIC="${OMP_DYNAMIC:-FALSE}"
 export MKL_DYNAMIC="${MKL_DYNAMIC:-FALSE}"
 export MEAN_FIELD_RLG_HBN_USE_NUMBA=1
 export MEAN_FIELD_RLG_HBN_REQUIRE_NUMBA=1
+export MEAN_FIELD_RLG_HBN_REMOTE_CHUNK_BANDS="${MEAN_FIELD_RLG_HBN_REMOTE_CHUNK_BANDS:-16}"
 
 python - <<'PY'
 import numba
@@ -101,16 +116,31 @@ echo "[job] panel=${PANEL}"
 echo "[job] init_mode=${INIT_MODE}"
 echo "[job] seed=${SEED}"
 echo "[job] output_dir=${TASK_DIR}"
+echo "[job] cache_root=${CACHE_ROOT}"
+echo "[job] cache_policy=${CACHE_POLICY}"
+echo "[job] screening_solver=${SCREENING_SOLVER}"
+echo "[job] screening_grid=${SCREENING_U_MIN_MEV}:${SCREENING_U_MAX_MEV}:${SCREENING_U_GRID_POINTS}"
 echo "[job] hostname=$(hostname)"
 echo "[job] partition=${SLURM_JOB_PARTITION:-}"
 echo "[job] cpus_per_task=${SLURM_CPUS_PER_TASK:-}"
 echo "[job] numba_threads=${NUMBA_NUM_THREADS:-}"
+echo "[job] remote_chunk_bands=${MEAN_FIELD_RLG_HBN_REMOTE_CHUNK_BANDS}"
 
 python -m mean_field.devtools.run_rlg_hbn_paper_hf \
   --paper-target "${PAPER_TARGET}" \
   --output-dir "${TASK_DIR}" \
+  --cache-dir "${CACHE_ROOT}" \
+  --cache-policy "${CACHE_POLICY}" \
+  --screening-solver "${SCREENING_SOLVER}" \
+  --screening-u-min-mev "${SCREENING_U_MIN_MEV}" \
+  --screening-u-max-mev "${SCREENING_U_MAX_MEV}" \
+  --screening-u-grid-points "${SCREENING_U_GRID_POINTS}" \
+  --skip-screening-check \
   --xi-values "${XI}" \
   --v-values-mev "${V_MEV}" \
   --init-modes "${INIT_MODE}" \
   --seeds "${SEED}" \
-  --max-iter "${MAX_ITER}"
+  --max-iter "${MAX_ITER}" \
+  --precision "${PRECISION}" \
+  --beta "${BETA}" \
+  --oda-stall-threshold "${ODA_STALL_THRESHOLD}"

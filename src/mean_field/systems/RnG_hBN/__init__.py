@@ -60,6 +60,24 @@ from .hf import (
     run_rlg_hbn_hartree_fock,
     scan_rlg_hbn_ground_state,
 )
+from .cache import (
+    CACHE_POLICY_CHOICES,
+    RLGhBNCacheMiss,
+    RLGhBNCacheResult,
+    hf_ground_state_archive_hash,
+    load_layer_overlap_blocks_cache,
+    load_or_build_layer_overlap_blocks,
+    load_or_build_projected_basis,
+    load_or_solve_screening,
+    load_path_band_cache,
+    load_projected_basis_cache,
+    path_cache_key,
+    rlg_hbn_cache_key,
+    save_layer_overlap_blocks_cache,
+    save_path_band_cache,
+    save_projected_basis_cache,
+    update_cache_manifest_file,
+)
 from .interaction import (
     E2_OVER_2_EPS0_MEV_NM,
     RLGhBNInteractionParams,
@@ -81,7 +99,10 @@ from .screening import (
     compute_valence_layer_charge,
     interlayer_hartree_potential_from_charge,
     moire_cell_area_nm2,
+    screening_result_from_dict,
+    screening_result_to_dict,
     solve_screened_interlayer_potential,
+    solve_screened_interlayer_potential_grid,
 )
 from .topology import TopologyResult, compute_topology_from_eigenvectors, compute_topology_from_grid_result, compute_topology_on_grid
 from .validation import ValidationCheck, ValidationReport, reproduce_paper_checkpoints, validate_physics

@@ -16,6 +16,7 @@ from mean_field.crpa import (
     run_full_crpa_hartree_fock,
     validate_hf_compatible_crpa,
 )
+from mean_field.crpa.validation import compare_fig1e_window_to_paper_points, fig1e_paper_point_gate_failures
 from mean_field.devtools.resample_b0_density_stack import resample_density_stack
 from mean_field.systems.tbg import TBGParameters
 from mean_field.systems.tbg.zero_field import (
@@ -27,6 +28,10 @@ from mean_field.systems.tbg.zero_field import (
 
 
 DEFAULT_OUTPUT_ROOT = Path("results") / "TBG_HF_cRPA" / "hf_crpa_runs"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_CRPA_PHYSICS_REFERENCE_DIR = (
+    REPO_ROOT / "results" / "TBG_HF_cRPA" / "crpa_lk24_lg9_q11_zhang_appendix_fig4_merged"
+)
 
 
 @dataclass(frozen=True)
@@ -194,6 +199,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Bypass HF-compatible cRPA metadata checks. Intended only for debugging old artifacts.",
     )
+    parser.add_argument("--crpa-physics-reference-dir", type=Path, default=DEFAULT_CRPA_PHYSICS_REFERENCE_DIR)
+    parser.add_argument("--skip-crpa-physics-gate", action="store_true")
+    parser.add_argument("--crpa-fig1e-max-rmse", type=float, default=0.8)
+    parser.add_argument("--crpa-fig1e-max-abs", type=float, default=1.5)
+    parser.add_argument("--crpa-fig1e-max-mean-abs", type=float, default=0.7)
+    parser.add_argument("--crpa-fig1e-min-paper-points", type=int, default=5)
     parser.add_argument(
         "--init",
         dest="init_specs",
@@ -246,6 +257,28 @@ def main(argv: list[str] | None = None) -> int:
     crpa_result = load_crpa_result(args.crpa_dir)
     if not bool(args.allow_incompatible_crpa):
         validate_hf_compatible_crpa(crpa_result, params, theta_deg=theta_deg, overlap_lg=overlap_lg)
+    crpa_physics_gate: dict[str, float | int | str] = {}
+    if not bool(args.skip_crpa_physics_gate):
+        comparison = compare_fig1e_window_to_paper_points(crpa_result)
+        failures = fig1e_paper_point_gate_failures(
+            comparison,
+            max_rmse=float(args.crpa_fig1e_max_rmse),
+            max_abs=float(args.crpa_fig1e_max_abs),
+            max_mean_abs=float(args.crpa_fig1e_max_mean_abs),
+            min_points=int(args.crpa_fig1e_min_paper_points),
+        )
+        crpa_physics_gate = {key: float(value) if isinstance(value, float) else int(value) for key, value in comparison.items()}
+        crpa_physics_gate["gate_type"] = "corrected_fig1e_paper_points"
+        if failures:
+            raise SystemExit(f"cRPA Fig. 1(e) physics gate failed for {args.crpa_dir}: {'; '.join(failures)}")
+        print(
+            "[stage] crpa_physics_gate "
+            "reference=corrected_fig1e_paper_points "
+            f"fig1e_paper_rmse={float(comparison['fig1e_paper_rmse']):.6g} "
+            f"fig1e_paper_max_abs={float(comparison['fig1e_paper_max_abs']):.6g} "
+            f"fig1e_paper_mean_abs={float(comparison['fig1e_paper_mean_abs']):.6g}",
+            flush=True,
+        )
     crpa_screening = CRPAScreenedCoulomb(crpa_result)
 
     print(
@@ -356,6 +389,7 @@ def main(argv: list[str] | None = None) -> int:
             crpa_lg=np.asarray([crpa_result.lg], dtype=int),
             crpa_q_lg=np.asarray([crpa_result.q_lg], dtype=int),
             crpa_metadata_json=np.asarray([json.dumps(crpa_result.metadata, sort_keys=True)]),
+            crpa_physics_gate_json=np.asarray([json.dumps(crpa_physics_gate, sort_keys=True)]),
             fock_interpolation=np.asarray([str(args.fock_interpolation)]),
             epsilon_bn=np.asarray([float(crpa_result.coulomb_params.epsilon_bn)], dtype=float),
             ds_angstrom=np.asarray([float(crpa_result.coulomb_params.ds_angstrom)], dtype=float),
@@ -405,6 +439,7 @@ def main(argv: list[str] | None = None) -> int:
             ("crpa_lg", str(crpa_result.lg)),
             ("crpa_q_lg", str(crpa_result.q_lg)),
             ("crpa_metadata_json", json.dumps(crpa_result.metadata, sort_keys=True)),
+            ("crpa_physics_gate_json", json.dumps(crpa_physics_gate, sort_keys=True)),
             ("epsilon_bn", f"{float(crpa_result.coulomb_params.epsilon_bn):.16g}"),
             ("ds_angstrom", f"{float(crpa_result.coulomb_params.ds_angstrom):.16g}"),
             (

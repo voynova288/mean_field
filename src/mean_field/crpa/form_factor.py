@@ -59,7 +59,10 @@ def _shift_plane_wave_coefficients_zero_fill(values: np.ndarray, dm: int, dn: in
 def _shift_plane_wave_coefficients(values: np.ndarray, dm: int, dn: int, *, mode: str = "zhang_zero_fill") -> np.ndarray:
     resolved_mode = _normalize_form_factor_mode(mode)
     if resolved_mode == "hf_periodic":
-        return np.roll(np.asarray(values, dtype=np.complex128), shift=(0, -int(dm), -int(dn), 0), axis=(0, 1, 2, 3))
+        # Match the zero-fill convention inside the plane-wave cutoff:
+        # shifted[G + Q] = right[G].  The periodic mode only changes the
+        # boundary condition, replacing zero-fill by wraparound.
+        return np.roll(np.asarray(values, dtype=np.complex128), shift=(0, int(dm), int(dn), 0), axis=(0, 1, 2, 3))
     return _shift_plane_wave_coefficients_zero_fill(values, dm, dn)
 
 

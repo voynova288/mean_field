@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import shutil
 import socket
+import subprocess
 from time import perf_counter
 
 import numpy as np
@@ -15,9 +16,12 @@ from mean_field.devtools._runtime import ensure_not_running_compute_on_login_nod
 from mean_field.systems.RnG_hBN import (
     RLGhBNInteractionParams,
     RLGhBNModel,
-    build_rlg_hbn_layer_overlap_blocks,
-    build_rlg_hbn_projected_basis,
+    load_or_build_layer_overlap_blocks,
+    load_or_build_projected_basis,
+    load_or_solve_screening,
     run_rlg_hbn_hartree_fock,
+    screening_result_to_dict,
+    update_cache_manifest_file,
 )
 
 
@@ -41,6 +45,7 @@ PAPER_CONFIGS = {
         "interaction_cutoff_q1": 3.0,
         "nu": 1.0,
         "scheme": "average",
+        "use_screened_basis": True,
     },
     "fig6": {
         "description": "2312.11617v1 Fig. 6 HF detail source states",
@@ -57,6 +62,7 @@ PAPER_CONFIGS = {
         "interaction_cutoff_q1": 3.0,
         "nu": 1.0,
         "scheme": "average",
+        "use_screened_basis": True,
     },
 }
 
@@ -88,10 +94,17 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--paper-target", choices=tuple(PAPER_CONFIGS), default="fig5")
     parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument("--cache-dir", type=Path, default=DEFAULT_OUTPUT_ROOT / "cache")
+    parser.add_argument("--cache-policy", choices=("reuse", "refresh", "off"), default="reuse")
+    parser.add_argument("--screening-solver", choices=("grid", "fixed_point"), default="grid")
+    parser.add_argument("--screening-u-min-mev", type=float, default=-100.0)
+    parser.add_argument("--screening-u-max-mev", type=float, default=200.0)
+    parser.add_argument("--screening-u-grid-points", type=int, default=121)
+    parser.add_argument("--skip-screening-check", action="store_true")
     parser.add_argument("--v-values-mev", type=_parse_csv_floats, default=None)
     parser.add_argument("--xi-values", type=_parse_csv_ints, default=None)
-    parser.add_argument("--init-modes", type=_parse_csv_strings, default=("flavor", "bm", "perturbed"))
-    parser.add_argument("--seeds", type=_parse_csv_ints, default=(1,))
+    parser.add_argument("--init-modes", type=_parse_csv_strings, default=None)
+    parser.add_argument("--seeds", type=_parse_csv_ints, default=None)
     parser.add_argument("--max-iter", type=int, default=80)
     parser.add_argument("--precision", type=float, default=1.0e-6)
     parser.add_argument("--beta", type=float, default=1.0)
@@ -137,6 +150,22 @@ def _timestamp() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
+def _git_commit_sha() -> str:
+    try:
+        completed = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=REPO_ROOT,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=5,
+        )
+    except Exception:
+        return "unavailable"
+    return completed.stdout.strip() or "unavailable"
+
+
 def _append_progress_event(panel_dir: Path, payload: dict[str, object]) -> None:
     event = {"timestamp": _timestamp(), **payload}
     _atomic_write_json(panel_dir / "hf_progress.json", event)
@@ -174,23 +203,37 @@ def _trace_arrays(trace: dict[str, list[float] | list[int]]) -> tuple[np.ndarray
     )
 
 
-def _save_state_archive(path: Path, run, trace: dict[str, list[float] | list[int]]) -> None:
+def _save_state_archive(
+    path: Path,
+    run,
+    trace: dict[str, list[float] | list[int]],
+    *,
+    cache_metadata: dict[str, object] | None = None,
+    ) -> None:
     iter_energy, iter_err, iter_oda = _trace_arrays(trace)
-    _atomic_savez(
-        path,
-        density=np.asarray(run.state.density, dtype=np.complex128),
-        hamiltonian=np.asarray(run.state.hamiltonian, dtype=np.complex128),
-        h0=np.asarray(run.state.h0, dtype=np.complex128),
-        energies_mev=np.asarray(run.state.energies, dtype=float),
-        kvec_nm_inv=_complex_to_pairs(run.basis_data.kvec),
-        k_grid_frac=np.asarray(run.basis_data.k_grid_frac, dtype=float),
-        band_energies_mev=np.asarray(run.basis_data.band_energies, dtype=float),
-        active_band_indices=np.asarray(run.basis_data.active_band_indices, dtype=int),
-        flat_band_indices=np.asarray(run.basis_data.flat_band_indices, dtype=int),
-        iter_energy_mev=iter_energy,
-        iter_err=iter_err,
-        iter_oda=iter_oda,
-    )
+    payload = {
+        "density": np.asarray(run.state.density, dtype=np.complex128),
+        "hamiltonian": np.asarray(run.state.hamiltonian, dtype=np.complex128),
+        "h0": np.asarray(run.state.h0, dtype=np.complex128),
+        "energies_mev": np.asarray(run.state.energies, dtype=float),
+        "kvec_nm_inv": _complex_to_pairs(run.basis_data.kvec),
+        "k_grid_frac": np.asarray(run.basis_data.k_grid_frac, dtype=float),
+        "band_energies_mev": np.asarray(run.basis_data.band_energies, dtype=float),
+        "active_band_indices": np.asarray(run.basis_data.active_band_indices, dtype=int),
+        "flat_band_indices": np.asarray(run.basis_data.flat_band_indices, dtype=int),
+        "iter_energy_mev": iter_energy,
+        "iter_err": iter_err,
+        "iter_oda": iter_oda,
+    }
+    if cache_metadata:
+        for key, value in cache_metadata.items():
+            if isinstance(value, (str, Path)):
+                payload[key] = np.asarray(str(value))
+            elif value is None:
+                payload[key] = np.asarray("")
+            else:
+                payload[key] = np.asarray(value)
+    _atomic_savez(path, **payload)
 
 
 def _write_checkpoint(
@@ -314,6 +357,7 @@ def _write_panel_convergence(
     panel_start: float,
     run_payloads: list[dict[str, object]],
     screening: object,
+    cache_metadata: dict[str, object] | None = None,
 ) -> dict[str, object] | None:
     if not run_payloads:
         return None
@@ -325,6 +369,8 @@ def _write_panel_convergence(
         "best": best,
         "screening": screening,
     }
+    if cache_metadata:
+        convergence_payload.update(cache_metadata)
     _atomic_write_json(panel_dir / "hf_convergence.json", convergence_payload)
     selected_archive = panel_dir / "runs" / _run_key(str(best["init_mode"]), int(best["seed"])) / "hf_run_state.npz"
     if selected_archive.exists():
@@ -334,6 +380,9 @@ def _write_panel_convergence(
 
 def _run_panel_with_incremental_outputs(
     *,
+    output_dir: Path,
+    cache_dir: Path,
+    cache_policy: str,
     panel_dir: Path,
     panel: str,
     model: RLGhBNModel,
@@ -341,20 +390,83 @@ def _run_panel_with_incremental_outputs(
     config: dict[str, object],
     panel_start: float,
 ) -> tuple[dict[str, object], Path]:
+    _append_progress_event(panel_dir, {"stage": "screening_start", "panel": panel})
+    print(f"[stage] {panel} screening_start", flush=True)
+    screening_result = None
+    screening_payload = None
+    screening_cache_key = ""
+    screening_cache_hit = False
+    if interaction.use_screened_basis:
+        screening_cache = load_or_solve_screening(
+            model,
+            interaction,
+            cache_dir=cache_dir,
+            cache_policy=cache_policy,
+            solver=str(config["screening_solver"]),
+            mesh_size=config["screening_mesh_size"],
+            u_min_mev=float(config["screening_u_min_mev"]),
+            u_max_mev=float(config["screening_u_max_mev"]),
+            n_grid=int(config["screening_u_grid_points"]),
+            root_tolerance_mev=1.0e-5,
+        )
+        screening_result = screening_cache.value
+        screening_cache_key = str(screening_cache.key)
+        screening_cache_hit = bool(screening_cache.hit)
+        screening_payload = screening_result_to_dict(screening_result)  # type: ignore[arg-type]
+        _atomic_write_json(panel_dir / "screening_result.json", screening_payload)
+        update_cache_manifest_file(
+            output_dir / "cache_manifest.json",
+            cache_dir=cache_dir,
+            kind="screening",
+            key=screening_cache_key,
+            hit=screening_cache_hit,
+            path=screening_cache.path,
+            panel=panel,
+        )
+        if screening_cache_hit:
+            print(f"[cache-hit] screening {screening_cache_key}", flush=True)
+        else:
+            print(f"[cache-miss] screening {screening_cache_key}", flush=True)
+    _append_progress_event(
+        panel_dir,
+        {
+            "stage": "screening_done",
+            "panel": panel,
+            "screening": screening_payload,
+            "cache_key": screening_cache_key,
+            "cache_hit": screening_cache_hit,
+        },
+    )
+
     _append_progress_event(panel_dir, {"stage": "basis_start", "panel": panel})
     print(f"[stage] {panel} basis_start", flush=True)
-    basis_data = build_rlg_hbn_projected_basis(
+    basis_cache = load_or_build_projected_basis(
         model,
         interaction,
+        cache_dir=cache_dir,
+        cache_policy=cache_policy,
+        mesh_size=int(config["k_mesh_size"]),
+        screening=screening_result,  # type: ignore[arg-type]
+        screening_solver=str(config["screening_solver"]),
         screening_mesh_size=config["screening_mesh_size"],
+        screening_u_min_mev=float(config["screening_u_min_mev"]),
+        screening_u_max_mev=float(config["screening_u_max_mev"]),
+        screening_u_grid_points=int(config["screening_u_grid_points"]),
     )
-    screening_payload = None
-    if basis_data.screening is not None:
-        screening_payload = {
-            "screened_u_mev": float(basis_data.screening.screened_u_mev),
-            "converged": bool(basis_data.screening.converged),
-            "iterations": len(basis_data.screening.iterations),
-        }
+    basis_data = basis_cache.value
+    update_cache_manifest_file(
+        output_dir / "cache_manifest.json",
+        cache_dir=cache_dir,
+        kind="basis",
+        key=str(basis_cache.key),
+        hit=bool(basis_cache.hit),
+        path=basis_cache.path,
+        panel=panel,
+    )
+    if basis_cache.hit:
+        print(f"[cache-hit] basis {basis_cache.key}", flush=True)
+    else:
+        print(f"[cache-miss] basis {basis_cache.key}", flush=True)
     _append_progress_event(
         panel_dir,
         {
@@ -364,22 +476,65 @@ def _run_panel_with_incremental_outputs(
             "nt": int(basis_data.nt),
             "n_band": int(basis_data.n_band),
             "screening": screening_payload,
+            "cache_key": str(basis_cache.key),
+            "cache_hit": bool(basis_cache.hit),
         },
     )
     print(f"[stage] {panel} basis_done nk={basis_data.nk} nt={basis_data.nt}", flush=True)
 
     _append_progress_event(panel_dir, {"stage": "overlap_start", "panel": panel})
     print(f"[stage] {panel} overlap_start", flush=True)
-    overlap_blocks = build_rlg_hbn_layer_overlap_blocks(basis_data)
+    overlap_cache = load_or_build_layer_overlap_blocks(
+        basis_data,
+        cache_dir=cache_dir,
+        cache_policy=cache_policy,
+        basis_cache_key=str(basis_cache.key),
+    )
+    overlap_blocks = overlap_cache.value
+    update_cache_manifest_file(
+        output_dir / "cache_manifest.json",
+        cache_dir=cache_dir,
+        kind="overlap",
+        key=str(overlap_cache.key),
+        hit=bool(overlap_cache.hit),
+        path=overlap_cache.path,
+        panel=panel,
+    )
+    if overlap_cache.hit:
+        print(f"[cache-hit] overlap {overlap_cache.key}", flush=True)
+    else:
+        print(f"[cache-miss] overlap {overlap_cache.key}", flush=True)
     _append_progress_event(
         panel_dir,
         {
             "stage": "overlap_done",
             "panel": panel,
             "shift_count": len(overlap_blocks.shifts),
+            "cache_key": str(overlap_cache.key),
+            "cache_hit": bool(overlap_cache.hit),
         },
     )
     print(f"[stage] {panel} overlap_done shifts={len(overlap_blocks.shifts)}", flush=True)
+
+    cache_metadata = {
+        "basis_cache_key": str(basis_cache.key),
+        "overlap_cache_key": str(overlap_cache.key),
+        "screening_cache_key": screening_cache_key,
+        "cache_dir": str(cache_dir),
+        "cache_hits": {
+            "screening": bool(screening_cache_hit),
+            "basis": bool(basis_cache.hit),
+            "overlap": bool(overlap_cache.hit),
+        },
+    }
+    archive_cache_metadata = {
+        "cache_key_basis": str(basis_cache.key),
+        "cache_key_overlap": str(overlap_cache.key),
+        "cache_key_screening": screening_cache_key,
+        "screened_u_mev": float(basis_data.basis_model.params.displacement_field_mev),
+        "physical_v_mev": float(model.params.displacement_field_mev),
+        "cache_dir": str(cache_dir),
+    }
 
     run_payloads: list[dict[str, object]] = []
     init_modes = tuple(str(mode) for mode in config["init_modes"])
@@ -398,6 +553,7 @@ def _run_panel_with_incremental_outputs(
                     panel_start=panel_start,
                     run_payloads=run_payloads,
                     screening=screening_payload,
+                    cache_metadata=cache_metadata,
                 )
                 continue
 
@@ -489,7 +645,7 @@ def _run_panel_with_incremental_outputs(
                 step_callback=step_callback,
             )
             payload = _run_payload(run, trace)
-            _save_state_archive(final_archive, run, trace)
+            _save_state_archive(final_archive, run, trace, cache_metadata=archive_cache_metadata)
             _atomic_write_json(
                 run_dir / "hf_run_summary.json",
                 {
@@ -498,6 +654,7 @@ def _run_panel_with_incremental_outputs(
                     "state_npz": str(final_archive),
                     "checkpoint_dir": str(checkpoint_dir),
                     "resumed_from": "" if resume_source is None else str(resume_source),
+                    **archive_cache_metadata,
                 },
             )
             run_payloads.append(payload)
@@ -521,6 +678,7 @@ def _run_panel_with_incremental_outputs(
                 panel_start=panel_start,
                 run_payloads=run_payloads,
                 screening=screening_payload,
+                cache_metadata=cache_metadata,
             )
 
     convergence_payload = _write_panel_convergence(
@@ -529,6 +687,7 @@ def _run_panel_with_incremental_outputs(
         panel_start=panel_start,
         run_payloads=run_payloads,
         screening=screening_payload,
+        cache_metadata=cache_metadata,
     )
     if convergence_payload is None:
         raise RuntimeError(f"No HF runs completed for panel {panel}")
@@ -545,13 +704,27 @@ def _resolved_config(args: argparse.Namespace) -> dict[str, object]:
     if args.xi_values is not None:
         base["xi_values"] = tuple(int(xi) for xi in args.xi_values)
     base["paper_target"] = str(args.paper_target)
-    base["init_modes"] = tuple(str(mode) for mode in args.init_modes)
-    base["seeds"] = tuple(int(seed) for seed in args.seeds)
+    if args.init_modes is None:
+        default_init_modes = ("flavor", "bm", "perturbed", "random") if args.paper_target == "fig6" else ("flavor", "bm", "perturbed")
+    else:
+        default_init_modes = tuple(str(mode) for mode in args.init_modes)
+    if args.seeds is None:
+        default_seeds = (1, 2, 3, 4) if args.paper_target == "fig6" else (1,)
+    else:
+        default_seeds = tuple(int(seed) for seed in args.seeds)
+    base["init_modes"] = tuple(str(mode) for mode in default_init_modes)
+    base["seeds"] = tuple(int(seed) for seed in default_seeds)
     base["max_iter"] = int(args.max_iter)
     base["precision"] = float(args.precision)
     base["beta"] = float(args.beta)
     base["oda_stall_threshold"] = float(args.oda_stall_threshold)
     base["screening_mesh_size"] = None if args.screening_mesh_size is None else int(args.screening_mesh_size)
+    base["screening_solver"] = str(args.screening_solver)
+    base["screening_u_min_mev"] = float(args.screening_u_min_mev)
+    base["screening_u_max_mev"] = float(args.screening_u_max_mev)
+    base["screening_u_grid_points"] = int(args.screening_u_grid_points)
+    base["cache_policy"] = str(args.cache_policy)
+    base["skip_screening_check"] = bool(args.skip_screening_check)
     return base
 
 
@@ -563,12 +736,17 @@ def main() -> None:
         ensure_not_running_compute_on_login_node(f"RLG/hBN {args.paper_target} paper HF")
 
     output_dir = Path(args.output_dir).resolve() if args.output_dir is not None else _default_output_dir(args.paper_target).resolve()
+    cache_dir = Path(args.cache_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
+    if args.cache_policy != "off":
+        cache_dir.mkdir(parents=True, exist_ok=True)
 
     write_json(
         output_dir / "paper_hf_config.json",
         {
             **config,
+            "git_commit_sha": _git_commit_sha(),
+            "cache_dir": str(cache_dir),
             "paper_reference": str(REPO_ROOT / "reference" / "2312.11617v1.pdf"),
             "runtime": {
                 "hostname": socket.gethostname(),
@@ -584,6 +762,31 @@ def main() -> None:
         print(f"[dry-run] output_dir={output_dir}")
         print(f"[dry-run] target={args.paper_target} config={config}")
         return
+
+    if args.paper_target == "fig6" and not args.skip_screening_check:
+        from mean_field.devtools.validate_rlg_hbn_fig6_prereqs import validate_fig6_screening_checkpoints
+
+        prereq_payload = validate_fig6_screening_checkpoints(
+            cache_dir=cache_dir,
+            cache_policy=str(args.cache_policy),
+            screening_solver=str(args.screening_solver),
+            screening_u_min_mev=float(args.screening_u_min_mev),
+            screening_u_max_mev=float(args.screening_u_max_mev),
+            screening_u_grid_points=int(args.screening_u_grid_points),
+            tolerance_mev=3.0,
+        )
+        write_json(output_dir / "prereq_screening_checkpoint.json", prereq_payload)
+        failed = [entry for entry in prereq_payload["checks"] if not bool(entry["passed"])]
+        if failed:
+            write_json(
+                output_dir / "prereq_screening_failure.json",
+                {
+                    "message": "Fig. 6 screening checkpoint failed; HF run was not started.",
+                    "failed": failed,
+                    "prereq": prereq_payload,
+                },
+            )
+            raise RuntimeError("Fig. 6 screening checkpoint failed; see prereq_screening_failure.json")
 
     panel_summaries: list[dict[str, object]] = []
     for xi in tuple(int(value) for value in config["xi_values"]):
@@ -609,7 +812,7 @@ def main() -> None:
                 active_conduction_bands=int(config["active_conduction_bands"]),
                 k_mesh_size=int(config["k_mesh_size"]),
                 interaction_cutoff_q1=float(config["interaction_cutoff_q1"]),
-                use_screened_basis=True,
+                use_screened_basis=bool(config.get("use_screened_basis", True)),
             )
             write_json(
                 panel_dir / "panel_config.json",
@@ -623,10 +826,16 @@ def main() -> None:
                     "max_iter": int(config["max_iter"]),
                     "precision": float(config["precision"]),
                     "beta": float(config["beta"]),
+                    "cache_dir": str(cache_dir),
+                    "cache_policy": str(args.cache_policy),
+                    "screening_solver": str(args.screening_solver),
                 },
             )
 
             convergence_payload, _ = _run_panel_with_incremental_outputs(
+                output_dir=output_dir,
+                cache_dir=cache_dir,
+                cache_policy=str(args.cache_policy),
                 panel_dir=panel_dir,
                 panel=panel,
                 model=model,

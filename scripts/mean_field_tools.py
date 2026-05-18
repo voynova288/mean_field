@@ -60,6 +60,8 @@ MODULE_COMMANDS = {
         "mean_field.devtools.validate_bare_hf_frameworks_against_liu_ref",
         (),
     ),
+    "validate_bare_split_equivalence": ("mean_field.devtools.validate_bare_split_equivalence", ()),
+    "validate_tbg_crpa_artifact": ("mean_field.devtools.validate_tbg_crpa_artifact", ()),
 }
 
 

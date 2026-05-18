@@ -4,6 +4,7 @@
 set -euo pipefail
 
 CRPA_DIR="${CRPA_DIR:-/data/home/ziyuzhu/Mean_Field/results/TBG_HF_cRPA/crpa_lk24_lg9_q11_zhang_appendix_fig4_merged}"
+CRPA_PHYSICS_REFERENCE_DIR="${CRPA_PHYSICS_REFERENCE_DIR:-/data/home/ziyuzhu/Mean_Field/results/TBG_HF_cRPA/crpa_lk24_lg9_q11_zhang_appendix_fig4_merged}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-/data/home/ziyuzhu/Mean_Field/results/TBG_HF_cRPA/hf_crpa_validation_smoke_20260510}"
 
 python scripts/mean_field_tools.py run_custom_b0_hf_case \
@@ -26,5 +27,7 @@ python scripts/mean_field_tools.py run_custom_b0_hf_case \
   --init bm:1 \
   --summary-mode root \
   --crpa-dir "${CRPA_DIR}" \
+  --allow-incompatible-crpa \
+  --crpa-physics-reference-dir "${CRPA_PHYSICS_REFERENCE_DIR}" \
   --fock-interpolation matrix_diagonal \
   --path-fock-interpolation linear

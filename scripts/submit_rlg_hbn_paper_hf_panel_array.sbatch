@@ -7,8 +7,8 @@
 # under each panel's runs/<init>_seed<seed>/checkpoints directory.
 #
 # Usage:
-#   sbatch --array=0-1%1 scripts/submit_rlg_hbn_paper_hf_panel_array.sbatch \
-#     fig6 <output-root> [max_iter] [threads_per_task]
+#   sbatch --array=0-1%2 scripts/submit_rlg_hbn_paper_hf_panel_array.sbatch \
+#     fig6 <output-root> [max_iter] [threads_per_task] [cache-root]
 
 #SBATCH -J rlg_hbn_hf_panel
 #SBATCH -p long
@@ -24,7 +24,7 @@
 set -euo pipefail
 
 if [[ $# -lt 2 ]]; then
-  echo "Usage: sbatch --array=... $0 <fig5|fig6> <output-root> [max_iter] [threads_per_task]" >&2
+  echo "Usage: sbatch --array=... $0 <fig5|fig6> <output-root> [max_iter] [threads_per_task] [cache-root]" >&2
   exit 2
 fi
 
@@ -32,6 +32,12 @@ PAPER_TARGET="$1"
 OUTPUT_ROOT="$2"
 MAX_ITER="${3:-160}"
 THREADS_PER_TASK="${4:-${SLURM_CPUS_PER_TASK:-64}}"
+CACHE_ROOT="${5:-${OUTPUT_ROOT}/cache}"
+CACHE_POLICY="${CACHE_POLICY:-reuse}"
+SCREENING_SOLVER="${SCREENING_SOLVER:-grid}"
+SCREENING_U_MIN_MEV="${SCREENING_U_MIN_MEV:--100}"
+SCREENING_U_MAX_MEV="${SCREENING_U_MAX_MEV:-200}"
+SCREENING_U_GRID_POINTS="${SCREENING_U_GRID_POINTS:-121}"
 
 if [[ -n "${SLURM_SUBMIT_DIR:-}" && -d "${SLURM_SUBMIT_DIR}/src/mean_field" ]]; then
   REPO_ROOT="${SLURM_SUBMIT_DIR}"
@@ -44,10 +50,14 @@ case "${PAPER_TARGET}" in
   fig5)
     XI_VALUES=(1)
     V_VALUES=(40 48 56 64)
+    INIT_MODES="${INIT_MODES:-flavor,bm,perturbed}"
+    SEEDS="${SEEDS:-1}"
     ;;
   fig6)
     XI_VALUES=(0 1)
     V_VALUES=(64)
+    INIT_MODES="${INIT_MODES:-flavor,bm,perturbed,random}"
+    SEEDS="${SEEDS:-1,2,3,4}"
     ;;
   *)
     echo "Unsupported paper target: ${PAPER_TARGET}" >&2
@@ -69,7 +79,7 @@ V_MEV="${V_VALUES[$V_INDEX]}"
 PANEL="xi${XI}_V$(printf "%03d" "${V_MEV}")meV"
 TASK_DIR="${OUTPUT_ROOT}/tasks/panel_${PANEL_INDEX}_${PANEL}"
 
-mkdir -p "${REPO_ROOT}/logs" "${TASK_DIR}"
+mkdir -p "${REPO_ROOT}/logs" "${TASK_DIR}" "${CACHE_ROOT}"
 
 export PYTHONNOUSERSITE=1
 export PYTHONPATH="${REPO_ROOT}/src"
@@ -102,14 +112,25 @@ echo "[job] slurm_cpus_per_task=${SLURM_CPUS_PER_TASK:-}"
 echo "[job] remote_chunk_bands=${MEAN_FIELD_RLG_HBN_REMOTE_CHUNK_BANDS}"
 echo "[job] output_root=${OUTPUT_ROOT}"
 echo "[job] task_dir=${TASK_DIR}"
+echo "[job] cache_root=${CACHE_ROOT}"
+echo "[job] cache_policy=${CACHE_POLICY}"
+echo "[job] init_modes=${INIT_MODES}"
+echo "[job] seeds=${SEEDS}"
 echo "[job] hostname=$(hostname)"
 echo "[job] partition=${SLURM_JOB_PARTITION:-}"
 
 python -m mean_field.devtools.run_rlg_hbn_paper_hf \
   --paper-target "${PAPER_TARGET}" \
   --output-dir "${TASK_DIR}" \
+  --cache-dir "${CACHE_ROOT}" \
+  --cache-policy "${CACHE_POLICY}" \
+  --screening-solver "${SCREENING_SOLVER}" \
+  --screening-u-min-mev "${SCREENING_U_MIN_MEV}" \
+  --screening-u-max-mev "${SCREENING_U_MAX_MEV}" \
+  --screening-u-grid-points "${SCREENING_U_GRID_POINTS}" \
+  --skip-screening-check \
   --xi-values "${XI}" \
   --v-values-mev "${V_MEV}" \
-  --init-modes flavor,bm,perturbed \
-  --seeds 1 \
+  --init-modes "${INIT_MODES}" \
+  --seeds "${SEEDS}" \
   --max-iter "${MAX_ITER}"
