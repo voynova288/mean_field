@@ -43,6 +43,8 @@ else:
 
 
 VALLEY_SEQUENCE = (1, -1)
+RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION = "centered_cell_reciprocal_relabel_pad1_v2"
+RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING = 1
 
 
 def _env_flag_enabled(name: str, *, default: bool) -> bool:
@@ -449,16 +451,57 @@ def rlg_hbn_filling_from_density(
 
 def _rectangular_g_embedding(
     lattice: RLGhBNLattice,
+    *,
+    padding: int = 0,
 ) -> tuple[tuple[int, int], tuple[int, int], dict[tuple[int, int], tuple[int, int]]]:
-    mins = np.min(lattice.g_indices, axis=0)
-    maxs = np.max(lattice.g_indices, axis=0)
+    pad = int(padding)
+    if pad < 0:
+        raise ValueError(f"padding must be non-negative, got {padding}")
+    mins = np.min(lattice.g_indices, axis=0) - pad
+    maxs = np.max(lattice.g_indices, axis=0) + pad
     grid_shape = (int(maxs[0] - mins[0] + 1), int(maxs[1] - mins[1] + 1))
     origin = (int(mins[0]), int(mins[1]))
     positions = {
         (int(n1), int(n2)): (int(n1 - mins[0]), int(n2 - mins[1]))
-        for n1, n2 in np.asarray(lattice.g_indices, dtype=int)
+        for n1 in range(int(mins[0]), int(maxs[0]) + 1)
+        for n2 in range(int(mins[1]), int(maxs[1]) + 1)
     }
     return grid_shape, origin, positions
+
+
+def _reciprocal_fractional_coordinates(k_tilde: complex, lattice: RLGhBNLattice) -> np.ndarray:
+    reciprocal = np.asarray(
+        [
+            [float(lattice.g_m1.real), float(lattice.g_m2.real)],
+            [float(lattice.g_m1.imag), float(lattice.g_m2.imag)],
+        ],
+        dtype=float,
+    )
+    vector = np.asarray([float(complex(k_tilde).real), float(complex(k_tilde).imag)], dtype=float)
+    return np.linalg.solve(reciprocal, vector)
+
+
+def _fold_k_to_centered_cell(k_tilde: complex, lattice: RLGhBNLattice) -> tuple[complex, tuple[int, int]]:
+    fractional = _reciprocal_fractional_coordinates(k_tilde, lattice)
+    shift = np.floor(fractional + 0.5).astype(int)
+    k_can = complex(k_tilde - int(shift[0]) * lattice.g_m1 - int(shift[1]) * lattice.g_m2)
+    return k_can, (int(shift[0]), int(shift[1]))
+
+
+def _raw_pair_from_canonical_pair(
+    canonical_pair: tuple[int, int] | np.ndarray,
+    shift: tuple[int, int],
+    *,
+    valley: int,
+) -> tuple[int, int]:
+    pair = np.asarray(canonical_pair, dtype=int)
+    sign = int(valley)
+    if sign not in VALLEY_SEQUENCE:
+        raise ValueError(f"Expected valley in {VALLEY_SEQUENCE}, got {valley}")
+    return (
+        int(pair[0] - sign * int(shift[0])),
+        int(pair[1] - sign * int(shift[1])),
+    )
 
 
 def _screened_basis_model(
@@ -567,7 +610,10 @@ def _build_projected_basis_for_indices(
         )
 
     n_projected = len(resolved_indices)
-    grid_shape, origin, positions = _rectangular_g_embedding(basis_model.lattice)
+    grid_shape, origin, positions = _rectangular_g_embedding(
+        basis_model.lattice,
+        padding=RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING,
+    )
     nx, ny = grid_shape
     local_basis_size = int(2 * basis_model.params.layer_count)
     embedded = np.zeros(
@@ -585,24 +631,39 @@ def _build_projected_basis_for_indices(
     )
 
     index_array = np.asarray(resolved_indices, dtype=int)
+    folded_k = tuple(_fold_k_to_centered_cell(complex(kval), basis_model.lattice) for kval in resolved_kvec)
+    canonical_kvec = np.asarray([entry[0] for entry in folded_k], dtype=np.complex128)
+    reciprocal_shifts = tuple(entry[1] for entry in folded_k)
     for iflavor, valley in enumerate(resolved_valleys):
-        for ik, kval in enumerate(resolved_kvec):
+        for ik, (k_can, reciprocal_shift) in enumerate(zip(canonical_kvec, reciprocal_shifts, strict=True)):
             evals, evecs = diagonalize_hamiltonian(
-                complex(kval),
+                complex(k_can),
                 basis_model.lattice,
                 basis_model.params,
                 valley=int(valley),
             )
-            selected = np.asarray(evecs[:, index_array], dtype=np.complex128)
+            selected_can = np.asarray(evecs[:, index_array], dtype=np.complex128)
             for source_g_index, pair in enumerate(basis_model.lattice.g_indices):
-                ix, iy = positions[(int(pair[0]), int(pair[1]))]
+                raw_pair = _raw_pair_from_canonical_pair(
+                    pair,
+                    reciprocal_shift,
+                    valley=int(valley),
+                )
+                if raw_pair not in positions:
+                    raise ValueError(
+                        "Periodic-gauge relabel moved a G component outside the embedded reciprocal grid: "
+                        f"raw_pair={raw_pair}, shift={reciprocal_shift}, valley={valley}, "
+                        f"origin={origin}, grid_shape={grid_shape}. Increase "
+                        "RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING."
+                    )
+                ix, iy = positions[raw_pair]
                 start = local_basis_size * source_g_index
-                embedded[:, ix, iy, :, iflavor, ik] = selected[start : start + local_basis_size, :]
+                embedded[:, ix, iy, :, iflavor, ik] = selected_can[start : start + local_basis_size, :]
             band_energies[:, iflavor, ik] = np.asarray(evals[index_array], dtype=float)
             if physical_blocks is not None:
                 physical_blocks[:, :, iflavor, ik] = _project_physical_hamiltonian(
-                    selected,
-                    k_tilde=complex(kval),
+                    selected_can,
+                    k_tilde=complex(k_can),
                     physical_model=physical_model,
                     valley=int(valley),
                 )
@@ -2114,6 +2175,8 @@ __all__ = [
     "RLGhBNInteractionComponents",
     "RLGhBNLayerOverlapBlockSet",
     "RLGhBNProjectedBasisData",
+    "RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING",
+    "RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION",
     "VALLEY_SEQUENCE",
     "active_band_indices_for_interaction",
     "average_scheme_density_delta",

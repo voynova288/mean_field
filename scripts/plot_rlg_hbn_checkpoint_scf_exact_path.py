@@ -83,12 +83,14 @@ def _path_nodes(path_kind: str) -> tuple[tuple[tuple[int, int], ...], tuple[str,
             r"$K'_M$",
         )
     if path_kind == "paper-fig6-gamma-k-kprime-gamma-mprime-m-gamma":
-        # Representatives:
-        #   K=(2/3,1/3), K'=(-1/3,1/3)
+        # Representatives are fractional in the canonical primitive reciprocal
+        # cell used by the finite-G projected basis:
+        #   K=(2/3,1/3), K'=(1/3,2/3)
         #   M'=(0,1/2), M=(1/2,1/2)
-        # This matches the TBG-style exact-hit diagnostic: use exact grid
-        # nodes on the chosen high-symmetry path and no nearest substitution.
-        kprime_fig6 = (-2, 2)
+        # Do not use the neighboring-zone K'=(-1/3,1/3) here: modulo lookup
+        # maps it onto K on the SCF mesh unless a reciprocal-gauge relabel is
+        # implemented.
+        kprime_fig6 = (2, 4)
         mprime_fig6 = (0, 3)
         m_fig6 = (3, 3)
         return (gamma, k_point, kprime_fig6, gamma, mprime_fig6, m_fig6, gamma), (

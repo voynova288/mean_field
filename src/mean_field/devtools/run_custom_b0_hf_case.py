@@ -27,7 +27,11 @@ from mean_field.crpa import (
     run_full_crpa_hartree_fock,
     validate_hf_compatible_crpa,
 )
-from mean_field.crpa.validation import compare_fig1e_window_to_paper_points, fig1e_paper_point_gate_failures
+from mean_field.crpa.validation import (
+    compare_fig1e_window_to_paper_points,
+    crpa_convention_family,
+    fig1e_paper_point_gate_failures,
+)
 from mean_field.devtools._runtime import ensure_not_running_compute_on_login_node
 from mean_field.devtools.resample_b0_density_stack import resample_density_stack
 from mean_field.systems.tbg import TBGParameters
@@ -580,7 +584,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--skip-crpa-physics-gate",
         action="store_true",
-        help="Bypass the Fig. 1(e) cRPA physics gate. This is only for diagnostics and should not be used for production HF+cRPA.",
+        help=(
+            "Skip the convention-aware cRPA gate. Fig. 1(e) is a hard gate only for "
+            "zhang_zero_fill paper-reference artifacts, not for HF-compatible artifacts."
+        ),
     )
     parser.add_argument("--crpa-fig1e-max-rmse", type=float, default=0.8)
     parser.add_argument("--crpa-fig1e-max-abs", type=float, default=1.5)
@@ -695,28 +702,45 @@ def main() -> int:
         crpa_result = load_crpa_result(args.crpa_dir)
         if not bool(args.allow_incompatible_crpa):
             validate_hf_compatible_crpa(crpa_result, params, theta_deg=theta_deg, overlap_lg=overlap_lg)
+        crpa_convention = crpa_convention_family(crpa_result)
         if not bool(args.skip_crpa_physics_gate):
-            comparison = compare_fig1e_window_to_paper_points(crpa_result)
-            failures = fig1e_paper_point_gate_failures(
-                comparison,
-                max_rmse=float(args.crpa_fig1e_max_rmse),
-                max_abs=float(args.crpa_fig1e_max_abs),
-                max_mean_abs=float(args.crpa_fig1e_max_mean_abs),
-                min_points=int(args.crpa_fig1e_min_paper_points),
-            )
-            crpa_physics_gate = {key: float(value) if isinstance(value, float) else int(value) for key, value in comparison.items()}
-            crpa_physics_gate["gate_type"] = "corrected_fig1e_paper_points"
-            if failures:
-                detail = "; ".join(failures)
-                raise SystemExit(f"cRPA Fig. 1(e) physics gate failed for {args.crpa_dir}: {detail}")
-            print(
-                "[stage] crpa_physics_gate "
-                "reference=corrected_fig1e_paper_points "
-                f"fig1e_paper_rmse={float(comparison['fig1e_paper_rmse']):.6g} "
-                f"fig1e_paper_max_abs={float(comparison['fig1e_paper_max_abs']):.6g} "
-                f"fig1e_paper_mean_abs={float(comparison['fig1e_paper_mean_abs']):.6g}",
-                flush=True,
-            )
+            if crpa_convention == "zhang_paper_reference":
+                comparison = compare_fig1e_window_to_paper_points(crpa_result)
+                failures = fig1e_paper_point_gate_failures(
+                    comparison,
+                    max_rmse=float(args.crpa_fig1e_max_rmse),
+                    max_abs=float(args.crpa_fig1e_max_abs),
+                    max_mean_abs=float(args.crpa_fig1e_max_mean_abs),
+                    min_points=int(args.crpa_fig1e_min_paper_points),
+                )
+                crpa_physics_gate = {
+                    key: float(value) if isinstance(value, float) else int(value) for key, value in comparison.items()
+                }
+                crpa_physics_gate["gate_type"] = "corrected_fig1e_paper_points"
+                crpa_physics_gate["convention_family"] = crpa_convention
+                if failures:
+                    detail = "; ".join(failures)
+                    raise SystemExit(f"cRPA Fig. 1(e) physics gate failed for {args.crpa_dir}: {detail}")
+                print(
+                    "[stage] crpa_physics_gate "
+                    "reference=corrected_fig1e_paper_points "
+                    f"fig1e_paper_rmse={float(comparison['fig1e_paper_rmse']):.6g} "
+                    f"fig1e_paper_max_abs={float(comparison['fig1e_paper_max_abs']):.6g} "
+                    f"fig1e_paper_mean_abs={float(comparison['fig1e_paper_mean_abs']):.6g}",
+                    flush=True,
+                )
+            else:
+                crpa_physics_gate = {
+                    "gate_type": "hf_compatible_convention",
+                    "convention_family": crpa_convention,
+                    "fig1e_paper_gate": "diagnostic_only_not_a_hard_gate_for_hf",
+                }
+                print(
+                    "[stage] crpa_physics_gate "
+                    f"convention_family={crpa_convention} "
+                    "fig1e_paper_gate=diagnostic_only_not_a_hard_gate_for_hf",
+                    flush=True,
+                )
         if str(args.fock_interpolation).strip().lower() == "matrix_diagonal":
             required_q_lg = overlap_lg + 2 if overlap_lg % 2 == 1 else overlap_lg
             if int(crpa_result.q_lg) < int(required_q_lg):

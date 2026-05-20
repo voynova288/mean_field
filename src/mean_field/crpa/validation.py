@@ -28,6 +28,31 @@ DEFAULT_FIG1E_PAPER_POINTS: tuple[tuple[float, float], ...] = (
 )
 
 
+def _metadata_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def crpa_convention_family(result: CRPAResult) -> str:
+    """Classify the cRPA artifact convention for validation routing."""
+
+    metadata = dict(result.metadata)
+    mode = str(metadata.get("form_factor_mode", "")).strip().lower()
+    periodic_g_grid = _metadata_bool(metadata.get("periodic_g_grid", False))
+    if mode == "zhang_zero_fill" and not periodic_g_grid:
+        return "zhang_paper_reference"
+    if mode == "hf_periodic" and periodic_g_grid:
+        return "hf_compatible"
+    return "mixed_or_unknown"
+
+
+def is_fig1e_paper_reference_convention(result: CRPAResult) -> bool:
+    return crpa_convention_family(result) == "zhang_paper_reference"
+
+
 def validation_summary(result: CRPAResult) -> dict[str, float]:
     chi_herm = 0.0
     eps_min = float(np.min(np.real(result.effective_epsilon)))

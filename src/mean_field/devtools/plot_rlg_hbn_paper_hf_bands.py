@@ -13,6 +13,7 @@ from mean_field.core.lattice import KPath
 from mean_field.devtools._runtime import ensure_not_running_compute_on_login_node, write_json
 from mean_field.devtools.run_rlg_hbn_paper_hf import PAPER_CONFIGS
 from mean_field.systems.RnG_hBN import (
+    RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
     RLGhBNHartreeFockRun,
     RLGhBNHartreeFockState,
     RLGhBNInteractionParams,
@@ -50,6 +51,16 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--points-per-segment", type=int, default=48)
     parser.add_argument("--chunk-size", type=int, default=4)
     parser.add_argument("--spin-index", type=int, default=0)
+    parser.add_argument(
+        "--spectrum-mode",
+        choices=("auto", "sector", "full", "both"),
+        default="auto",
+        help=(
+            "Plot 'sector' K/K' spin blocks, 'full' Hamiltonian eigenvalues, "
+            "'both', or 'auto' sector only when flavor off-block terms are negligible."
+        ),
+    )
+    parser.add_argument("--block-offdiag-rtol", type=float, default=1.0e-8)
     parser.add_argument("--ylim-mev", type=str, default=None, help="Comma-separated lower,upper y limits in meV.")
     parser.add_argument("--dpi", type=int, default=180)
     parser.add_argument("--dry-run", action="store_true")
@@ -133,6 +144,13 @@ def _reconstruct_run(
     )
     interaction = _build_interaction(config)
     archive = np.load(state_path)
+    archive_gauge = _string_from_archive(archive, "basis_periodic_gauge")
+    if archive_gauge != RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION:
+        raise ValueError(
+            f"{state_path} was generated with basis_periodic_gauge={archive_gauge!r}; "
+            f"expected {RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION!r}. Rerun the HF source state "
+            "before plotting bands with the periodic-gauge corrected basis."
+        )
     basis_data = None
     overlap_blocks = None
     if cache_dir is not None and cache_policy != "off":
@@ -192,19 +210,17 @@ def _reconstruct_run(
 
 def _paper_hf_path(model: RLGhBNModel, points_per_segment: int):
     lattice = model.lattice
-    g1 = lattice.g_m1
     g2 = lattice.g_m2
-    # Use the paper geometry: Gamma -> K -> K' -> Gamma is a 120-degree-apex
-    # isosceles triangle, Gamma -> M' -> M -> Gamma is equilateral, and the
-    # two perpendicular bisectors are collinear.  The two M representatives are
-    # both in the sampled cell.
-    kprime_fig6 = (-g1 + g2) / 3.0
+    # Keep the Fig. 6 M' representative explicit.  The projected-basis builder
+    # folds each target k for diagonalization and then relabels plane-wave
+    # coefficients back into this raw path convention before form factors are
+    # evaluated.
     mprime_fig6 = g2 / 2.0
     m_fig6 = lattice.m_m
     nodes = (
         lattice.gamma_m,
         lattice.k_m,
-        kprime_fig6,
+        lattice.kprime_m,
         lattice.gamma_m,
         mprime_fig6,
         m_fig6,
@@ -230,6 +246,56 @@ def _sector_energies(path_hamiltonian: np.ndarray, *, n_spin: int, n_eta: int, n
         block = hamiltonian[:, :, ik][np.ix_(block_indices, block_indices)]
         energies[:, ik] = np.linalg.eigvalsh(block)
     return energies
+
+
+def _full_energies(path_hamiltonian: np.ndarray) -> np.ndarray:
+    hamiltonian = np.asarray(path_hamiltonian, dtype=np.complex128)
+    energies = np.zeros((hamiltonian.shape[0], hamiltonian.shape[2]), dtype=float)
+    for ik in range(hamiltonian.shape[2]):
+        energies[:, ik] = np.linalg.eigvalsh(hamiltonian[:, :, ik])
+    return energies
+
+
+def _flavor_block_offdiag_metrics(
+    path_hamiltonian: np.ndarray,
+    *,
+    n_spin: int,
+    n_eta: int,
+    n_band: int,
+) -> dict[str, float]:
+    hamiltonian = np.asarray(path_hamiltonian, dtype=np.complex128)
+    idx = np.arange(int(n_spin) * int(n_eta) * int(n_band), dtype=int).reshape(
+        (int(n_spin), int(n_eta), int(n_band)),
+        order="F",
+    )
+    blocks = [
+        np.asarray(idx[ispin, ieta, :], dtype=int)
+        for ispin in range(int(n_spin))
+        for ieta in range(int(n_eta))
+    ]
+    max_diag = 0.0
+    max_offdiag = 0.0
+    for ik in range(hamiltonian.shape[2]):
+        for left_idx, left in enumerate(blocks):
+            diag_block = hamiltonian[:, :, ik][np.ix_(left, left)]
+            max_diag = max(max_diag, float(np.max(np.abs(diag_block))))
+            for right_idx, right in enumerate(blocks):
+                if left_idx == right_idx:
+                    continue
+                off_block = hamiltonian[:, :, ik][np.ix_(left, right)]
+                max_offdiag = max(max_offdiag, float(np.max(np.abs(off_block))))
+    denom = max(max_diag, 1.0e-30)
+    return {
+        "flavor_block_diag_max_abs_mev": float(max_diag),
+        "flavor_block_offdiag_max_abs_mev": float(max_offdiag),
+        "flavor_block_offdiag_relative": float(max_offdiag / denom),
+    }
+
+
+def _resolved_spectrum_mode(requested: str, metrics: dict[str, float], *, rtol: float) -> str:
+    if requested != "auto":
+        return str(requested)
+    return "sector" if float(metrics["flavor_block_offdiag_relative"]) <= float(rtol) else "full"
 
 
 def _source_mu_mev(run: RLGhBNHartreeFockRun) -> float:
@@ -295,6 +361,7 @@ def _panel_bands_payload(panel_result: dict[str, object]) -> dict[str, object]:
         "all_energies_mev": np.asarray(panel_result["all_energies_mev"], dtype=float),
         "spin_up_K_energies_mev": np.asarray(panel_result["k_energies_mev"], dtype=float),
         "spin_up_Kprime_energies_mev": np.asarray(panel_result["kprime_energies_mev"], dtype=float),
+        "full_energies_mev": np.asarray(panel_result["full_energies_mev"], dtype=float),
         "energy_zero_mev": np.asarray(float(panel_result["mu_mev"])),
     }
 
@@ -304,11 +371,17 @@ def _plot_panel(ax, panel_result: dict[str, object], *, ylim_mev: tuple[float, f
     assert hasattr(path, "kdist")
     kdist = np.asarray(path.kdist, dtype=float)
     mu = float(panel_result["mu_mev"])
+    mode = str(panel_result.get("resolved_spectrum_mode", "sector"))
+    if mode in ("full", "both"):
+        full_energies = np.asarray(panel_result["full_energies_mev"], dtype=float) - mu
+        for iband in range(full_energies.shape[0]):
+            ax.plot(kdist, full_energies[iband], color="0.25", linewidth=0.62, alpha=0.72)
     k_energies = np.asarray(panel_result["k_energies_mev"], dtype=float) - mu
     kp_energies = np.asarray(panel_result["kprime_energies_mev"], dtype=float) - mu
-    for iband in range(k_energies.shape[0]):
-        ax.plot(kdist, k_energies[iband], color="black", linewidth=0.9)
-        ax.plot(kdist, kp_energies[iband], color="#c62828", linewidth=0.9)
+    if mode in ("sector", "both"):
+        for iband in range(k_energies.shape[0]):
+            ax.plot(kdist, k_energies[iband], color="black", linewidth=0.9)
+            ax.plot(kdist, kp_energies[iband], color="#c62828", linewidth=0.9)
 
     node_indices = np.asarray(path.node_indices, dtype=int) - 1
     node_positions = np.asarray(path.kdist, dtype=float)[node_indices]
@@ -343,6 +416,9 @@ def _write_panel_outputs(panel_dir: Path, panel_result: dict[str, object], *, dp
             "path_labels": list(path.labels),
             "points": int(np.asarray(path.kvec).size),
             "energy_zero_mev": float(panel_result["mu_mev"]),
+            "requested_spectrum_mode": str(panel_result["requested_spectrum_mode"]),
+            "resolved_spectrum_mode": str(panel_result["resolved_spectrum_mode"]),
+            "flavor_block_offdiag": panel_result["flavor_block_offdiag"],
             "output_png": str(panel_dir / "hf_bands_path.png"),
             "output_pdf": str(panel_dir / "hf_bands_path.pdf"),
         },
@@ -380,8 +456,12 @@ def _write_combined_figure(
         axes = [axes]
     for idx, (ax, result) in enumerate(zip(axes, panel_results, strict=True)):
         _plot_panel(ax, result, ylim_mev=ylim_mev, show_ylabel=idx == 0)
-    axes[0].plot([], [], color="black", linewidth=1.0, label="$K$")
-    axes[0].plot([], [], color="#c62828", linewidth=1.0, label="$K'$")
+    modes = {str(result.get("resolved_spectrum_mode", "sector")) for result in panel_results}
+    if modes & {"sector", "both"}:
+        axes[0].plot([], [], color="black", linewidth=1.0, label="$K$")
+        axes[0].plot([], [], color="#c62828", linewidth=1.0, label="$K'$")
+    if modes & {"full", "both"}:
+        axes[0].plot([], [], color="0.25", linewidth=0.8, label="full eig.")
     axes[0].legend(loc="upper right", fontsize=8, frameon=False)
     fig.savefig(output_dir / f"paper_{paper_target}_hf_bands.png", dpi=int(dpi))
     fig.savefig(output_dir / f"paper_{paper_target}_hf_bands.pdf")
@@ -420,6 +500,8 @@ def main() -> None:
             "points_per_segment": int(args.points_per_segment),
             "chunk_size": int(args.chunk_size),
             "spin_index": int(args.spin_index),
+            "spectrum_mode": str(args.spectrum_mode),
+            "block_offdiag_rtol": float(args.block_offdiag_rtol),
             "ylim_mev": list(ylim_mev),
             "hostname": socket.gethostname(),
             "cache_dir": str(cache_dir),
@@ -519,6 +601,25 @@ def main() -> None:
             spin=int(args.spin_index),
             eta=1,
         )
+        full_energies = _full_energies(path_hamiltonian)
+        offdiag_metrics = _flavor_block_offdiag_metrics(
+            path_hamiltonian,
+            n_spin=n_spin,
+            n_eta=n_eta,
+            n_band=n_band,
+        )
+        resolved_mode = _resolved_spectrum_mode(
+            str(args.spectrum_mode),
+            offdiag_metrics,
+            rtol=float(args.block_offdiag_rtol),
+        )
+        if resolved_mode == "full":
+            print(
+                "[warn] flavor/spin off-block terms are non-negligible; "
+                f"plotting full eigenvalues for {panel_dir.name}. "
+                f"offdiag_rel={offdiag_metrics['flavor_block_offdiag_relative']:.3e}",
+                flush=True,
+            )
         panel_result = {
             "panel": panel_dir.name,
             "title": f"$\\xi={xi}$, $V={v_mev:.0f}$ meV",
@@ -526,10 +627,14 @@ def main() -> None:
             "all_energies_mev": path_energies,
             "k_energies_mev": k_energies,
             "kprime_energies_mev": kprime_energies,
+            "full_energies_mev": full_energies,
             "mu_mev": mu_mev,
             "elapsed_sec": float(perf_counter() - panel_start),
             "path_cache_key": cache_key,
             "path_cache_hit": bool(path_cache_hit),
+            "requested_spectrum_mode": str(args.spectrum_mode),
+            "resolved_spectrum_mode": resolved_mode,
+            "flavor_block_offdiag": offdiag_metrics,
         }
         if cached_path is None and args.cache_policy != "off":
             save_path_band_cache(
@@ -577,6 +682,9 @@ def main() -> None:
                     "energy_zero_mev": float(result["mu_mev"]),
                     "path_cache_key": str(result["path_cache_key"]),
                     "path_cache_hit": bool(result["path_cache_hit"]),
+                    "requested_spectrum_mode": str(result["requested_spectrum_mode"]),
+                    "resolved_spectrum_mode": str(result["resolved_spectrum_mode"]),
+                    "flavor_block_offdiag": result["flavor_block_offdiag"],
                 }
                 for result in panel_results
             ],

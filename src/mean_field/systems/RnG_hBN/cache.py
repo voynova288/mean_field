@@ -11,6 +11,8 @@ import numpy as np
 
 from ...core.hf import ProjectedWavefunctionBasis
 from .hf import (
+    RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
+    RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING,
     RLGhBNLayerOverlapBlockSet,
     RLGhBNProjectedBasisData,
     active_band_indices_for_interaction,
@@ -342,6 +344,11 @@ def load_projected_basis_cache(cache_dir: Path, key: str) -> RLGhBNProjectedBasi
     basis_model_payload = extra.get("basis_model")
     if not isinstance(basis_model_payload, dict):
         raise RLGhBNCacheMiss(f"Basis cache {path} lacks basis_model metadata")
+    if extra.get("basis_periodic_gauge") != RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION:
+        raise RLGhBNCacheMiss(
+            f"Basis cache {path} uses stale periodic-gauge metadata "
+            f"{extra.get('basis_periodic_gauge')!r}; expected {RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION!r}"
+        )
     model = _model_from_payload(model_payload)
     basis_model = _model_from_payload(basis_model_payload)
     interaction_payload = manifest["interaction"]
@@ -401,6 +408,7 @@ def load_or_build_projected_basis(
 ) -> RLGhBNCacheResult:
     policy = _check_policy(cache_policy)
     resolved_mesh = interaction.k_mesh_size if mesh_size is None else int(mesh_size)
+    resolved_screening_mesh = resolved_mesh if screening_mesh_size is None else int(screening_mesh_size)
     if interaction.use_screened_basis and screening is None:
         screening_cache = load_or_solve_screening(
             model,
@@ -408,7 +416,7 @@ def load_or_build_projected_basis(
             cache_dir=cache_dir,
             cache_policy=cache_policy,
             solver=screening_solver,
-            mesh_size=resolved_mesh if screening_mesh_size is None else int(screening_mesh_size),
+            mesh_size=resolved_screening_mesh,
             u_min_mev=screening_u_min_mev,
             u_max_mev=screening_u_max_mev,
             n_grid=screening_u_grid_points,
@@ -430,12 +438,14 @@ def load_or_build_projected_basis(
         "mesh_size": int(resolved_mesh),
         "frac_shift": [float(frac_shift[0]), float(frac_shift[1])],
         "valleys": [int(value) for value in valleys],
-        "screening_mesh_size": None if screening_mesh_size is None else int(screening_mesh_size),
+        "screening_mesh_size": int(resolved_screening_mesh),
         "screening_solver": str(screening_solver),
         "screened_u_mev": None if screening is None else float(screening.screened_u_mev),
         "physical_v_mev": float(model.params.displacement_field_mev),
         "basis_model": _model_cache_payload(basis_model),
         "basis_name": "rlg_hbn_screened_active",
+        "basis_periodic_gauge": RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
+        "basis_periodic_gauge_padding": int(RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING),
         "active_band_indices": [int(value) for value in active_indices],
         "flat_band_indices": [int(value) for value in basis_model.flat_band_indices],
         "screening_u_min_mev": float(screening_u_min_mev),
@@ -460,7 +470,7 @@ def load_or_build_projected_basis(
         mesh_size=resolved_mesh,
         frac_shift=frac_shift,
         valleys=valleys,
-        screening_mesh_size=resolved_mesh if screening_mesh_size is None else int(screening_mesh_size),
+        screening_mesh_size=resolved_screening_mesh,
         screening_result=screening,
         screening_solver=screening_solver,
         screening_u_min_mev=screening_u_min_mev,
@@ -564,6 +574,8 @@ def load_or_build_layer_overlap_blocks(
         if np.asarray(basis_data.k_grid_frac).size
         else [0.0, 0.0],
         "shifts": None if resolved_shifts is None else [[int(m), int(n)] for m, n in resolved_shifts],
+        "basis_periodic_gauge": RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
+        "basis_periodic_gauge_padding": int(RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING),
     }
     key = rlg_hbn_cache_key("overlap", basis_data.model, basis_data.interaction, extra)
     manifest = _manifest_for("overlap", basis_data.model, basis_data.interaction, extra=extra)
@@ -608,6 +620,8 @@ def path_cache_key(
         "beta": float(beta),
         "spin_index": int(spin_index),
         "source_panel": str(panel),
+        "basis_periodic_gauge": RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
+        "basis_periodic_gauge_padding": int(RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING),
     }
     key = rlg_hbn_cache_key("path_bands", model, interaction, extra)
     return key, _manifest_for("path_bands", model, interaction, extra=extra)

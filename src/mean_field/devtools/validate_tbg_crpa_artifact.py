@@ -11,6 +11,7 @@ from mean_field.crpa.validation import (
     DEFAULT_FIG1E_PAPER_POINTS,
     compare_fig1e_window_to_reference,
     compare_fig1e_window_to_paper_points,
+    crpa_convention_family,
     dielectric_algebra_summary,
     fig1e_gate_failures,
     fig1e_paper_point_gate_failures,
@@ -140,6 +141,8 @@ def main(argv: list[str] | None = None) -> int:
     theta_deg = float(result.theta_deg if args.theta_deg is None else args.theta_deg)
     failures: list[str] = []
     metadata_payload = dict(result.metadata)
+    convention_family = crpa_convention_family(result)
+    metadata_payload["convention_family"] = convention_family
 
     if bool(args.require_hf_compatible):
         try:
@@ -188,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
             f"{float(args.hermitian_tolerance):.6g}"
         )
 
-    paper_point_payload: dict[str, float | int] = {}
+    paper_point_payload: dict[str, object] = {}
     if not bool(args.disable_paper_point_gate):
         reference_points = (
             _load_reference_points(Path(args.paper_points_tsv))
@@ -196,35 +199,47 @@ def main(argv: list[str] | None = None) -> int:
             else DEFAULT_FIG1E_PAPER_POINTS
         )
         paper_point_payload = compare_fig1e_window_to_paper_points(result, reference_points)
-        failures.extend(
-            fig1e_paper_point_gate_failures(
-                paper_point_payload,
-                max_rmse=float(args.max_paper_point_rmse),
-                max_abs=float(args.max_paper_point_max_abs),
-                max_mean_abs=float(args.max_paper_point_mean_abs),
-                min_points=int(args.min_paper_points),
+        if convention_family == "zhang_paper_reference":
+            failures.extend(
+                fig1e_paper_point_gate_failures(
+                    paper_point_payload,
+                    max_rmse=float(args.max_paper_point_rmse),
+                    max_abs=float(args.max_paper_point_max_abs),
+                    max_mean_abs=float(args.max_paper_point_mean_abs),
+                    min_points=int(args.min_paper_points),
+                )
             )
-        )
+        else:
+            paper_point_payload["fig1e_paper_gate_hard_fail_enabled"] = 0
+            paper_point_payload["fig1e_paper_gate_skip_reason"] = (
+                "artifact convention is not zhang_paper_reference"
+            )
 
-    fig1e_payload: dict[str, float | int] = {}
+    fig1e_payload: dict[str, object] = {}
     reference_dir = None if args.reference_crpa_dir is None else Path(args.reference_crpa_dir)
     if reference_dir is not None:
         if not (reference_dir / "crpa_params.json").exists():
             failures.append(f"Fig. 1(e) reference cRPA artifact not found: {reference_dir}")
         else:
             reference = load_crpa_result(reference_dir)
+            reference_convention_family = crpa_convention_family(reference)
             fig1e_payload = compare_fig1e_window_to_reference(result, reference)
-            failures.extend(
-                fig1e_gate_failures(
-                    fig1e_payload,
-                    max_rmse=float(args.max_fig1e_rmse),
-                    max_abs=float(args.max_fig1e_max_abs),
-                    max_peak_abs=float(args.max_fig1e_peak_abs),
-                    max_q_peak_abs_nm_inv=float(args.max_fig1e_q_peak_abs_nm_inv),
-                    max_checkpoint_abs=float(args.max_fig1e_checkpoint_abs),
-                    min_points=int(args.min_fig1e_points),
+            fig1e_payload["reference_convention_family"] = reference_convention_family
+            if convention_family == reference_convention_family:
+                failures.extend(
+                    fig1e_gate_failures(
+                        fig1e_payload,
+                        max_rmse=float(args.max_fig1e_rmse),
+                        max_abs=float(args.max_fig1e_max_abs),
+                        max_peak_abs=float(args.max_fig1e_peak_abs),
+                        max_q_peak_abs_nm_inv=float(args.max_fig1e_q_peak_abs_nm_inv),
+                        max_checkpoint_abs=float(args.max_fig1e_checkpoint_abs),
+                        min_points=int(args.min_fig1e_points),
+                    )
                 )
-            )
+            else:
+                fig1e_payload["fig1e_reference_gate_hard_fail_enabled"] = 0
+                fig1e_payload["fig1e_reference_gate_skip_reason"] = "artifact/reference convention mismatch"
 
     status = "pass" if not failures else "fail"
     out = Path(args.output_dir)

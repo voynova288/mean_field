@@ -1,9 +1,9 @@
 #!/bin/bash
 # Submit cached RLG/hBN Fig. 6 HF bands as a dependency chain:
-#   prereq screening checkpoint -> cache warmup -> 32 HF init tasks -> merge -> plot -> verify
+#   prereq screening checkpoint -> cache warmup -> 26 HF init tasks -> merge -> plot -> verify
 #
-# The HF array uses one task per (xi, init_mode, seed):
-#   xi in {0,1}, init_mode in {flavor,bm,perturbed,random}, seed in {1,2,3,4}.
+# The HF array uses one task per explicit (xi, init_mode, seed). BM is
+# deterministic for fixed model parameters, so it is only launched with seed 1.
 # Submit from login002:
 #   ssh login002 'cd /data/home/ziyuzhu/Mean_Field && bash scripts/submit_fig6_hf_bands_cached_init_parallel.sh'
 #
@@ -31,10 +31,12 @@ WALLTIME="${WALLTIME:-7-00:00:00}"
 ARRAY_THROTTLE="${ARRAY_THROTTLE:-8}"
 MAX_ITER="${MAX_ITER:-120}"
 CACHE_POLICY="${CACHE_POLICY:-reuse}"
+TASKS_PER_ALLOCATION="${TASKS_PER_ALLOCATION:-3}"
 SCREENING_SOLVER="${SCREENING_SOLVER:-grid}"
 SCREENING_U_MIN_MEV="${SCREENING_U_MIN_MEV:--100}"
 SCREENING_U_MAX_MEV="${SCREENING_U_MAX_MEV:-200}"
 SCREENING_U_GRID_POINTS="${SCREENING_U_GRID_POINTS:-121}"
+SCREENING_MESH_SIZE="${SCREENING_MESH_SIZE:-18}"
 PRECISION="${PRECISION:-1e-6}"
 BETA="${BETA:-1.0}"
 ODA_STALL_THRESHOLD="${ODA_STALL_THRESHOLD:-1e-3}"
@@ -45,8 +47,10 @@ DPI="${DPI:-180}"
 mkdir -p "${OUT}" "${CACHE}"
 
 EXPORT_COMMON="ALL,MEAN_FIELD_RLG_HBN_USE_NUMBA=1,MEAN_FIELD_RLG_HBN_REQUIRE_NUMBA=1,MEAN_FIELD_RLG_HBN_REMOTE_CHUNK_BANDS=16"
-EXPORT_HF="${EXPORT_COMMON},CACHE_POLICY=${CACHE_POLICY},SCREENING_SOLVER=${SCREENING_SOLVER},SCREENING_U_MIN_MEV=${SCREENING_U_MIN_MEV},SCREENING_U_MAX_MEV=${SCREENING_U_MAX_MEV},SCREENING_U_GRID_POINTS=${SCREENING_U_GRID_POINTS},PRECISION=${PRECISION},BETA=${BETA},ODA_STALL_THRESHOLD=${ODA_STALL_THRESHOLD}"
+EXPORT_HF="${EXPORT_COMMON},CACHE_POLICY=${CACHE_POLICY},TASKS_PER_ALLOCATION=${TASKS_PER_ALLOCATION},SCREENING_SOLVER=${SCREENING_SOLVER},SCREENING_U_MIN_MEV=${SCREENING_U_MIN_MEV},SCREENING_U_MAX_MEV=${SCREENING_U_MAX_MEV},SCREENING_U_GRID_POINTS=${SCREENING_U_GRID_POINTS},SCREENING_MESH_SIZE=${SCREENING_MESH_SIZE},PRECISION=${PRECISION},BETA=${BETA},ODA_STALL_THRESHOLD=${ODA_STALL_THRESHOLD}"
 MANIFEST="${OUT}/submission_jobs.tsv"
+HF_TASK_COUNT=26
+HF_ARRAY_MAX=$(((HF_TASK_COUNT + TASKS_PER_ALLOCATION - 1) / TASKS_PER_ALLOCATION - 1))
 
 {
   echo -e "stage\tjob_id\tdependency\toutput\tcommand"
@@ -55,6 +59,7 @@ MANIFEST="${OUT}/submission_jobs.tsv"
 echo "[submit] out=${OUT}"
 echo "[submit] cache=${CACHE}"
 echo "[submit] partition=${PARTITION} cpus=${CPUS_PER_TASK} array_throttle=${ARRAY_THROTTLE}"
+echo "[submit] hf_task_count=${HF_TASK_COUNT} tasks_per_allocation=${TASKS_PER_ALLOCATION} hf_array=0-${HF_ARRAY_MAX}"
 
 PREREQ_JOB="$(
   sbatch --parsable \
@@ -109,14 +114,14 @@ HF_ARRAY_JOB="$(
     -t "${WALLTIME}" \
     -o logs/rlg_fig6_hfinit_%A_%a.out \
     -e logs/rlg_fig6_hfinit_%A_%a.err \
-    --array="0-31%${ARRAY_THROTTLE}" \
+    --array="0-${HF_ARRAY_MAX}%${ARRAY_THROTTLE}" \
     --dependency="afterok:${WARMUP_JOB}" \
     --export="${EXPORT_HF}" \
     scripts/submit_rlg_hbn_paper_hf_array.sbatch \
     fig6 "${OUT}" "${MAX_ITER}" "${CACHE}"
 )"
 HF_ARRAY_JOB="${HF_ARRAY_JOB%%;*}"
-echo -e "hf_array\t${HF_ARRAY_JOB}\tafterok:${WARMUP_JOB}\t${OUT}\t32 init tasks" >> "${MANIFEST}"
+echo -e "hf_array\t${HF_ARRAY_JOB}\tafterok:${WARMUP_JOB}\t${OUT}\t${HF_TASK_COUNT} init tasks packed ${TASKS_PER_ALLOCATION}/allocation" >> "${MANIFEST}"
 
 MERGE_JOB="$(
   sbatch --parsable \
@@ -175,7 +180,7 @@ echo -e "verify\t${VERIFY_JOB}\tafterok:${PLOT_JOB}\t${OUT}\tverify_rlg_hbn_fig6
 
 echo "[submitted] prereq=${PREREQ_JOB}"
 echo "[submitted] warmup=${WARMUP_JOB}"
-echo "[submitted] hf_array=${HF_ARRAY_JOB} (0-31%${ARRAY_THROTTLE})"
+echo "[submitted] hf_array=${HF_ARRAY_JOB} (0-${HF_ARRAY_MAX}%${ARRAY_THROTTLE}, ${TASKS_PER_ALLOCATION}/allocation)"
 echo "[submitted] merge=${MERGE_JOB}"
 echo "[submitted] plot=${PLOT_JOB}"
 echo "[submitted] verify=${VERIFY_JOB}"

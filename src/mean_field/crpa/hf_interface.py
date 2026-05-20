@@ -246,7 +246,7 @@ def build_crpa_projected_interaction_components(
         coeff = 0.0 + 0.0j
         for q1_shift, trace_q1 in hartree_traces.items():
             q1_index = crpa_shift_to_index[q1_shift]
-            coeff += hartree_dimless[q1_index, q2_index] * trace_q1
+            coeff += hartree_dimless[q2_index, q1_index] * trace_q1
         if coeff != 0.0:
             hartree += scale * coeff * diagonal_q2
 
@@ -338,7 +338,7 @@ def build_crpa_projected_target_hamiltonian(
         coeff = 0.0 + 0.0j
         for q1_shift, trace_q1 in hartree_traces.items():
             q1_index = crpa_shift_to_index[q1_shift]
-            coeff += hartree_dimless[q1_index, q2_index] * trace_q1
+            coeff += hartree_dimless[q2_index, q1_index] * trace_q1
         if coeff != 0.0:
             target_hamiltonian += scale * coeff * target_diagonal
 

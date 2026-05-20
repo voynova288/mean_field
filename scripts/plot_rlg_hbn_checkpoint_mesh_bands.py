@@ -46,7 +46,7 @@ def _paper_hf_path(model: RLGhBNModel, points_per_segment: int):
         lattice.k_m,
         lattice.kprime_m,
         lattice.gamma_m,
-        -lattice.m_m,
+        lattice.g_m2 / 2.0,
         lattice.m_m,
         lattice.gamma_m,
     )

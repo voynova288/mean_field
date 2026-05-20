@@ -38,6 +38,11 @@ SCREENING_SOLVER="${SCREENING_SOLVER:-grid}"
 SCREENING_U_MIN_MEV="${SCREENING_U_MIN_MEV:--100}"
 SCREENING_U_MAX_MEV="${SCREENING_U_MAX_MEV:-200}"
 SCREENING_U_GRID_POINTS="${SCREENING_U_GRID_POINTS:-121}"
+RUN_SPECS="${RUN_SPECS:-}"
+USER_SET_INIT_OR_SEEDS=0
+if [[ -n "${INIT_MODES:-}" || -n "${SEEDS:-}" ]]; then
+  USER_SET_INIT_OR_SEEDS=1
+fi
 
 if [[ -n "${SLURM_SUBMIT_DIR:-}" && -d "${SLURM_SUBMIT_DIR}/src/mean_field" ]]; then
   REPO_ROOT="${SLURM_SUBMIT_DIR}"
@@ -50,20 +55,27 @@ case "${PAPER_TARGET}" in
   fig5)
     XI_VALUES=(1)
     V_VALUES=(40 48 56 64)
-    INIT_MODES="${INIT_MODES:-flavor,bm,perturbed}"
-    SEEDS="${SEEDS:-1}"
+    DEFAULT_INIT_MODES="flavor,bm,perturbed"
+    DEFAULT_SEEDS="1"
+    DEFAULT_RUN_SPECS="flavor:1,bm:1,perturbed:1"
     ;;
   fig6)
     XI_VALUES=(0 1)
     V_VALUES=(64)
-    INIT_MODES="${INIT_MODES:-flavor,bm,perturbed,random}"
-    SEEDS="${SEEDS:-1,2,3,4}"
+    DEFAULT_INIT_MODES="flavor,bm,perturbed,random"
+    DEFAULT_SEEDS="1,2,3,4"
+    DEFAULT_RUN_SPECS="flavor:1,flavor:2,flavor:3,flavor:4,bm:1,perturbed:1,perturbed:2,perturbed:3,perturbed:4,random:1,random:2,random:3,random:4"
     ;;
   *)
     echo "Unsupported paper target: ${PAPER_TARGET}" >&2
     exit 2
     ;;
 esac
+INIT_MODES="${INIT_MODES:-${DEFAULT_INIT_MODES}}"
+SEEDS="${SEEDS:-${DEFAULT_SEEDS}}"
+if [[ -z "${RUN_SPECS}" && "${USER_SET_INIT_OR_SEEDS}" -eq 0 ]]; then
+  RUN_SPECS="${DEFAULT_RUN_SPECS}"
+fi
 
 PANEL_COUNT=$((${#XI_VALUES[@]} * ${#V_VALUES[@]}))
 PANEL_INDEX="${SLURM_ARRAY_TASK_ID:-0}"
@@ -116,10 +128,12 @@ echo "[job] cache_root=${CACHE_ROOT}"
 echo "[job] cache_policy=${CACHE_POLICY}"
 echo "[job] init_modes=${INIT_MODES}"
 echo "[job] seeds=${SEEDS}"
+echo "[job] run_specs=${RUN_SPECS}"
 echo "[job] hostname=$(hostname)"
 echo "[job] partition=${SLURM_JOB_PARTITION:-}"
 
-python -m mean_field.devtools.run_rlg_hbn_paper_hf \
+CMD=(
+  python -m mean_field.devtools.run_rlg_hbn_paper_hf
   --paper-target "${PAPER_TARGET}" \
   --output-dir "${TASK_DIR}" \
   --cache-dir "${CACHE_ROOT}" \
@@ -131,6 +145,11 @@ python -m mean_field.devtools.run_rlg_hbn_paper_hf \
   --skip-screening-check \
   --xi-values "${XI}" \
   --v-values-mev "${V_MEV}" \
-  --init-modes "${INIT_MODES}" \
-  --seeds "${SEEDS}" \
   --max-iter "${MAX_ITER}"
+)
+if [[ -n "${RUN_SPECS}" ]]; then
+  CMD+=(--run-specs "${RUN_SPECS}")
+else
+  CMD+=(--init-modes "${INIT_MODES}" --seeds "${SEEDS}")
+fi
+"${CMD[@]}"

@@ -6,7 +6,7 @@ from pathlib import Path
 import shutil
 
 from mean_field.devtools._runtime import write_json
-from mean_field.devtools.run_rlg_hbn_paper_hf import PAPER_CONFIGS
+from mean_field.devtools.run_rlg_hbn_paper_hf import PAPER_CONFIGS, default_rlg_hbn_run_specs
 
 
 def _read_json(path: Path) -> dict[str, object]:
@@ -37,6 +37,18 @@ def _best_energy(panel_dir: Path) -> float:
     if not isinstance(best, dict):
         raise ValueError(f"Missing best run payload in {panel_dir / 'hf_convergence.json'}")
     return float(best["final_energy_mev"])
+
+
+def _best_run_spec(panel_dir: Path) -> tuple[str, int] | None:
+    convergence = _read_json(panel_dir / "hf_convergence.json")
+    best = convergence.get("best")
+    if not isinstance(best, dict):
+        return None
+    init_mode = best.get("init_mode")
+    seed = best.get("seed")
+    if init_mode is None or seed is None:
+        return None
+    return str(init_mode), int(seed)
 
 
 def _expected_panels(paper_target: str) -> list[str]:
@@ -97,7 +109,23 @@ def main() -> None:
     if not tasks_root.exists():
         raise FileNotFoundError(tasks_root)
 
-    panel_dirs = _task_panel_dirs(tasks_root)
+    allowed_specs = set(default_rlg_hbn_run_specs(str(args.paper_target)))
+    all_panel_dirs = _task_panel_dirs(tasks_root)
+    ignored_panel_dirs: list[dict[str, object]] = []
+    panel_dirs: list[Path] = []
+    for panel_dir in all_panel_dirs:
+        spec = _best_run_spec(panel_dir)
+        if spec is not None and spec not in allowed_specs:
+            ignored_panel_dirs.append(
+                {
+                    "path": str(panel_dir),
+                    "init_mode": spec[0],
+                    "seed": spec[1],
+                    "reason": "not in deduplicated paper-target run specs",
+                }
+            )
+            continue
+        panel_dirs.append(panel_dir)
     grouped: dict[str, list[Path]] = {}
     for panel_dir in panel_dirs:
         grouped.setdefault(panel_dir.name, []).append(panel_dir)
@@ -149,17 +177,19 @@ def main() -> None:
     first_config_path = next(path for path in tasks_root.glob("*/paper_hf_config.json"))
     first_config = _read_json(first_config_path)
     base = dict(PAPER_CONFIGS[str(args.paper_target)])
-    if args.paper_target == "fig6":
-        init_modes = ["flavor", "bm", "perturbed", "random"]
-        seeds = [1, 2, 3, 4]
-    else:
-        init_modes = ["flavor", "bm", "perturbed"]
-        seeds = [1]
+    run_specs = default_rlg_hbn_run_specs(str(args.paper_target))
+    init_modes = list(dict.fromkeys(init_mode for init_mode, _ in run_specs))
+    seeds = list(dict.fromkeys(int(seed) for _, seed in run_specs))
     merged_config = {
         **base,
         "paper_target": str(args.paper_target),
         "init_modes": init_modes,
         "seeds": seeds,
+        "run_specs": [
+            {"init_mode": str(init_mode), "seed": int(seed)}
+            for init_mode, seed in run_specs
+        ],
+        "candidate_count": len(run_specs),
         "max_iter": int(first_config.get("max_iter", 80)),
         "precision": float(first_config.get("precision", 1.0e-6)),
         "beta": float(first_config.get("beta", 1.0)),
@@ -184,6 +214,11 @@ def main() -> None:
             "source_root": str(source_root),
             "paper_target": str(args.paper_target),
             "tasks_root": str(tasks_root),
+            "allowed_run_specs": [
+                {"init_mode": str(init_mode), "seed": int(seed)}
+                for init_mode, seed in sorted(allowed_specs)
+            ],
+            "ignored_candidates": ignored_panel_dirs,
             "selected": selected_rows,
         },
     )

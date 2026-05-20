@@ -14,6 +14,8 @@ import numpy as np
 
 from mean_field.devtools._runtime import ensure_not_running_compute_on_login_node, write_json
 from mean_field.systems.RnG_hBN import (
+    RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING,
+    RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
     RLGhBNInteractionParams,
     RLGhBNModel,
     load_or_build_layer_overlap_blocks,
@@ -88,6 +90,84 @@ def _parse_csv_strings(text: str) -> tuple[str, ...]:
     return values
 
 
+def _parse_run_specs(text: str) -> tuple[tuple[str, int], ...]:
+    specs: list[tuple[str, int]] = []
+    for item in text.split(","):
+        stripped = item.strip()
+        if not stripped:
+            continue
+        if ":" not in stripped:
+            raise argparse.ArgumentTypeError(
+                f"Expected run spec entries as init_mode:seed, got {stripped!r}."
+            )
+        init_mode, seed_text = stripped.split(":", 1)
+        init_mode = init_mode.strip()
+        seed_text = seed_text.strip()
+        if not init_mode:
+            raise argparse.ArgumentTypeError(f"Missing init mode in run spec {stripped!r}.")
+        try:
+            seed = int(seed_text)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError(f"Invalid seed in run spec {stripped!r}.") from exc
+        specs.append((init_mode, seed))
+    if not specs:
+        raise argparse.ArgumentTypeError("Expected at least one comma-separated run spec.")
+    return tuple(specs)
+
+
+DETERMINISTIC_INIT_MODES = {"bm"}
+
+
+def rlg_hbn_run_specs_for_modes(
+    init_modes: tuple[str, ...],
+    seeds: tuple[int, ...],
+) -> tuple[tuple[str, int], ...]:
+    specs: list[tuple[str, int]] = []
+    for init_mode in init_modes:
+        mode = str(init_mode)
+        mode_seeds = seeds
+        if mode.strip().lower() in DETERMINISTIC_INIT_MODES and len(mode_seeds) > 1:
+            mode_seeds = mode_seeds[:1]
+        for seed in mode_seeds:
+            specs.append((mode, int(seed)))
+    return tuple(specs)
+
+
+def default_rlg_hbn_run_specs(paper_target: str) -> tuple[tuple[str, int], ...]:
+    if paper_target == "fig6":
+        return rlg_hbn_run_specs_for_modes(
+            ("flavor", "bm", "perturbed", "random"),
+            (1, 2, 3, 4),
+        )
+    return rlg_hbn_run_specs_for_modes(("flavor", "bm", "perturbed"), (1,))
+
+
+def _serialize_run_specs(run_specs: tuple[tuple[str, int], ...]) -> list[dict[str, object]]:
+    return [{"init_mode": str(init_mode), "seed": int(seed)} for init_mode, seed in run_specs]
+
+
+def _run_specs_from_config(config: dict[str, object]) -> tuple[tuple[str, int], ...]:
+    raw_specs = config.get("run_specs")
+    if raw_specs is None:
+        return rlg_hbn_run_specs_for_modes(
+            tuple(str(mode) for mode in config["init_modes"]),
+            tuple(int(seed) for seed in config["seeds"]),
+        )
+    specs: list[tuple[str, int]] = []
+    if not isinstance(raw_specs, (list, tuple)):
+        raise TypeError("run_specs must be a list of {init_mode, seed} entries.")
+    for raw in raw_specs:
+        if isinstance(raw, dict):
+            specs.append((str(raw["init_mode"]), int(raw["seed"])))
+        elif isinstance(raw, (list, tuple)) and len(raw) == 2:
+            specs.append((str(raw[0]), int(raw[1])))
+        else:
+            raise TypeError(f"Invalid run spec entry: {raw!r}")
+    if not specs:
+        raise ValueError("run_specs must not be empty.")
+    return tuple(specs)
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run paper-config projected HF source states for R5G/hBN Figs. 5 and 6."
@@ -105,6 +185,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--xi-values", type=_parse_csv_ints, default=None)
     parser.add_argument("--init-modes", type=_parse_csv_strings, default=None)
     parser.add_argument("--seeds", type=_parse_csv_ints, default=None)
+    parser.add_argument(
+        "--run-specs",
+        type=_parse_run_specs,
+        default=None,
+        help="Comma-separated exact init_mode:seed list. Overrides the init-modes x seeds expansion.",
+    )
     parser.add_argument("--max-iter", type=int, default=80)
     parser.add_argument("--precision", type=float, default=1.0e-6)
     parser.add_argument("--beta", type=float, default=1.0)
@@ -521,6 +607,8 @@ def _run_panel_with_incremental_outputs(
         "overlap_cache_key": str(overlap_cache.key),
         "screening_cache_key": screening_cache_key,
         "cache_dir": str(cache_dir),
+        "basis_periodic_gauge": RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
+        "basis_periodic_gauge_padding": int(RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING),
         "cache_hits": {
             "screening": bool(screening_cache_hit),
             "basis": bool(basis_cache.hit),
@@ -534,13 +622,12 @@ def _run_panel_with_incremental_outputs(
         "screened_u_mev": float(basis_data.basis_model.params.displacement_field_mev),
         "physical_v_mev": float(model.params.displacement_field_mev),
         "cache_dir": str(cache_dir),
+        "basis_periodic_gauge": RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
+        "basis_periodic_gauge_padding": int(RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING),
     }
 
     run_payloads: list[dict[str, object]] = []
-    init_modes = tuple(str(mode) for mode in config["init_modes"])
-    seeds = tuple(int(seed) for seed in config["seeds"])
-    for init_mode in init_modes:
-        for seed in seeds:
+    for init_mode, seed in _run_specs_from_config(config):
             run_dir = panel_dir / "runs" / _run_key(init_mode, seed)
             run_dir.mkdir(parents=True, exist_ok=True)
             completed = _completed_run_summary(run_dir, max_iter=int(config["max_iter"]))
@@ -712,13 +799,23 @@ def _resolved_config(args: argparse.Namespace) -> dict[str, object]:
         default_seeds = (1, 2, 3, 4) if args.paper_target == "fig6" else (1,)
     else:
         default_seeds = tuple(int(seed) for seed in args.seeds)
+    if args.run_specs is None:
+        run_specs = rlg_hbn_run_specs_for_modes(default_init_modes, default_seeds)
+    else:
+        run_specs = tuple((str(init_mode), int(seed)) for init_mode, seed in args.run_specs)
+        default_init_modes = tuple(dict.fromkeys(init_mode for init_mode, _ in run_specs))
+        default_seeds = tuple(dict.fromkeys(int(seed) for _, seed in run_specs))
     base["init_modes"] = tuple(str(mode) for mode in default_init_modes)
     base["seeds"] = tuple(int(seed) for seed in default_seeds)
+    base["run_specs"] = _serialize_run_specs(run_specs)
+    base["candidate_count"] = len(run_specs)
     base["max_iter"] = int(args.max_iter)
     base["precision"] = float(args.precision)
     base["beta"] = float(args.beta)
     base["oda_stall_threshold"] = float(args.oda_stall_threshold)
-    base["screening_mesh_size"] = None if args.screening_mesh_size is None else int(args.screening_mesh_size)
+    base["screening_mesh_size"] = (
+        int(base["k_mesh_size"]) if args.screening_mesh_size is None else int(args.screening_mesh_size)
+    )
     base["screening_solver"] = str(args.screening_solver)
     base["screening_u_min_mev"] = float(args.screening_u_min_mev)
     base["screening_u_max_mev"] = float(args.screening_u_max_mev)
@@ -823,6 +920,8 @@ def main() -> None:
                     "nu": float(config["nu"]),
                     "init_modes": list(config["init_modes"]),
                     "seeds": list(config["seeds"]),
+                    "run_specs": _serialize_run_specs(_run_specs_from_config(config)),
+                    "candidate_count": int(config["candidate_count"]),
                     "max_iter": int(config["max_iter"]),
                     "precision": float(config["precision"]),
                     "beta": float(config["beta"]),

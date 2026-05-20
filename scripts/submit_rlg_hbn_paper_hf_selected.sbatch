@@ -68,13 +68,16 @@ case "${PAPER_TARGET}" in
 esac
 
 if [[ "${PAPER_TARGET}" == "fig6" ]]; then
-  INIT_MODES=(flavor bm perturbed random)
-  SEEDS=(1 2 3 4)
+  INIT_SEED_SPECS=(
+    flavor:1 flavor:2 flavor:3 flavor:4
+    bm:1
+    perturbed:1 perturbed:2 perturbed:3 perturbed:4
+    random:1 random:2 random:3 random:4
+  )
 else
-  INIT_MODES=(flavor bm perturbed)
-  SEEDS=(1)
+  INIT_SEED_SPECS=(flavor:1 bm:1 perturbed:1)
 fi
-TASKS_PER_PANEL=$((${#INIT_MODES[@]} * ${#SEEDS[@]}))
+TASKS_PER_PANEL=${#INIT_SEED_SPECS[@]}
 TASK_COUNT=$((${#XI_VALUES[@]} * ${#V_VALUES[@]} * TASKS_PER_PANEL))
 RESERVED_CPUS="${SLURM_CPUS_PER_TASK:-1}"
 
@@ -140,15 +143,14 @@ for raw_task_id in "${SELECTED_TASK_IDS[@]}"; do
 
   PANEL_INDEX=$((TASK_ID / TASKS_PER_PANEL))
   WITHIN_PANEL=$((TASK_ID % TASKS_PER_PANEL))
-  INIT_INDEX=$((WITHIN_PANEL / ${#SEEDS[@]}))
-  SEED_INDEX=$((WITHIN_PANEL % ${#SEEDS[@]}))
   XI_INDEX=$((PANEL_INDEX / ${#V_VALUES[@]}))
   V_INDEX=$((PANEL_INDEX % ${#V_VALUES[@]}))
 
   XI="${XI_VALUES[$XI_INDEX]}"
   V_MEV="${V_VALUES[$V_INDEX]}"
-  INIT_MODE="${INIT_MODES[$INIT_INDEX]}"
-  SEED="${SEEDS[$SEED_INDEX]}"
+  INIT_SEED_SPEC="${INIT_SEED_SPECS[$WITHIN_PANEL]}"
+  INIT_MODE="${INIT_SEED_SPEC%%:*}"
+  SEED="${INIT_SEED_SPEC##*:}"
   PANEL="xi${XI}_V$(printf "%03d" "${V_MEV}")meV"
   TASK_DIR="${OUTPUT_ROOT}/tasks/task_${TASK_ID}_${PANEL}_${INIT_MODE}_seed${SEED}"
   PANEL_DIR="${TASK_DIR}/${PANEL}"
