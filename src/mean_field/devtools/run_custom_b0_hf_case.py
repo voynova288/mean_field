@@ -676,8 +676,8 @@ def main() -> int:
     total_start = perf_counter()
     print(f"[stage] setup theta={theta_deg} nu={nu} lk={lk} lg={lg} overlap_lg={overlap_lg}", flush=True)
     print(
-        "[stage] interaction "
-        f"epsilon_r={args.epsilon_r} tanh_argument_scale_a={tanh_argument_scale_a:.16g} "
+        "[stage] interaction_input "
+        f"requested_epsilon_r={args.epsilon_r} tanh_argument_scale_a={tanh_argument_scale_a:.16g} "
         f"screening_lm={screening_lm:.16g} finite_zero_limit={str(finite_zero_limit).lower()}",
         flush=True,
     )
@@ -766,6 +766,13 @@ def main() -> int:
         "finite_zero_limit": finite_zero_limit if crpa_result is None else bool(crpa_result.coulomb_params.finite_zero_limit),
         "zero_cutoff": float(args.zero_cutoff) if crpa_result is None else float(crpa_result.coulomb_params.zero_cutoff),
     }
+    print(
+        "[stage] interaction_effective "
+        f"model={interaction_model} relative_permittivity={float(screening_kwargs['relative_permittivity']):.16g} "
+        f"screening_lm={float(screening_kwargs['screening_lm']):.16g} "
+        f"finite_zero_limit={str(bool(screening_kwargs['finite_zero_limit'])).lower()}",
+        flush=True,
+    )
 
     bm_start = perf_counter()
     grid = build_b0_uniform_lattice(params, lk)

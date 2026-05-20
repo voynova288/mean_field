@@ -46,7 +46,7 @@ CRPA_BUNDLE="${REPO_ROOT}/results/TBG_HF_cRPA/crpa_dielectric_fixed_20260519"
 CRPA_DIR="${REPO_ROOT}/results/TBG_HF_cRPA/crpa_lk24_lg9_q11_zhang_paper_ref_fixed_20260519_merged"
 INITIAL_STATE="${REPO_ROOT}/results/TBG_HF/custom_b0_hf_targeted_runs/theta_105_nu_-3000_eps10_gate400a_ds400over2p46_q0limit_w0_79p7_w1_97p4_vf_2135p4_20260430_maxiter3000_serial/states/theta_105_nu_-3000_init_bm_seed_001_lk19_lg9.npz"
 OUTPUT_ROOT="${REPO_ROOT}/results/TBG_HF_cRPA/hf_crpa_production_runs"
-RUN_TAG="eps10_gate400a_ds400over2p46_q0limit_w0_79p7_w1_97p4_vf_2135p4_crpa_dielectric_fixed_20260519_zhangref_allow_gamma_m_k_gamma_kprime"
+RUN_TAG="eps4_gate400a_ds400over2p46_q0limit_w0_79p7_w1_97p4_vf_2135p4_crpa_dielectric_fixed_20260519_zhangref_allow_init_eps10_gamma_m_k_gamma_kprime"
 
 if [[ ! -d "${CRPA_BUNDLE}" ]]; then
   echo "Missing cRPA bundle: ${CRPA_BUNDLE}" >&2
@@ -70,7 +70,9 @@ echo "[job] crpa_dir=${CRPA_DIR}"
 echo "[job] initial_state=${INITIAL_STATE}"
 echo "[job] output_root=${OUTPUT_ROOT}"
 echo "[job] run_tag=${RUN_TAG}"
+echo "[job] target_epsilon_r=4"
 echo "[job] note=using --allow-incompatible-crpa because this user-selected dielectric is zhang_zero_fill/periodic_g_grid=false"
+echo "[job] note=initial_state path contains eps10 only as the source of the initial density"
 
 python scripts/mean_field_tools.py run_custom_b0_hf_case \
   --theta-deg 1.05 \
@@ -83,7 +85,7 @@ python scripts/mean_field_tools.py run_custom_b0_hf_case \
   --w0 79.7 \
   --w1 97.4 \
   --vf 2135.4 \
-  --epsilon-r 10 \
+  --epsilon-r 4 \
   --tanh-argument-scale-a 162.60162601626016 \
   --zero-limit finite \
   --max-iter 3000 \
