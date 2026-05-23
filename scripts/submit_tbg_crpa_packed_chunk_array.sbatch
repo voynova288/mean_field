@@ -4,6 +4,7 @@
 #     <bm_solution> <output_root> <q_lg> <chunk_count> <chunks_per_task> [extra run_tbg_crpa_chunk args...]
 
 #SBATCH -J crpa_chunk_pack
+#SBATCH --account=hmt03
 #SBATCH -p regular6430
 #SBATCH -N 1
 #SBATCH --ntasks=1

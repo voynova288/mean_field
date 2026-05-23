@@ -21,12 +21,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--periodic-g-grid",
         action="store_true",
-        help="Use the legacy B0/Jacobian benchmark periodic G-grid tunneling convention instead of physical zero-fill.",
+        help="Retained for CLI compatibility. Production cRPA BM caches use periodic G-grid by default.",
     )
     parser.add_argument(
         "--hf-compatible",
         action="store_true",
-        help="Alias for --periodic-g-grid when preparing a BM cache for HF-compatible cRPA chunks.",
+        help="Retained compatibility alias; HF-compatible BM caches are now the default.",
+    )
+    parser.add_argument(
+        "--legacy-zero-fill-test",
+        action="store_true",
+        help="Diagnostic/test only: prepare the old non-periodic-G BM cache.",
     )
     parser.add_argument("--compressed", action="store_true", help="Use compressed npz output. Smaller but slower for large lg.")
     parser.add_argument("--output-path", type=Path, required=True)
@@ -35,6 +40,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
+    if args.legacy_zero_fill_test and (args.periodic_g_grid or args.hf_compatible):
+        raise ValueError("--legacy-zero-fill-test cannot be combined with --periodic-g-grid or --hf-compatible.")
     params = TBGParameters.from_degrees(
         args.theta_deg,
         vf=float(args.vf),
@@ -45,11 +52,12 @@ def main(argv: list[str] | None = None) -> None:
         deformation_potential=0.0,
     )
     grid = build_uniform_crpa_grid(params, int(args.lk))
-    periodic_g_grid = bool(args.periodic_g_grid or args.hf_compatible)
+    periodic_g_grid = not bool(args.legacy_zero_fill_test)
     print(
         "[bm-cache] solving "
         f"theta={args.theta_deg} lk={args.lk} lg={args.lg} "
-        f"bands_per_valley={args.bands_per_valley} periodic_g_grid={str(periodic_g_grid).lower()}",
+        f"bands_per_valley={args.bands_per_valley} periodic_g_grid={str(periodic_g_grid).lower()} "
+        f"legacy_zero_fill_test={str(args.legacy_zero_fill_test).lower()}",
         flush=True,
     )
     start = time.perf_counter()

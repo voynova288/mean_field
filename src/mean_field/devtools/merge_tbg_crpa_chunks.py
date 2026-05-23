@@ -20,6 +20,18 @@ def _save_npz(path: Path, **arrays: np.ndarray) -> None:
     np.savez_compressed(path, **arrays)
 
 
+def _metadata_for_compare(metadata: object) -> dict[str, object]:
+    normalized = dict(metadata) if isinstance(metadata, dict) else {}
+    normalized.setdefault("legacy_zero_fill_test", False)
+    return normalized
+
+
+def _values_match_for_key(key: str, left: object, right: object) -> bool:
+    if key == "metadata":
+        return _metadata_for_compare(left) == _metadata_for_compare(right)
+    return left == right
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Merge q-point TBG cRPA chunk artifact directories.")
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -34,6 +46,7 @@ def main(argv: list[str] | None = None) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     params = _load_json(chunks[0] / "crpa_params.json")
+    params["metadata"] = _metadata_for_compare(params.get("metadata", {}))
     q_indices_list = []
     q_tilde_real_list = []
     q_tilde_imag_list = []
@@ -52,7 +65,7 @@ def main(argv: list[str] | None = None) -> None:
         chunk_params = _load_json(chunk / "crpa_params.json")
         comparable_keys = ("theta_deg", "lk", "lg", "q_lg", "bands_per_valley", "eta_mev", "coulomb_params", "metadata")
         for key in comparable_keys:
-            if chunk_params.get(key) != params.get(key):
+            if not _values_match_for_key(key, chunk_params.get(key), params.get(key)):
                 raise ValueError(f"Chunk {chunk} has incompatible {key}: {chunk_params.get(key)!r} != {params.get(key)!r}")
 
         with np.load(chunk / "chi0_q.npz") as chi0_npz:

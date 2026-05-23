@@ -571,6 +571,11 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--diagnostic-only",
+        action="store_true",
+        help="Required with --allow-incompatible-crpa; marks the run as non-production diagnostics.",
+    )
+    parser.add_argument(
         "--strict-hf-compatible-crpa",
         action="store_true",
         help="Deprecated compatibility flag; HF-compatible cRPA validation is now the default unless --allow-incompatible-crpa is set.",
@@ -653,6 +658,11 @@ def main() -> int:
         row_count = _combine_summary_parts(root_dir)
         print(f"[stage] combine_summary done output_dir={root_dir} rows={row_count}", flush=True)
         return 0
+    if bool(args.allow_incompatible_crpa) and not bool(args.diagnostic_only):
+        raise SystemExit(
+            "--allow-incompatible-crpa now requires --diagnostic-only. "
+            "Production HF bands must use HF-compatible cRPA metadata."
+        )
 
     _ensure_not_running_on_login_node()
 
@@ -954,6 +964,7 @@ def main() -> int:
             fock_interpolation=np.asarray([str(args.fock_interpolation)]),
             q_lookup_diagnostics_json=np.asarray([json.dumps(q_lookup_diagnostics, sort_keys=True)]),
             crpa_physics_gate_json=np.asarray([json.dumps(crpa_physics_gate, sort_keys=True)]),
+            diagnostic_only=np.asarray([bool(args.diagnostic_only)]),
             energy_summary_json=np.asarray([json.dumps(energy_summary, sort_keys=True)]),
             order_parameters_json=np.asarray([json.dumps(order_summary, sort_keys=True)]),
             indirect_gap_mev=np.asarray([float(gap_summary["indirect_gap_mev"])], dtype=float),
@@ -1057,6 +1068,7 @@ def main() -> int:
                 ("crpa_physics_gate_json", json.dumps(crpa_physics_gate, sort_keys=True)),
                 ("fock_interpolation", str(args.fock_interpolation)),
                 ("path_fock_interpolation", str(args.path_fock_interpolation)),
+                ("diagnostic_only", str(bool(args.diagnostic_only)).lower()),
                 ("path_kind", str(args.path_kind)),
                 ("path_labels", "-".join(path.labels)),
                 ("write_scf_path", str(bool(args.write_scf_path)).lower()),
@@ -1174,6 +1186,8 @@ def main() -> int:
         ("physical_ds_angstrom", f"{tanh_argument_scale_a * GRAPHENE_LATTICE_A_ANGSTROM:.16g}"),
         ("interaction_model", interaction_model),
         ("q_zero_limit", str(bool(screening_kwargs["finite_zero_limit"])).lower()),
+        ("allow_incompatible_crpa", str(bool(args.allow_incompatible_crpa)).lower()),
+        ("diagnostic_only", str(bool(args.diagnostic_only)).lower()),
         ("crpa_dir", "" if args.crpa_dir is None else str(args.crpa_dir)),
         ("crpa_lk", "" if crpa_result is None else str(crpa_result.lk)),
         ("crpa_lg", "" if crpa_result is None else str(crpa_result.lg)),

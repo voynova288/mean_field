@@ -6,6 +6,7 @@
 #     5 16
 
 #SBATCH -J crpa_chunk
+#SBATCH --account=hmt03
 #SBATCH -p regular
 #SBATCH -N 1
 #SBATCH --ntasks=1

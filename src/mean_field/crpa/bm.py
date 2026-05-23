@@ -36,7 +36,7 @@ class AllBandBMSolution:
     band_start: int
     band_stop: int
     sigma_rotation: bool = True
-    periodic_g_grid: bool = False
+    periodic_g_grid: bool = True
     k_grid_kind: str = "uniform_crpa"
 
     @property
@@ -221,7 +221,7 @@ def solve_all_band_bm_model(
     lg: int = 9,
     bands_per_valley: int | None = None,
     sigma_rotation: bool = True,
-    periodic_g_grid: bool = False,
+    periodic_g_grid: bool = True,
     check_finite: bool = False,
 ) -> AllBandBMSolution:
     """Solve the BM model for all or a centered window of bands.

@@ -4,6 +4,7 @@
 #   sbatch -p test -c 8 --mem=32G scripts/submit_mean_field.sbatch julia scripts/mean_field_tools.jl inspect_b0_grid_overlap_julia
 
 #SBATCH -J mean_field
+#SBATCH --account=hmt03
 #SBATCH -p regular
 #SBATCH -N 1
 #SBATCH --ntasks=1

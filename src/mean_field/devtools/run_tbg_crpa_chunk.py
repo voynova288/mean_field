@@ -47,14 +47,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--chunk-count", type=int, default=None)
     parser.add_argument(
         "--form-factor-mode",
-        choices=("zhang_zero_fill", "hf_periodic"),
-        default="zhang_zero_fill",
-        help="Plane-wave form-factor convention for this chunk.",
+        choices=("hf_periodic",),
+        default="hf_periodic",
+        help="Plane-wave form-factor convention for production chunks.",
     )
     parser.add_argument(
         "--hf-compatible",
         action="store_true",
-        help="Alias for --form-factor-mode=hf_periodic; requires a periodic-G BM cache.",
+        help="Retained compatibility alias; production chunks are HF-compatible by default.",
+    )
+    parser.add_argument(
+        "--legacy-zero-fill-test",
+        action="store_true",
+        help="Diagnostic/test only: use the old zhang_zero_fill convention with a non-periodic-G BM cache.",
     )
     parser.add_argument(
         "--occupation-mode",
@@ -89,9 +94,16 @@ def main(argv: list[str] | None = None) -> None:
         raise ValueError(f"Empty q chunk after clipping: {start}:{stop}")
 
     q_indices = [grid.unravel_index(iq) for iq in range(start, stop)]
-    form_factor_mode = "hf_periodic" if args.hf_compatible else str(args.form_factor_mode)
-    if form_factor_mode == "hf_periodic" and not bool(solution.periodic_g_grid):
-        raise ValueError("HF-compatible cRPA chunks require a BM cache prepared with --periodic-g-grid.")
+    if args.legacy_zero_fill_test and args.hf_compatible:
+        raise ValueError("--legacy-zero-fill-test cannot be combined with --hf-compatible.")
+    if args.legacy_zero_fill_test:
+        if bool(solution.periodic_g_grid):
+            raise ValueError("Legacy zero-fill test chunks require a non-periodic-G BM cache.")
+        form_factor_mode = "zhang_zero_fill"
+    else:
+        form_factor_mode = str(args.form_factor_mode)
+        if not bool(solution.periodic_g_grid):
+            raise ValueError("Production cRPA chunks require a BM cache prepared with periodic_g_grid=True.")
     classification = classify_flat_bands(solution.spectrum, method="center")
     coulomb = CRPACoulombParams(epsilon_bn=float(args.epsilon_bn), ds_angstrom=float(args.ds_angstrom))
     bands_per_valley = None if solution.nb == solution.basis_dimension else int(solution.nb)
@@ -101,7 +113,7 @@ def main(argv: list[str] | None = None) -> None:
         "[crpa-chunk] start "
         f"bm={args.bm_solution} lk={lk} lg={solution.lg} q_lg={args.q_lg} "
         f"q_range={start}:{stop} q_points={len(q_indices)} form_factor_mode={form_factor_mode} "
-        f"occupation_mode={args.occupation_mode}",
+        f"occupation_mode={args.occupation_mode} legacy_zero_fill_test={str(args.legacy_zero_fill_test).lower()}",
         flush=True,
     )
     result = compute_crpa_from_solution(
@@ -115,6 +127,7 @@ def main(argv: list[str] | None = None) -> None:
         coulomb_params=coulomb,
         eta_mev=float(args.eta_mev),
         form_factor_mode=form_factor_mode,
+        allow_legacy_zero_fill_test=bool(args.legacy_zero_fill_test),
         occupation_mode=str(args.occupation_mode),
         flat_method="center",
     )

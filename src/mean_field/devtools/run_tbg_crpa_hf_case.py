@@ -201,7 +201,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--allow-incompatible-crpa",
         action="store_true",
-        help="Bypass HF-compatible cRPA metadata checks. Intended only for debugging old artifacts.",
+        help="Bypass HF-compatible cRPA metadata checks. Intended only for diagnostic old-artifact runs.",
+    )
+    parser.add_argument(
+        "--diagnostic-only",
+        action="store_true",
+        help="Required with --allow-incompatible-crpa; marks the run as non-production diagnostics.",
     )
     parser.add_argument("--crpa-physics-reference-dir", type=Path, default=DEFAULT_CRPA_PHYSICS_REFERENCE_DIR)
     parser.add_argument(
@@ -238,6 +243,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if bool(args.allow_incompatible_crpa) and not bool(args.diagnostic_only):
+        raise SystemExit(
+            "--allow-incompatible-crpa now requires --diagnostic-only. "
+            "Production HF bands must use HF-compatible cRPA metadata."
+        )
     theta_deg = float(args.theta_deg)
     nu = float(args.nu)
     lk = int(args.lk)
@@ -418,6 +428,7 @@ def main(argv: list[str] | None = None) -> int:
             crpa_q_lg=np.asarray([crpa_result.q_lg], dtype=int),
             crpa_metadata_json=np.asarray([json.dumps(crpa_result.metadata, sort_keys=True)]),
             crpa_physics_gate_json=np.asarray([json.dumps(crpa_physics_gate, sort_keys=True)]),
+            diagnostic_only=np.asarray([bool(args.diagnostic_only)]),
             fock_interpolation=np.asarray([str(args.fock_interpolation)]),
             epsilon_bn=np.asarray([float(crpa_result.coulomb_params.epsilon_bn)], dtype=float),
             ds_angstrom=np.asarray([float(crpa_result.coulomb_params.ds_angstrom)], dtype=float),
@@ -462,6 +473,7 @@ def main(argv: list[str] | None = None) -> int:
             ("fock_interpolation", str(args.fock_interpolation)),
             ("initial_state_resample", str(args.initial_state_resample)),
             ("allow_incompatible_crpa", str(bool(args.allow_incompatible_crpa)).lower()),
+            ("diagnostic_only", str(bool(args.diagnostic_only)).lower()),
             ("crpa_dir", str(args.crpa_dir)),
             ("crpa_lk", str(crpa_result.lk)),
             ("crpa_lg", str(crpa_result.lg)),

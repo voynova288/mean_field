@@ -24,12 +24,17 @@ Q_LG="${Q_LG:-11}"
 CHUNK_COUNT="${CHUNK_COUNT:-144}"
 ARRAY_CONCURRENCY="${ARRAY_CONCURRENCY:-2}"
 CRPA_HF_COMPATIBLE="${CRPA_HF_COMPATIBLE:-1}"
+ALLOW_LEGACY_ZERO_FILL_TEST="${ALLOW_LEGACY_ZERO_FILL_TEST:-0}"
 if [[ "${CRPA_HF_COMPATIBLE}" == "1" || "${CRPA_HF_COMPATIBLE}" == "true" ]]; then
   CRPA_CONVENTION_TAG="${CRPA_CONVENTION_TAG:-hf_compatible}"
   CRPA_EXTRA_ARGS=(--hf-compatible)
 else
-  CRPA_CONVENTION_TAG="${CRPA_CONVENTION_TAG:-zhang_appendix_fig4}"
-  CRPA_EXTRA_ARGS=()
+  if [[ "${ALLOW_LEGACY_ZERO_FILL_TEST}" != "1" && "${ALLOW_LEGACY_ZERO_FILL_TEST}" != "true" ]]; then
+    echo "Refusing CRPA_HF_COMPATIBLE=0. zhang_zero_fill/periodic_g_grid=false is legacy test only; set ALLOW_LEGACY_ZERO_FILL_TEST=1 for a diagnostic cRPA-only run." >&2
+    exit 2
+  fi
+  CRPA_CONVENTION_TAG="${CRPA_CONVENTION_TAG:-legacy_zero_fill_test}"
+  CRPA_EXTRA_ARGS=(--legacy-zero-fill-test)
 fi
 CHUNK_ROOT="${CHUNK_ROOT:-${OUTPUT_ROOT}/crpa_lk${LK}_lg${LG}_q${Q_LG}_${CRPA_CONVENTION_TAG}_chunks}"
 MERGED_DIR="${MERGED_DIR:-${OUTPUT_ROOT}/crpa_lk${LK}_lg${LG}_q${Q_LG}_${CRPA_CONVENTION_TAG}_merged}"
@@ -46,6 +51,7 @@ PATH_KIND="${PATH_KIND:-gamma-m-k-gamma-kprime}"
 INITIAL_STATE_RESAMPLE="${INITIAL_STATE_RESAMPLE:-bilinear}"
 FOCK_INTERPOLATION="${FOCK_INTERPOLATION:-matrix_diagonal}"
 HF_MANIFEST="${HF_MANIFEST:-${HF_OUTPUT_ROOT}/submission_jobs_crpa_lk24_selected_${CRPA_RUN_TAG_SUFFIX}.tsv}"
+ACCOUNT="${ACCOUNT:-hmt03}"
 
 PARTITION="${PARTITION:-regular6430}"
 BM_CPUS="${BM_CPUS:-64}"
@@ -86,6 +92,7 @@ submit_crpa() {
   echo "[fig4-crpa] lk=${LK} lg=${LG} q_lg=${Q_LG}"
   echo "[fig4-crpa] chunk_count=${CHUNK_COUNT} concurrency=${ARRAY_CONCURRENCY}"
   echo "[fig4-crpa] hf_compatible=${CRPA_HF_COMPATIBLE}"
+  echo "[fig4-crpa] allow_legacy_zero_fill_test=${ALLOW_LEGACY_ZERO_FILL_TEST}"
   echo "[fig4-crpa] convention_tag=${CRPA_CONVENTION_TAG}"
   echo "[fig4-crpa] bm_solution=${BM_SOLUTION}"
   echo "[fig4-crpa] chunk_root=${CHUNK_ROOT}"
@@ -109,6 +116,7 @@ submit_crpa() {
   fi
   bm_job="$(
     sbatch --parsable \
+      --account="${ACCOUNT}" \
       -p "${PARTITION}" \
       -N 1 \
       --ntasks=1 \
@@ -144,8 +152,14 @@ submit_crpa() {
   fi
   chunk_array_last=$((chunk_array_count - 1))
 
+  local chunk_place_args=()
+  if [[ -n "${CHUNK_EXCLUDE}" ]]; then
+    chunk_place_args+=(--exclude="${CHUNK_EXCLUDE}")
+  fi
+
   array_job="$(
     sbatch --parsable \
+      --account="${ACCOUNT}" \
       --dependency="afterok:${bm_job}" \
       --array="0-${chunk_array_last}%${ARRAY_CONCURRENCY}" \
       -p "${PARTITION}" \
@@ -155,7 +169,7 @@ submit_crpa() {
       --mem="${CHUNK_MEM}" \
       --exclusive \
       --export=ALL,LD_LIBRARY_PATH= \
-      --exclude="${CHUNK_EXCLUDE}" \
+      "${chunk_place_args[@]}" \
       -t "${CHUNK_TIME}" \
       -J "crpa_zfg4_lk${LK}_q${Q_LG}" \
       -o "logs/crpa_zhang_fig4_lk${LK}_lg${LG}_q${Q_LG}_chunk_%A_%a.out" \
@@ -176,6 +190,7 @@ submit_crpa() {
 
   merge_job="$(
     sbatch --parsable \
+      --account="${ACCOUNT}" \
       --dependency="afterok:${array_job}" \
       -p "${MERGE_PARTITION}" \
       -N 1 \
@@ -222,6 +237,10 @@ fillings_csv_from_manifest() {
 
 submit_hf() {
   repo_cd
+  if [[ "${CRPA_HF_COMPATIBLE}" != "1" && "${CRPA_HF_COMPATIBLE}" != "true" ]]; then
+    echo "Refusing to submit HF with legacy zero-fill cRPA. Submit only cRPA diagnostics, or use HF-compatible artifacts for bands." >&2
+    exit 2
+  fi
   if [[ ! -f "${SELECTED_MANIFEST}" ]]; then
     echo "selected manifest not found: ${SELECTED_MANIFEST}" >&2
     exit 1
@@ -248,6 +267,7 @@ submit_hf() {
 
   local sbatch_args=(
     --parsable
+    --account="${ACCOUNT}"
     --array="${array_spec}"
     -p "${PARTITION}"
     -N 1
@@ -365,6 +385,10 @@ fi
 
 case "${mode}" in
   submit-all)
+    if [[ "${CRPA_HF_COMPATIBLE}" != "1" && "${CRPA_HF_COMPATIBLE}" != "true" ]]; then
+      echo "submit-all is disabled for legacy zero-fill tests because it would feed a diagnostic cRPA artifact to HF." >&2
+      exit 2
+    fi
     submit_crpa
     if [[ -n "${SUBMITTED_MERGE_JOB:-}" ]]; then
       DEPENDENCY="afterok:${SUBMITTED_MERGE_JOB}" submit_hf

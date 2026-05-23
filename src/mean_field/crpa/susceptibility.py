@@ -4,7 +4,7 @@ import numpy as np
 
 from .band_classifier import BandClassification
 from .bm import AllBandBMSolution
-from .form_factor import compute_lambda_stack
+from .form_factor import PRODUCTION_FORM_FACTOR_MODE, compute_lambda_stack
 from .grid import CRPAKGrid
 
 
@@ -115,7 +115,7 @@ def _compute_chi0(
     fermi_level_mev: float = 0.0,
     fermi_tol_mev: float = 1.0e-10,
     symmetrize: bool = True,
-    form_factor_mode: str = "zhang_zero_fill",
+    form_factor_mode: str = PRODUCTION_FORM_FACTOR_MODE,
     occupation_mode: str = "cnp_index",
 ) -> np.ndarray:
     """Compute static polarizability for one q_tilde."""

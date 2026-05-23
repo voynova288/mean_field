@@ -10,9 +10,10 @@ from .band_classifier import classify_flat_bands
 from .bm import solve_all_band_bm_model
 from .coulomb import coulomb_potential_table_mev
 from .diagnostics import representative_fig1e_window_curve
+from .form_factor import PRODUCTION_FORM_FACTOR_MODE
 from .grid import build_q_shift_table, build_uniform_crpa_grid
 from .susceptibility import compute_constrained_chi0, compute_constrained_chi0_by_subtraction
-from .workflow import CRPAResult
+from .workflow import CRPAResult, resolve_crpa_runtime_convention
 
 
 DEFAULT_FIG1E_PAPER_POINTS: tuple[tuple[float, float], ...] = (
@@ -433,12 +434,18 @@ def compute_c1_cross_check(
     q_index: tuple[int, int] = (1, 0),
     eta_mev: float = 1.0,
     sigma_rotation: bool = True,
-    periodic_g_grid: bool = False,
-    form_factor_mode: str = "zhang_zero_fill",
+    periodic_g_grid: bool = True,
+    form_factor_mode: str = PRODUCTION_FORM_FACTOR_MODE,
+    allow_legacy_zero_fill_test: bool = False,
     occupation_mode: str = "cnp_index",
 ) -> dict[str, float | int | list[int]]:
     """Check constrained direct summing against full minus flat-flat."""
 
+    resolved_form_factor_mode = resolve_crpa_runtime_convention(
+        periodic_g_grid=bool(periodic_g_grid),
+        form_factor_mode=form_factor_mode,
+        allow_legacy_zero_fill_test=bool(allow_legacy_zero_fill_test),
+    )
     grid = build_uniform_crpa_grid(params, lk)
     solution = solve_all_band_bm_model(
         params,
@@ -458,7 +465,7 @@ def compute_c1_cross_check(
         q_index,
         q_shifts,
         eta_mev=eta_mev,
-        form_factor_mode=form_factor_mode,
+        form_factor_mode=resolved_form_factor_mode,
         occupation_mode=occupation_mode,
     )
     subtraction = compute_constrained_chi0_by_subtraction(
@@ -468,7 +475,7 @@ def compute_c1_cross_check(
         q_index,
         q_shifts,
         eta_mev=eta_mev,
-        form_factor_mode=form_factor_mode,
+        form_factor_mode=resolved_form_factor_mode,
         occupation_mode=occupation_mode,
     )
     diff = direct - subtraction
@@ -482,6 +489,6 @@ def compute_c1_cross_check(
         "c1_q_lg": int(q_lg),
         "c1_bands_per_valley": -1 if bands_per_valley is None else int(bands_per_valley),
         "c1_periodic_g_grid": int(bool(periodic_g_grid)),
-        "c1_form_factor_mode": str(form_factor_mode),
+        "c1_form_factor_mode": resolved_form_factor_mode,
         "c1_occupation_mode": str(occupation_mode),
     }

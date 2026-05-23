@@ -26,7 +26,7 @@ def _q_indices_for_run(lk: int, stride: int, max_q_points: int | None) -> list[t
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Compute Zhang-style cRPA epsilon(q) for zero-field TBG.")
+    parser = argparse.ArgumentParser(description="Compute HF-compatible cRPA epsilon(q) for zero-field TBG.")
     parser.add_argument("--theta-deg", type=float, default=1.05)
     parser.add_argument("--vf", type=float, default=2135.4, help="Dirac velocity parameter in meV.")
     parser.add_argument("--w0", type=float, default=79.7, help="AA tunneling in meV.")
@@ -46,18 +46,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--periodic-g-grid",
         action="store_true",
-        help="Use the legacy B0/Jacobian benchmark periodic G-grid tunneling convention instead of physical zero-fill.",
+        help="Retained for CLI compatibility. Production cRPA uses periodic G-grid by default.",
     )
     parser.add_argument(
         "--form-factor-mode",
-        choices=("zhang_zero_fill", "hf_periodic"),
-        default="zhang_zero_fill",
-        help="Plane-wave form-factor convention. Use hf_periodic only for HF-compatible cRPA artifacts.",
+        choices=("hf_periodic",),
+        default="hf_periodic",
+        help="Plane-wave form-factor convention for production cRPA.",
     )
     parser.add_argument(
         "--hf-compatible",
         action="store_true",
-        help="Generate an HF-compatible cRPA artifact: periodic G-grid BM plus HF-periodic form factors.",
+        help="Retained compatibility alias; HF-compatible cRPA is now the default.",
+    )
+    parser.add_argument(
+        "--legacy-zero-fill-test",
+        action="store_true",
+        help="Diagnostic/test only: generate the old zhang_zero_fill, non-periodic-G artifact.",
     )
     parser.add_argument(
         "--occupation-mode",
@@ -84,10 +89,10 @@ def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     output_dir = args.output_dir if args.output_dir is not None else default_crpa_output_dir(Path("outputs"))
     q_indices = _q_indices_for_run(args.lk, args.q_stride, args.max_q_points)
-    periodic_g_grid = bool(args.periodic_g_grid or args.hf_compatible)
-    form_factor_mode = "hf_periodic" if args.hf_compatible else str(args.form_factor_mode)
-    if form_factor_mode == "hf_periodic" and not periodic_g_grid:
-        raise ValueError("HF-periodic form factors require --periodic-g-grid or --hf-compatible.")
+    if args.legacy_zero_fill_test and (args.periodic_g_grid or args.hf_compatible):
+        raise ValueError("--legacy-zero-fill-test cannot be combined with --periodic-g-grid or --hf-compatible.")
+    periodic_g_grid = not bool(args.legacy_zero_fill_test)
+    form_factor_mode = "zhang_zero_fill" if args.legacy_zero_fill_test else str(args.form_factor_mode)
     if args.hf_compatible and (int(args.q_stride) != 1 or args.max_q_points is not None):
         raise ValueError("--hf-compatible requires the full q table: use --q-stride 1 and omit --max-q-points.")
 
@@ -107,7 +112,7 @@ def main(argv: list[str] | None = None) -> None:
         f"theta={args.theta_deg} lk={args.lk} lg={args.lg} q_lg={args.q_lg} "
         f"bands_per_valley={args.bands_per_valley} q_points={len(q_indices)} "
         f"periodic_g_grid={str(periodic_g_grid).lower()} form_factor_mode={form_factor_mode} "
-        f"occupation_mode={args.occupation_mode}",
+        f"occupation_mode={args.occupation_mode} legacy_zero_fill_test={str(args.legacy_zero_fill_test).lower()}",
         flush=True,
     )
     start = time.perf_counter()
@@ -124,6 +129,7 @@ def main(argv: list[str] | None = None) -> None:
         sigma_rotation=True,
         periodic_g_grid=periodic_g_grid,
         form_factor_mode=form_factor_mode,
+        allow_legacy_zero_fill_test=bool(args.legacy_zero_fill_test),
         occupation_mode=str(args.occupation_mode),
     )
     elapsed = time.perf_counter() - start
@@ -144,6 +150,7 @@ def main(argv: list[str] | None = None) -> None:
             sigma_rotation=True,
             periodic_g_grid=periodic_g_grid,
             form_factor_mode=form_factor_mode,
+            allow_legacy_zero_fill_test=bool(args.legacy_zero_fill_test),
             occupation_mode=str(args.occupation_mode),
         )
         (out / "c1_cross_check.json").write_text(json.dumps(extra_checks, indent=2, sort_keys=True) + "\n", encoding="utf-8")

@@ -12,6 +12,11 @@ from .band_classifier import BandClassification, classify_flat_bands
 from .bm import AllBandBMSolution, solve_all_band_bm_model
 from .coulomb import CRPACoulombParams, coulomb_potential_table_mev
 from .dielectric import compute_dielectric
+from .form_factor import (
+    LEGACY_ZERO_FILL_TEST_MODE,
+    PRODUCTION_FORM_FACTOR_MODE,
+    normalize_form_factor_mode,
+)
 from .grid import CRPAKGrid, build_q_shift_table, build_uniform_crpa_grid, q_shift_vectors
 from .susceptibility import compute_constrained_chi0
 
@@ -51,6 +56,30 @@ def _normalize_q_indices(q_indices: list[int | tuple[int, int]] | tuple[int | tu
     return np.asarray(coords, dtype=int)
 
 
+def resolve_crpa_runtime_convention(
+    *,
+    periodic_g_grid: bool,
+    form_factor_mode: str,
+    allow_legacy_zero_fill_test: bool = False,
+) -> str:
+    """Return the normalized form-factor mode after enforcing production gates."""
+
+    resolved_mode = normalize_form_factor_mode(form_factor_mode)
+    if bool(periodic_g_grid) and resolved_mode == PRODUCTION_FORM_FACTOR_MODE:
+        return resolved_mode
+    if (
+        bool(allow_legacy_zero_fill_test)
+        and not bool(periodic_g_grid)
+        and resolved_mode == LEGACY_ZERO_FILL_TEST_MODE
+    ):
+        return resolved_mode
+    raise ValueError(
+        "Production cRPA requires periodic_g_grid=True and form_factor_mode='hf_periodic'. "
+        "The zhang_zero_fill/periodic_g_grid=False convention is retained only for explicit "
+        "legacy regression tests via allow_legacy_zero_fill_test=True."
+    )
+
+
 def compute_crpa(
     params: TBGParameters,
     *,
@@ -63,11 +92,17 @@ def compute_crpa(
     coulomb_params: CRPACoulombParams | None = None,
     eta_mev: float = 1.0,
     sigma_rotation: bool = True,
-    periodic_g_grid: bool = False,
-    form_factor_mode: str = "zhang_zero_fill",
+    periodic_g_grid: bool = True,
+    form_factor_mode: str = PRODUCTION_FORM_FACTOR_MODE,
+    allow_legacy_zero_fill_test: bool = False,
     occupation_mode: str = "cnp_index",
     flat_method: str = "center",
 ) -> CRPAResult:
+    resolved_form_factor_mode = resolve_crpa_runtime_convention(
+        periodic_g_grid=bool(periodic_g_grid),
+        form_factor_mode=form_factor_mode,
+        allow_legacy_zero_fill_test=bool(allow_legacy_zero_fill_test),
+    )
     coulomb = CRPACoulombParams() if coulomb_params is None else coulomb_params
     grid = build_uniform_crpa_grid(params, lk)
     solution = solve_all_band_bm_model(
@@ -89,7 +124,8 @@ def compute_crpa(
         q_indices=q_indices,
         coulomb_params=coulomb,
         eta_mev=eta_mev,
-        form_factor_mode=form_factor_mode,
+        form_factor_mode=resolved_form_factor_mode,
+        allow_legacy_zero_fill_test=bool(allow_legacy_zero_fill_test),
         occupation_mode=occupation_mode,
         flat_method=flat_method,
         metadata={
@@ -98,7 +134,10 @@ def compute_crpa(
             "w1": float(params.w1),
             "sigma_rotation": bool(sigma_rotation),
             "periodic_g_grid": bool(periodic_g_grid),
-            "form_factor_mode": str(form_factor_mode),
+            "form_factor_mode": resolved_form_factor_mode,
+            "legacy_zero_fill_test": bool(
+                allow_legacy_zero_fill_test and resolved_form_factor_mode == LEGACY_ZERO_FILL_TEST_MODE
+            ),
             "occupation_mode": str(occupation_mode),
             "flat_band_classifier": str(flat_method),
             "k_grid_kind": "uniform_crpa",
@@ -117,11 +156,17 @@ def compute_crpa_from_solution(
     q_indices: list[int | tuple[int, int]] | tuple[int | tuple[int, int], ...] | None,
     coulomb_params: CRPACoulombParams,
     eta_mev: float,
-    form_factor_mode: str = "zhang_zero_fill",
+    form_factor_mode: str = PRODUCTION_FORM_FACTOR_MODE,
+    allow_legacy_zero_fill_test: bool = False,
     occupation_mode: str = "cnp_index",
     flat_method: str = "center",
     metadata: dict[str, object] | None = None,
 ) -> CRPAResult:
+    resolved_form_factor_mode = resolve_crpa_runtime_convention(
+        periodic_g_grid=bool(solution.periodic_g_grid),
+        form_factor_mode=form_factor_mode,
+        allow_legacy_zero_fill_test=bool(allow_legacy_zero_fill_test),
+    )
     q_shift_labels, q_shift_coords = build_q_shift_table(q_lg)
     q_vecs = q_shift_vectors(solution.params, q_shift_labels)
     q_coords = _normalize_q_indices(q_indices, grid)
@@ -143,7 +188,7 @@ def compute_crpa_from_solution(
             (int(qi), int(qj)),
             q_shift_labels,
             eta_mev=eta_mev,
-            form_factor_mode=form_factor_mode,
+            form_factor_mode=resolved_form_factor_mode,
             occupation_mode=occupation_mode,
         )
         v_q = coulomb_potential_table_mev(q_tilde, q_vecs, solution.params, coulomb_params)
@@ -162,7 +207,10 @@ def compute_crpa_from_solution(
         "w1": float(solution.params.w1),
         "sigma_rotation": bool(solution.sigma_rotation),
         "periodic_g_grid": bool(solution.periodic_g_grid),
-        "form_factor_mode": str(form_factor_mode),
+        "form_factor_mode": resolved_form_factor_mode,
+        "legacy_zero_fill_test": bool(
+            allow_legacy_zero_fill_test and resolved_form_factor_mode == LEGACY_ZERO_FILL_TEST_MODE
+        ),
         "occupation_mode": str(occupation_mode),
         "flat_band_classifier": str(flat_method),
         "k_grid_kind": str(solution.k_grid_kind),
@@ -179,6 +227,15 @@ def compute_crpa_from_solution(
     }
     if metadata:
         resolved_metadata.update(metadata)
+    resolved_metadata.update(
+        {
+            "periodic_g_grid": bool(solution.periodic_g_grid),
+            "form_factor_mode": resolved_form_factor_mode,
+            "legacy_zero_fill_test": bool(
+                allow_legacy_zero_fill_test and resolved_form_factor_mode == LEGACY_ZERO_FILL_TEST_MODE
+            ),
+        }
+    )
 
     return CRPAResult(
         theta_deg=float(theta_deg),

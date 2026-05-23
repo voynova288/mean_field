@@ -48,7 +48,7 @@ def _window_stats(result) -> dict[str, float]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run serial cRPA convergence cases for Zhang-style TBG epsilon(q).")
+    parser = argparse.ArgumentParser(description="Run serial HF-compatible cRPA convergence cases for TBG epsilon(q).")
     parser.add_argument("--theta-deg", type=float, default=1.05)
     parser.add_argument("--vf", type=float, default=2135.4)
     parser.add_argument("--w0", type=float, default=79.7)
@@ -60,7 +60,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--periodic-g-grid",
         action="store_true",
-        help="Use the legacy B0/Jacobian benchmark periodic G-grid tunneling convention instead of physical zero-fill.",
+        help="Retained for CLI compatibility. Production cRPA uses periodic G-grid by default.",
+    )
+    parser.add_argument(
+        "--legacy-zero-fill-test",
+        action="store_true",
+        help="Diagnostic/test only: run the old zhang_zero_fill, non-periodic-G convention.",
     )
     parser.add_argument(
         "--case",
@@ -74,6 +79,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
+    if args.legacy_zero_fill_test and args.periodic_g_grid:
+        raise ValueError("--legacy-zero-fill-test cannot be combined with --periodic-g-grid.")
     cases = args.case or [
         "lk6_lg5_b40:6:5:5:40",
         "lk8_lg5_b40:8:5:5:40",
@@ -99,6 +106,8 @@ def main(argv: list[str] | None = None) -> None:
         label = str(case["label"])
         print(f"[scan] start {label}: lk={case['lk']} lg={case['lg']} q_lg={case['q_lg']} bands={case['bands_per_valley']}", flush=True)
         start = time.perf_counter()
+        periodic_g_grid = not bool(args.legacy_zero_fill_test)
+        form_factor_mode = "zhang_zero_fill" if args.legacy_zero_fill_test else "hf_periodic"
         result = compute_crpa(
             params,
             theta_deg=float(args.theta_deg),
@@ -109,7 +118,9 @@ def main(argv: list[str] | None = None) -> None:
             coulomb_params=coulomb,
             eta_mev=float(args.eta_mev),
             sigma_rotation=True,
-            periodic_g_grid=bool(args.periodic_g_grid),
+            periodic_g_grid=periodic_g_grid,
+            form_factor_mode=form_factor_mode,
+            allow_legacy_zero_fill_test=bool(args.legacy_zero_fill_test),
         )
         elapsed = time.perf_counter() - start
         out = output_root / label
@@ -125,6 +136,9 @@ def main(argv: list[str] | None = None) -> None:
                 bands_per_valley=case["bands_per_valley"],
                 q_index=(1, 0),
                 eta_mev=float(args.eta_mev),
+                periodic_g_grid=periodic_g_grid,
+                form_factor_mode=form_factor_mode,
+                allow_legacy_zero_fill_test=bool(args.legacy_zero_fill_test),
             )
             (out / "c1_cross_check.json").write_text(json.dumps(extra_checks, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         write_validation_report(result, out / "validation_report.md", extra_checks=extra_checks)

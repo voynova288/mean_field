@@ -6,6 +6,7 @@
 #   sbatch scripts/plot_rlg_hbn_fig6_current_checkpoints.sbatch <output-root> [snapshot-name]
 
 #SBATCH -J rlg_fig6_ckpt_bands
+#SBATCH --account=hmt03
 #SBATCH -p regular
 #SBATCH -N 1
 #SBATCH --ntasks=1

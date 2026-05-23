@@ -28,6 +28,7 @@ python scripts/mean_field_tools.py run_custom_b0_hf_case \
   --summary-mode root \
   --crpa-dir "${CRPA_DIR}" \
   --allow-incompatible-crpa \
+  --diagnostic-only \
   --crpa-physics-reference-dir "${CRPA_PHYSICS_REFERENCE_DIR}" \
   --fock-interpolation matrix_diagonal \
   --path-fock-interpolation linear

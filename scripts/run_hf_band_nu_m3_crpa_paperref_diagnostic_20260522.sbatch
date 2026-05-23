@@ -1,9 +1,9 @@
 #!/bin/bash
-# Run nu=-3 Fig. 4 HF+cRPA bands with an HF-compatible epsilon=4 artifact.
-# The Zhang paper-reference dielectric bundle remains a validation reference;
-# production HF must use periodic_g_grid=true / form_factor_mode=hf_periodic.
+# Diagnostic-only nu=-3 band from the Zhang paper-reference dielectric artifact.
+# This intentionally bypasses the HF-compatible cRPA metadata gate so the output
+# is not a production Fig. 4 HF+cRPA result.
 
-#SBATCH -J mf_crpahf_m3_fixedeps
+#SBATCH -J mf_diag_paperref_band
 #SBATCH --account=hmt03
 #SBATCH -p regular6430
 #SBATCH -N 1
@@ -12,8 +12,8 @@
 #SBATCH --mem=0
 #SBATCH --exclusive
 #SBATCH -t 3-00:00:00
-#SBATCH -o logs/custom_b0_hf_lk24_crpa_nu_m3_fixedeps_%j.out
-#SBATCH -e logs/custom_b0_hf_lk24_crpa_nu_m3_fixedeps_%j.err
+#SBATCH -o logs/custom_b0_hf_lk24_crpa_paperref_diag_%j.out
+#SBATCH -e logs/custom_b0_hf_lk24_crpa_paperref_diag_%j.err
 
 set -euo pipefail
 
@@ -31,7 +31,7 @@ mkdir -p logs
 export PYTHONNOUSERSITE=1
 export PYTHONPATH="${REPO_ROOT}/src"
 export MPLBACKEND="${MPLBACKEND:-Agg}"
-export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/mplconfig_hf_crpa_fixedeps_${SLURM_JOB_ID:-manual}}"
+export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/mplconfig_hf_crpa_paperref_diag_${SLURM_JOB_ID:-manual}}"
 mkdir -p "${MPLCONFIGDIR}"
 
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
@@ -44,9 +44,9 @@ export OMP_DYNAMIC="${OMP_DYNAMIC:-FALSE}"
 export MKL_DYNAMIC="${MKL_DYNAMIC:-FALSE}"
 
 CRPA_BUNDLE="${REPO_ROOT}/results/TBG_HF_cRPA/crpa_dielectric_fixed_20260519"
-CRPA_DIR="${CRPA_DIR:-${REPO_ROOT}/results/TBG_HF_cRPA/crpa_lk24_lg9_q11_hfcompatible_fig4_20260522_epsbn4_merged}"
-OUTPUT_ROOT="${REPO_ROOT}/results/TBG_HF_cRPA/hf_crpa_fig4_eps4_runs"
-RUN_TAG="${RUN_TAG:-fig4_eps4_crpa_hfcompatible_20260522_lk24_q11_gamma_m_k_gamma_kprime}"
+CRPA_DIR="${CRPA_DIR:-${REPO_ROOT}/results/TBG_HF_cRPA/crpa_lk24_lg9_q11_zhang_paper_ref_fixed_20260519_merged}"
+OUTPUT_ROOT="${OUTPUT_ROOT:-${REPO_ROOT}/results/TBG_HF_cRPA/hf_crpa_fig4_paperref_diagnostic_runs}"
+RUN_TAG="${RUN_TAG:-fig4_eps4_crpa_paperref_diagnostic_20260522_lk24_q11_gamma_m_k_gamma_kprime}"
 
 if [[ ! -d "${CRPA_BUNDLE}" ]]; then
   echo "Missing cRPA bundle: ${CRPA_BUNDLE}" >&2
@@ -56,6 +56,7 @@ if [[ ! -f "${CRPA_DIR}/crpa_params.json" || ! -f "${CRPA_DIR}/screened_coulomb.
   echo "Missing merged cRPA artifact files under: ${CRPA_DIR}" >&2
   exit 2
 fi
+
 echo "[job] hostname=$(hostname)"
 echo "[job] partition=${SLURM_JOB_PARTITION:-}"
 echo "[job] cpus_per_task=${SLURM_CPUS_PER_TASK:-}"
@@ -65,8 +66,8 @@ echo "[job] crpa_dir=${CRPA_DIR}"
 echo "[job] output_root=${OUTPUT_ROOT}"
 echo "[job] run_tag=${RUN_TAG}"
 echo "[job] target_epsilon_r=4"
-echo "[job] note=production HF requires HF-compatible cRPA; the paper-reference dielectric bundle is not passed to HF"
-echo "[job] note=using bm:1 start to avoid importing the Fig. 5/no-cRPA epsilon=10 initial density"
+echo "[job] diagnostic_only=true"
+echo "[job] note=paper-reference artifact is zhang_zero_fill/periodic_g_grid=false; production HF requires HF-compatible cRPA"
 
 python scripts/mean_field_tools.py run_custom_b0_hf_case \
   --theta-deg 1.05 \
@@ -89,5 +90,7 @@ python scripts/mean_field_tools.py run_custom_b0_hf_case \
   --init bm:1 \
   --summary-mode both \
   --crpa-dir "${CRPA_DIR}" \
+  --allow-incompatible-crpa \
+  --diagnostic-only \
   --fock-interpolation matrix_diagonal \
   --path-fock-interpolation linear
