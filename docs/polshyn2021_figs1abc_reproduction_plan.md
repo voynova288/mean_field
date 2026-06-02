@@ -112,7 +112,7 @@ remote folded cell.
 ### Phase 0 - parameter and non-interacting anchor
 
 1. Add a Polshyn-specific devtool, tentatively
-   `src/mean_field/devtools/run_tmbg_polshyn_figs1_abc.py`.
+   a reusable tMBG system/devtool entrypoint if this workflow is revived.  The old one-off `run_tmbg_polshyn_figs1_abc.py` runner was retired during script-surface cleanup.
 2. Implement S1a first using existing `mean_field.systems.tmbg` non-interacting model.
 3. Default parameters after the Polshyn-2020 convention correction:
    - `theta_deg = 1.29`, matching the experimental device.

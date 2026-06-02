@@ -34,6 +34,9 @@ checkpoints/
 *.out
 *.err
 *.log
+scripts/local/
+scripts/oneoff/
+scripts/scratch/
 
 # Code-agent work notes and temporary project documents
 *工作文档*.md

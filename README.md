@@ -52,7 +52,7 @@ Heavy self-consistent HF calculations, topology-grid eigensolver recomputations,
 
 ## Command Surface
 
-The public script surface is intentionally small:
+The desired public script surface is intentionally small.  Prefer existing dispatchers over adding new standalone scripts; see `docs/script_surface_policy.md`.
 
 - `scripts/mean_field_tools.py`: Python command dispatcher for stable benchmark and reproduction tools.
 - `scripts/mean_field_tools.jl`: Julia helper dispatcher for benchmark-reference exports.
@@ -69,7 +69,7 @@ sbatch scripts/submit_mean_field.sbatch python scripts/mean_field_tools.py run_h
 ## Repository Layout
 
 - `src/mean_field/`: installable Python package.
-- `scripts/`: stable entrypoints only.
+- `scripts/`: stable/generic entrypoints only; one-off wrappers should stay in ignored scratch paths.
 - `docs/`: stable architecture and migration notes.
 
 The following local directories are ignored by design:

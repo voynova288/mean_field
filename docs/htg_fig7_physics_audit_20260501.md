@@ -40,8 +40,8 @@ Note: `reference/2310.15982v3.pdf` is a different finite-field TBG paper and sho
 - `scripts/submit_mean_field.sbatch`
   - Fixed repo-root detection under Slurm by preferring `SLURM_SUBMIT_DIR` when it is a Mean_Field checkout. Without this, Slurm's copied script path can make `REPO_ROOT=/var/spool/slurmd`, causing `mkdir /var/spool/slurmd/logs` failures.
 
-- `scripts/run_htg_fig7_corrected_cases.sh`
-  - Added a file-backed Slurm-safe rerun script for the two corrected Fig. 7 representative sectors.
+- Historical one-off Fig. 7 launch scripts were retired during script-surface cleanup.
+  - Future reruns should use `scripts/submit_mean_field.sbatch` with `scripts/mean_field_tools.py run_htg_hf ...` instead of adding a new tracked wrapper per sector.
 
 ## Verification
 

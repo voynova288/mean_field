@@ -52,7 +52,8 @@ PYTHONPATH=src python -m analysis.shift_current_htg.run_slg_toy --mesh-size 24 -
 PYTHONPATH=src python -m analysis.shift_current_htg.run_htg_shift_current_smoke --n-shells 1 --mesh-size 3 --no-save
 PYTHONPATH=src python -m analysis.shift_current_htg.run_htg_bandpair_spectra --n-shells 1 --mesh-size 2 --eta-mev 1,2 --no-save
 PYTHONPATH=src python -m analysis.shift_current_htg.run_htg_bandpair_spectra --n-shells 1 --mesh-size 2 --pair-window central_window:-2,1 --eta-mev 2 --no-save
-# Production-like smoke figures were launched through Slurm wrappers in scripts/run_shift_current_htg_*.sbatch.
+# Production-like smoke figures should be launched through the generic Slurm wrapper, e.g.
+# sbatch scripts/submit_mean_field.sbatch python -m analysis.shift_current_htg.<module> ...
 ```
 
 Expected first gate: `dhdk_validation.passes_1e_minus_7 = true` for the hTTG velocity check.

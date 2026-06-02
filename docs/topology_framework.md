@@ -101,7 +101,7 @@ Slurm validation job:
 
 ```text
 job id: 132090
-wrapper: scripts/validate_unified_topology.sbatch
+wrapper: historical scripts/validate_unified_topology.sbatch (retired; use scripts/submit_mean_field.sbatch with pytest or saved-result validator)
 node: test001
 result: 37 passed in 3.09s
 saved-result validation: status=pass, failures=0, known_gaps=1

@@ -101,6 +101,12 @@ The zero-field TBG port now has three explicit layers instead of one large `hf.p
 
 This is the intended direction for future systems. A new graphene stacking should first try to reuse `core/hf/`, then add its own `systems/<name>/...` physics layer, and only after that add benchmark or CLI workflows.
 
+## Script and devtool surface
+
+The command surface should stay small.  Use `scripts/mean_field_tools.py`, `scripts/mean_field_tools.jl`, `scripts/submit_mean_field.sbatch`, and package CLI subcommands as the durable entrypoints.  `src/mean_field/devtools` should provide reusable implementation modules behind those entrypoints, not a growing collection of one-off runners.
+
+Before adding a new tracked script or devtool, try to extend an existing command with an option, subcommand, or config input.  Per-run `.sbatch` files, timestamped launchers, narrow plotting scripts, and temporary parameter sweeps should normally stay in ignored scratch space.  See `script_surface_policy.md` for the detailed policy and cleanup target.
+
 ## Performance strategy
 
 The right performance target is not "Python everywhere"; it is "Python orchestration with optimized kernels where needed".

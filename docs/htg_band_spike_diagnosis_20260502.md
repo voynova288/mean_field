@@ -58,22 +58,13 @@ against the later Fig. 7/Fig. 8 companion band plots under
 
 ## Code changes
 
-- `scripts/recompute_htg_fig7_path_from_state.py` now tolerates old
-  `hf_params.json` files that do not contain `zeta_rad`,
-  `fermi_velocity_m_per_s`, `finite_zero_limit`, or `zero_cutoff_nm_inv`.
-- `scripts/run_htg_fig7_corrected_cases.sh` now defaults
-  `PATH_POINTS_PER_SEGMENT=120` and `HF_BAND_WINDOW_MEV=80.0`, with both values
-  overridable through environment variables, and explicitly passes
-  `--finite-zero-limit`.
-- `scripts/plot_htg_scf_grid_path_from_state.py` writes a diagnostic band plot
-  and TSV using only saved SCF grid points that exactly lie on the saved
-  high-symmetry path. It breaks line segments across large path gaps so missing
-  SCF coverage is visible rather than hidden by artificial long interpolation.
-- `scripts/recompute_htg_fig8a_potential_path_from_state.py` recomputes
-  Fig. 8-style Hartree/Fock path potentials from saved SCF states with a
-  finite screened-Coulomb `q -> 0` limit. With `--update-default`, it backs up
-  the old q0-zero output to `_q0zero_spiky` names and replaces the default
-  Fig. 8 potential plot/NPZ.
+Historical one-off scripts used during this diagnosis were retired during script-surface cleanup.  Future reruns should use the generic dispatcher/Slurm wrapper (`scripts/mean_field_tools.py` plus `scripts/submit_mean_field.sbatch`) and the reusable HTG HF entrypoint `mean_field.devtools.run_htg_hf` rather than restoring per-case scripts.
+
+The durable implementation changes from this diagnosis live in the HTG system modules and retained devtools:
+
+- old `hf_params.json` compatibility for missing `zeta_rad`, `fermi_velocity_m_per_s`, `finite_zero_limit`, or `zero_cutoff_nm_inv` should be handled in reusable loaders/runners;
+- corrected reruns should pass explicit path resolution, band-window, and finite-q0 settings through a generic command rather than a timestamped launcher;
+- saved-SCF-grid diagnostics should be implemented as reusable plotting/post-processing commands when needed, not as one-off tracked scripts.
 
 ## 2026-05-02 Gamma-m-Gamma path correction
 
