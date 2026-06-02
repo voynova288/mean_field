@@ -3,8 +3,9 @@ from __future__ import annotations
 import numpy as np
 
 
-PRODUCTION_FORM_FACTOR_MODE = "hf_periodic"
+PRODUCTION_FORM_FACTOR_MODE = "k_periodic_zero_fill"
 LEGACY_ZERO_FILL_TEST_MODE = "zhang_zero_fill"
+HF_PERIODIC_ROLL_DIAGNOSTIC_MODE = "hf_periodic_roll"
 
 
 def reshape_plane_wave_vectors(
@@ -27,8 +28,19 @@ def _normalize_form_factor_mode(mode: str) -> str:
     normalized = str(mode).strip().lower().replace("-", "_")
     if normalized in {"zhang", "zhang_zero_fill", "zero_fill"}:
         return LEGACY_ZERO_FILL_TEST_MODE
-    if normalized in {"hf", "hf_periodic", "periodic"}:
+    if normalized in {
+        "hf",
+        "hf_periodic",
+        "hf_compatible",
+        "k_periodic_zero_fill",
+        "kperiodic_zero_fill",
+        "hf_kperiodic_zero_fill",
+        "hf_zero_fill",
+        "production",
+    }:
         return PRODUCTION_FORM_FACTOR_MODE
+    if normalized in {"hf_periodic_roll", "periodic_roll", "roll", "wrap", "wrapped"}:
+        return HF_PERIODIC_ROLL_DIAGNOSTIC_MODE
     raise ValueError(f"Unsupported cRPA form-factor mode: {mode!r}")
 
 
@@ -72,10 +84,9 @@ def _shift_plane_wave_coefficients(
     mode: str = PRODUCTION_FORM_FACTOR_MODE,
 ) -> np.ndarray:
     resolved_mode = _normalize_form_factor_mode(mode)
-    if resolved_mode == "hf_periodic":
-        # Keep the Zhang +Q form-factor convention and replace only the
-        # zero-fill boundary by periodic wrapping.  This aligns with HF overlap
-        # blocks through Lambda_M(source,target) = O_M(target,source)^dagger.
+    if resolved_mode == HF_PERIODIC_ROLL_DIAGNOSTIC_MODE:
+        # Diagnostic only: this matches the periodic-G HF overlap algebra, but
+        # it is not the finite plane-wave vertex in Zhang Eq. 22.
         return np.roll(np.asarray(values, dtype=np.complex128), shift=(0, int(dm), int(dn), 0), axis=(0, 1, 2, 3))
     return _shift_plane_wave_coefficients_zero_fill(values, dm, dn)
 
@@ -97,6 +108,10 @@ def compute_lambda_stack(
     follows Zhang SM Eq. 22:
 
     ``lambda_Q = sum_G C_left[G + Q]^* C_right[G]``.
+
+    The production mode keeps the k-grid periodicity outside this routine by
+    passing ``Q + wrap`` from the caller, but the finite plane-wave G cutoff is
+    not a torus: coefficients outside the retained G shell are zero-filled.
     """
 
     left = reshape_plane_wave_vectors(

@@ -15,8 +15,10 @@ from .dielectric import compute_dielectric
 from .form_factor import (
     LEGACY_ZERO_FILL_TEST_MODE,
     PRODUCTION_FORM_FACTOR_MODE,
+    HF_PERIODIC_ROLL_DIAGNOSTIC_MODE,
     normalize_form_factor_mode,
 )
+from .flat_remote import apply_chi0_energy_mode
 from .grid import CRPAKGrid, build_q_shift_table, build_uniform_crpa_grid, q_shift_vectors
 from .susceptibility import compute_constrained_chi0
 
@@ -41,6 +43,44 @@ class CRPAResult:
     screened_v: np.ndarray
     effective_epsilon: np.ndarray
     metadata: dict[str, object] = field(default_factory=dict)
+
+
+def max_hf_periodic_wrap_shell(grid: CRPAKGrid, q_indices: np.ndarray) -> int:
+    """Return the largest reciprocal wrap entering ``Q + wrap`` form factors."""
+
+    coords = np.asarray(q_indices, dtype=int)
+    max_wrap = 0
+    for qi, qj in coords.reshape((-1, 2)):
+        for ik in range(grid.nk):
+            _shifted, wrap = grid.shifted_index_and_wrap(ik, (int(qi), int(qj)))
+            max_wrap = max(max_wrap, abs(int(wrap[0])), abs(int(wrap[1])))
+    return int(max_wrap)
+
+
+def required_hf_periodic_lg(q_lg: int, max_wrap_shell: int = 1) -> int:
+    """Minimum plane-wave grid width needed to avoid ``Q + wrap`` aliasing."""
+
+    q_lg = int(q_lg)
+    max_wrap_shell = int(max_wrap_shell)
+    return int(q_lg + 2 * max(0, max_wrap_shell))
+
+
+def validate_hf_periodic_no_aliasing(
+    *,
+    lg: int,
+    q_lg: int,
+    max_wrap_shell: int = 1,
+    artifact_label: str = "HF-compatible cRPA artifact",
+) -> None:
+    """Reject periodic form-factor artifacts whose ``Q + wrap`` shifts alias."""
+
+    required_lg = required_hf_periodic_lg(q_lg, max_wrap_shell=max_wrap_shell)
+    if int(lg) < required_lg:
+        raise ValueError(
+            f"Invalid {artifact_label}: periodic-G roll form factors use Q + wrap on a finite torus. "
+            f"Need crpa_lg >= q_lg + 2*max_wrap = {required_lg} "
+            f"(q_lg={int(q_lg)}, max_wrap={int(max_wrap_shell)}); got crpa_lg={int(lg)}."
+        )
 
 
 def _normalize_q_indices(q_indices: list[int | tuple[int, int]] | tuple[int | tuple[int, int], ...] | None, grid: CRPAKGrid) -> np.ndarray:
@@ -74,7 +114,9 @@ def resolve_crpa_runtime_convention(
     ):
         return resolved_mode
     raise ValueError(
-        "Production cRPA requires periodic_g_grid=True and form_factor_mode='hf_periodic'. "
+        "Production cRPA requires periodic_g_grid=True and "
+        "form_factor_mode='k_periodic_zero_fill' (the legacy alias "
+        "'hf_periodic' is accepted and normalized). "
         "The zhang_zero_fill/periodic_g_grid=False convention is retained only for explicit "
         "legacy regression tests via allow_legacy_zero_fill_test=True."
     )
@@ -97,6 +139,8 @@ def compute_crpa(
     allow_legacy_zero_fill_test: bool = False,
     occupation_mode: str = "cnp_index",
     flat_method: str = "center",
+    chi0_energy_mode: str = "bm",
+    chi0_eq19_overlap_lg: int | None = None,
 ) -> CRPAResult:
     resolved_form_factor_mode = resolve_crpa_runtime_convention(
         periodic_g_grid=bool(periodic_g_grid),
@@ -128,6 +172,8 @@ def compute_crpa(
         allow_legacy_zero_fill_test=bool(allow_legacy_zero_fill_test),
         occupation_mode=occupation_mode,
         flat_method=flat_method,
+        chi0_energy_mode=chi0_energy_mode,
+        chi0_eq19_overlap_lg=chi0_eq19_overlap_lg,
         metadata={
             "vf": float(params.vf),
             "w0": float(params.w0),
@@ -140,6 +186,7 @@ def compute_crpa(
             ),
             "occupation_mode": str(occupation_mode),
             "flat_band_classifier": str(flat_method),
+            "chi0_energy_mode_requested": str(chi0_energy_mode),
             "k_grid_kind": "uniform_crpa",
         },
     )
@@ -160,6 +207,8 @@ def compute_crpa_from_solution(
     allow_legacy_zero_fill_test: bool = False,
     occupation_mode: str = "cnp_index",
     flat_method: str = "center",
+    chi0_energy_mode: str = "bm",
+    chi0_eq19_overlap_lg: int | None = None,
     metadata: dict[str, object] | None = None,
 ) -> CRPAResult:
     resolved_form_factor_mode = resolve_crpa_runtime_convention(
@@ -167,9 +216,24 @@ def compute_crpa_from_solution(
         form_factor_mode=form_factor_mode,
         allow_legacy_zero_fill_test=bool(allow_legacy_zero_fill_test),
     )
+    q_coords = _normalize_q_indices(q_indices, grid)
+    max_wrap_shell = max_hf_periodic_wrap_shell(grid, q_coords)
+    if bool(solution.periodic_g_grid) and resolved_form_factor_mode == HF_PERIODIC_ROLL_DIAGNOSTIC_MODE:
+        validate_hf_periodic_no_aliasing(
+            lg=int(solution.lg),
+            q_lg=int(q_lg),
+            max_wrap_shell=max_wrap_shell,
+            artifact_label="periodic-G roll diagnostic cRPA run",
+        )
     q_shift_labels, q_shift_coords = build_q_shift_table(q_lg)
     q_vecs = q_shift_vectors(solution.params, q_shift_labels)
-    q_coords = _normalize_q_indices(q_indices, grid)
+    solution, classification, chi0_energy_metadata = apply_chi0_energy_mode(
+        solution,
+        classification,
+        mode=chi0_energy_mode,
+        coulomb_params=coulomb_params,
+        overlap_lg=chi0_eq19_overlap_lg,
+    )
 
     chi0_list: list[np.ndarray] = []
     eps_list: list[np.ndarray] = []
@@ -213,6 +277,7 @@ def compute_crpa_from_solution(
         ),
         "occupation_mode": str(occupation_mode),
         "flat_band_classifier": str(flat_method),
+        "chi0_energy_mode_requested": str(chi0_energy_mode),
         "k_grid_kind": str(solution.k_grid_kind),
         "n_valleys_explicit": int(solution.n_eta),
         "spin_degeneracy": 2.0,
@@ -224,9 +289,16 @@ def compute_crpa_from_solution(
         "band_start": int(solution.band_start),
         "band_stop": int(solution.band_stop),
         "basis_dimension_per_valley": int(solution.basis_dimension),
+        "k_periodic_max_wrap_shell": int(max_wrap_shell),
+        "form_factor_g_boundary": "zero_fill"
+        if resolved_form_factor_mode in {PRODUCTION_FORM_FACTOR_MODE, LEGACY_ZERO_FILL_TEST_MODE}
+        else "periodic_roll",
+        "periodic_roll_required_lg": int(required_hf_periodic_lg(q_lg, max_wrap_shell=max_wrap_shell)),
+        "periodic_roll_no_alias": bool(int(solution.lg) >= required_hf_periodic_lg(q_lg, max_wrap_shell=max_wrap_shell)),
     }
     if metadata:
         resolved_metadata.update(metadata)
+    resolved_metadata.update(chi0_energy_metadata)
     resolved_metadata.update(
         {
             "periodic_g_grid": bool(solution.periodic_g_grid),

@@ -16,12 +16,14 @@ from .model import BMSolution
 
 
 def projected_basis_from_bm_solution(solution: BMSolution) -> ProjectedWavefunctionBasis:
+    boundary_mode = "periodic" if bool(solution.periodic_g_grid) else "zero_fill"
     return ProjectedWavefunctionBasis(
         wavefunctions=np.asarray(solution.uk, dtype=np.complex128),
         grid_shape=(solution.lg, solution.lg),
         n_spin=solution.n_spin,
         local_basis_size=solution.nlocal,
         name="tbg_bm",
+        boundary_mode=boundary_mode,
     )
 
 

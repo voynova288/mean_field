@@ -68,6 +68,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Diagnostic/test only: run the old zhang_zero_fill, non-periodic-G convention.",
     )
     parser.add_argument(
+        "--chi0-energy-mode",
+        choices=("bm", "hf_active_flat", "eq19_flat_remote"),
+        default="bm",
+        help="Band energies/eigenvectors used in chi0. hf_active_flat uses the HF C2T flat basis; eq19_flat_remote applies the Eq.19 flat-band correction.",
+    )
+    parser.add_argument(
+        "--chi0-eq19-overlap-lg",
+        type=int,
+        default=None,
+        help="Optional Q shell for the Eq.19 flat-band correction; defaults to each BM lg.",
+    )
+    parser.add_argument(
         "--case",
         action="append",
         default=None,
@@ -107,7 +119,7 @@ def main(argv: list[str] | None = None) -> None:
         print(f"[scan] start {label}: lk={case['lk']} lg={case['lg']} q_lg={case['q_lg']} bands={case['bands_per_valley']}", flush=True)
         start = time.perf_counter()
         periodic_g_grid = not bool(args.legacy_zero_fill_test)
-        form_factor_mode = "zhang_zero_fill" if args.legacy_zero_fill_test else "hf_periodic"
+        form_factor_mode = "zhang_zero_fill" if args.legacy_zero_fill_test else "k_periodic_zero_fill"
         result = compute_crpa(
             params,
             theta_deg=float(args.theta_deg),
@@ -121,6 +133,8 @@ def main(argv: list[str] | None = None) -> None:
             periodic_g_grid=periodic_g_grid,
             form_factor_mode=form_factor_mode,
             allow_legacy_zero_fill_test=bool(args.legacy_zero_fill_test),
+            chi0_energy_mode=str(args.chi0_energy_mode),
+            chi0_eq19_overlap_lg=args.chi0_eq19_overlap_lg,
         )
         elapsed = time.perf_counter() - start
         out = output_root / label

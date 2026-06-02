@@ -7,7 +7,7 @@ import numpy as np
 from scipy.linalg import eigh
 
 from .lattice import TMBGLattice, _complex_key
-from .params import TMBGParameters
+from .params import TMBGParameters, VALID_BLG_STACKINGS
 
 
 VALID_VALLEYS = (-1, 1)
@@ -44,6 +44,12 @@ def dirac_block(kvec: complex, phi: float, vf: float, valley: int) -> np.ndarray
     return np.asarray([[0.0, vf * pi_dag], [vf * pi, 0.0]], dtype=np.complex128)
 
 
+def _validate_blg_stacking(stacking: str) -> str:
+    if stacking not in VALID_BLG_STACKINGS:
+        raise ValueError(f"Expected blg_stacking in {VALID_BLG_STACKINGS}, got {stacking!r}")
+    return str(stacking)
+
+
 def blg_interlayer(
     kvec: complex, phi: float, params: TMBGParameters, valley: int
 ) -> np.ndarray:
@@ -51,21 +57,44 @@ def blg_interlayer(
 
     The basis of each six-orbital moire block is
     (A_b, B_b, A_m, B_m, A_t, B_t), and t^- is inserted as
-    H[bottom, middle].  Relative to the compact notation in Park et al.
-    Eq. (3), the intralayer Dirac block used here has the opposite B-
-    sublattice phase.  In this gauge the Park/PyTwist-compatible AB block is
-
-        [[-v4*pi^dagger, -v3*pi],
-         [ t1,            -v4*pi^dagger]].
-
-    The v3 term connects the non-dimer pair A_b <-> B_m and is the term that
-    fixes the trigonal-warping orientation of the complete-model bands.
+    H[bottom, middle].  ``blg_stacking='AB'`` keeps the historical/Park-Fig.-2
+    checkpoint convention with the dimer hopping in B_b <-> A_m.  The opposite
+    Bernal chirality, ``blg_stacking='BA'``, moves the dimer hopping to
+    A_b <-> B_m; this is the configuration needed when the target conduction
+    band is the C=2 band rather than the Park-checkpoint partner.
     """
     pi, pi_dag = _valley_pi(kvec, phi, valley)
+    if params.bernal_convention == "polshyn2020":
+        # Polshyn 2020 SM Eq. (S5) is written for the block H[middle,bottom]
+        # in the (top, middle, bottom) layer order.  This code stores layers as
+        # (bottom, middle, top), so the bottom-middle block is T_Bernal^dagger.
+        # Using -gamma0 f ~= vf*pi_dag gives
+        #   T_Bernal ~= [[-v4*pi_dag, -v3*pi], [t1, -v4*pi_dag]],
+        # hence H[bottom,middle]=T_Bernal^dagger below.  The dimer hopping is
+        # A_b <-> B_m, i.e. the BA Bernal chirality in the historical code
+        # labels, but the momentum-dependent gamma3/gamma4 terms are the
+        # Hermitian-conjugated Polshyn convention rather than the Park/JM one.
+        return np.asarray(
+            [
+                [-params.v4 * pi, params.t1],
+                [-params.v3 * pi_dag, -params.v4 * pi],
+            ],
+            dtype=np.complex128,
+        )
+
+    stacking = _validate_blg_stacking(params.blg_stacking)
+    if stacking == "AB":
+        return np.asarray(
+            [
+                [-params.v4 * pi_dag, -params.v3 * pi],
+                [params.t1, -params.v4 * pi_dag],
+            ],
+            dtype=np.complex128,
+        )
     return np.asarray(
         [
-            [-params.v4 * pi_dag, -params.v3 * pi],
-            [params.t1, -params.v4 * pi_dag],
+            [-params.v4 * pi_dag, params.t1],
+            [-params.v3 * pi, -params.v4 * pi_dag],
         ],
         dtype=np.complex128,
     )
@@ -99,12 +128,17 @@ def build_diagonal_block(
     block[2:4, 0:2] = t_blg.conjugate().T
 
     # Park Eq. (2) is written in the same sublattice gauge as the t^- block
-    # above.  In the explicit (A_b, B_b, A_m, B_m, A_t, B_t) basis used here it
-    # gives the dimer-site correction B_b += delta and A_m -= delta.
-    # Placing delta on A_b/B_m, or putting +delta on both dimer orbitals, opens
-    # an artificial visible gap at the Delta=0 K point of Fig. 2.
-    block[1, 1] += params.delta
-    block[2, 2] -= params.delta
+    # above.  Polshyn 2020 instead takes sublattice energies identical within
+    # each layer, so its parameter preset sets delta=0 and this branch is inert.
+    if params.bernal_convention == "polshyn2020":
+        block[0, 0] += params.delta
+        block[3, 3] -= params.delta
+    elif _validate_blg_stacking(params.blg_stacking) == "AB":
+        block[1, 1] += params.delta
+        block[2, 2] -= params.delta
+    else:
+        block[0, 0] += params.delta
+        block[3, 3] -= params.delta
 
     block[0:2, 0:2] += -params.interlayer_potential * np.eye(2, dtype=np.complex128)
     block[4:6, 4:6] += params.interlayer_potential * np.eye(2, dtype=np.complex128)

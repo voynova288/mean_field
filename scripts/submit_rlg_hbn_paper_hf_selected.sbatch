@@ -41,7 +41,8 @@ SCREENING_SOLVER="${SCREENING_SOLVER:-grid}"
 SCREENING_U_MIN_MEV="${SCREENING_U_MIN_MEV:--100}"
 SCREENING_U_MAX_MEV="${SCREENING_U_MAX_MEV:-200}"
 SCREENING_U_GRID_POINTS="${SCREENING_U_GRID_POINTS:-121}"
-PRECISION="${PRECISION:-1e-6}"
+PRECISION="${PRECISION:-}"
+CHECKPOINT_INTERVAL="${CHECKPOINT_INTERVAL:-5}"
 BETA="${BETA:-1.0}"
 ODA_STALL_THRESHOLD="${ODA_STALL_THRESHOLD:-1e-3}"
 
@@ -66,10 +67,17 @@ case "${PAPER_TARGET}" in
     exit 2
     ;;
 esac
+if [[ -z "${PRECISION}" ]]; then
+  if [[ "${PAPER_TARGET}" == "fig6" ]]; then
+    PRECISION="1e-4"
+  else
+    PRECISION="1e-6"
+  fi
+fi
 
 if [[ "${PAPER_TARGET}" == "fig6" ]]; then
   INIT_SEED_SPECS=(
-    flavor:1 flavor:2 flavor:3 flavor:4
+    flavor:1 flavor:2
     bm:1
     perturbed:1 perturbed:2 perturbed:3 perturbed:4
     random:1 random:2 random:3 random:4
@@ -103,6 +111,7 @@ export MKL_DYNAMIC="${MKL_DYNAMIC:-FALSE}"
 export MEAN_FIELD_RLG_HBN_USE_NUMBA=1
 export MEAN_FIELD_RLG_HBN_REQUIRE_NUMBA=1
 export MEAN_FIELD_RLG_HBN_REMOTE_CHUNK_BANDS="${MEAN_FIELD_RLG_HBN_REMOTE_CHUNK_BANDS:-16}"
+export MEAN_FIELD_RLG_HBN_MMAP_OVERLAP_CACHE="${MEAN_FIELD_RLG_HBN_MMAP_OVERLAP_CACHE:-0}"
 
 python - <<'PY'
 import numba
@@ -113,6 +122,8 @@ echo "[job] paper_target=${PAPER_TARGET}"
 echo "[job] selected_task_ids=${TASK_ID_CSV}"
 echo "[job] task_count=${TASK_COUNT}"
 echo "[job] threads_per_task=${THREADS_PER_TASK}"
+echo "[job] precision=${PRECISION}"
+echo "[job] checkpoint_interval=${CHECKPOINT_INTERVAL}"
 echo "[job] reserved_cpus=${RESERVED_CPUS}"
 echo "[job] requested_cpus=${REQUESTED_CPUS}"
 echo "[job] remote_chunk_bands=${MEAN_FIELD_RLG_HBN_REMOTE_CHUNK_BANDS}"
@@ -121,6 +132,7 @@ echo "[job] cache_root=${CACHE_ROOT}"
 echo "[job] cache_policy=${CACHE_POLICY}"
 echo "[job] screening_solver=${SCREENING_SOLVER}"
 echo "[job] screening_grid=${SCREENING_U_MIN_MEV}:${SCREENING_U_MAX_MEV}:${SCREENING_U_GRID_POINTS}"
+echo "[job] mmap_overlap_cache=${MEAN_FIELD_RLG_HBN_MMAP_OVERLAP_CACHE}"
 echo "[job] hostname=$(hostname)"
 echo "[job] partition=${SLURM_JOB_PARTITION:-}"
 
@@ -188,6 +200,7 @@ for raw_task_id in "${SELECTED_TASK_IDS[@]}"; do
       --seeds "${SEED}" \
       --max-iter "${MAX_ITER}" \
       --precision "${PRECISION}" \
+      --checkpoint-interval "${CHECKPOINT_INTERVAL}" \
       --beta "${BETA}" \
       --oda-stall-threshold "${ODA_STALL_THRESHOLD}"
     echo "[resume] done task_id=${TASK_ID}"

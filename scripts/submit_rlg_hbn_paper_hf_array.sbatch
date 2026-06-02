@@ -31,7 +31,8 @@ SCREENING_U_MAX_MEV="${SCREENING_U_MAX_MEV:-200}"
 SCREENING_U_GRID_POINTS="${SCREENING_U_GRID_POINTS:-121}"
 SCREENING_MESH_SIZE="${SCREENING_MESH_SIZE:-}"
 TASKS_PER_ALLOCATION="${TASKS_PER_ALLOCATION:-1}"
-PRECISION="${PRECISION:-1e-6}"
+PRECISION="${PRECISION:-}"
+CHECKPOINT_INTERVAL="${CHECKPOINT_INTERVAL:-5}"
 BETA="${BETA:-1.0}"
 ODA_STALL_THRESHOLD="${ODA_STALL_THRESHOLD:-1e-3}"
 
@@ -59,9 +60,16 @@ case "${PAPER_TARGET}" in
     ;;
 esac
 SCREENING_MESH_SIZE="${SCREENING_MESH_SIZE:-${DEFAULT_SCREENING_MESH_SIZE}}"
+if [[ -z "${PRECISION}" ]]; then
+  if [[ "${PAPER_TARGET}" == "fig6" ]]; then
+    PRECISION="1e-4"
+  else
+    PRECISION="1e-6"
+  fi
+fi
 if [[ "${PAPER_TARGET}" == "fig6" ]]; then
   INIT_SEED_SPECS=(
-    flavor:1 flavor:2 flavor:3 flavor:4
+    flavor:1 flavor:2
     bm:1
     perturbed:1 perturbed:2 perturbed:3 perturbed:4
     random:1 random:2 random:3 random:4
@@ -166,6 +174,7 @@ export MKL_DYNAMIC="${MKL_DYNAMIC:-FALSE}"
 export MEAN_FIELD_RLG_HBN_USE_NUMBA=1
 export MEAN_FIELD_RLG_HBN_REQUIRE_NUMBA=1
 export MEAN_FIELD_RLG_HBN_REMOTE_CHUNK_BANDS="${MEAN_FIELD_RLG_HBN_REMOTE_CHUNK_BANDS:-16}"
+export MEAN_FIELD_RLG_HBN_MMAP_OVERLAP_CACHE="${MEAN_FIELD_RLG_HBN_MMAP_OVERLAP_CACHE:-0}"
 
 python - <<'PY'
 import numba
@@ -184,11 +193,14 @@ echo "[job] cache_policy=${CACHE_POLICY}"
 echo "[job] screening_solver=${SCREENING_SOLVER}"
 echo "[job] screening_mesh_size=${SCREENING_MESH_SIZE}"
 echo "[job] screening_grid=${SCREENING_U_MIN_MEV}:${SCREENING_U_MAX_MEV}:${SCREENING_U_GRID_POINTS}"
+echo "[job] precision=${PRECISION}"
+echo "[job] checkpoint_interval=${CHECKPOINT_INTERVAL}"
 echo "[job] hostname=$(hostname)"
 echo "[job] partition=${SLURM_JOB_PARTITION:-}"
 echo "[job] cpus_per_task=${SLURM_CPUS_PER_TASK:-}"
 echo "[job] numba_threads=${NUMBA_NUM_THREADS:-}"
 echo "[job] remote_chunk_bands=${MEAN_FIELD_RLG_HBN_REMOTE_CHUNK_BANDS}"
+echo "[job] mmap_overlap_cache=${MEAN_FIELD_RLG_HBN_MMAP_OVERLAP_CACHE}"
 
 python -m mean_field.devtools.run_rlg_hbn_paper_hf \
   --paper-target "${PAPER_TARGET}" \
@@ -207,5 +219,6 @@ python -m mean_field.devtools.run_rlg_hbn_paper_hf \
   --seeds "${SEED}" \
   --max-iter "${MAX_ITER}" \
   --precision "${PRECISION}" \
+  --checkpoint-interval "${CHECKPOINT_INTERVAL}" \
   --beta "${BETA}" \
   --oda-stall-threshold "${ODA_STALL_THRESHOLD}"

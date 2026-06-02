@@ -51,7 +51,28 @@ class CRPAScreenedCoulomb:
         return np.asarray(self.result.screened_v[matches[0]], dtype=np.complex128)
 
     def get_fock_epsilon_by_index(self, q_table_index: int, q_shift_index: int) -> float:
-        return float(np.real(self.result.effective_epsilon[int(q_table_index), int(q_shift_index)]))
+        return float(self._fock_epsilon_table[int(q_table_index), int(q_shift_index)])
+
+    @cached_property
+    def _fock_epsilon_table(self) -> np.ndarray:
+        """Return the scalar Fock divisor implied by the screened interaction.
+
+        The cRPA workflow stores ``screened_v = diag(V) @ epsilon_inv``.  If the
+        Fock path keeps only the diagonal local-field channel, the corresponding
+        scalar divisor is therefore ``1 / Re[(epsilon_inv)_{QQ}]``, not
+        ``Re[epsilon_{QQ}]``.  The two agree only when the dielectric matrix is
+        diagonal.
+        """
+
+        eps_inv_diag = np.real(np.diagonal(np.asarray(self.result.epsilon_inv), axis1=1, axis2=2))
+        if eps_inv_diag.shape != np.asarray(self.result.effective_epsilon).shape:
+            raise ValueError(
+                "epsilon_inv diagonal shape does not match effective_epsilon shape: "
+                f"{eps_inv_diag.shape} != {np.asarray(self.result.effective_epsilon).shape}"
+            )
+        if np.any(~np.isfinite(eps_inv_diag)) or np.any(eps_inv_diag <= 0.0):
+            raise ValueError("cRPA epsilon_inv has non-finite or non-positive diagonal entries for Fock screening.")
+        return 1.0 / eps_inv_diag
 
     @cached_property
     def _reciprocal_basis(self) -> tuple[complex, complex]:
@@ -151,7 +172,7 @@ class CRPAScreenedCoulomb:
 
         valid = (residuals <= float(decomposition_tol)) & (q_table_index >= 0) & (q_shift_index >= 0)
         values = np.full(flat_q.shape, np.nan, dtype=float)
-        values[valid] = np.real(self.result.effective_epsilon[q_table_index[valid], q_shift_index[valid]])
+        values[valid] = self._fock_epsilon_table[q_table_index[valid], q_shift_index[valid]]
 
         failure_indices = np.flatnonzero(~valid)
         failures: list[str] = []
@@ -187,7 +208,7 @@ class CRPAScreenedCoulomb:
     @cached_property
     def _epsilon_lookup(self) -> tuple[np.ndarray, np.ndarray, cKDTree, LinearNDInterpolator | None]:
         q_values = np.asarray(self.result.physical_q_vectors, dtype=np.complex128).reshape(-1)
-        eps_values = np.asarray(self.result.effective_epsilon, dtype=float).reshape(-1)
+        eps_values = np.asarray(self._fock_epsilon_table, dtype=float).reshape(-1)
         finite = np.isfinite(q_values.real) & np.isfinite(q_values.imag) & np.isfinite(eps_values)
         if not np.any(finite):
             raise ValueError("The cRPA result contains no finite Fock epsilon lookup points.")
@@ -228,9 +249,10 @@ class CRPAScreenedCoulomb:
         """Return Fock epsilon values for arbitrary physical momenta.
 
         ``method="matrix_diagonal"`` decomposes each physical transfer vector as
-        ``q = q_tilde + Q`` and returns the stored matrix diagonal
-        ``epsilon(q_tilde)[Q, Q]``.  This is the production HF path.  The
-        interpolation methods are retained for off-grid path-band diagnostics.
+        ``q = q_tilde + Q`` and returns the diagonal scalar divisor implied by
+        the stored screened interaction ``diag(V) @ epsilon_inv``.  This is the
+        production HF path.  The interpolation methods are retained for off-grid
+        path-band diagnostics and use the same scalar table.
         """
 
         q = np.asarray(q_vec, dtype=np.complex128)

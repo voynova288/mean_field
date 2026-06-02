@@ -70,8 +70,13 @@ def validate_hf_compatible_crpa(
     metadata = dict(crpa_result.metadata)
     if not _metadata_bool(metadata, "periodic_g_grid"):
         raise ValueError("This HF code requires cRPA generated with periodic_g_grid=True.")
-    if _metadata_string(metadata, "form_factor_mode") != "hf_periodic":
-        raise ValueError("This HF code requires cRPA form_factor_mode='hf_periodic'.")
+    if _metadata_string(metadata, "form_factor_mode") != "k_periodic_zero_fill":
+        raise ValueError(
+            "This HF code requires cRPA form_factor_mode='k_periodic_zero_fill'. "
+            "Old hf_periodic artifacts used a periodic-G roll in the cRPA vertex and must be regenerated."
+        )
+    if _metadata_string(metadata, "form_factor_g_boundary") != "zero_fill":
+        raise ValueError("This HF code requires cRPA form_factor_g_boundary='zero_fill'.")
     if _metadata_string(metadata, "occupation_mode") != "cnp_index":
         raise ValueError("This HF code requires cRPA occupation_mode='cnp_index'.")
     if not _metadata_bool(metadata, "sigma_rotation"):

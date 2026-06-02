@@ -62,6 +62,23 @@ def _rlg_hbn_use_numba() -> bool:
     return _env_flag_enabled("MEAN_FIELD_RLG_HBN_USE_NUMBA", default=True)
 
 
+def _rlg_hbn_zero_literal_q0_fock() -> bool:
+    return _env_flag_enabled("MEAN_FIELD_RLG_HBN_ZERO_LITERAL_Q0_FOCK", default=False)
+
+
+def _maybe_zero_literal_q0_fock_kernel(shift: tuple[int, int], fock_kernel: np.ndarray) -> np.ndarray:
+    kernel = np.asarray(fock_kernel)
+    if not _rlg_hbn_zero_literal_q0_fock() or (int(shift[0]), int(shift[1])) != (0, 0):
+        return kernel
+    if kernel.ndim != 4:
+        raise ValueError(f"Expected fock kernel shape (nk_target, nk_source, layer, layer), got {kernel.shape}")
+    adjusted = np.array(kernel, copy=True)
+    n_diag = min(adjusted.shape[0], adjusted.shape[1])
+    for ik in range(n_diag):
+        adjusted[ik, ik, :, :] = 0.0
+    return adjusted
+
+
 if _NUMBA_AVAILABLE:
 
     @njit(cache=True, fastmath=True, parallel=True)
@@ -930,7 +947,7 @@ def _remote_average_hamiltonian_from_source(
                 shifts=(shift,),
             )
             target_source_layer_overlap = target_source_blocks.layer_overlaps[shift]
-            fock_kernel = target_source_blocks.fock_layer_coulomb[shift]
+            fock_kernel = _maybe_zero_literal_q0_fock_kernel(shift, target_source_blocks.fock_layer_coulomb[shift])
             for target_layer in range(layer_count):
                 for source_layer in range(layer_count):
                     coeff = scale * fock_kernel[:, :, target_layer, source_layer]
@@ -1388,7 +1405,7 @@ def build_rlg_hbn_interaction_components(
         layer_diagonal = overlap_blocks.layer_diagonal_overlaps[shift]
         layer_overlap = overlap_blocks.layer_overlaps[shift]
         hartree_kernel = overlap_blocks.hartree_layer_coulomb[shift]
-        fock_kernel = overlap_blocks.fock_layer_coulomb[shift]
+        fock_kernel = _maybe_zero_literal_q0_fock_kernel(shift, overlap_blocks.fock_layer_coulomb[shift])
         if layer_diagonal.shape[1:] != (nt, nt, nk):
             raise ValueError(f"Layer diagonal overlap for {shift} is incompatible with density shape {density_delta.shape}")
         if layer_overlap.shape[1:] != (nt, nk, nt, nk):
@@ -1468,7 +1485,7 @@ def build_rlg_hbn_target_hamiltonian(
         target_layer_diagonal = target_overlap_blocks.layer_diagonal_overlaps[shift]
         target_source_layer_overlap = target_source_overlap_blocks.layer_overlaps[shift]
         hartree_kernel = source_overlap_blocks.hartree_layer_coulomb[shift]
-        fock_kernel = target_source_overlap_blocks.fock_layer_coulomb[shift]
+        fock_kernel = _maybe_zero_literal_q0_fock_kernel(shift, target_source_overlap_blocks.fock_layer_coulomb[shift])
 
         if source_layer_diagonal.shape[1:] != (nt_source, nt_source, nk_source):
             raise ValueError(
@@ -1743,6 +1760,7 @@ def rlg_hbn_flavor_occupation_counts_for_init_mode(
     n_spin: int = 2,
     n_eta: int = 2,
     n_band: int = 2,
+    seed: int | None = None,
 ) -> tuple[int, ...] | None:
     normalized = normalize_rlg_hbn_init_mode(init_mode)
     if normalized in {"bm", "random", "perturbed"}:
@@ -1767,6 +1785,9 @@ def rlg_hbn_flavor_occupation_counts_for_init_mode(
         for e in range(n_eta)
         if (s, e) not in flavor_order
     )
+    if seed is not None and flavor_order:
+        start = (int(seed) - 1) % len(flavor_order)
+        flavor_order = flavor_order[start:] + flavor_order[:start]
     if integer_nu > 0:
         if integer_nu > len(flavor_order):
             raise ValueError(f"Positive integer filling nu={nu} exceeds available flavors {len(flavor_order)}")
@@ -1870,6 +1891,7 @@ def initialize_rlg_hbn_density(
         n_spin=n_spin,
         n_eta=n_eta,
         n_band=n_band,
+        seed=seed if init_mode == "flavor" else None,
     )
     if counts is None:
         raise ValueError(f"init_mode={init_mode!r} requires integer flavor occupation counts for nu={nu}")
@@ -2064,6 +2086,7 @@ def run_rlg_hbn_hartree_fock(
             n_spin=basis_data.basis.n_spin,
             n_eta=basis_data.basis.n_flavor,
             n_band=basis_data.basis.n_band,
+            seed=seed,
         )
     state = RLGhBNHartreeFockState.from_projected_basis(
         basis_data,

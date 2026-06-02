@@ -5,6 +5,8 @@ from typing import Callable
 
 import numpy as np
 
+from analysis.topology import berry_curvature_from_links, chern_number_from_berry_curvature, compute_link_variables
+
 from .hamiltonian import centered_band_indices, diagonalize_hamiltonian, build_hamiltonian
 from .lattice import HTGLattice, build_moire_k_grid
 from .params import HTGParams
@@ -104,49 +106,31 @@ def _reciprocal_translation(lattice: HTGLattice, dn1: int, dn2: int) -> Callable
 
 
 def _compute_link_arrays_line_bundle(vectors: np.ndarray, lattice: HTGLattice) -> tuple[np.ndarray, np.ndarray]:
-    mesh_size = int(vectors.shape[0])
-    shift_b1 = _reciprocal_translation(lattice, 1, 0)
-    shift_b2 = _reciprocal_translation(lattice, 0, 1)
-    link_1 = np.zeros((mesh_size, mesh_size), dtype=np.complex128)
-    link_2 = np.zeros((mesh_size, mesh_size), dtype=np.complex128)
-
-    for i in range(mesh_size):
-        for j in range(mesh_size):
-            target_1 = shift_b1(vectors[0, j]) if i == mesh_size - 1 else vectors[i + 1, j]
-            target_2 = shift_b2(vectors[i, 0]) if j == mesh_size - 1 else vectors[i, j + 1]
-            link_1[i, j] = _unit_link(np.vdot(vectors[i, j], target_1))
-            link_2[i, j] = _unit_link(np.vdot(vectors[i, j], target_2))
-
-    return link_1, link_2
+    links = compute_link_variables(
+        vectors,
+        sewing_transforms=(
+            _reciprocal_translation(lattice, 1, 0),
+            _reciprocal_translation(lattice, 0, 1),
+        ),
+        link_method="determinant",
+    )
+    return links.link_1, links.link_2
 
 
 def _compute_link_arrays_subspace(vectors: np.ndarray, lattice: HTGLattice) -> tuple[np.ndarray, np.ndarray]:
-    mesh_size = int(vectors.shape[0])
-    shift_b1 = _reciprocal_translation(lattice, 1, 0)
-    shift_b2 = _reciprocal_translation(lattice, 0, 1)
-    link_1 = np.zeros((mesh_size, mesh_size), dtype=np.complex128)
-    link_2 = np.zeros((mesh_size, mesh_size), dtype=np.complex128)
-
-    for i in range(mesh_size):
-        for j in range(mesh_size):
-            target_1 = shift_b1(vectors[0, j]) if i == mesh_size - 1 else vectors[i + 1, j]
-            target_2 = shift_b2(vectors[i, 0]) if j == mesh_size - 1 else vectors[i, j + 1]
-            link_1[i, j] = _unit_link(np.linalg.det(vectors[i, j].conjugate().T @ target_1))
-            link_2[i, j] = _unit_link(np.linalg.det(vectors[i, j].conjugate().T @ target_2))
-
-    return link_1, link_2
+    links = compute_link_variables(
+        vectors,
+        sewing_transforms=(
+            _reciprocal_translation(lattice, 1, 0),
+            _reciprocal_translation(lattice, 0, 1),
+        ),
+        link_method="determinant",
+    )
+    return links.link_1, links.link_2
 
 
 def _chern_from_link_arrays(link_1: np.ndarray, link_2: np.ndarray) -> float:
-    mesh_size = int(link_1.shape[0])
-    flux = 0.0
-    for i in range(mesh_size):
-        ip = (i + 1) % mesh_size
-        for j in range(mesh_size):
-            jp = (j + 1) % mesh_size
-            plaquette = link_1[i, j] * link_2[ip, j] * link_1[i, jp].conjugate() * link_2[i, j].conjugate()
-            flux += float(np.angle(plaquette))
-    return float(flux / (2.0 * np.pi))
+    return chern_number_from_berry_curvature(berry_curvature_from_links(link_1, link_2))
 
 
 def _chern_from_line_bundle(vectors: np.ndarray, lattice: HTGLattice) -> float:

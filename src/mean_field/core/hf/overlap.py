@@ -21,6 +21,7 @@ class ProjectedWavefunctionBasis:
     n_spin: int = 1
     local_basis_size: int | None = None
     name: str = "projected"
+    boundary_mode: str = "periodic"
 
     def __post_init__(self) -> None:
         wavefunctions = np.asarray(self.wavefunctions, dtype=np.complex128)
@@ -48,11 +49,13 @@ class ProjectedWavefunctionBasis:
         n_spin = int(self.n_spin)
         if n_spin <= 0:
             raise ValueError(f"Expected positive n_spin, got {self.n_spin}")
+        boundary_mode = _normalize_boundary_mode(self.boundary_mode)
 
         object.__setattr__(self, "wavefunctions", wavefunctions)
         object.__setattr__(self, "grid_shape", grid_shape)
         object.__setattr__(self, "local_basis_size", local_basis_size)
         object.__setattr__(self, "n_spin", n_spin)
+        object.__setattr__(self, "boundary_mode", boundary_mode)
 
     @property
     def n_band(self) -> int:
@@ -111,6 +114,45 @@ def _numba_enabled(use_numba: bool | None) -> bool:
     return njit is not None
 
 
+def _normalize_boundary_mode(mode: str) -> str:
+    normalized = str(mode).strip().lower().replace("-", "_")
+    if normalized in {"periodic", "hf_periodic", "wrap", "wrapped"}:
+        return "periodic"
+    if normalized in {"zero_fill", "zerofill", "zhang_zero_fill", "finite_cutoff"}:
+        return "zero_fill"
+    raise ValueError(f"Unsupported projected-overlap boundary_mode: {mode!r}")
+
+
+def _shift_wavefunction_grid(values: np.ndarray, dm: int, dn: int, *, boundary_mode: str) -> np.ndarray:
+    arr = np.asarray(values, dtype=np.complex128)
+    mode = _normalize_boundary_mode(boundary_mode)
+    dm = int(dm)
+    dn = int(dn)
+    if mode == "periodic":
+        return np.roll(arr, shift=(0, dm, dn, 0), axis=(0, 1, 2, 3))
+
+    nx, ny = arr.shape[1], arr.shape[2]
+    out = np.zeros_like(arr)
+    if abs(dm) >= nx or abs(dn) >= ny:
+        return out
+
+    if dm >= 0:
+        dst_x = slice(dm, nx)
+        src_x = slice(0, nx - dm)
+    else:
+        dst_x = slice(0, nx + dm)
+        src_x = slice(-dm, nx)
+    if dn >= 0:
+        dst_y = slice(dn, ny)
+        src_y = slice(0, ny - dn)
+    else:
+        dst_y = slice(0, ny + dn)
+        src_y = slice(-dn, ny)
+
+    out[:, dst_x, dst_y, :] = arr[:, src_x, src_y, :]
+    return out
+
+
 def validate_projected_basis_compatibility(target: ProjectedWavefunctionBasis, source: ProjectedWavefunctionBasis) -> None:
     if target.local_basis_size != source.local_basis_size:
         raise ValueError(f"local_basis_size mismatch: {target.local_basis_size} != {source.local_basis_size}")
@@ -122,6 +164,8 @@ def validate_projected_basis_compatibility(target: ProjectedWavefunctionBasis, s
         raise ValueError(f"n_spin mismatch: {target.n_spin} != {source.n_spin}")
     if target.grid_shape != source.grid_shape:
         raise ValueError(f"grid_shape mismatch: {target.grid_shape} != {source.grid_shape}")
+    if target.boundary_mode != source.boundary_mode:
+        raise ValueError(f"boundary_mode mismatch: {target.boundary_mode} != {source.boundary_mode}")
 
 
 def calculate_projected_overlap_compact(
@@ -137,10 +181,11 @@ def calculate_projected_overlap_compact(
     nx, ny = basis.grid_shape
     nk_band = basis.n_band * basis.nk
     ul = basis.wavefunctions[:, :, flavor_index, :].reshape(basis.basis_dimension, nk_band, order="F")
-    shifted = np.roll(
+    shifted = _shift_wavefunction_grid(
         ul.reshape(basis.local_basis_size, nx, ny, nk_band, order="F"),
-        shift=(0, -int(m), -int(n), 0),
-        axis=(0, 1, 2, 3),
+        -int(m),
+        -int(n),
+        boundary_mode=basis.boundary_mode,
     ).reshape(basis.basis_dimension, nk_band, order="F")
     return ul.conj().T @ shifted
 
@@ -172,10 +217,11 @@ def calculate_projected_overlap_between(
     for iflavor in range(target.n_flavor):
         ul = target.wavefunctions[:, :, iflavor, :].reshape(target.basis_dimension, target_band_k, order="F")
         ur = source.wavefunctions[:, :, iflavor, :].reshape(source.basis_dimension, source_band_k, order="F")
-        shifted = np.roll(
+        shifted = _shift_wavefunction_grid(
             ur.reshape(source.local_basis_size, nx, ny, source_band_k, order="F"),
-            shift=(0, -int(m), -int(n), 0),
-            axis=(0, 1, 2, 3),
+            -int(m),
+            -int(n),
+            boundary_mode=target.boundary_mode,
         ).reshape(source.basis_dimension, source_band_k, order="F")
         lambda_kp = ul.conj().T @ shifted
         for ispin in range(target.n_spin):

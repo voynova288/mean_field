@@ -45,8 +45,10 @@ def crpa_convention_family(result: CRPAResult) -> str:
     periodic_g_grid = _metadata_bool(metadata.get("periodic_g_grid", False))
     if mode == "zhang_zero_fill" and not periodic_g_grid:
         return "zhang_paper_reference"
-    if mode == "hf_periodic" and periodic_g_grid:
+    if mode == "k_periodic_zero_fill" and periodic_g_grid:
         return "hf_compatible"
+    if mode == "hf_periodic_roll" and periodic_g_grid:
+        return "periodic_g_roll_diagnostic"
     return "mixed_or_unknown"
 
 

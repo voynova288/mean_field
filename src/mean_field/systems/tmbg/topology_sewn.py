@@ -18,6 +18,8 @@ from typing import Iterable, Literal
 import numpy as np
 from scipy.linalg import eigh
 
+from analysis.topology import WavefunctionIndex, compute_lattice_topology
+
 from .hamiltonian import build_hamiltonian
 from .lattice import _complex_key
 from .model import TMBGModel
@@ -176,50 +178,41 @@ def fhs_chern_sewn(
     return_berry: bool = False,
 ) -> tuple[float, float] | tuple[float, float, np.ndarray]:
     """Compute an FHS Chern number with reciprocal-lattice boundary sewing."""
+    if orientation not in {"raw", "physical"}:
+        raise ValueError("orientation must be 'raw' or 'physical'")
+
     selected = select_subspace(grid, selector)
-    mesh = grid.mesh
     lat = grid.lattice
     src_g1 = translation_srcmap(lat, lat.g_m1)
     src_g2 = translation_srcmap(lat, lat.g_m2)
+    selector_label = str(selector) if isinstance(selector, str) else ",".join(str(index) for index in selector)
 
-    ux = np.empty((mesh, mesh), dtype=np.complex128)
-    uy = np.empty((mesh, mesh), dtype=np.complex128)
-    min_link = 1.0
+    geometry = compute_lattice_topology(
+        selected,
+        index=WavefunctionIndex(
+            indices=tuple(range(selected.shape[-1])),
+            role="sewn_band_selector",
+            labels=(selector_label,),
+            system="tmbg",
+            valley=int(grid.valley),
+            metadata={"global_band_window": (int(grid.global_i0), int(grid.global_i1))},
+        ),
+        k_grid_frac=grid.k_grid_frac,
+        sewing_transforms=(
+            lambda vectors: transform_vec_by_g_shift(vectors, src_g1),
+            lambda vectors: transform_vec_by_g_shift(vectors, src_g2),
+        ),
+        link_method="determinant",
+    )
 
-    for i in range(mesh):
-        for j in range(mesh):
-            left = selected[i, j]
-
-            right = selected[(i + 1) % mesh, j]
-            if i == mesh - 1:
-                right = transform_vec_by_g_shift(right, src_g1)
-            z, mag = _link(left, right)
-            ux[i, j] = z
-            min_link = min(min_link, mag)
-
-            right = selected[i, (j + 1) % mesh]
-            if j == mesh - 1:
-                right = transform_vec_by_g_shift(right, src_g2)
-            z, mag = _link(left, right)
-            uy[i, j] = z
-            min_link = min(min_link, mag)
-
-    berry = np.empty((mesh, mesh), dtype=float)
-    for i in range(mesh):
-        for j in range(mesh):
-            plaquette = ux[i, j] * uy[(i + 1) % mesh, j] / (ux[i, (j + 1) % mesh] * uy[i, j])
-            berry[i, j] = float(np.angle(plaquette))
-
-    chern = float(np.sum(berry) / (2.0 * np.pi))
+    chern = float(geometry.chern_number)
     if orientation == "physical":
         cross = lat.g_m1.real * lat.g_m2.imag - lat.g_m1.imag * lat.g_m2.real
         chern *= float(np.sign(cross))
-    elif orientation != "raw":
-        raise ValueError("orientation must be 'raw' or 'physical'")
 
     if return_berry:
-        return chern, float(min_link), berry
-    return chern, float(min_link)
+        return chern, float(geometry.min_link_magnitude), geometry.berry_curvature
+    return chern, float(geometry.min_link_magnitude)
 
 
 def central_band_cherns(

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run nu=-3 Fig. 4 HF+cRPA bands with an HF-compatible epsilon=4 artifact.
 # The Zhang paper-reference dielectric bundle remains a validation reference;
-# production HF must use periodic_g_grid=true / form_factor_mode=hf_periodic.
+# production HF must use periodic_g_grid=true / form_factor_mode=k_periodic_zero_fill.
 
 #SBATCH -J mf_crpahf_m3_fixedeps
 #SBATCH --account=hmt03

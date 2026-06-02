@@ -20,6 +20,7 @@ STAMP="${STAMP:-$(date +%Y%m%d_%H%M%S)}"
 OUT="${OUT:-${REPO_ROOT}/results/RnG_hBN/fig6_hf_bands_periodic_gauge_v2_${STAMP}}"
 CACHE="${CACHE:-${REPO_ROOT}/results/RnG_hBN/cache_fig6_periodic_gauge_v2_${STAMP}}"
 PARTITION="${PARTITION:-regular6430}"
+SLURM_ACCOUNT="${SLURM_ACCOUNT:-hmt03}"
 CPUS_PER_TASK="${CPUS_PER_TASK:-64}"
 WALLTIME="${WALLTIME:-7-00:00:00}"
 MAIN_ARRAY_THROTTLE="${MAIN_ARRAY_THROTTLE:-5}"
@@ -40,7 +41,8 @@ DPI="${DPI:-180}"
 
 RESUME_TASK_COUNT=26
 RESUME_ARRAY_MAX=$((RESUME_TASK_COUNT - 1))
-MANIFEST="${OUT}/periodic_gauge_v2_jobs.tsv"
+MAIN_ARRAY_SPEC="${MAIN_ARRAY_SPEC:-0-${RESUME_ARRAY_MAX}%${MAIN_ARRAY_THROTTLE}}"
+MANIFEST="${MANIFEST:-${OUT}/periodic_gauge_v2_jobs.tsv}"
 
 mkdir -p "${OUT}" "${CACHE}"
 
@@ -58,18 +60,20 @@ EXPORT_HF="${EXPORT_COMMON},CACHE_POLICY=${CACHE_POLICY},SCREENING_SOLVER=${SCRE
 
 echo "[submit] out=${OUT}"
 echo "[submit] cache=${CACHE}"
+echo "[submit] account=${SLURM_ACCOUNT}"
 echo "[submit] partition=${PARTITION} cpus=${CPUS_PER_TASK} exclusive mem=0"
 if [[ -n "${EXCLUDE_NODES}" ]]; then
   echo "[submit] exclude=${EXCLUDE_NODES}"
 fi
 echo "[submit] warmup xi0 array=0"
 echo "[submit] warmup xi1 array=13"
-echo "[submit] main array=0-${RESUME_ARRAY_MAX}%${MAIN_ARRAY_THROTTLE}"
+echo "[submit] main array=${MAIN_ARRAY_SPEC}"
 
 WARMUP_XI0_JOB="${WARMUP_XI0_JOB:-}"
 if [[ -z "${WARMUP_XI0_JOB}" ]]; then
   WARMUP_XI0_JOB="$(
     sbatch --parsable \
+      --account="${SLURM_ACCOUNT}" \
       -J rlg_fig6_v2_warm_xi0 \
       -p "${PARTITION}" \
       "${SBATCH_EXCLUDE_ARGS[@]}" \
@@ -92,6 +96,7 @@ WARMUP_XI1_JOB="${WARMUP_XI1_JOB:-}"
 if [[ -z "${WARMUP_XI1_JOB}" ]]; then
   WARMUP_XI1_JOB="$(
     sbatch --parsable \
+      --account="${SLURM_ACCOUNT}" \
       -J rlg_fig6_v2_warm_xi1 \
       -p "${PARTITION}" \
       "${SBATCH_EXCLUDE_ARGS[@]}" \
@@ -111,9 +116,18 @@ fi
 echo -e "warmup_xi1\t${WARMUP_XI1_JOB}\t\t${OUT}\txi1 cache warmup task" >> "${MANIFEST}"
 
 WARMUP_DEPENDENCY="afterok:${WARMUP_XI0_JOB}:${WARMUP_XI1_JOB}"
+if [[ -z "${MAIN_DEPENDENCY+x}" ]]; then
+  MAIN_DEPENDENCY="${WARMUP_DEPENDENCY}"
+fi
+
+SBATCH_MAIN_DEPENDENCY_ARGS=()
+if [[ -n "${MAIN_DEPENDENCY}" ]]; then
+  SBATCH_MAIN_DEPENDENCY_ARGS=(--dependency="${MAIN_DEPENDENCY}")
+fi
 
 MAIN_JOB="$(
   sbatch --parsable \
+    --account="${SLURM_ACCOUNT}" \
     -J rlg_fig6_v2_hf \
     -p "${PARTITION}" \
     "${SBATCH_EXCLUDE_ARGS[@]}" \
@@ -121,17 +135,20 @@ MAIN_JOB="$(
     -t "${WALLTIME}" \
     -o logs/rlg_fig6_v2_hf_%A_%a.out \
     -e logs/rlg_fig6_v2_hf_%A_%a.err \
-    --dependency="${WARMUP_DEPENDENCY}" \
-    --array="0-${RESUME_ARRAY_MAX}%${MAIN_ARRAY_THROTTLE}" \
+    "${SBATCH_MAIN_DEPENDENCY_ARGS[@]}" \
+    --array="${MAIN_ARRAY_SPEC}" \
     --export="${EXPORT_HF}" \
     scripts/submit_rlg_hbn_fig6_existing_resume_exclusive.sbatch \
     "${OUT}" "${CACHE}" "${MAX_ITER}"
 )"
 MAIN_JOB="${MAIN_JOB%%;*}"
-echo -e "hf_array\t${MAIN_JOB}\t${WARMUP_DEPENDENCY}\t${OUT}\t${RESUME_TASK_COUNT} existing-layout init tasks, v2 cache" >> "${MANIFEST}"
+echo -e "hf_array\t${MAIN_JOB}\t${MAIN_DEPENDENCY}\t${OUT}\t${RESUME_TASK_COUNT} existing-layout init tasks, v2 cache" >> "${MANIFEST}"
+
+MERGE_DEPENDENCY="afterok:${MAIN_JOB}${MERGE_DEPENDENCY_EXTRA:-}"
 
 MERGE_JOB="$(
   sbatch --parsable \
+    --account="${SLURM_ACCOUNT}" \
     -J rlg_fig6_v2_merge \
     -p "${PARTITION}" \
     "${SBATCH_EXCLUDE_ARGS[@]}" \
@@ -139,7 +156,7 @@ MERGE_JOB="$(
     -t 04:00:00 \
     -o logs/rlg_fig6_v2_merge_%j.out \
     -e logs/rlg_fig6_v2_merge_%j.err \
-    --dependency="afterok:${MAIN_JOB}" \
+    --dependency="${MERGE_DEPENDENCY}" \
     --export="${EXPORT_COMMON}" \
     scripts/submit_mean_field.sbatch \
     python -m mean_field.devtools.merge_rlg_hbn_parallel_hf \
@@ -147,10 +164,11 @@ MERGE_JOB="$(
       --paper-target fig6
 )"
 MERGE_JOB="${MERGE_JOB%%;*}"
-echo -e "merge\t${MERGE_JOB}\tafterok:${MAIN_JOB}\t${OUT}\tmerge_rlg_hbn_parallel_hf" >> "${MANIFEST}"
+echo -e "merge\t${MERGE_JOB}\t${MERGE_DEPENDENCY}\t${OUT}\tmerge_rlg_hbn_parallel_hf" >> "${MANIFEST}"
 
 PLOT_JOB="$(
   sbatch --parsable \
+    --account="${SLURM_ACCOUNT}" \
     -J rlg_fig6_v2_plot \
     -p "${PARTITION}" \
     "${SBATCH_EXCLUDE_ARGS[@]}" \
@@ -175,6 +193,7 @@ echo -e "plot\t${PLOT_JOB}\tafterok:${MERGE_JOB}\t${OUT}\tplot_rlg_hbn_paper_hf_
 
 VERIFY_JOB="$(
   sbatch --parsable \
+    --account="${SLURM_ACCOUNT}" \
     -J rlg_fig6_v2_verify \
     -p "${PARTITION}" \
     "${SBATCH_EXCLUDE_ARGS[@]}" \

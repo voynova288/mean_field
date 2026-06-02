@@ -19,14 +19,14 @@ HF_OUTPUT_ROOT="${HF_OUTPUT_ROOT:-${OUTPUT_ROOT}/hf_crpa_production_runs}"
 SELECTED_MANIFEST="${SELECTED_MANIFEST:-${REPO_ROOT}/results/TBG_HF/custom_b0_hf_targeted_runs/selected_eps10_appendix_fig4_all7_20260509.tsv}"
 
 LK="${LK:-24}"
-LG="${LG:-9}"
+LG="${LG:-13}"
 Q_LG="${Q_LG:-11}"
 CHUNK_COUNT="${CHUNK_COUNT:-144}"
 ARRAY_CONCURRENCY="${ARRAY_CONCURRENCY:-2}"
 CRPA_HF_COMPATIBLE="${CRPA_HF_COMPATIBLE:-1}"
 ALLOW_LEGACY_ZERO_FILL_TEST="${ALLOW_LEGACY_ZERO_FILL_TEST:-0}"
 if [[ "${CRPA_HF_COMPATIBLE}" == "1" || "${CRPA_HF_COMPATIBLE}" == "true" ]]; then
-  CRPA_CONVENTION_TAG="${CRPA_CONVENTION_TAG:-hf_compatible}"
+  CRPA_CONVENTION_TAG="${CRPA_CONVENTION_TAG:-hf_kperiodic_zerofill}"
   CRPA_EXTRA_ARGS=(--hf-compatible)
 else
   if [[ "${ALLOW_LEGACY_ZERO_FILL_TEST}" != "1" && "${ALLOW_LEGACY_ZERO_FILL_TEST}" != "true" ]]; then
@@ -50,6 +50,7 @@ POINTS_PER_SEGMENT="${POINTS_PER_SEGMENT:-120}"
 PATH_KIND="${PATH_KIND:-gamma-m-k-gamma-kprime}"
 INITIAL_STATE_RESAMPLE="${INITIAL_STATE_RESAMPLE:-bilinear}"
 FOCK_INTERPOLATION="${FOCK_INTERPOLATION:-matrix_diagonal}"
+CRPA_SPLIT_MODE="${CRPA_SPLIT_MODE:-active_cnp_fock_reference_projector}"
 HF_MANIFEST="${HF_MANIFEST:-${HF_OUTPUT_ROOT}/submission_jobs_crpa_lk24_selected_${CRPA_RUN_TAG_SUFFIX}.tsv}"
 ACCOUNT="${ACCOUNT:-hmt03}"
 
@@ -257,6 +258,7 @@ submit_hf() {
 
   echo "[fig4-hf] selected_manifest=${SELECTED_MANIFEST}"
   echo "[fig4-hf] crpa_dir=${CRPA_DIR}"
+  echo "[fig4-hf] crpa_split_mode=${CRPA_SPLIT_MODE}"
   echo "[fig4-hf] fillings=${fillings_csv}"
   echo "[fig4-hf] array_spec=${array_spec}"
   echo "[fig4-hf] dependency=${DEPENDENCY:-none}"
@@ -278,7 +280,7 @@ submit_hf() {
     -J "mf_crpahf_lk24"
     -o "logs/custom_b0_hf_lk24_crpa_%A_%a.out"
     -e "logs/custom_b0_hf_lk24_crpa_%A_%a.err"
-    --export=ALL,LD_LIBRARY_PATH=,HF_OUTPUT_ROOT="${HF_OUTPUT_ROOT}",OUTPUT_ROOT="${OUTPUT_ROOT}",SELECTED_MANIFEST="${SELECTED_MANIFEST}",CRPA_DIR="${CRPA_DIR}",CRPA_RUN_TAG_SUFFIX="${CRPA_RUN_TAG_SUFFIX}",MAX_ITER="${MAX_ITER}",TARGET_LK="${TARGET_LK}",OVERLAP_LG="${OVERLAP_LG}",POINTS_PER_SEGMENT="${POINTS_PER_SEGMENT}",PATH_KIND="${PATH_KIND}",INITIAL_STATE_RESAMPLE="${INITIAL_STATE_RESAMPLE}",FOCK_INTERPOLATION="${FOCK_INTERPOLATION}",FILLINGS_CSV="${fillings_csv//,/:}"
+    --export=ALL,LD_LIBRARY_PATH=,HF_OUTPUT_ROOT="${HF_OUTPUT_ROOT}",OUTPUT_ROOT="${OUTPUT_ROOT}",SELECTED_MANIFEST="${SELECTED_MANIFEST}",CRPA_DIR="${CRPA_DIR}",CRPA_RUN_TAG_SUFFIX="${CRPA_RUN_TAG_SUFFIX}",MAX_ITER="${MAX_ITER}",TARGET_LK="${TARGET_LK}",OVERLAP_LG="${OVERLAP_LG}",POINTS_PER_SEGMENT="${POINTS_PER_SEGMENT}",PATH_KIND="${PATH_KIND}",INITIAL_STATE_RESAMPLE="${INITIAL_STATE_RESAMPLE}",FOCK_INTERPOLATION="${FOCK_INTERPOLATION}",MEAN_FIELD_CRPA_SPLIT_MODE="${CRPA_SPLIT_MODE}",FILLINGS_CSV="${fillings_csv//,/:}"
   )
   if [[ "${HF_EXCLUSIVE}" == "1" || "${HF_EXCLUSIVE}" == "true" ]]; then
     sbatch_args+=(--exclusive)

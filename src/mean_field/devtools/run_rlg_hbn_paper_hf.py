@@ -135,9 +135,18 @@ def rlg_hbn_run_specs_for_modes(
 
 def default_rlg_hbn_run_specs(paper_target: str) -> tuple[tuple[str, int], ...]:
     if paper_target == "fig6":
-        return rlg_hbn_run_specs_for_modes(
-            ("flavor", "bm", "perturbed", "random"),
-            (1, 2, 3, 4),
+        return (
+            ("flavor", 1),
+            ("flavor", 2),
+            ("bm", 1),
+            ("perturbed", 1),
+            ("perturbed", 2),
+            ("perturbed", 3),
+            ("perturbed", 4),
+            ("random", 1),
+            ("random", 2),
+            ("random", 3),
+            ("random", 4),
         )
     return rlg_hbn_run_specs_for_modes(("flavor", "bm", "perturbed"), (1,))
 
@@ -183,6 +192,9 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-screening-check", action="store_true")
     parser.add_argument("--v-values-mev", type=_parse_csv_floats, default=None)
     parser.add_argument("--xi-values", type=_parse_csv_ints, default=None)
+    parser.add_argument("--active-valence-bands", type=int, default=None)
+    parser.add_argument("--active-conduction-bands", type=int, default=None)
+    parser.add_argument("--k-mesh-size", type=int, default=None)
     parser.add_argument("--init-modes", type=_parse_csv_strings, default=None)
     parser.add_argument("--seeds", type=_parse_csv_ints, default=None)
     parser.add_argument(
@@ -192,9 +204,15 @@ def _parse_args() -> argparse.Namespace:
         help="Comma-separated exact init_mode:seed list. Overrides the init-modes x seeds expansion.",
     )
     parser.add_argument("--max-iter", type=int, default=80)
-    parser.add_argument("--precision", type=float, default=1.0e-6)
+    parser.add_argument("--precision", type=float, default=None)
     parser.add_argument("--beta", type=float, default=1.0)
     parser.add_argument("--oda-stall-threshold", type=float, default=1.0e-3)
+    parser.add_argument(
+        "--checkpoint-interval",
+        type=int,
+        default=5,
+        help="Write full latest-checkpoint archives every N HF iterations; trace/progress logs remain per iteration.",
+    )
     parser.add_argument("--screening-mesh-size", type=int, default=None)
     parser.add_argument(
         "--dry-run",
@@ -680,24 +698,27 @@ def _run_panel_with_incremental_outputs(
                 flush=True,
             )
 
+            checkpoint_interval = max(1, int(config.get("checkpoint_interval", 1)))
+
             def step_callback(state, step, *, _trace=trace, _offset=iteration_offset) -> None:
                 absolute_iteration = int(_offset) + int(step.iteration)
                 _trace.setdefault("iteration", []).append(absolute_iteration)
                 _trace.setdefault("energy_mev", []).append(float(step.energy))
                 _trace.setdefault("err", []).append(float(step.norm_selected))
                 _trace.setdefault("oda", []).append(float(step.oda_lambda))
-                _write_checkpoint(
-                    checkpoint_dir,
-                    state=state,
-                    basis_data=basis_data,
-                    trace=_trace,
-                    init_mode=init_mode,
-                    seed=int(seed),
-                    iteration=absolute_iteration,
-                    energy=float(step.energy),
-                    err=float(step.norm_selected),
-                    oda=float(step.oda_lambda),
-                )
+                if absolute_iteration == 1 or absolute_iteration % checkpoint_interval == 0:
+                    _write_checkpoint(
+                        checkpoint_dir,
+                        state=state,
+                        basis_data=basis_data,
+                        trace=_trace,
+                        init_mode=init_mode,
+                        seed=int(seed),
+                        iteration=absolute_iteration,
+                        energy=float(step.energy),
+                        err=float(step.norm_selected),
+                        oda=float(step.oda_lambda),
+                    )
                 _append_progress_event(
                     panel_dir,
                     {
@@ -733,6 +754,19 @@ def _run_panel_with_incremental_outputs(
             )
             payload = _run_payload(run, trace)
             _save_state_archive(final_archive, run, trace, cache_metadata=archive_cache_metadata)
+            if trace.get("iteration"):
+                _write_checkpoint(
+                    checkpoint_dir,
+                    state=run.state,
+                    basis_data=basis_data,
+                    trace=trace,
+                    init_mode=init_mode,
+                    seed=int(seed),
+                    iteration=int(trace["iteration"][-1]),
+                    energy=float(payload["final_energy_mev"]),
+                    err=float(payload["final_error"]) if payload["final_error"] is not None else float("nan"),
+                    oda=float(trace["oda"][-1]) if trace.get("oda") else float("nan"),
+                )
             _atomic_write_json(
                 run_dir / "hf_run_summary.json",
                 {
@@ -790,6 +824,12 @@ def _resolved_config(args: argparse.Namespace) -> dict[str, object]:
         base["v_values_mev"] = tuple(float(v) for v in args.v_values_mev)
     if args.xi_values is not None:
         base["xi_values"] = tuple(int(xi) for xi in args.xi_values)
+    if args.active_valence_bands is not None:
+        base["active_valence_bands"] = int(args.active_valence_bands)
+    if args.active_conduction_bands is not None:
+        base["active_conduction_bands"] = int(args.active_conduction_bands)
+    if args.k_mesh_size is not None:
+        base["k_mesh_size"] = int(args.k_mesh_size)
     base["paper_target"] = str(args.paper_target)
     if args.init_modes is None:
         default_init_modes = ("flavor", "bm", "perturbed", "random") if args.paper_target == "fig6" else ("flavor", "bm", "perturbed")
@@ -799,7 +839,11 @@ def _resolved_config(args: argparse.Namespace) -> dict[str, object]:
         default_seeds = (1, 2, 3, 4) if args.paper_target == "fig6" else (1,)
     else:
         default_seeds = tuple(int(seed) for seed in args.seeds)
-    if args.run_specs is None:
+    if args.run_specs is None and args.init_modes is None and args.seeds is None:
+        run_specs = default_rlg_hbn_run_specs(str(args.paper_target))
+        default_init_modes = tuple(dict.fromkeys(init_mode for init_mode, _ in run_specs))
+        default_seeds = tuple(dict.fromkeys(int(seed) for _, seed in run_specs))
+    elif args.run_specs is None:
         run_specs = rlg_hbn_run_specs_for_modes(default_init_modes, default_seeds)
     else:
         run_specs = tuple((str(init_mode), int(seed)) for init_mode, seed in args.run_specs)
@@ -810,9 +854,13 @@ def _resolved_config(args: argparse.Namespace) -> dict[str, object]:
     base["run_specs"] = _serialize_run_specs(run_specs)
     base["candidate_count"] = len(run_specs)
     base["max_iter"] = int(args.max_iter)
-    base["precision"] = float(args.precision)
+    if args.precision is None:
+        base["precision"] = 1.0e-4 if str(args.paper_target) == "fig6" else 1.0e-6
+    else:
+        base["precision"] = float(args.precision)
     base["beta"] = float(args.beta)
     base["oda_stall_threshold"] = float(args.oda_stall_threshold)
+    base["checkpoint_interval"] = max(1, int(args.checkpoint_interval))
     base["screening_mesh_size"] = (
         int(base["k_mesh_size"]) if args.screening_mesh_size is None else int(args.screening_mesh_size)
     )
@@ -822,6 +870,10 @@ def _resolved_config(args: argparse.Namespace) -> dict[str, object]:
     base["screening_u_grid_points"] = int(args.screening_u_grid_points)
     base["cache_policy"] = str(args.cache_policy)
     base["skip_screening_check"] = bool(args.skip_screening_check)
+    base["zero_literal_q0_fock"] = os.environ.get(
+        "MEAN_FIELD_RLG_HBN_ZERO_LITERAL_Q0_FOCK",
+        "0",
+    ).strip().lower() in {"1", "true", "yes", "on"}
     return base
 
 

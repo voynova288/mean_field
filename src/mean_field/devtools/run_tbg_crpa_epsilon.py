@@ -50,8 +50,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--form-factor-mode",
-        choices=("hf_periodic",),
-        default="hf_periodic",
+        choices=("k_periodic_zero_fill", "hf_periodic"),
+        default="k_periodic_zero_fill",
         help="Plane-wave form-factor convention for production cRPA.",
     )
     parser.add_argument(
@@ -69,6 +69,18 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("cnp_index", "energy_step"),
         default="cnp_index",
         help="Reference occupation for cRPA. Production Zhang/HF artifacts use cnp_index.",
+    )
+    parser.add_argument(
+        "--chi0-energy-mode",
+        choices=("bm", "hf_active_flat", "eq19_flat_remote"),
+        default="bm",
+        help="Band energies/eigenvectors used in chi0. hf_active_flat uses the HF C2T flat basis; eq19_flat_remote applies the Eq.19 flat-band correction.",
+    )
+    parser.add_argument(
+        "--chi0-eq19-overlap-lg",
+        type=int,
+        default=None,
+        help="Optional Q shell for the Eq.19 flat-band correction; defaults to the BM lg.",
     )
     parser.add_argument("--q-stride", type=int, default=1)
     parser.add_argument("--max-q-points", type=int, default=None)
@@ -112,7 +124,8 @@ def main(argv: list[str] | None = None) -> None:
         f"theta={args.theta_deg} lk={args.lk} lg={args.lg} q_lg={args.q_lg} "
         f"bands_per_valley={args.bands_per_valley} q_points={len(q_indices)} "
         f"periodic_g_grid={str(periodic_g_grid).lower()} form_factor_mode={form_factor_mode} "
-        f"occupation_mode={args.occupation_mode} legacy_zero_fill_test={str(args.legacy_zero_fill_test).lower()}",
+        f"occupation_mode={args.occupation_mode} chi0_energy_mode={args.chi0_energy_mode} "
+        f"legacy_zero_fill_test={str(args.legacy_zero_fill_test).lower()}",
         flush=True,
     )
     start = time.perf_counter()
@@ -131,6 +144,8 @@ def main(argv: list[str] | None = None) -> None:
         form_factor_mode=form_factor_mode,
         allow_legacy_zero_fill_test=bool(args.legacy_zero_fill_test),
         occupation_mode=str(args.occupation_mode),
+        chi0_energy_mode=str(args.chi0_energy_mode),
+        chi0_eq19_overlap_lg=args.chi0_eq19_overlap_lg,
     )
     elapsed = time.perf_counter() - start
 

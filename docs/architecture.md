@@ -48,6 +48,23 @@ src/mean_field/
 - `benchmarks.py` knows how to load benchmark metadata, not how to solve physics.
 - CLI commands call high-level runners, not low-level kernels directly.
 
+## Unified topology / Berry-geometry layer
+
+Berry connection, Berry curvature / plaquette flux, and Chern-number calculations are unified under:
+
+```text
+src/analysis/topology/
+```
+
+The architectural rule is that topology is system-independent after wavefunctions have been generated and selected.  System modules should provide:
+
+- a wavefunction mesh with shape `(mesh_1, mesh_2, basis_dim, n_states)`;
+- selected state/subspace indices;
+- `WavefunctionIndex` metadata that labels band, Chern-basis, flavor, valley, and system meaning;
+- optional boundary sewing transforms for non-periodic plane-wave gauges.
+
+The common framework then builds FHS link variables, Berry-connection phases, plaquette flux, and Chern numbers.  Do not duplicate `_unit_link`, `_subspace_link`, determinant-link, or plaquette loops in future system modules; extend `analysis.topology` instead.  See `docs/topology_framework.md` for conventions, validation status, and examples.
+
 ## Current reusable HF split
 
 The zero-field TBG port now has three explicit layers instead of one large `hf.py` bucket:

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -31,6 +32,21 @@ from .screening import (
 
 
 CACHE_POLICY_CHOICES = ("reuse", "refresh", "off")
+
+
+def _env_flag_enabled(name: str, *, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return bool(default)
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _load_cache_array(path: Path, *, dtype: np.dtype | type, mmap: bool = False) -> np.ndarray:
+    array = np.load(path, mmap_mode="r" if mmap else None)
+    expected_dtype = np.dtype(dtype)
+    if array.dtype == expected_dtype:
+        return array
+    return np.asarray(array, dtype=expected_dtype)
 
 
 @dataclass(frozen=True)
@@ -519,6 +535,7 @@ def load_layer_overlap_blocks_cache(cache_dir: Path, key: str) -> RLGhBNLayerOve
     path = _cache_path(cache_dir, "overlap", key)
     if not (path / "manifest.json").exists() or not (path / "shifts.npy").exists():
         raise RLGhBNCacheMiss(f"Overlap cache {path} is missing manifest or shifts")
+    mmap = _env_flag_enabled("MEAN_FIELD_RLG_HBN_MMAP_OVERLAP_CACHE", default=False)
     shifts = tuple((int(row[0]), int(row[1])) for row in np.asarray(np.load(path / "shifts.npy"), dtype=int))
     gvecs_path = path / "gvecs_complex_pairs.npy"
     if not gvecs_path.exists():
@@ -539,10 +556,12 @@ def load_layer_overlap_blocks_cache(cache_dir: Path, key: str) -> RLGhBNLayerOve
         missing = [name for name, file_path in files.items() if not file_path.exists()]
         if missing:
             raise RLGhBNCacheMiss(f"Overlap cache {path} is corrupt; shift {shift} is missing {missing}")
-        layer_overlaps[shift] = np.asarray(np.load(files["layer_overlap"]), dtype=np.complex128)
-        layer_diagonal_overlaps[shift] = np.asarray(np.load(files["layer_diagonal_overlap"]), dtype=np.complex128)
-        hartree_layer_coulomb[shift] = np.asarray(np.load(files["hartree_layer_coulomb"]), dtype=float)
-        fock_layer_coulomb[shift] = np.asarray(np.load(files["fock_layer_coulomb"]), dtype=float)
+        layer_overlaps[shift] = _load_cache_array(files["layer_overlap"], dtype=np.complex128, mmap=mmap)
+        layer_diagonal_overlaps[shift] = _load_cache_array(
+            files["layer_diagonal_overlap"], dtype=np.complex128, mmap=mmap
+        )
+        hartree_layer_coulomb[shift] = _load_cache_array(files["hartree_layer_coulomb"], dtype=float, mmap=mmap)
+        fock_layer_coulomb[shift] = _load_cache_array(files["fock_layer_coulomb"], dtype=float, mmap=mmap)
     return RLGhBNLayerOverlapBlockSet(
         shifts=shifts,
         gvecs=np.asarray(gvecs, dtype=np.complex128),

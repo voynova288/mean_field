@@ -26,6 +26,7 @@ MODULE_COMMANDS = {
     "diagnose_tbg_crpa_epsilon": ("mean_field.devtools.diagnose_tbg_crpa_epsilon", ()),
     "merge_tbg_crpa_chunks": ("mean_field.devtools.merge_tbg_crpa_chunks", ()),
     "merge_rlg_hbn_parallel_hf": ("mean_field.devtools.merge_rlg_hbn_parallel_hf", ()),
+    "plot_tbg_zhang_fig10_scf_grid": ("mean_field.devtools.plot_tbg_zhang_fig10_scf_grid", ()),
     "prepare_tbg_crpa_bm": ("mean_field.devtools.prepare_tbg_crpa_bm", ()),
     "resample_b0_density_stack": ("mean_field.devtools.resample_b0_density_stack", ()),
     "run_atmg_fig3_band_plot": ("mean_field.devtools.run_atmg_fig3_band_plot", ()),
@@ -44,6 +45,7 @@ MODULE_COMMANDS = {
     "run_tbg_crpa_convergence_scan": ("mean_field.devtools.run_tbg_crpa_convergence_scan", ()),
     "run_tbg_crpa_epsilon": ("mean_field.devtools.run_tbg_crpa_epsilon", ()),
     "run_tbg_crpa_hf_case": ("mean_field.devtools.run_tbg_crpa_hf_case", ()),
+    "run_tbg_zhang_fig10": ("mean_field.devtools.run_tbg_zhang_fig10", ()),
     "run_bare_hf_framework_band_plots_against_liu_ref": (
         "mean_field.devtools.run_bare_hf_framework_band_plots_against_liu_ref",
         (),
@@ -52,6 +54,7 @@ MODULE_COMMANDS = {
     "run_tdbg_reference_band_plot": ("mean_field.devtools.run_tdbg_reference_band_plot", ()),
     "run_tmbg_fig2_band_plot": ("mean_field.devtools.run_tmbg_fig2_band_plot", ()),
     "run_tmbg_fig2_chern_band_plot": ("mean_field.devtools.run_tmbg_fig2_chern_band_plot", ()),
+    "run_tmbg_polshyn_figs1_abc": ("mean_field.devtools.run_tmbg_polshyn_figs1_abc", ()),
     "sync_benchmarks": ("mean_field.devtools.sync_benchmarks", ()),
     "sync_b0_benchmark": ("mean_field.devtools.sync_benchmarks", ("b0",)),
     "sync_b0_benchmarks": ("mean_field.devtools.sync_benchmarks", ("b0",)),

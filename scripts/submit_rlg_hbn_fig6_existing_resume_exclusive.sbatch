@@ -38,7 +38,8 @@ SCREENING_U_MIN_MEV="${SCREENING_U_MIN_MEV:--100}"
 SCREENING_U_MAX_MEV="${SCREENING_U_MAX_MEV:-200}"
 SCREENING_U_GRID_POINTS="${SCREENING_U_GRID_POINTS:-121}"
 SCREENING_MESH_SIZE="${SCREENING_MESH_SIZE:-18}"
-PRECISION="${PRECISION:-1e-6}"
+PRECISION="${PRECISION:-1e-4}"
+CHECKPOINT_INTERVAL="${CHECKPOINT_INTERVAL:-5}"
 BETA="${BETA:-1.0}"
 ODA_STALL_THRESHOLD="${ODA_STALL_THRESHOLD:-1e-3}"
 
@@ -87,6 +88,11 @@ PANEL="xi${XI}_V$(printf "%03d" "${V_MEV}")meV"
 TASK_DIR="${OUTPUT_ROOT}/tasks/task_${TASK_ID}_${PANEL}_${INIT_MODE}_seed${SEED}"
 PANEL_DIR="${TASK_DIR}/${PANEL}"
 
+if [[ "${INIT_MODE}" == "flavor" && "${SEED}" -gt 2 ]]; then
+  echo "[skip] flavor seed ${SEED} is no longer part of the Fig. 6 production set; keeping only flavor:1,2"
+  exit 0
+fi
+
 if [[ "${INIT_MODE}" == "bm" && "${SEED}" != "1" ]]; then
   echo "Refusing duplicate deterministic BM task_id=${TASK_ID} init=${INIT_MODE} seed=${SEED}" >&2
   exit 2
@@ -111,6 +117,7 @@ export MKL_DYNAMIC="${MKL_DYNAMIC:-FALSE}"
 export MEAN_FIELD_RLG_HBN_USE_NUMBA=1
 export MEAN_FIELD_RLG_HBN_REQUIRE_NUMBA=1
 export MEAN_FIELD_RLG_HBN_REMOTE_CHUNK_BANDS="${MEAN_FIELD_RLG_HBN_REMOTE_CHUNK_BANDS:-16}"
+export MEAN_FIELD_RLG_HBN_MMAP_OVERLAP_CACHE="${MEAN_FIELD_RLG_HBN_MMAP_OVERLAP_CACHE:-0}"
 
 python - <<'PY'
 import numba
@@ -130,11 +137,14 @@ echo "[job] panel_dir=${PANEL_DIR}"
 echo "[job] cache_root=${CACHE_ROOT}"
 echo "[job] cache_policy=${CACHE_POLICY}"
 echo "[job] max_iter=${MAX_ITER}"
+echo "[job] precision=${PRECISION}"
+echo "[job] checkpoint_interval=${CHECKPOINT_INTERVAL}"
 echo "[job] hostname=$(hostname)"
 echo "[job] partition=${SLURM_JOB_PARTITION:-}"
 echo "[job] cpus_per_task=${SLURM_CPUS_PER_TASK:-}"
 echo "[job] numba_threads=${NUMBA_NUM_THREADS:-}"
 echo "[job] remote_chunk_bands=${MEAN_FIELD_RLG_HBN_REMOTE_CHUNK_BANDS}"
+echo "[job] mmap_overlap_cache=${MEAN_FIELD_RLG_HBN_MMAP_OVERLAP_CACHE}"
 
 python -m mean_field.devtools.run_rlg_hbn_paper_hf \
   --paper-target fig6 \
@@ -152,5 +162,6 @@ python -m mean_field.devtools.run_rlg_hbn_paper_hf \
   --run-specs "${INIT_MODE}:${SEED}" \
   --max-iter "${MAX_ITER}" \
   --precision "${PRECISION}" \
+  --checkpoint-interval "${CHECKPOINT_INTERVAL}" \
   --beta "${BETA}" \
   --oda-stall-threshold "${ODA_STALL_THRESHOLD}"

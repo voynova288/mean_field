@@ -12,6 +12,7 @@ The package started as a benchmark-driven rewrite of a Julia `TBG_HartreeFock` w
 - `mean_field.systems.tdbg`: twisted double bilayer graphene continuum model and band/topology tools.
 - `mean_field.systems.atmg`: alternating-twist multilayer graphene continuum-model utilities.
 - `mean_field.systems.htg`: helical trilayer graphene continuum model and projected-HF adapter for Kwan et al. style calculations.
+- `analysis.topology`: local unified Berry-geometry framework used by system topology adapters for Berry connection, plaquette flux, Chern numbers, wavefunction-index metadata, and boundary sewing.
 
 Large generated outputs, local benchmark bundles, PDFs, Slurm logs, and code-agent work documents are intentionally not versioned. They should be regenerated or stored separately.
 
@@ -39,8 +40,13 @@ A lightweight syntax check can be run from the repository root:
 python -m compileall -q src scripts
 ```
 
-Heavy self-consistent HF calculations should be submitted to a compute node
-through Slurm rather than run on a login node.
+The unified topology framework has its durable design note in `docs/topology_framework.md`.  Existing saved topology artifacts can be checked without rerunning Hamiltonian solves via:
+
+```bash
+python -m analysis.topology.validate_existing_results --root /path/to/Mean_Field
+```
+
+Heavy self-consistent HF calculations, topology-grid eigensolver recomputations, and broad numerical pytest runs should be submitted to a compute node through Slurm rather than run on a login node.
 
 ## Command Surface
 

@@ -25,7 +25,10 @@ logs/
 reference/
 tests/
 path/
+tmp/
 outputs/
+artifacts/
+checkpoints/
 
 # Slurm/runtime artifacts
 *.out

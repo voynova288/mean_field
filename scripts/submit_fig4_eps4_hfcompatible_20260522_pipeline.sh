@@ -115,7 +115,7 @@ after the HF-compatible validation gate succeeds.
 
 - cRPA tag: \`${TAG}\`
 - cRPA artifact: \`${MERGED_DIR}\`
-- required convention: \`periodic_g_grid=true\`, \`form_factor_mode=hf_periodic\`, \`occupation_mode=cnp_index\`
+- required convention: \`periodic_g_grid=true\`, \`form_factor_mode=k_periodic_zero_fill\`, \`occupation_mode=cnp_index\`
 - q table: \`lk=24\`, \`lg=9\`, \`q_lg=11\`
 - HF overlap: \`overlap_lg=9\`
 - HF Fock lookup: \`matrix_diagonal\`

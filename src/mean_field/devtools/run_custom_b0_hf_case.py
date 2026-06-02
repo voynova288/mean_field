@@ -17,14 +17,28 @@ import numpy as np
 from mean_field.core.hf import build_flavor_band_data, build_projected_target_hamiltonian
 from mean_field.crpa import (
     CRPAScreenedCoulomb,
+    active_lower_flat_projector_like,
+    build_bare_projected_target_components,
+    build_crpa_hartree_delta_fock_projector_components,
     build_crpa_projected_interaction_components,
+    build_crpa_projected_target_components,
+    build_crpa_projected_target_components_from_densities,
     build_crpa_projected_target_hamiltonian,
     build_fock_screened_overlap_blocks,
+    crpa_active_density_from_delta,
+    crpa_hartree_delta_fock_projector_energy_components,
+    crpa_remote_bare_scale,
+    crpa_split_mode,
+    crpa_split_uses_active_cnp_reference,
+    crpa_split_uses_hartree_delta_fock_projector,
+    crpa_split_uses_remote_bare,
     crpa_hf_energy_components,
     half_reference_delta_like,
     load_crpa_result,
     physical_projector_from_delta,
     run_full_crpa_hartree_fock,
+    select_active_cnp_reference_components,
+    select_remote_reference_components,
     validate_hf_compatible_crpa,
 )
 from mean_field.crpa.validation import (
@@ -144,8 +158,13 @@ def _summary_columns() -> list[str]:
         "final_oda",
         "hf_elapsed_sec",
         "path_elapsed_sec",
+        "gap_source",
         "indirect_gap_mev",
         "direct_gap_mev",
+        "full_scf_grid_indirect_gap_mev",
+        "full_scf_grid_direct_gap_mev",
+        "scf_path_indirect_gap_mev",
+        "scf_path_direct_gap_mev",
         "E_band",
         "E_Hartree",
         "E_Fock",
@@ -514,6 +533,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-tag", default=DEFAULT_RUN_TAG)
     parser.add_argument("--lk", type=int, default=19)
     parser.add_argument("--lg", type=int, default=9)
+    parser.add_argument(
+        "--periodic-g-grid",
+        dest="periodic_g_grid",
+        action="store_true",
+        default=True,
+        help="Use periodic reciprocal-grid wrapping in the BM tunneling and HF overlaps. This is the default benchmark convention.",
+    )
+    parser.add_argument(
+        "--zero-fill-g-grid",
+        dest="periodic_g_grid",
+        action="store_false",
+        help="Use finite-cutoff zero-fill reciprocal-grid shifts for Zhang-convention diagnostic runs.",
+    )
     parser.add_argument("--overlap-lg", type=int, default=None)
     parser.add_argument("--points-per-segment", type=int, default=120)
     parser.add_argument("--max-iter", type=int, default=300)
@@ -538,8 +570,24 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--write-scf-path",
+        dest="write_scf_path",
         action="store_true",
-        help="Also write unreconstructed SCF-grid-only path TSV and band plot for grid points on the chosen path.",
+        default=True,
+        help="Write unreconstructed SCF-grid-only path TSV and line plot for grid points on the chosen path. This is the default.",
+    )
+    parser.add_argument(
+        "--skip-scf-path",
+        dest="write_scf_path",
+        action="store_false",
+        help="Do not write the SCF-grid-only path TSV/line plot.",
+    )
+    parser.add_argument(
+        "--write-reconstructed-path",
+        action="store_true",
+        help=(
+            "Also build the off-grid reconstructed path Hamiltonian and dense path-band plot. "
+            "This is off by default because cRPA/HF diagnostics should use SCF-grid path points."
+        ),
     )
     parser.add_argument(
         "--summary-mode",
@@ -667,6 +715,8 @@ def main() -> int:
     _ensure_not_running_on_login_node()
 
     overlap_lg = lg if args.overlap_lg is None else int(args.overlap_lg)
+    periodic_g_grid = bool(args.periodic_g_grid)
+    g_boundary_mode = "periodic" if periodic_g_grid else "zero_fill"
     tanh_argument_scale_a = float(args.tanh_argument_scale_a)
     screening_lm = tanh_argument_scale_a / 2.0
     finite_zero_limit = args.zero_limit == "finite"
@@ -684,7 +734,11 @@ def main() -> int:
 
     started = datetime.now()
     total_start = perf_counter()
-    print(f"[stage] setup theta={theta_deg} nu={nu} lk={lk} lg={lg} overlap_lg={overlap_lg}", flush=True)
+    print(
+        f"[stage] setup theta={theta_deg} nu={nu} lk={lk} lg={lg} overlap_lg={overlap_lg} "
+        f"periodic_g_grid={str(periodic_g_grid).lower()} g_boundary_mode={g_boundary_mode}",
+        flush=True,
+    )
     print(
         "[stage] interaction_input "
         f"requested_epsilon_r={args.epsilon_r} tanh_argument_scale_a={tanh_argument_scale_a:.16g} "
@@ -708,8 +762,19 @@ def main() -> int:
     crpa_result = None
     crpa_screening = None
     crpa_physics_gate: dict[str, float | int | str] = {}
+    crpa_split_mode_value = ""
+    crpa_remote_bare_scale_value = 0.0
     if args.crpa_dir is not None:
+        crpa_split_mode_value = crpa_split_mode()
+        crpa_remote_bare_scale_value = crpa_remote_bare_scale()
         crpa_result = load_crpa_result(args.crpa_dir)
+        crpa_periodic_g_grid = bool(crpa_result.metadata.get("periodic_g_grid", False))
+        if crpa_periodic_g_grid != periodic_g_grid and not bool(args.allow_incompatible_crpa):
+            raise SystemExit(
+                "cRPA/HF reciprocal-grid boundary mismatch: "
+                f"HF periodic_g_grid={periodic_g_grid}, cRPA metadata periodic_g_grid={crpa_periodic_g_grid}. "
+                "Use matching artifacts for production, or --allow-incompatible-crpa --diagnostic-only for an explicit diagnostic."
+            )
         if not bool(args.allow_incompatible_crpa):
             validate_hf_compatible_crpa(crpa_result, params, theta_deg=theta_deg, overlap_lg=overlap_lg)
         crpa_convention = crpa_convention_family(crpa_result)
@@ -765,7 +830,8 @@ def main() -> int:
             "[stage] crpa "
             f"dir={args.crpa_dir} lk={crpa_result.lk} lg={crpa_result.lg} q_lg={crpa_result.q_lg} "
             f"epsilon_bn={float(crpa_result.coulomb_params.epsilon_bn):.16g} "
-            f"fock_interpolation={args.fock_interpolation}",
+            f"fock_interpolation={args.fock_interpolation} split_mode={crpa_split_mode_value} "
+            f"remote_bare_scale={crpa_remote_bare_scale_value:.16g}",
             flush=True,
         )
     bare_interaction_model = "double_gate_tanh_q0limit" if finite_zero_limit else "double_gate_tanh_zero_q0"
@@ -786,7 +852,7 @@ def main() -> int:
 
     bm_start = perf_counter()
     grid = build_b0_uniform_lattice(params, lk)
-    grid_solution = solve_bm_model(params, grid.kvec, lg=lg, sigma_rotation=True)
+    grid_solution = solve_bm_model(params, grid.kvec, lg=lg, sigma_rotation=True, periodic_g_grid=periodic_g_grid)
     bm_elapsed = perf_counter() - bm_start
     print(f"[stage] bm_grid done elapsed_sec={bm_elapsed:.3f} nk={grid_solution.nk}", flush=True)
 
@@ -816,26 +882,38 @@ def main() -> int:
 
     path_start = perf_counter()
     path = _build_path(params, path_kind=str(args.path_kind), points_per_segment=int(args.points_per_segment))
-    path_solution = solve_bm_model(params, path.kvec, lg=lg, sigma_rotation=True)
-    path_h0 = build_h0_from_bm(path_solution)
-    path_overlap = build_overlap_block_set(path_solution, lg=overlap_lg, **screening_kwargs)
-    path_grid_overlap = build_overlap_block_set(path_solution, source_solution=grid_solution, lg=overlap_lg, **screening_kwargs)
-    path_grid_overlap_bare = path_grid_overlap
-    if crpa_screening is not None:
-        path_grid_overlap = build_fock_screened_overlap_blocks(
-            path_grid_overlap_bare,
-            target_kvec=np.asarray(path_solution.lattice_kvec, dtype=np.complex128),
-            source_kvec=np.asarray(grid_solution.lattice_kvec, dtype=np.complex128),
-            params=params,
-            crpa_screening=crpa_screening,
-            fock_interpolation=str(args.path_fock_interpolation),
+    path_h0 = None
+    path_overlap = None
+    path_grid_overlap = None
+    path_grid_overlap_bare = None
+    if args.write_reconstructed_path:
+        path_solution = solve_bm_model(params, path.kvec, lg=lg, sigma_rotation=True, periodic_g_grid=periodic_g_grid)
+        path_h0 = build_h0_from_bm(path_solution)
+        path_overlap = build_overlap_block_set(path_solution, lg=overlap_lg, **screening_kwargs)
+        path_grid_overlap = build_overlap_block_set(
+            path_solution,
+            source_solution=grid_solution,
+            lg=overlap_lg,
             **screening_kwargs,
         )
+        path_grid_overlap_bare = path_grid_overlap
+        if crpa_screening is not None:
+            path_grid_overlap = build_fock_screened_overlap_blocks(
+                path_grid_overlap_bare,
+                target_kvec=np.asarray(path_solution.lattice_kvec, dtype=np.complex128),
+                source_kvec=np.asarray(grid_solution.lattice_kvec, dtype=np.complex128),
+                params=params,
+                crpa_screening=crpa_screening,
+                fock_interpolation=str(args.path_fock_interpolation),
+                **screening_kwargs,
+            )
     path_setup_elapsed = perf_counter() - path_start
     _write_kmesh_path_overlay(path_dir, params=params, grid=grid, path=path, path_kind=str(args.path_kind))
     print(
         f"[stage] path_setup done elapsed_sec={path_setup_elapsed:.3f} "
-        f"path_kind={args.path_kind} path_points={path.kvec.size}",
+        f"path_kind={args.path_kind} path_points={path.kvec.size} "
+        f"write_scf_path={str(bool(args.write_scf_path)).lower()} "
+        f"write_reconstructed_path={str(bool(args.write_reconstructed_path)).lower()}",
         flush=True,
     )
 
@@ -900,18 +978,32 @@ def main() -> int:
                 fock_interpolation=str(args.fock_interpolation),
                 **screening_kwargs,
             )
-            hartree_h, fock_h = build_crpa_projected_interaction_components(
-                physical_projector_from_delta(hf_run.state.density),
-                energy_overlap,
-                crpa_screening=crpa_screening,
-                params=params,
-            )
-            energy_summary = crpa_hf_energy_components(
-                hf_run.state.h0,
-                hf_run.state.density,
-                hartree_h,
-                fock_h,
-            )
+            if crpa_split_uses_hartree_delta_fock_projector(crpa_split_mode_value):
+                hartree_h, fock_h = build_crpa_hartree_delta_fock_projector_components(
+                    hf_run.state.density,
+                    energy_overlap,
+                    crpa_screening=crpa_screening,
+                    params=params,
+                )
+                energy_summary = crpa_hartree_delta_fock_projector_energy_components(
+                    hf_run.state.h0,
+                    hf_run.state.density,
+                    hartree_h,
+                    fock_h,
+                )
+            else:
+                hartree_h, fock_h = build_crpa_projected_interaction_components(
+                    crpa_active_density_from_delta(hf_run.state.density, crpa_split_mode_value),
+                    energy_overlap,
+                    crpa_screening=crpa_screening,
+                    params=params,
+                )
+                energy_summary = crpa_hf_energy_components(
+                    hf_run.state.h0,
+                    hf_run.state.density,
+                    hartree_h,
+                    fock_h,
+                )
         else:
             nk_energy = int(hf_run.state.density.shape[2])
             e_band = np.einsum("abk,abk->", hf_run.state.h0, hf_run.state.density, optimize=True).real / float(
@@ -947,6 +1039,8 @@ def main() -> int:
             lk=np.asarray([lk], dtype=int),
             lg=np.asarray([lg], dtype=int),
             overlap_lg=np.asarray([overlap_lg], dtype=int),
+            periodic_g_grid=np.asarray([periodic_g_grid]),
+            g_boundary_mode=np.asarray([g_boundary_mode]),
             w0_mev=np.asarray([float(args.w0)], dtype=float),
             w1_mev=np.asarray([float(args.w1)], dtype=float),
             vf_mev=np.asarray([float(args.vf)], dtype=float),
@@ -961,6 +1055,8 @@ def main() -> int:
             crpa_lg=np.asarray([-1 if crpa_result is None else int(crpa_result.lg)], dtype=int),
             crpa_q_lg=np.asarray([-1 if crpa_result is None else int(crpa_result.q_lg)], dtype=int),
             crpa_metadata_json=np.asarray(["" if crpa_result is None else json.dumps(crpa_result.metadata, sort_keys=True)]),
+            crpa_split_mode=np.asarray([crpa_split_mode_value]),
+            crpa_remote_bare_scale=np.asarray([crpa_remote_bare_scale_value], dtype=float),
             fock_interpolation=np.asarray([str(args.fock_interpolation)]),
             q_lookup_diagnostics_json=np.asarray([json.dumps(q_lookup_diagnostics, sort_keys=True)]),
             crpa_physics_gate_json=np.asarray([json.dumps(crpa_physics_gate, sort_keys=True)]),
@@ -973,66 +1069,12 @@ def main() -> int:
             resumed_from_state=np.asarray(["" if args.initial_state is None else str(args.initial_state)]),
         )
 
-        print(f"[stage] path:start init={spec.init_mode} seed={spec.seed}", flush=True)
-        eval_start = perf_counter()
-        if crpa_screening is None:
-            h_path = build_projected_target_hamiltonian(
-                path_h0,
-                hf_run.state.density,
-                source_overlap_blocks=grid_overlap,
-                target_overlap_blocks=path_overlap,
-                target_source_overlap_blocks=path_grid_overlap,
-                v0=hf_run.state.v0,
-            )
-        else:
-            remote_path_bare = build_projected_target_hamiltonian(
-                np.zeros_like(path_h0),
-                half_reference_delta_like(hf_run.state.density),
-                source_overlap_blocks=grid_overlap,
-                target_overlap_blocks=path_overlap,
-                target_source_overlap_blocks=path_grid_overlap_bare,
-                v0=hf_run.state.v0,
-            )
-            h_path = build_crpa_projected_target_hamiltonian(
-                path_h0 + remote_path_bare,
-                physical_projector_from_delta(hf_run.state.density),
-                source_overlap_blocks=grid_overlap,
-                target_overlap_blocks=path_overlap,
-                target_source_overlap_blocks=path_grid_overlap,
-                crpa_screening=crpa_screening,
-                params=params,
-            )
-        band_data = build_flavor_band_data(
-            h_path,
-            n_spin=hf_run.state.n_spin,
-            n_eta=hf_run.state.n_eta,
-            n_band=hf_run.state.n_band,
-        )
-        path_result = HFPathResult(
-            params=params,
-            path=path,
-            hamiltonian=h_path,
-            band_data=band_data,
-            mu=hf_run.state.mu,
-            nu=nu,
-            lk=lk,
-            lg=lg,
-            points_per_segment=int(args.points_per_segment),
-            init_mode=spec.init_mode,
-            normalized_init_mode=hf_run.init_mode,
-            seed=spec.seed,
-            exit_reason=hf_run.exit_reason,
-            overlap_lg=overlap_lg,
-            relative_permittivity=float(screening_kwargs["relative_permittivity"]),
-            screening_lm=float(screening_kwargs["screening_lm"]),
-            finite_zero_limit=bool(screening_kwargs["finite_zero_limit"]),
-            zero_cutoff=float(screening_kwargs["zero_cutoff"]),
-        )
-        path_elapsed = perf_counter() - eval_start
-        write_hf_path_tsv(path_tsv, path_result)
-        write_hf_path_nodes_tsv(nodes_tsv, path_result)
-        write_hf_path_summary(path_summary, path_result, hf_state_path=str(state_path))
         scf_path_elapsed = 0.0
+        scf_plot_paths: dict[str, Path] | None = None
+        scf_path_gap_summary = {
+            "indirect_gap_mev": float("nan"),
+            "direct_gap_mev": float("nan"),
+        }
         if args.write_scf_path:
             scf_path_start = perf_counter()
             scf_path_result = build_restricted_hf_scf_path_plot_result(
@@ -1041,43 +1083,178 @@ def main() -> int:
                 path=path,
                 init_mode=spec.init_mode,
             )
+            scf_path_gap_summary = _gap_summary(scf_path_result.band_data.energies, nu)
             write_hf_scf_path_tsv(scf_path_tsv, scf_path_result)
-            write_hf_scf_band_plot(path_dir, scf_path_result, stem=f"{tag}_scf_grid_band_plot")
+            scf_plot_paths = write_hf_scf_band_plot(path_dir, scf_path_result, stem=f"{tag}_scf_grid_band_plot")
             scf_path_elapsed = perf_counter() - scf_path_start
             print(
                 f"[stage] scf_path:done init={spec.init_mode} seed={spec.seed} "
                 f"elapsed_sec={scf_path_elapsed:.3f} scf_path_tsv={scf_path_tsv}",
                 flush=True,
             )
-        _append_key_value_file(
-            path_summary,
-            [
-                ("w0_meV", f"{float(args.w0):.16g}"),
-                ("w1_meV", f"{float(args.w1):.16g}"),
-                ("vf_meV", f"{float(args.vf):.16g}"),
-                ("epsilon_r", f"{float(args.epsilon_r):.16g}"),
-                ("effective_relative_permittivity", f"{float(screening_kwargs['relative_permittivity']):.16g}"),
-                ("tanh_argument_scale_a", f"{tanh_argument_scale_a:.16g}"),
-                ("screening_lm", f"{float(screening_kwargs['screening_lm']):.16g}"),
-                ("interaction_model", interaction_model),
-                ("q_zero_limit", str(bool(screening_kwargs["finite_zero_limit"])).lower()),
-                ("crpa_dir", "" if args.crpa_dir is None else str(args.crpa_dir)),
-                ("crpa_lk", "" if crpa_result is None else str(crpa_result.lk)),
-                ("crpa_lg", "" if crpa_result is None else str(crpa_result.lg)),
-                ("crpa_q_lg", "" if crpa_result is None else str(crpa_result.q_lg)),
-                ("crpa_physics_gate_json", json.dumps(crpa_physics_gate, sort_keys=True)),
-                ("fock_interpolation", str(args.fock_interpolation)),
-                ("path_fock_interpolation", str(args.path_fock_interpolation)),
-                ("diagnostic_only", str(bool(args.diagnostic_only)).lower()),
-                ("path_kind", str(args.path_kind)),
-                ("path_labels", "-".join(path.labels)),
-                ("write_scf_path", str(bool(args.write_scf_path)).lower()),
-                ("scf_path_tsv", str(scf_path_tsv) if args.write_scf_path else ""),
-                ("scf_path_elapsed_sec", f"{scf_path_elapsed:.16e}"),
-                *initial_state_entries,
-            ],
-        )
-        plot_paths = write_hf_band_plot(path_dir, path_result, stem=f"{tag}_band_plot")
+
+        path_elapsed = 0.0
+        reconstructed_plot_paths: dict[str, Path] | None = None
+        if args.write_reconstructed_path:
+            if path_h0 is None or path_overlap is None or path_grid_overlap is None:
+                raise RuntimeError("Reconstructed path setup was not initialized.")
+            print(f"[stage] path:start init={spec.init_mode} seed={spec.seed}", flush=True)
+            eval_start = perf_counter()
+            if crpa_screening is None:
+                h_path = build_projected_target_hamiltonian(
+                    path_h0,
+                    hf_run.state.density,
+                    source_overlap_blocks=grid_overlap,
+                    target_overlap_blocks=path_overlap,
+                    target_source_overlap_blocks=path_grid_overlap,
+                    v0=hf_run.state.v0,
+                )
+            else:
+                if crpa_split_uses_remote_bare(crpa_split_mode_value):
+                    if path_grid_overlap_bare is None:
+                        raise RuntimeError("Bare path-grid overlap was not initialized.")
+                    remote_path_hartree, remote_path_fock = build_bare_projected_target_components(
+                        half_reference_delta_like(hf_run.state.density),
+                        source_overlap_blocks=grid_overlap,
+                        target_overlap_blocks=path_overlap,
+                        target_source_overlap_blocks=path_grid_overlap_bare,
+                        v0=hf_run.state.v0,
+                    )
+                    remote_path_bare = select_remote_reference_components(
+                        remote_path_hartree,
+                        remote_path_fock,
+                        crpa_split_mode_value,
+                    )
+                    remote_path_bare *= crpa_remote_bare_scale_value
+                else:
+                    remote_path_bare = np.zeros_like(path_h0)
+                if crpa_split_uses_active_cnp_reference(crpa_split_mode_value):
+                    active_cnp_path_projector = active_lower_flat_projector_like(
+                        hf_run.state.density,
+                        n_spin=hf_run.state.n_spin,
+                        n_eta=hf_run.state.n_eta,
+                        n_band=hf_run.state.n_band,
+                    )
+                    active_cnp_path_hartree, active_cnp_path_fock = build_crpa_projected_target_components(
+                        active_cnp_path_projector,
+                        source_overlap_blocks=grid_overlap,
+                        target_overlap_blocks=path_overlap,
+                        target_source_overlap_blocks=path_grid_overlap,
+                        crpa_screening=crpa_screening,
+                        params=params,
+                    )
+                    active_cnp_path_reference = select_active_cnp_reference_components(
+                        active_cnp_path_hartree,
+                        active_cnp_path_fock,
+                        crpa_split_mode_value,
+                    )
+                else:
+                    active_cnp_path_reference = np.zeros_like(path_h0)
+                path_base_hamiltonian = path_h0 + remote_path_bare + active_cnp_path_reference
+                if crpa_split_uses_hartree_delta_fock_projector(crpa_split_mode_value):
+                    path_hartree, path_fock = build_crpa_projected_target_components_from_densities(
+                        hf_run.state.density,
+                        physical_projector_from_delta(hf_run.state.density),
+                        source_overlap_blocks=grid_overlap,
+                        target_overlap_blocks=path_overlap,
+                        target_source_overlap_blocks=path_grid_overlap,
+                        crpa_screening=crpa_screening,
+                        params=params,
+                    )
+                    h_path = path_base_hamiltonian + path_hartree + path_fock
+                else:
+                    h_path = build_crpa_projected_target_hamiltonian(
+                        path_base_hamiltonian,
+                        crpa_active_density_from_delta(hf_run.state.density, crpa_split_mode_value),
+                        source_overlap_blocks=grid_overlap,
+                        target_overlap_blocks=path_overlap,
+                        target_source_overlap_blocks=path_grid_overlap,
+                        crpa_screening=crpa_screening,
+                        params=params,
+                    )
+            band_data = build_flavor_band_data(
+                h_path,
+                n_spin=hf_run.state.n_spin,
+                n_eta=hf_run.state.n_eta,
+                n_band=hf_run.state.n_band,
+            )
+            path_result = HFPathResult(
+                params=params,
+                path=path,
+                hamiltonian=h_path,
+                band_data=band_data,
+                mu=hf_run.state.mu,
+                nu=nu,
+                lk=lk,
+                lg=lg,
+                points_per_segment=int(args.points_per_segment),
+                init_mode=spec.init_mode,
+                normalized_init_mode=hf_run.init_mode,
+                seed=spec.seed,
+                exit_reason=hf_run.exit_reason,
+                overlap_lg=overlap_lg,
+                relative_permittivity=float(screening_kwargs["relative_permittivity"]),
+                screening_lm=float(screening_kwargs["screening_lm"]),
+                finite_zero_limit=bool(screening_kwargs["finite_zero_limit"]),
+                zero_cutoff=float(screening_kwargs["zero_cutoff"]),
+            )
+            path_elapsed = perf_counter() - eval_start
+            write_hf_path_tsv(path_tsv, path_result)
+            write_hf_path_nodes_tsv(nodes_tsv, path_result)
+            write_hf_path_summary(path_summary, path_result, hf_state_path=str(state_path))
+            _append_key_value_file(
+                path_summary,
+                [
+                    ("w0_meV", f"{float(args.w0):.16g}"),
+                    ("w1_meV", f"{float(args.w1):.16g}"),
+                    ("vf_meV", f"{float(args.vf):.16g}"),
+                    ("periodic_g_grid", str(periodic_g_grid).lower()),
+                    ("g_boundary_mode", g_boundary_mode),
+                    ("epsilon_r", f"{float(args.epsilon_r):.16g}"),
+                    ("effective_relative_permittivity", f"{float(screening_kwargs['relative_permittivity']):.16g}"),
+                    ("tanh_argument_scale_a", f"{tanh_argument_scale_a:.16g}"),
+                    ("screening_lm", f"{float(screening_kwargs['screening_lm']):.16g}"),
+                    ("interaction_model", interaction_model),
+                    ("q_zero_limit", str(bool(screening_kwargs["finite_zero_limit"])).lower()),
+                    ("crpa_dir", "" if args.crpa_dir is None else str(args.crpa_dir)),
+                    ("crpa_lk", "" if crpa_result is None else str(crpa_result.lk)),
+                    ("crpa_lg", "" if crpa_result is None else str(crpa_result.lg)),
+                    ("crpa_q_lg", "" if crpa_result is None else str(crpa_result.q_lg)),
+                    ("crpa_split_mode", crpa_split_mode_value),
+                    ("crpa_remote_bare_scale", f"{crpa_remote_bare_scale_value:.16g}"),
+                    ("crpa_physics_gate_json", json.dumps(crpa_physics_gate, sort_keys=True)),
+                    ("fock_interpolation", str(args.fock_interpolation)),
+                    ("path_fock_interpolation", str(args.path_fock_interpolation)),
+                    ("diagnostic_only", str(bool(args.diagnostic_only)).lower()),
+                    ("path_kind", str(args.path_kind)),
+                    ("path_labels", "-".join(path.labels)),
+                    ("write_scf_path", str(bool(args.write_scf_path)).lower()),
+                    ("write_reconstructed_path", str(bool(args.write_reconstructed_path)).lower()),
+                    ("scf_path_tsv", str(scf_path_tsv) if args.write_scf_path else ""),
+                    ("scf_path_elapsed_sec", f"{scf_path_elapsed:.16e}"),
+                    *initial_state_entries,
+                ],
+            )
+            reconstructed_plot_paths = write_hf_band_plot(path_dir, path_result, stem=f"{tag}_band_plot")
+            print(
+                f"[stage] path:done init={spec.init_mode} seed={spec.seed} "
+                f"elapsed_sec={path_elapsed:.3f} path_tsv={path_tsv}",
+                flush=True,
+            )
+        elif not args.write_scf_path:
+            raise ValueError("At least one of --write-scf-path or --write-reconstructed-path must be enabled.")
+        else:
+            print(
+                f"[stage] path:skip_reconstructed init={spec.init_mode} seed={spec.seed} "
+                f"scf_path_tsv={scf_path_tsv}",
+                flush=True,
+            )
+
+        canonical_tsv = scf_path_tsv if args.write_scf_path else path_tsv
+        canonical_summary = "" if args.write_scf_path else str(path_summary)
+        canonical_plot_paths = scf_plot_paths if scf_plot_paths is not None else reconstructed_plot_paths
+        if canonical_plot_paths is None:
+            raise RuntimeError("No canonical band plot was generated.")
         screening_label = "crpa" if crpa_result is not None else "no_crpa"
         nu_label = _nu_file_label(nu)
         fig4_payload: dict[str, object] = {
@@ -1087,6 +1264,10 @@ def main() -> int:
             "seed": spec.seed,
             "screening_mode": "crpa_matrix_diagonal" if crpa_result is not None else "no_crpa",
             "interaction_model": interaction_model,
+            "periodic_g_grid": periodic_g_grid,
+            "g_boundary_mode": g_boundary_mode,
+            "crpa_split_mode": crpa_split_mode_value,
+            "crpa_remote_bare_scale": crpa_remote_bare_scale_value,
             "hartree_crpa_convention": "full_matrix_qe_0" if crpa_result is not None else "bare_bn_screened_scalar",
             "fock_convention": (
                 "V_bare_with_BN / eps_crpa; eps_total is plotting only"
@@ -1105,17 +1286,31 @@ def main() -> int:
             **order_summary,
             **q_lookup_diagnostics,
             "state_path": str(state_path),
-            "path_tsv": str(path_tsv),
-            "path_summary": str(path_summary),
-            "band_plot_png": str(plot_paths["band_plot_png"]),
-            "band_plot_pdf": str(plot_paths["band_plot_pdf"]),
+            "path_tsv": str(canonical_tsv),
+            "path_summary": canonical_summary,
+            "band_plot_png": str(canonical_plot_paths["band_plot_png"]),
+            "band_plot_pdf": str(canonical_plot_paths["band_plot_pdf"]),
+            "scf_path_tsv": str(scf_path_tsv) if args.write_scf_path else "",
+            "scf_band_plot_png": (
+                "" if scf_plot_paths is None else str(scf_plot_paths["band_plot_png"])
+            ),
+            "scf_band_plot_pdf": (
+                "" if scf_plot_paths is None else str(scf_plot_paths["band_plot_pdf"])
+            ),
+            "reconstructed_path_tsv": str(path_tsv) if args.write_reconstructed_path else "",
+            "reconstructed_path_summary": str(path_summary) if args.write_reconstructed_path else "",
+            "reconstructed_band_plot_png": (
+                "" if reconstructed_plot_paths is None else str(reconstructed_plot_paths["band_plot_png"])
+            ),
+            "reconstructed_band_plot_pdf": (
+                "" if reconstructed_plot_paths is None else str(reconstructed_plot_paths["band_plot_pdf"])
+            ),
         }
         _write_json(root_dir / f"hf_summary_nu_{nu_label}_{screening_label}.json", fig4_payload)
         _write_json(root_dir / f"order_parameters_nu_{nu_label}.json", order_summary)
-        _copy_if_exists(path_tsv, root_dir / f"hf_band_nu_{nu_label}_{screening_label}.csv")
-        _copy_if_exists(plot_paths["band_plot_png"], root_dir / f"hf_band_nu_{nu_label}_{screening_label}.png")
+        _copy_if_exists(canonical_tsv, root_dir / f"hf_band_nu_{nu_label}_{screening_label}.csv")
+        _copy_if_exists(canonical_plot_paths["band_plot_png"], root_dir / f"hf_band_nu_{nu_label}_{screening_label}.png")
         _copy_if_exists(state_path, root_dir / f"density_matrix_final_nu_{nu_label}.npz")
-        print(f"[stage] path:done init={spec.init_mode} seed={spec.seed} elapsed_sec={path_elapsed:.3f} path_tsv={path_tsv}", flush=True)
 
         rows.append(
             {
@@ -1132,8 +1327,13 @@ def main() -> int:
                 "final_oda": "" if hf_run.iter_oda.size == 0 else f"{float(hf_run.iter_oda[-1]):.16e}",
                 "hf_elapsed_sec": f"{hf_elapsed:.16e}",
                 "path_elapsed_sec": f"{path_elapsed:.16e}",
+                "gap_source": "full_scf_grid",
                 "indirect_gap_mev": f"{float(gap_summary['indirect_gap_mev']):.16e}",
                 "direct_gap_mev": f"{float(gap_summary['direct_gap_mev']):.16e}",
+                "full_scf_grid_indirect_gap_mev": f"{float(gap_summary['indirect_gap_mev']):.16e}",
+                "full_scf_grid_direct_gap_mev": f"{float(gap_summary['direct_gap_mev']):.16e}",
+                "scf_path_indirect_gap_mev": f"{float(scf_path_gap_summary['indirect_gap_mev']):.16e}",
+                "scf_path_direct_gap_mev": f"{float(scf_path_gap_summary['direct_gap_mev']):.16e}",
                 "E_band": f"{float(energy_summary['E_band']):.16e}",
                 "E_Hartree": f"{float(energy_summary['E_Hartree']):.16e}",
                 "E_Fock": f"{float(energy_summary['E_Fock']):.16e}",
@@ -1149,8 +1349,9 @@ def main() -> int:
                 "eps_crpa_min": f"{float(q_lookup_diagnostics['eps_crpa_min']):.16e}",
                 "eps_crpa_mean": f"{float(q_lookup_diagnostics['eps_crpa_mean']):.16e}",
                 "eps_crpa_max": f"{float(q_lookup_diagnostics['eps_crpa_max']):.16e}",
+                "crpa_split_mode": crpa_split_mode_value,
                 "state_path": str(state_path),
-                "path_tsv": str(path_tsv),
+                "path_tsv": str(canonical_tsv),
             }
         )
         if args.summary_mode in ("parts", "both"):
@@ -1169,6 +1370,8 @@ def main() -> int:
         ("lk", str(lk)),
         ("lg", str(lg)),
         ("overlap_lg", str(overlap_lg)),
+        ("periodic_g_grid", str(periodic_g_grid).lower()),
+        ("g_boundary_mode", g_boundary_mode),
         ("points_per_segment", str(int(args.points_per_segment))),
         ("path_kind", str(args.path_kind)),
         ("path_labels", "-".join(path.labels)),
@@ -1192,10 +1395,12 @@ def main() -> int:
         ("crpa_lk", "" if crpa_result is None else str(crpa_result.lk)),
         ("crpa_lg", "" if crpa_result is None else str(crpa_result.lg)),
         ("crpa_q_lg", "" if crpa_result is None else str(crpa_result.q_lg)),
-                ("crpa_metadata_json", "" if crpa_result is None else json.dumps(crpa_result.metadata, sort_keys=True)),
-                ("crpa_physics_gate_json", json.dumps(crpa_physics_gate, sort_keys=True)),
-                ("fock_interpolation", str(args.fock_interpolation)),
-                ("path_fock_interpolation", str(args.path_fock_interpolation)),
+        ("crpa_split_mode", crpa_split_mode_value),
+        ("crpa_remote_bare_scale", f"{crpa_remote_bare_scale_value:.16g}"),
+        ("crpa_metadata_json", "" if crpa_result is None else json.dumps(crpa_result.metadata, sort_keys=True)),
+        ("crpa_physics_gate_json", json.dumps(crpa_physics_gate, sort_keys=True)),
+        ("fock_interpolation", str(args.fock_interpolation)),
+        ("path_fock_interpolation", str(args.path_fock_interpolation)),
         ("init_specs", ",".join(f"{spec.init_mode}:{spec.seed}" for spec in init_specs)),
         *initial_state_entries,
         ("start_time", started.strftime("%Y-%m-%dT%H:%M:%S")),

@@ -47,8 +47,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--chunk-count", type=int, default=None)
     parser.add_argument(
         "--form-factor-mode",
-        choices=("hf_periodic",),
-        default="hf_periodic",
+        choices=("k_periodic_zero_fill", "hf_periodic"),
+        default="k_periodic_zero_fill",
         help="Plane-wave form-factor convention for production chunks.",
     )
     parser.add_argument(
@@ -66,6 +66,18 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("cnp_index", "energy_step"),
         default="cnp_index",
         help="Reference occupation for cRPA. Production Zhang/HF chunks use cnp_index.",
+    )
+    parser.add_argument(
+        "--chi0-energy-mode",
+        choices=("bm", "hf_active_flat", "eq19_flat_remote"),
+        default="bm",
+        help="Band energies/eigenvectors used in chi0. hf_active_flat uses the HF C2T flat basis; eq19_flat_remote applies the Eq.19 flat-band correction.",
+    )
+    parser.add_argument(
+        "--chi0-eq19-overlap-lg",
+        type=int,
+        default=None,
+        help="Optional Q shell for the Eq.19 flat-band correction; defaults to the cached BM lg.",
     )
     parser.add_argument("--output-dir", type=Path, required=True)
     return parser
@@ -113,7 +125,8 @@ def main(argv: list[str] | None = None) -> None:
         "[crpa-chunk] start "
         f"bm={args.bm_solution} lk={lk} lg={solution.lg} q_lg={args.q_lg} "
         f"q_range={start}:{stop} q_points={len(q_indices)} form_factor_mode={form_factor_mode} "
-        f"occupation_mode={args.occupation_mode} legacy_zero_fill_test={str(args.legacy_zero_fill_test).lower()}",
+        f"occupation_mode={args.occupation_mode} chi0_energy_mode={args.chi0_energy_mode} "
+        f"legacy_zero_fill_test={str(args.legacy_zero_fill_test).lower()}",
         flush=True,
     )
     result = compute_crpa_from_solution(
@@ -130,6 +143,8 @@ def main(argv: list[str] | None = None) -> None:
         allow_legacy_zero_fill_test=bool(args.legacy_zero_fill_test),
         occupation_mode=str(args.occupation_mode),
         flat_method="center",
+        chi0_energy_mode=str(args.chi0_energy_mode),
+        chi0_eq19_overlap_lg=args.chi0_eq19_overlap_lg,
     )
     out = write_crpa_outputs(result, args.output_dir)
     write_epsilon_vs_q_plot(result, out / "epsilon_vs_q.pdf")

@@ -38,6 +38,8 @@ SCREENING_SOLVER="${SCREENING_SOLVER:-grid}"
 SCREENING_U_MIN_MEV="${SCREENING_U_MIN_MEV:--100}"
 SCREENING_U_MAX_MEV="${SCREENING_U_MAX_MEV:-200}"
 SCREENING_U_GRID_POINTS="${SCREENING_U_GRID_POINTS:-121}"
+PRECISION="${PRECISION:-}"
+CHECKPOINT_INTERVAL="${CHECKPOINT_INTERVAL:-5}"
 RUN_SPECS="${RUN_SPECS:-}"
 USER_SET_INIT_OR_SEEDS=0
 if [[ -n "${INIT_MODES:-}" || -n "${SEEDS:-}" ]]; then
@@ -64,13 +66,20 @@ case "${PAPER_TARGET}" in
     V_VALUES=(64)
     DEFAULT_INIT_MODES="flavor,bm,perturbed,random"
     DEFAULT_SEEDS="1,2,3,4"
-    DEFAULT_RUN_SPECS="flavor:1,flavor:2,flavor:3,flavor:4,bm:1,perturbed:1,perturbed:2,perturbed:3,perturbed:4,random:1,random:2,random:3,random:4"
+    DEFAULT_RUN_SPECS="flavor:1,flavor:2,bm:1,perturbed:1,perturbed:2,perturbed:3,perturbed:4,random:1,random:2,random:3,random:4"
     ;;
   *)
     echo "Unsupported paper target: ${PAPER_TARGET}" >&2
     exit 2
     ;;
 esac
+if [[ -z "${PRECISION}" ]]; then
+  if [[ "${PAPER_TARGET}" == "fig6" ]]; then
+    PRECISION="1e-4"
+  else
+    PRECISION="1e-6"
+  fi
+fi
 INIT_MODES="${INIT_MODES:-${DEFAULT_INIT_MODES}}"
 SEEDS="${SEEDS:-${DEFAULT_SEEDS}}"
 if [[ -z "${RUN_SPECS}" && "${USER_SET_INIT_OR_SEEDS}" -eq 0 ]]; then
@@ -108,6 +117,7 @@ export NUMBA_NUM_THREADS="${THREADS_PER_TASK}"
 export MEAN_FIELD_RLG_HBN_USE_NUMBA=1
 export MEAN_FIELD_RLG_HBN_REQUIRE_NUMBA=1
 export MEAN_FIELD_RLG_HBN_REMOTE_CHUNK_BANDS="${MEAN_FIELD_RLG_HBN_REMOTE_CHUNK_BANDS:-16}"
+export MEAN_FIELD_RLG_HBN_MMAP_OVERLAP_CACHE="${MEAN_FIELD_RLG_HBN_MMAP_OVERLAP_CACHE:-0}"
 mkdir -p "${MPLCONFIGDIR}"
 
 python - <<'PY'
@@ -119,6 +129,8 @@ echo "[job] paper_target=${PAPER_TARGET}"
 echo "[job] panel_index=${PANEL_INDEX}/${PANEL_COUNT}"
 echo "[job] panel=${PANEL}"
 echo "[job] max_iter=${MAX_ITER}"
+echo "[job] precision=${PRECISION}"
+echo "[job] checkpoint_interval=${CHECKPOINT_INTERVAL}"
 echo "[job] threads_per_task=${THREADS_PER_TASK}"
 echo "[job] slurm_cpus_per_task=${SLURM_CPUS_PER_TASK:-}"
 echo "[job] remote_chunk_bands=${MEAN_FIELD_RLG_HBN_REMOTE_CHUNK_BANDS}"
@@ -129,6 +141,7 @@ echo "[job] cache_policy=${CACHE_POLICY}"
 echo "[job] init_modes=${INIT_MODES}"
 echo "[job] seeds=${SEEDS}"
 echo "[job] run_specs=${RUN_SPECS}"
+echo "[job] mmap_overlap_cache=${MEAN_FIELD_RLG_HBN_MMAP_OVERLAP_CACHE}"
 echo "[job] hostname=$(hostname)"
 echo "[job] partition=${SLURM_JOB_PARTITION:-}"
 
@@ -145,7 +158,9 @@ CMD=(
   --skip-screening-check \
   --xi-values "${XI}" \
   --v-values-mev "${V_MEV}" \
-  --max-iter "${MAX_ITER}"
+  --max-iter "${MAX_ITER}" \
+  --precision "${PRECISION}" \
+  --checkpoint-interval "${CHECKPOINT_INTERVAL}"
 )
 if [[ -n "${RUN_SPECS}" ]]; then
   CMD+=(--run-specs "${RUN_SPECS}")

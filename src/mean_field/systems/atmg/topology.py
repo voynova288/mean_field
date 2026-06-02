@@ -5,53 +5,15 @@ from typing import Iterable
 
 import numpy as np
 
+from analysis.topology import WavefunctionIndex, compute_lattice_topology, normalize_state_indices
+
 from .bands import GridBandsResult, compute_bands_on_grid
 from .lattice import ATMGLattice
 from .params import ATMGParameters
 
 
 def _normalize_band_indices(band_indices: int | Iterable[int]) -> tuple[int, ...]:
-    if isinstance(band_indices, (int, np.integer)):
-        normalized = (int(band_indices),)
-    else:
-        normalized = tuple(int(index) for index in band_indices)
-    if not normalized:
-        raise ValueError("Expected at least one target band index.")
-    if min(normalized) < 0:
-        raise ValueError(f"Band indices must be non-negative, got {normalized}")
-    if len(set(normalized)) != len(normalized):
-        raise ValueError(f"Band indices must be unique, got {normalized}")
-    return normalized
-
-
-def _unit_link(overlap: complex, *, atol: float = 1.0e-14) -> complex:
-    magnitude = abs(overlap)
-    if magnitude <= atol:
-        raise ValueError(
-            "Encountered a near-zero overlap link while building the Fukui-Hatsugai plaquette field. "
-            "The target band or subspace is likely not isolated on this grid."
-        )
-    return overlap / magnitude
-
-
-def _subspace_link(
-    left_vectors: np.ndarray,
-    right_vectors: np.ndarray,
-    *,
-    atol: float = 1.0e-14,
-    regularization: float = 1.0e-12,
-) -> complex:
-    overlap_matrix = left_vectors.conjugate().T @ right_vectors
-    if overlap_matrix.shape == (1, 1):
-        return _unit_link(complex(overlap_matrix[0, 0]), atol=atol)
-
-    singular_values = np.linalg.svd(overlap_matrix, compute_uv=False)
-    if np.min(singular_values) <= atol:
-        overlap_matrix = overlap_matrix + regularization * np.eye(overlap_matrix.shape[0], dtype=np.complex128)
-    u_mat, _, vh_mat = np.linalg.svd(overlap_matrix, full_matrices=False)
-    phase_matrix = u_mat @ vh_mat
-    overlap_det = np.linalg.det(phase_matrix)
-    return _unit_link(complex(overlap_det), atol=atol)
+    return normalize_state_indices(band_indices)
 
 
 @dataclass(frozen=True)
@@ -62,6 +24,9 @@ class TopologyResult:
     berry_curvature: np.ndarray
     chern_number: float
     rounded_chern_number: int
+    berry_connection: np.ndarray | None = None
+    min_link_magnitude: float | None = None
+    index_metadata: dict[str, object] | None = None
 
     @property
     def integer_residual(self) -> float:
@@ -93,36 +58,29 @@ def compute_topology_from_eigenvectors(
         )
 
     mesh_x, mesh_y = eigenvectors.shape[:2]
-    selected = np.take(eigenvectors, normalized_bands, axis=-1)
-
-    ux = np.zeros((mesh_x, mesh_y), dtype=np.complex128)
-    uy = np.zeros((mesh_x, mesh_y), dtype=np.complex128)
-    for ix in range(mesh_x):
-        ix_next = (ix + 1) % mesh_x
-        for iy in range(mesh_y):
-            iy_next = (iy + 1) % mesh_y
-            ux[ix, iy] = _subspace_link(selected[ix, iy], selected[ix_next, iy])
-            uy[ix, iy] = _subspace_link(selected[ix, iy], selected[ix, iy_next])
-
-    berry_curvature = np.zeros((mesh_x, mesh_y), dtype=float)
-    for ix in range(mesh_x):
-        ix_next = (ix + 1) % mesh_x
-        for iy in range(mesh_y):
-            iy_next = (iy + 1) % mesh_y
-            plaquette = ux[ix, iy] * uy[ix_next, iy] / (ux[ix, iy_next] * uy[ix, iy])
-            berry_curvature[ix, iy] = float(np.angle(plaquette))
-
-    chern_number = float(np.sum(berry_curvature) / (2.0 * np.pi))
-    rounded_chern_number = int(np.rint(chern_number))
     resolved_grid = np.zeros((mesh_x, mesh_y, 2), dtype=float) if k_grid_frac is None else np.asarray(k_grid_frac, dtype=float)
+    geometry = compute_lattice_topology(
+        eigenvectors,
+        normalized_bands,
+        index=WavefunctionIndex(
+            indices=normalized_bands,
+            role="band",
+            system="atmg",
+            valley=int(valley),
+        ),
+        k_grid_frac=resolved_grid,
+    )
 
     return TopologyResult(
         band_indices=normalized_bands,
         valley=int(valley),
-        k_grid_frac=resolved_grid,
-        berry_curvature=berry_curvature,
-        chern_number=chern_number,
-        rounded_chern_number=rounded_chern_number,
+        k_grid_frac=geometry.k_grid_frac,
+        berry_curvature=geometry.berry_curvature,
+        chern_number=geometry.chern_number,
+        rounded_chern_number=geometry.rounded_chern_number,
+        berry_connection=geometry.berry_connection,
+        min_link_magnitude=geometry.min_link_magnitude,
+        index_metadata=geometry.wavefunction_index.to_dict(),
     )
 
 

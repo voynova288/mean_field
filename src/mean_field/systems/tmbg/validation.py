@@ -328,6 +328,8 @@ def _clone_params(params: TMBGParameters) -> TMBGParameters:
         omega_prime=params.omega_prime,
         interlayer_potential=params.interlayer_potential,
         staggered_potential=params.staggered_potential,
+        blg_stacking=params.blg_stacking,
+        bernal_convention=params.bernal_convention,
         model_name=params.model_name,
     )
 

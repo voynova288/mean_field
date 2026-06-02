@@ -13,7 +13,7 @@ from .hamiltonian import (
 )
 from .lattice import TMBGLattice, build_kpath_from_nodes, build_moire_k_grid, build_standard_kpath, build_tmbg_lattice
 from .model import TMBGModel
-from .params import TMBGParameters, default_omega, default_omega_prime, hopping_to_velocity
+from .params import TMBGParameters, VALID_BERNAL_CONVENTIONS, VALID_BLG_STACKINGS, default_omega, default_omega_prime, hopping_to_velocity
 from .plot import (
     TMBGBandPlotPanel,
     infer_flat_band_indices,
@@ -44,6 +44,8 @@ __all__ = [
     "PaperCheckpointCase",
     "ValidationCheck",
     "ValidationReport",
+    "VALID_BERNAL_CONVENTIONS",
+    "VALID_BLG_STACKINGS",
     "blg_interlayer",
     "build_coupling_table",
     "build_diagonal_block",

@@ -24,6 +24,7 @@ class BMSolution:
     uk: np.ndarray
     spectrum: np.ndarray
     gvec: np.ndarray
+    periodic_g_grid: bool = True
 
     @property
     def nk(self) -> int:
@@ -109,6 +110,42 @@ def _generate_t12(params: TBGParameters, lg: int, zeta: int) -> np.ndarray:
     return t12
 
 
+def _generate_t12_zero_fill(params: TBGParameters, lg: int, zeta: int) -> np.ndarray:
+    dim = 4 * lg * lg
+    t12 = np.zeros((dim, dim), dtype=np.complex128)
+
+    if zeta == 1:
+        t0, t1, t2 = params.t0, params.t1, params.t2
+    elif zeta == -1:
+        t0, t1, t2 = params.t0, params.t2, params.t1
+    else:
+        raise ValueError(f"Unexpected valley label: {zeta}")
+
+    def flat(ix: int, iy: int) -> int:
+        return int(ix) + int(lg) * int(iy)
+
+    def in_bounds(ix: int, iy: int) -> bool:
+        return 0 <= int(ix) < int(lg) and 0 <= int(iy) < int(lg)
+
+    for iy in range(lg):
+        for ix in range(lg):
+            here = flat(ix, iy)
+            left = 4 * here
+            neighbors = (
+                (ix + zeta, iy - zeta, t2),
+                (ix, iy - zeta, t1),
+                (ix + zeta, iy, t0),
+            )
+            for nx, ny, tunnel in neighbors:
+                if not in_bounds(nx, ny):
+                    continue
+                right = 4 * flat(nx, ny)
+                t12[left + 2 : left + 4, right : right + 2] = tunnel
+                t12[right : right + 2, left + 2 : left + 4] = tunnel
+
+    return t12
+
+
 def _construct_diagonal_block(params: TBGParameters, gvec: np.ndarray, lg: int, k: complex, zeta: int, sigma_rotation: bool) -> np.ndarray:
     dim = 4 * lg * lg
     h = np.zeros((dim, dim), dtype=np.complex128)
@@ -182,6 +219,7 @@ def solve_bm_model(
     lg: int = 9,
     sigma_rotation: bool = True,
     calculate_chern_operator: bool = True,
+    periodic_g_grid: bool = True,
 ) -> BMSolution:
     n_eta, n_spin, nb, nlocal = 2, 2, 2, 4
     nk = int(lattice_kvec.size)
@@ -195,7 +233,8 @@ def solve_bm_model(
 
     c2t = _c2t_operator(lg)
     sigma_z_local = _sigma_z_operator(lg)
-    tunnel = {1: _generate_t12(params, lg, 1), -1: _generate_t12(params, lg, -1)}
+    tunnel_builder = _generate_t12 if periodic_g_grid else _generate_t12_zero_fill
+    tunnel = {1: tunnel_builder(params, lg, 1), -1: tunnel_builder(params, lg, -1)}
 
     start = dim // 2 - 1
     stop = start + nb - 1
@@ -229,4 +268,5 @@ def solve_bm_model(
         uk=uk,
         spectrum=spectrum,
         gvec=gvec,
+        periodic_g_grid=bool(periodic_g_grid),
     )
