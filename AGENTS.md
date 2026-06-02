@@ -1,5 +1,14 @@
 # AGENTS.md
 
+## 项目分层心智模型
+
+这个库应被维护成“通用框架 + 体系适配层 + 分析工作区”：
+
+- 通用 Hartree-Fock 框架在 `src/mean_field/core/hf`。SCF/ODA/占据/投影重叠/相互作用拼装等可复用逻辑应留在这里，不要写进某个具体体系。
+- 通用量子几何分析框架在 `src/analysis`：`topology` 负责 Berry connection、plaquette flux、Chern；`response_derivative_gauge.py` 是按 WannierBerri 约定整理的规范安全求导器，可被不同响应/量子几何问题复用。
+- `src/analysis/shift_current_*` 目前是 shift-current 复现/诊断工作区，不是已经完成的稳定框架。不要把这些目录里的图像复现状态当成通用公式已经验证完成；其中可复用的求导逻辑应上收到 `src/analysis/response_derivative_gauge.py` 或其它通用分析层。
+- 不同物理体系应在 `src/mean_field/systems/<system>` 中接入通用 HF 框架和通用分析框架。体系目录负责 Hamiltonian、基底/规范、参数、sewing、投影窗口、历史 API 适配；不要在体系目录重复实现通用 SCF loop、FHS plaquette 或 WannierBerri generalized-derivative 公式。
+
 ## 复杂逻辑必须先理解
 
 如果涉及复杂逻辑问题，例如物理和 AI 公式，需要先仔细地理解逻辑。
@@ -10,8 +19,17 @@
 
 如果关键逻辑仍不清楚，必须停止并明确报告不确定性，不能继续提交昂贵任务，也不能把结果标记为已经验证。
 
-## 拓扑计算统一框架
+## 通用框架边界
 
-贝利联络、贝利曲率/plaquette flux、陈数的通用实现位于 `src/analysis/topology`，项目约定见 `docs/topology_framework.md`。以后处理拓扑问题时，先把问题理解为“二维动量网格上的波函数 + 所选波函数列/子空间的物理指标 + 必要的 BZ 边界 sewing”。体系差异应体现在波函数生成、`WavefunctionIndex` 指标标记、valley/flavor/band/Chern-basis 标签和边界规范变换上，不应在各体系里重复实现 FHS link、plaquette 或 Chern 积分公式。
+- 修改 `src/mean_field/core/hf` 前先读 `docs/architecture.md`，并确认变更不引入体系依赖。
+- 修改拓扑/Berry 几何前先读 `docs/topology_framework.md`，优先扩展 `src/analysis/topology`，不要在体系目录复制 `_unit_link`、determinant-link、plaquette loop 或 Chern 积分。
+- 修改响应求导、shift vector、Berry connection generalized derivative 前先读 `src/analysis/RESPONSE_DERIVATIVE_GAUGE.md`。不要对原始本征矢相位或 `np.angle(A_mn)` 做裸差分；使用 WannierBerri-style covariant/generalized derivative 或 Wilson-link 检查。
+- 新体系应先实现 `src/mean_field/systems/<system>` 的物理层和适配层，再接入 `core/hf`、`analysis/topology`、`analysis/response_derivative_gauge.py`。只有通用能力不足时才修改通用框架。
 
-声称论文复现时必须区分：统一框架单元验证、保存结果一致性验证、完整重新求解/重新对角化、以及图像/论文 overlay 复现。拓扑网格重算或任何 BLAS/eigensolver-heavy 验证都必须走 Slurm，不能在 login 节点运行。
+## 验证与集群安全
+
+声称论文复现时必须区分：统一框架单元验证、保存结果一致性验证、完整重新求解/重新对角化、以及图像/论文 overlay 复现。
+
+拓扑网格重算、HF 自洽、响应函数网格积分、BLAS/eigensolver-heavy 验证都必须走 Slurm，不能在 login 节点运行。login 节点只用于读文件、编辑、轻量语法检查和提交/查看队列。
+
+不要通过后处理缩放、筛选跃迁、调坐标、裁图或视觉 overlay 来“修复”核心物理或公式问题。先修正并验证核心实现，只展示来自已验证计算链的结果。

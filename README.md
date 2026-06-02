@@ -13,6 +13,8 @@ The package started as a benchmark-driven rewrite of a Julia `TBG_HartreeFock` w
 - `mean_field.systems.atmg`: alternating-twist multilayer graphene continuum-model utilities.
 - `mean_field.systems.htg`: helical trilayer graphene continuum model and projected-HF adapter for Kwan et al. style calculations.
 - `analysis.topology`: local unified Berry-geometry framework used by system topology adapters for Berry connection, plaquette flux, Chern numbers, wavefunction-index metadata, and boundary sewing.
+- `analysis.response_derivative_gauge`: reusable WannierBerri-style, gauge-safe derivative helpers for Berry-connection generalized derivatives, shift vectors, and subspace/gauge validation.
+- `analysis.shift_current_htg` and `analysis.shift_current_tbg`: active shift-current reproduction and diagnostic workspaces. The shift-current framework is not yet considered stable; reusable derivative logic should live in `analysis.response_derivative_gauge` rather than in these workspaces.
 
 Large generated outputs, local benchmark bundles, PDFs, Slurm logs, and code-agent work documents are intentionally not versioned. They should be regenerated or stored separately.
 

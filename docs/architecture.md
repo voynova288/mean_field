@@ -65,6 +65,30 @@ The architectural rule is that topology is system-independent after wavefunction
 
 The common framework then builds FHS link variables, Berry-connection phases, plaquette flux, and Chern numbers.  Do not duplicate `_unit_link`, `_subspace_link`, determinant-link, or plaquette loops in future system modules; extend `analysis.topology` instead.  See `docs/topology_framework.md` for conventions, validation status, and examples.
 
+## Gauge-safe response derivative layer
+
+Gauge-safe Berry-connection generalized derivatives and shift-vector helpers are centralized in:
+
+```text
+src/analysis/response_derivative_gauge.py
+```
+
+This module mirrors the WannierBerri/Wannier90 covariant-derivative convention for Hamiltonian-gauge matrices and is reusable beyond the current shift-current workspaces.  It should be the common place for:
+
+- Hamiltonian-gauge derivative ingredients;
+- Berry-connection generalized derivatives;
+- selected-pair and subspace-trace helpers;
+- Wilson-link validation of shift vectors;
+- random phase/block-unitary gauge-covariance tests.
+
+Do not implement response derivatives by differentiating raw eigenvector phases or raw `np.angle(A_mn)` in a system module.  If a response calculation needs more common derivative capability, extend `analysis.response_derivative_gauge` first and then call it from the system or analysis adapter.  See `src/analysis/RESPONSE_DERIVATIVE_GAUGE.md` for the local contract and validation notes.
+
+## Shift-current workspace status
+
+The directories under `src/analysis/shift_current_htg` and `src/analysis/shift_current_tbg` are active reproduction and diagnostic workspaces, not a stable general shift-current framework.  They contain useful audits, adapters, scripts, and paper-specific workflows.  The reusable mathematical piece that should be shared with future systems is the WannierBerri-style derivative layer described above.
+
+When future systems need optical-response or shift-current analysis, connect the system model through a thin adapter that supplies Hamiltonians, derivatives, energies/eigenvectors, occupation data, units, and conventions.  Keep paper-specific scans, plotting, and unresolved reproduction diagnostics out of the common framework until the relevant formula and convention gates have passed.
+
 ## Current reusable HF split
 
 The zero-field TBG port now has three explicit layers instead of one large `hf.py` bucket:
