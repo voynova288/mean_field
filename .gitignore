@@ -31,6 +31,7 @@ artifacts/
 checkpoints/
 
 # Slurm/runtime artifacts
+.tasque/
 *.out
 *.err
 *.log

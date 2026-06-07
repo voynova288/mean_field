@@ -64,6 +64,8 @@ Default paper-style magnetic-spectrum API smoke on `test001` also passed: `compu
 
 Refactor check: before the unified API cleanup, the finite-field/core subset was `43 passed`; after consolidating full and tL-symmetric input/kernel/run convenience paths through `build_finite_field_hf_inputs_from_spectra`, `build_finite_field_hf_inputs_from_parameters`, `build_finite_field_hf_kernel_from_inputs`, and `run_finite_field_hartree_fock_from_inputs`, the same subset remained `43 passed` on `test001`.
 
+Convergence-rule regression check: author finite-B `update_P` computes convergence using the mixed density `λ*P_new + (1-λ)*P_old`, not the raw update.  The reusable core engine now preserves this for kernels with `convergence_rule="mixed"`, while raw/restricted adapters still use the raw norm.  The finite-field regression `test_finite_field_problem_preserves_author_mixed_density_convergence_rule` confirms that `λ=0` with unchanged mixed density is reported as `converged`, not `oda_stall`.
+
 Added reusable no-I/O HF assembly helpers for the next interacting B-SCHF step:
 
 - `magnetic_shell_shifts` mirrors the author interaction-shell loop/order.

@@ -97,6 +97,8 @@ The zero-field TBG port now has three explicit layers instead of one large `hf.p
 - `core/hf/engine.py`: generic SCF iteration, ODA mixing, convergence-rule handling, and density-update plumbing. This layer should be reusable across moire systems even when the Coulomb kernel or projected basis changes.
 - `core/hf/problem.py`: generic HF problem definitions that let each physical system swap in its own non-interacting model, Coulomb kernel, projected basis, and initialization policy without rewriting the SCF loop.
 - `systems/tbg/zero_field/hf.py`: the TBG-specific interaction kernels, density builders, and initialization semantics that still depend on BM overlaps, Coulomb conventions, and Julia B0 benchmark rules.
+- `systems/tbg/finite_field/spectrum.py`: the finite-magnetic-field BM/LL spectrum adapter ported from the author `bmLL*.jl` modules for arXiv:2310.15982v3. It keeps author finite-B parameter conventions, LL translation matrix elements, magnetic-BZ Hamiltonian construction, central `2q` Hofstadter subbands, projected `PΣz`, and optional `Λ_(m,n)` overlaps in the TBG system layer.
+- `systems/tbg/finite_field/hf.py`: the finite-magnetic-field B-SCHF adapter ported from the author `MagneticFieldHF*.jl` modules for arXiv:2310.15982v3. It reuses `core/hf` for SCF/ODA, while keeping flux `p/q`, magnetic-mesh ordering, `1/(q*nq)^2` normalization, Hofstadter metadata adapters, and tL-symmetric/IKS reduction in the TBG system layer.
 - `systems/tbg/zero_field/runners.py` and `hf_runners.py`: benchmark-facing orchestration and path-band diagnostics.
 
 This is the intended direction for future systems. A new graphene stacking should first try to reuse `core/hf/`, then add its own `systems/<name>/...` physics layer, and only after that add benchmark or CLI workflows.
@@ -159,6 +161,6 @@ Cluster execution assumptions:
 
 ## Initial non-goals
 
-- immediate port of all magnetic-field workflows
+- immediate port of every magnetic-field production workflow/script beyond the reusable B-SCHF module
 - exact reproduction of every script in the Julia repo
 - premature backend complexity before benchmark parity
