@@ -10,6 +10,7 @@ from typing import Literal
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
+from ...plotting import load_plot_backend
 from .bands import PathBandsResult
 
 
@@ -25,14 +26,7 @@ class HTGPathPlotTrace:
 
 
 def _load_plot_backend():
-    os.environ.setdefault("MPLCONFIGDIR", os.path.join(tempfile.gettempdir(), "mplconfig_mean_field"))
-    os.environ.setdefault("MPLBACKEND", "Agg")
-    import matplotlib
-
-    matplotlib.use(os.environ["MPLBACKEND"])
-    import matplotlib.pyplot as plt
-
-    return plt
+    return load_plot_backend()
 
 
 def _display_node_label(label: str) -> str:

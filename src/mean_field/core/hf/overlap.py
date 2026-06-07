@@ -123,15 +123,27 @@ def _normalize_boundary_mode(mode: str) -> str:
     raise ValueError(f"Unsupported projected-overlap boundary_mode: {mode!r}")
 
 
-def _shift_wavefunction_grid(values: np.ndarray, dm: int, dn: int, *, boundary_mode: str) -> np.ndarray:
+def shift_wavefunction_grid(
+    values: np.ndarray,
+    dm: int,
+    dn: int,
+    *,
+    boundary_mode: str = "zero_fill",
+    grid_axes: tuple[int, int] = (1, 2),
+) -> np.ndarray:
     arr = np.asarray(values, dtype=np.complex128)
     mode = _normalize_boundary_mode(boundary_mode)
     dm = int(dm)
     dn = int(dn)
+    axis_m, axis_n = (int(grid_axes[0]), int(grid_axes[1]))
+    if axis_m == axis_n:
+        raise ValueError(f"grid_axes must be distinct, got {grid_axes}")
+    if arr.ndim <= max(axis_m, axis_n) or min(axis_m, axis_n) < 0:
+        raise ValueError(f"grid_axes={grid_axes} are incompatible with shape {arr.shape}")
     if mode == "periodic":
-        return np.roll(arr, shift=(0, dm, dn, 0), axis=(0, 1, 2, 3))
+        return np.roll(arr, shift=(dm, dn), axis=(axis_m, axis_n))
 
-    nx, ny = arr.shape[1], arr.shape[2]
+    nx, ny = arr.shape[axis_m], arr.shape[axis_n]
     out = np.zeros_like(arr)
     if abs(dm) >= nx or abs(dn) >= ny:
         return out
@@ -149,8 +161,18 @@ def _shift_wavefunction_grid(values: np.ndarray, dm: int, dn: int, *, boundary_m
         dst_y = slice(0, ny + dn)
         src_y = slice(-dn, ny)
 
-    out[:, dst_x, dst_y, :] = arr[:, src_x, src_y, :]
+    src = [slice(None)] * arr.ndim
+    dst = [slice(None)] * arr.ndim
+    src[axis_m] = src_x
+    src[axis_n] = src_y
+    dst[axis_m] = dst_x
+    dst[axis_n] = dst_y
+    out[tuple(dst)] = arr[tuple(src)]
     return out
+
+
+def _shift_wavefunction_grid(values: np.ndarray, dm: int, dn: int, *, boundary_mode: str) -> np.ndarray:
+    return shift_wavefunction_grid(values, dm, dn, boundary_mode=boundary_mode, grid_axes=(1, 2))
 
 
 def validate_projected_basis_compatibility(target: ProjectedWavefunctionBasis, source: ProjectedWavefunctionBasis) -> None:

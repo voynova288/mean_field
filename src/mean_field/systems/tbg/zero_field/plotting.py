@@ -6,6 +6,7 @@ import tempfile
 
 import numpy as np
 
+from ....plotting import load_plot_backend
 from ....core.lattice import KPath
 from .hf_runners import HFPathResult, HFSCFPathPlotResult
 from .model import BMSolution
@@ -32,17 +33,7 @@ DEFAULT_MARKER_EDGE_COLOR = "#ffffff"
 
 
 def _load_plot_backend():
-    os.environ.setdefault("MPLCONFIGDIR", os.path.join(tempfile.gettempdir(), "mplconfig_mean_field"))
-    os.environ.setdefault("MPLBACKEND", "Agg")
-    import matplotlib
-
-    matplotlib.use(os.environ["MPLBACKEND"])
-    import matplotlib.pyplot as plt
-    from matplotlib.lines import Line2D
-
-    return plt, Line2D
-
-
+    return load_plot_backend(include_line2d=True)
 def _display_node_label(label: str) -> str:
     return {"Gamma": "Γ", "M": "M", "K": "K", "Kprime": "K'"}.get(label, label)
 

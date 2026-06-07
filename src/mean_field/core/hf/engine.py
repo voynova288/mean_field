@@ -60,6 +60,21 @@ class HartreeFockStepResult:
 
 
 @dataclass(frozen=True)
+class FixedMixingRun:
+    density: np.ndarray
+    interaction_h: np.ndarray
+    hamiltonian: np.ndarray
+    energies: np.ndarray
+    iter_err: np.ndarray
+    converged: bool
+    exit_reason: str
+
+    @property
+    def iterations(self) -> int:
+        return int(self.iter_err.size)
+
+
+@dataclass(frozen=True)
 class HartreeFockRun:
     state: HartreeFockStateProtocol
     iter_energy: np.ndarray
@@ -111,6 +126,49 @@ def compute_oda_parameter(
     if lambda0 <= 0.5:
         return 1.0
     return 0.0
+
+
+def run_fixed_mixing_scf(
+    h0: np.ndarray,
+    initial_density: np.ndarray,
+    *,
+    interaction_builder: Callable[[np.ndarray], np.ndarray],
+    density_builder: Callable[[np.ndarray], tuple[np.ndarray, np.ndarray]],
+    max_iter: int = 300,
+    mixing: float = 0.5,
+    precision: float = 1.0e-8,
+) -> FixedMixingRun:
+    h0_arr = np.asarray(h0, dtype=np.complex128)
+    density = np.asarray(initial_density, dtype=np.complex128).copy()
+    if density.shape != h0_arr.shape:
+        raise ValueError(f"initial_density shape {density.shape} does not match h0 shape {h0_arr.shape}")
+    mix = float(mixing)
+    iter_err: list[float] = []
+    exit_reason = "max_iter"
+    for _iteration in range(1, int(max_iter) + 1):
+        interaction_h = np.asarray(interaction_builder(density), dtype=np.complex128)
+        hamiltonian = h0_arr + interaction_h
+        raw_density, _energies = density_builder(hamiltonian)
+        raw_density = np.asarray(raw_density, dtype=np.complex128)
+        mixed_density = mix * raw_density + (1.0 - mix) * density
+        norm = calculate_norm_convergence(raw_density, density)
+        iter_err.append(norm)
+        density = mixed_density
+        if norm <= float(precision):
+            exit_reason = "converged"
+            break
+    final_interaction_h = np.asarray(interaction_builder(density), dtype=np.complex128)
+    final_hamiltonian = h0_arr + final_interaction_h
+    _final_density, final_energies = density_builder(final_hamiltonian)
+    return FixedMixingRun(
+        density=density,
+        interaction_h=final_interaction_h,
+        hamiltonian=final_hamiltonian,
+        energies=np.asarray(final_energies, dtype=float),
+        iter_err=np.asarray(iter_err, dtype=float),
+        converged=exit_reason == "converged",
+        exit_reason=exit_reason,
+    )
 
 
 def run_hartree_fock_iterations(
@@ -213,12 +271,12 @@ def run_hartree_fock_iterations(
 
         raw_converged = norm_raw <= state.precision
         mixed_converged = norm_mixed <= state.precision
-        if oda_lambda < oda_stall_threshold and not raw_converged:
-            exit_reason = "oda_stall"
-            break
-        converged = raw_converged if convergence_rule == "raw" else raw_converged and mixed_converged
+        converged = raw_converged if convergence_rule == "raw" else mixed_converged
         if converged:
             exit_reason = "converged"
+            break
+        if oda_lambda < oda_stall_threshold:
+            exit_reason = "oda_stall"
             break
 
     if cached_interaction_h is None:

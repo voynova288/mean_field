@@ -32,6 +32,34 @@ def remote_velocity(
     return float(math.sqrt(3.0) * lattice_constant_nm * hopping_ev / 2.0)
 
 
+def delta_from_paper_ud(paper_ud_ev: float) -> float:
+    """Convert the paper displacement-field parameter U_d to code Delta.
+
+    The TDBG Hamiltonian convention used here stores the valley-independent
+    layer potential as ``Delta = -U_d / 3``.
+    """
+
+    return -float(paper_ud_ev) / 3.0
+
+
+def layer_potentials_from_delta(delta_ev: float) -> tuple[float, float, float, float]:
+    """Return the four TDBG layer potentials implied by code ``Delta``.
+
+    The layer order follows the Hamiltonian basis blocks: top bilayer upper,
+    top bilayer lower, bottom bilayer upper, bottom bilayer lower.  This keeps
+    the average potential at zero: ``(3Δ/2, Δ/2, -Δ/2, -3Δ/2)``.
+    """
+
+    delta = float(delta_ev)
+    return (1.5 * delta, 0.5 * delta, -0.5 * delta, -1.5 * delta)
+
+
+def paper_ud_layer_potentials(paper_ud_ev: float) -> tuple[float, float, float, float]:
+    """Return layer potentials corresponding to the Liu paper ``U_d`` input."""
+
+    return layer_potentials_from_delta(delta_from_paper_ud(paper_ud_ev))
+
+
 @dataclass(frozen=True)
 class TDBGParameters:
     graphene_lattice_constant_nm: float = GRAPHENE_LATTICE_CONSTANT_NM
@@ -109,6 +137,24 @@ class TDBGParameters:
             phi_deg=phi_deg,
             epsilon=epsilon,
             model_name="full",
+        )
+
+    @classmethod
+    def full_from_paper_ud(
+        cls,
+        paper_ud_ev: float,
+        *,
+        stacking: str = "AB-AB",
+        valley: int = 1,
+        phi_deg: float = 0.0,
+        epsilon: float = 0.0,
+    ) -> "TDBGParameters":
+        return cls.full(
+            stacking=stacking,
+            valley=valley,
+            Delta=delta_from_paper_ud(paper_ud_ev),
+            phi_deg=phi_deg,
+            epsilon=epsilon,
         )
 
     @classmethod

@@ -13,6 +13,8 @@ from ...core.hf import (
     HartreeFockRun,
     HartreeFockStepResult,
     ProjectedWavefunctionBasis,
+    apply_random_projector_rotation,
+    random_unitary_from_hermitian,
     build_flavor_band_data,
     build_projected_hf_kernel,
     build_projected_interaction_hamiltonian,
@@ -33,6 +35,40 @@ from .topology import sublattice_sigma_z
 
 
 VALLEY_SEQUENCE = (1, -1)
+
+
+@dataclass(frozen=True)
+class HTGSeedOccupationSummary:
+    requested_init_mode: str
+    normalized_init_mode: str
+    nu: float
+    n_spin: int
+    n_eta: int
+    n_band: int
+    reference_band_occupations: tuple[float, ...]
+    central_projected_band_indices: tuple[int, int]
+    occupied_bands_per_k: int
+    occupation_counts: tuple[int, ...] | None
+    occupation_count_matrix: tuple[tuple[int, ...], ...] | None
+    initial_state_labels: tuple[str, ...] | None
+    constrained_flavor_counts: bool
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "requested_init_mode": self.requested_init_mode,
+            "normalized_init_mode": self.normalized_init_mode,
+            "nu": float(self.nu),
+            "n_spin": int(self.n_spin),
+            "n_eta": int(self.n_eta),
+            "n_band": int(self.n_band),
+            "reference_band_occupations": self.reference_band_occupations,
+            "central_projected_band_indices": self.central_projected_band_indices,
+            "occupied_bands_per_k": int(self.occupied_bands_per_k),
+            "occupation_counts": self.occupation_counts,
+            "occupation_count_matrix": self.occupation_count_matrix,
+            "initial_state_labels": self.initial_state_labels,
+            "constrained_flavor_counts": bool(self.constrained_flavor_counts),
+        }
 
 
 @dataclass(frozen=True)
@@ -550,11 +586,72 @@ def htg_flavor_occupation_counts_for_init_mode(
     return tuple(int(value) for value in counts.reshape(-1, order="C"))
 
 
-def _random_unitary(dim: int, rng: np.random.Generator) -> np.ndarray:
-    sampled = rng.standard_normal((dim, dim)) + 1j * rng.standard_normal((dim, dim))
-    hermitian = sampled + sampled.conjugate().T
-    _, vecs = np.linalg.eigh(hermitian)
-    return np.asarray(vecs, dtype=np.complex128)
+def _htg_seed_state_label(state_index: int, idx: np.ndarray) -> str:
+    spin_labels = ["up", "down"] + [f"spin_{ispin + 1}" for ispin in range(2, idx.shape[0])]
+    valley_labels = ["K", "Kprime"] + [f"eta_{ieta + 1}" for ieta in range(2, idx.shape[1])]
+    lower_count = _remote_band_count_per_side(idx.shape[2])
+    central_a, central_b = _central_projected_band_indices(idx.shape[2])
+    for ispin in range(idx.shape[0]):
+        for ieta in range(idx.shape[1]):
+            for iband in range(idx.shape[2]):
+                if int(idx[ispin, ieta, iband]) != int(state_index):
+                    continue
+                if iband < lower_count:
+                    band_label = f"lower_remote_{iband + 1}"
+                elif iband == central_a:
+                    band_label = "central_A"
+                elif iband == central_b:
+                    band_label = "central_B"
+                else:
+                    band_label = f"upper_remote_{iband - central_b}"
+                return f"{valley_labels[ieta]}_{spin_labels[ispin]}:{band_label}"
+    raise ValueError(f"state_index={state_index} is not present in HTG seed layout")
+
+
+def htg_seed_occupation_summary(
+    init_mode: str,
+    *,
+    nu: float,
+    seed: int = 1,
+    n_spin: int = 2,
+    n_eta: int = 2,
+    n_band: int = 2,
+) -> HTGSeedOccupationSummary:
+    normalized = normalize_htg_init_mode(init_mode)
+    nt = int(n_spin) * int(n_eta) * int(n_band)
+    occupied_per_k = htg_occupied_bands_per_k(nu, nt, n_spin=n_spin, n_eta=n_eta)
+    occupation_counts = htg_flavor_occupation_counts_for_init_mode(
+        init_mode,
+        nu=nu,
+        seed=seed,
+        n_spin=n_spin,
+        n_eta=n_eta,
+        n_band=n_band,
+    )
+    occupation_count_matrix: tuple[tuple[int, ...], ...] | None = None
+    initial_state_labels: tuple[str, ...] | None = None
+    if occupation_counts is not None:
+        counts = np.asarray(occupation_counts, dtype=int).reshape((int(n_spin), int(n_eta)), order="C")
+        occupation_count_matrix = tuple(tuple(int(value) for value in row) for row in counts)
+        rng = np.random.default_rng(seed)
+        idx = np.arange(nt, dtype=int).reshape((int(n_spin), int(n_eta), int(n_band)), order="F")
+        order = _flavor_priority(normalized, idx, rng)
+        initial_state_labels = tuple(_htg_seed_state_label(int(state_index), idx) for state_index in order[:occupied_per_k])
+    return HTGSeedOccupationSummary(
+        requested_init_mode=str(init_mode),
+        normalized_init_mode=normalized,
+        nu=float(nu),
+        n_spin=int(n_spin),
+        n_eta=int(n_eta),
+        n_band=int(n_band),
+        reference_band_occupations=tuple(float(value) for value in htg_band_reference_occupations(n_band)),
+        central_projected_band_indices=_central_projected_band_indices(n_band),
+        occupied_bands_per_k=occupied_per_k,
+        occupation_counts=occupation_counts,
+        occupation_count_matrix=occupation_count_matrix,
+        initial_state_labels=initial_state_labels,
+        constrained_flavor_counts=occupation_counts is not None,
+    )
 
 
 def _apply_random_rotation(
@@ -564,14 +661,12 @@ def _apply_random_rotation(
     alpha: float,
     seed: int,
 ) -> None:
-    rng = np.random.default_rng(seed)
-    nt = density.shape[0]
-    for ik in range(density.shape[2]):
-        unitary = _random_unitary(nt, rng)
-        projector = density[:, :, ik] + reference_density[:, :, ik]
-        rotated_density = unitary.conjugate().T @ projector @ unitary - reference_density[:, :, ik]
-        density[:, :, ik] = (1.0 - alpha) * density[:, :, ik] + alpha * rotated_density
-
+    apply_random_projector_rotation(
+        density,
+        reference_density=reference_density,
+        alpha=alpha,
+        seed=seed,
+    )
 
 def initialize_htg_density(
     h0: np.ndarray,
@@ -610,7 +705,7 @@ def initialize_htg_density(
         random_energies = rng.standard_normal((nt, nk))
         occ_mask = occupied_state_mask(random_energies, total_occupied)
         for ik in range(nk):
-            unitary = _random_unitary(nt, rng)
+            unitary = random_unitary_from_hermitian(nt, rng)
             occupied = np.flatnonzero(occ_mask[:, ik])
             if occupied.size == 0:
                 density[:, :, ik] = -reference_density[:, :, ik]

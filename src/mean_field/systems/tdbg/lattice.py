@@ -5,7 +5,7 @@ import math
 
 import numpy as np
 
-from ...core.lattice import KPath, cumulative_distance
+from ...core.lattice import KPath, build_kpath_from_nodes as _build_core_kpath_from_nodes
 from .params import DEFAULT_BETA, DEFAULT_POISSON_RATIO, GRAPHENE_LATTICE_CONSTANT_NM
 
 
@@ -59,43 +59,12 @@ def build_kpath_from_nodes(
     *,
     duplicate_nodes: bool = False,
 ) -> KPath:
-    if len(nodes) < 2:
-        raise ValueError("At least two path nodes are required.")
-    if len(nodes) != len(labels):
-        raise ValueError(f"Expected {len(nodes)} labels, got {len(labels)}")
-    if len(segment_point_counts) != len(nodes) - 1:
-        raise ValueError(f"Expected {len(nodes) - 1} segment counts, got {len(segment_point_counts)}")
-    if min(segment_point_counts) <= 0:
-        raise ValueError(f"Segment point counts must be positive, got {segment_point_counts}")
-
-    kvec: list[complex] = []
-    node_indices: list[int] = [1]
-    if duplicate_nodes:
-        for segment_index, (start_k, end_k, count) in enumerate(
-            zip(nodes[:-1], nodes[1:], segment_point_counts, strict=True)
-        ):
-            segment = np.linspace(0.0, 1.0, int(count), dtype=float)
-            for weight in segment:
-                kvec.append(complex(start_k + weight * (end_k - start_k)))
-            if segment_index + 1 < len(nodes) - 1:
-                node_indices.append(len(kvec))
-        node_indices.append(len(kvec))
-    else:
-        kvec.append(complex(nodes[0]))
-        for start_k, end_k, count in zip(nodes[:-1], nodes[1:], segment_point_counts, strict=True):
-            step = (end_k - start_k) / float(count)
-            for idx in range(1, int(count) + 1):
-                kvec.append(complex(start_k + idx * step))
-            node_indices.append(len(kvec))
-
-    kvec_array = np.asarray(kvec, dtype=np.complex128)
-    return KPath(
-        kvec=kvec_array,
-        kdist=cumulative_distance(kvec_array),
-        labels=labels,
-        node_indices=tuple(node_indices),
+    return _build_core_kpath_from_nodes(
+        nodes,
+        labels,
+        segment_point_counts,
+        duplicate_nodes=duplicate_nodes,
     )
-
 
 @dataclass(frozen=True)
 class TDBGLattice:

@@ -15,11 +15,18 @@ from ...core.hf import (
     calculate_norm_convergence,
     calculate_projected_overlap_between,
     compute_hf_energy,
+    density_from_fixed_sector_occupations as _core_density_from_fixed_sector_occupations,
     diagonal_overlap_blocks,
+    flat_sector_indices as _core_flat_sector_indices,
+    flatten_sector_blocks as _core_flatten_sector_blocks,
     real_space_cell_area_nm2_from_reciprocal,
     run_hartree_fock_iterations,
     screened_coulomb,
     screened_coulomb_matrix,
+    sector_block_energies,
+    shift_wavefunction_grid,
+    unflatten_sector_blocks as _core_unflatten_sector_blocks,
+    unflatten_sector_energies as _core_unflatten_sector_energies,
 )
 from .core_lattice import KPath, cumulative_distance
 from .hamiltonian import build_diagonal_block, build_hamiltonian, dirac_block
@@ -69,6 +76,34 @@ class PolshynDoubledCell:
 
 def polshyn_doubled_cell() -> PolshynDoubledCell:
     return PolshynDoubledCell()
+
+
+@dataclass(frozen=True)
+class PolshynFillingSummary:
+    projected_indices: tuple[int, ...]
+    target_band_index: int
+    target_primitive_position: int
+    target_fold_indices: tuple[int, int]
+    nb: int
+    area_ratio: int
+    reference_diagonal: np.ndarray
+    occupation_counts: np.ndarray
+    primitive_nu: float
+    matches_expected_filling: bool
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "projected_indices": [int(value) for value in self.projected_indices],
+            "target_band_index": int(self.target_band_index),
+            "target_primitive_position": int(self.target_primitive_position),
+            "target_fold_indices": [int(value) for value in self.target_fold_indices],
+            "nb": int(self.nb),
+            "area_ratio": int(self.area_ratio),
+            "reference_diagonal": [float(value) for value in self.reference_diagonal],
+            "occupation_counts": self.occupation_counts.astype(int).tolist(),
+            "primitive_nu": float(self.primitive_nu),
+            "matches_expected_filling": bool(self.matches_expected_filling),
+        }
 
 
 @dataclass(frozen=True)
@@ -326,6 +361,35 @@ def primitive_nu_from_counts(occupation_counts: np.ndarray, reference_diagonal: 
     return (occupied_total - reference_total) / float(area_ratio)
 
 
+
+def polshyn_nu_7over2_filling_summary(
+    projected_indices: tuple[int, ...],
+    *,
+    target_band_index: int,
+    area_ratio: int = 2,
+) -> PolshynFillingSummary:
+    indices = tuple(int(index) for index in projected_indices)
+    target = int(target_band_index)
+    if target not in indices:
+        raise ValueError(f"target_band_index={target} is not present in projected_indices={indices}")
+    target_position = indices.index(target)
+    target_fold_indices = (2 * target_position, 2 * target_position + 1)
+    reference = reference_diagonal_for_projected_indices(indices, target)
+    counts = occupation_counts_nu_7over2(indices, target)
+    primitive_nu = primitive_nu_from_counts(counts, reference, area_ratio=int(area_ratio))
+    return PolshynFillingSummary(
+        projected_indices=indices,
+        target_band_index=target,
+        target_primitive_position=int(target_position),
+        target_fold_indices=target_fold_indices,
+        nb=2 * len(indices),
+        area_ratio=int(area_ratio),
+        reference_diagonal=reference,
+        occupation_counts=counts,
+        primitive_nu=float(primitive_nu),
+        matches_expected_filling=bool(np.isclose(primitive_nu, 3.5, atol=1.0e-12)),
+    )
+
 def build_polshyn_projected_basis(
     model: TMBGModel,
     kvec: np.ndarray,
@@ -398,27 +462,7 @@ def build_polshyn_projected_basis(
 
 
 def _shift_wavefunction_grid(values: np.ndarray, dm: int, dn: int) -> np.ndarray:
-    arr = np.asarray(values, dtype=np.complex128)
-    dm = int(dm)
-    dn = int(dn)
-    nx, ny = arr.shape[1], arr.shape[2]
-    out = np.zeros_like(arr)
-    if abs(dm) >= nx or abs(dn) >= ny:
-        return out
-    if dm >= 0:
-        dst_x = slice(dm, nx)
-        src_x = slice(0, nx - dm)
-    else:
-        dst_x = slice(0, nx + dm)
-        src_x = slice(-dm, nx)
-    if dn >= 0:
-        dst_y = slice(dn, ny)
-        src_y = slice(0, ny - dn)
-    else:
-        dst_y = slice(0, ny + dn)
-        src_y = slice(-dn, ny)
-    out[:, dst_x, dst_y, ...] = arr[:, src_x, src_y, ...]
-    return out
+    return shift_wavefunction_grid(values, dm, dn, boundary_mode="zero_fill", grid_axes=(1, 2))
 
 
 def compact_overlap_between(
@@ -611,36 +655,11 @@ def density_from_fixed_sector_occupations(
     occupation_counts: np.ndarray,
     reference_diagonal: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
-    h = np.asarray(h_blocks, dtype=np.complex128)
-    n_spin, n_eta, nb, nb_rhs, nk = h.shape
-    if nb != nb_rhs:
-        raise ValueError(f"Expected square h blocks, got {h.shape}")
-    reference = np.asarray(reference_diagonal, dtype=float)
-    if reference.shape != (nb,):
-        raise ValueError(f"reference_diagonal shape {reference.shape} incompatible with nb={nb}")
-    ref_mat = np.diag(reference).astype(np.complex128)
-    occ = np.asarray(occupation_counts, dtype=int)
-    if occ.shape != (n_spin, n_eta):
-        raise ValueError(f"occupation_counts shape {occ.shape} incompatible with {(n_spin, n_eta)}")
-    density = np.zeros_like(h)
-    energies = np.zeros((n_spin, n_eta, nb, nk), dtype=float)
-    for ispin in range(n_spin):
-        for ieta in range(n_eta):
-            n_occ = int(occ[ispin, ieta])
-            for ik in range(nk):
-                block_h = 0.5 * (h[ispin, ieta, :, :, ik] + h[ispin, ieta, :, :, ik].conjugate().T)
-                evals, evecs = np.linalg.eigh(block_h)
-                energies[ispin, ieta, :, ik] = evals
-                if n_occ == 0:
-                    projector = np.zeros((nb, nb), dtype=np.complex128)
-                elif n_occ == nb:
-                    projector = np.eye(nb, dtype=np.complex128)
-                else:
-                    vecs = evecs[:, :n_occ]
-                    projector = vecs @ vecs.conjugate().T
-                density[ispin, ieta, :, :, ik] = projector - ref_mat
-    return density, energies
-
+    return _core_density_from_fixed_sector_occupations(
+        h_blocks,
+        occupation_counts,
+        reference_diagonal=reference_diagonal,
+    )
 
 def cdw_density_blocks(
     *,
@@ -1285,55 +1304,18 @@ def wang_projected_wavefunction_basis(basis: PolshynProjectedBasis) -> Projected
 
 
 def _flat_sector_indices(n_spin: int, n_eta: int, nb: int, ispin: int, ieta: int) -> np.ndarray:
-    return np.asarray(
-        [int(ispin) + int(n_spin) * (int(ieta) + int(n_eta) * ib) for ib in range(int(nb))],
-        dtype=int,
-    )
-
+    return _core_flat_sector_indices(n_spin, n_eta, nb, ispin, ieta)
 
 def flatten_sector_blocks(blocks: np.ndarray) -> np.ndarray:
     """Flatten (spin, valley, band, band, k) blocks to Wang nt x nt x nk layout."""
 
-    arr = np.asarray(blocks, dtype=np.complex128)
-    n_spin, n_eta, nb, nb_rhs, nk = arr.shape
-    if nb != nb_rhs:
-        raise ValueError(f"Expected square band blocks, got {arr.shape}")
-    nt = int(n_spin * n_eta * nb)
-    out = np.zeros((nt, nt, int(nk)), dtype=np.complex128)
-    for ispin in range(n_spin):
-        for ieta in range(n_eta):
-            idx = _flat_sector_indices(n_spin, n_eta, nb, ispin, ieta)
-            out[idx[:, None], idx[None, :], :] = arr[ispin, ieta]
-    return out
-
+    return _core_flatten_sector_blocks(blocks)
 
 def unflatten_sector_blocks(flat: np.ndarray, *, n_spin: int, n_eta: int, nb: int) -> np.ndarray:
-    arr = np.asarray(flat, dtype=np.complex128)
-    nt, nt_rhs, nk = arr.shape
-    if nt != nt_rhs:
-        raise ValueError(f"Expected square flattened blocks, got {arr.shape}")
-    if nt != int(n_spin) * int(n_eta) * int(nb):
-        raise ValueError(f"Flattened dimension {nt} incompatible with {(n_spin, n_eta, nb)}")
-    out = np.zeros((int(n_spin), int(n_eta), int(nb), int(nb), int(nk)), dtype=np.complex128)
-    for ispin in range(int(n_spin)):
-        for ieta in range(int(n_eta)):
-            idx = _flat_sector_indices(n_spin, n_eta, nb, ispin, ieta)
-            out[ispin, ieta] = arr[idx[:, None], idx[None, :], :]
-    return out
-
+    return _core_unflatten_sector_blocks(flat, n_spin=n_spin, n_eta=n_eta, nb=nb)
 
 def unflatten_sector_energies(flat_energies: np.ndarray, *, n_spin: int, n_eta: int, nb: int) -> np.ndarray:
-    arr = np.asarray(flat_energies, dtype=float)
-    nt, nk = arr.shape
-    if nt != int(n_spin) * int(n_eta) * int(nb):
-        raise ValueError(f"Flattened energy dimension {nt} incompatible with {(n_spin, n_eta, nb)}")
-    out = np.zeros((int(n_spin), int(n_eta), int(nb), int(nk)), dtype=float)
-    for ispin in range(int(n_spin)):
-        for ieta in range(int(n_eta)):
-            idx = _flat_sector_indices(n_spin, n_eta, nb, ispin, ieta)
-            out[ispin, ieta] = arr[idx, :]
-    return out
-
+    return _core_unflatten_sector_energies(flat_energies, n_spin=n_spin, n_eta=n_eta, nb=nb)
 
 def wang_density_from_fixed_sector_occupations(
     hamiltonian_flat: np.ndarray,
@@ -1696,16 +1678,7 @@ def translation_order_parameters(
 
 
 def path_sector_energies(h_blocks: np.ndarray) -> np.ndarray:
-    h = np.asarray(h_blocks, dtype=np.complex128)
-    n_spin, n_eta, nb, _nb_rhs, nk = h.shape
-    energies = np.zeros((n_spin, n_eta, nb, nk), dtype=float)
-    for ispin in range(n_spin):
-        for ieta in range(n_eta):
-            for ik in range(nk):
-                block_h = 0.5 * (h[ispin, ieta, :, :, ik] + h[ispin, ieta, :, :, ik].conjugate().T)
-                energies[ispin, ieta, :, ik] = np.linalg.eigvalsh(block_h)
-    return energies
-
+    return sector_block_energies(h_blocks)
 
 def estimate_fermi_level_from_sector_energies(energies: np.ndarray, occupation_counts: np.ndarray) -> float:
     vals = np.asarray(energies, dtype=float)

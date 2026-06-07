@@ -12,6 +12,8 @@ from ...core.hf import (
     DensityUpdateResult,
     HartreeFockRun,
     HartreeFockStepResult,
+    apply_random_projector_rotation,
+    random_unitary_from_hermitian,
     compute_hf_energy,
     compute_oda_parameter,
     ProjectedWavefunctionBasis,
@@ -1804,13 +1806,6 @@ def rlg_hbn_flavor_occupation_counts_for_init_mode(
     return tuple(int(value) for value in counts.reshape(-1, order="C"))
 
 
-def _random_unitary(dim: int, rng: np.random.Generator) -> np.ndarray:
-    sampled = rng.standard_normal((dim, dim)) + 1j * rng.standard_normal((dim, dim))
-    hermitian = sampled + sampled.conjugate().T
-    _, vecs = np.linalg.eigh(hermitian)
-    return np.asarray(vecs, dtype=np.complex128)
-
-
 def _apply_random_rotation(
     density: np.ndarray,
     *,
@@ -1818,14 +1813,12 @@ def _apply_random_rotation(
     alpha: float,
     seed: int,
 ) -> None:
-    rng = np.random.default_rng(seed)
-    nt = density.shape[0]
-    for ik in range(density.shape[2]):
-        unitary = _random_unitary(nt, rng)
-        projector = density[:, :, ik] + reference_density[:, :, ik]
-        rotated_density = unitary.conjugate().T @ projector @ unitary - reference_density[:, :, ik]
-        density[:, :, ik] = (1.0 - alpha) * density[:, :, ik] + alpha * rotated_density
-
+    apply_random_projector_rotation(
+        density,
+        reference_density=reference_density,
+        alpha=alpha,
+        seed=seed,
+    )
 
 def initialize_rlg_hbn_density(
     h0: np.ndarray,
@@ -1875,7 +1868,7 @@ def initialize_rlg_hbn_density(
         random_energies = rng.standard_normal((nt, nk))
         occ_mask = occupied_state_mask(random_energies, total_occupied)
         for ik in range(nk):
-            unitary = _random_unitary(nt, rng)
+            unitary = random_unitary_from_hermitian(nt, rng)
             occupied = np.flatnonzero(occ_mask[:, ik])
             if occupied.size == 0:
                 density[:, :, ik] = -reference_density[:, :, ik]

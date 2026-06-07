@@ -102,6 +102,21 @@ def project_to_flavor_diagonal(
     return projected
 
 
+def sector_block_energies(blocks: np.ndarray) -> np.ndarray:
+    arr = np.asarray(blocks, dtype=np.complex128)
+    if arr.ndim != 5:
+        raise ValueError(f"Expected blocks shape (n_spin, n_eta, nb, nb, nk), got {arr.shape}")
+    n_spin, n_eta, nb, nb_col, nk = arr.shape
+    if nb_col != nb:
+        raise ValueError(f"Expected square sector blocks, got {arr.shape}")
+    energies = np.zeros((n_spin, n_eta, nb, nk), dtype=float)
+    for ispin in range(n_spin):
+        for ieta in range(n_eta):
+            for ik in range(nk):
+                energies[ispin, ieta, :, ik] = eigh(arr[ispin, ieta, :, :, ik], eigvals_only=True)
+    return energies
+
+
 def build_flavor_band_data(
     hamiltonian: np.ndarray,
     *,

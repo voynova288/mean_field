@@ -8,6 +8,11 @@ import numpy as np
 from scipy.linalg import eigh
 
 from ....core.lattice import KPath, LatticeGrid
+from ....core.hf import (
+    density_from_fixed_sector_occupations as _core_density_from_fixed_sector_occupations,
+    sector_block_energies,
+    shift_wavefunction_grid,
+)
 from ..params import TBGParameters
 from .hf import coulomb_unit, screened_coulomb
 from .model import _construct_diagonal_block, build_sigma_z_from_uk
@@ -448,29 +453,7 @@ def screened_coulomb_matrix(
 
 
 def _shift_wavefunction_grid(values: np.ndarray, dm: int, dn: int) -> np.ndarray:
-    arr = np.asarray(values, dtype=np.complex128)
-    dm = int(dm)
-    dn = int(dn)
-    nx, ny = arr.shape[1], arr.shape[2]
-    out = np.zeros_like(arr)
-    if abs(dm) >= nx or abs(dn) >= ny:
-        return out
-
-    if dm >= 0:
-        dst_x = slice(dm, nx)
-        src_x = slice(0, nx - dm)
-    else:
-        dst_x = slice(0, nx + dm)
-        src_x = slice(-dm, nx)
-    if dn >= 0:
-        dst_y = slice(dn, ny)
-        src_y = slice(0, ny - dn)
-    else:
-        dst_y = slice(0, ny + dn)
-        src_y = slice(-dn, ny)
-
-    out[:, dst_x, dst_y, ...] = arr[:, src_x, src_y, ...]
-    return out
+    return shift_wavefunction_grid(values, dm, dn, boundary_mode="zero_fill", grid_axes=(1, 2))
 
 
 def compact_overlap_between(
@@ -711,36 +694,11 @@ def density_from_fixed_sector_occupations(
     h_blocks: np.ndarray,
     occupation_counts: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
-    h = np.asarray(h_blocks, dtype=np.complex128)
-    if h.ndim != 5:
-        raise ValueError(f"Expected h_blocks shape (spin, valley, band, band, k), got {h.shape}")
-    n_spin, n_eta, nb, nb_rhs, nk = h.shape
-    if nb != nb_rhs:
-        raise ValueError(f"Expected square band blocks, got {h.shape}")
-    occ = np.asarray(occupation_counts, dtype=int)
-    if occ.shape != (n_spin, n_eta):
-        raise ValueError(f"occupation_counts shape {occ.shape} incompatible with sectors {(n_spin, n_eta)}")
-    if np.any(occ < 0) or np.any(occ > nb):
-        raise ValueError(f"occupation_counts must lie in [0, {nb}], got {occ}")
-
-    density = np.zeros_like(h)
-    energies = np.zeros((n_spin, n_eta, nb, nk), dtype=float)
-    eye = np.eye(nb, dtype=np.complex128)
-    for ispin in range(n_spin):
-        for ieta in range(n_eta):
-            n_occ = int(occ[ispin, ieta])
-            for ik in range(nk):
-                block_h = 0.5 * (h[ispin, ieta, :, :, ik] + h[ispin, ieta, :, :, ik].conjugate().T)
-                evals, evecs = np.linalg.eigh(block_h)
-                energies[ispin, ieta, :, ik] = evals
-                if n_occ == 0:
-                    density[ispin, ieta, :, :, ik] = -0.5 * eye
-                elif n_occ == nb:
-                    density[ispin, ieta, :, :, ik] = 0.5 * eye
-                else:
-                    occ_vecs = evecs[:, :n_occ]
-                    density[ispin, ieta, :, :, ik] = occ_vecs @ occ_vecs.conjugate().T - 0.5 * eye
-    return density, energies
+    return _core_density_from_fixed_sector_occupations(
+        h_blocks,
+        occupation_counts,
+        reference_diagonal=0.5,
+    )
 
 
 def random_density_blocks(
@@ -989,15 +947,7 @@ def sector_index_from_label(label: str, *, n_spin: int = 2, n_eta: int = 2) -> t
 
 
 def path_sector_energies(h_blocks: np.ndarray) -> np.ndarray:
-    h = np.asarray(h_blocks, dtype=np.complex128)
-    n_spin, n_eta, nb, _nb_rhs, nk = h.shape
-    energies = np.zeros((n_spin, n_eta, nb, nk), dtype=float)
-    for ispin in range(n_spin):
-        for ieta in range(n_eta):
-            for ik in range(nk):
-                block_h = 0.5 * (h[ispin, ieta, :, :, ik] + h[ispin, ieta, :, :, ik].conjugate().T)
-                energies[ispin, ieta, :, ik] = np.linalg.eigvalsh(block_h)
-    return energies
+    return sector_block_energies(h_blocks)
 
 
 def max_hermitian_error(blocks: np.ndarray) -> float:

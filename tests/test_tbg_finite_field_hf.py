@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from mean_field.core.hf import DensityUpdateResult, HartreeFockKernel, run_hartree_fock_problem
 from mean_field.systems.tbg.finite_field import (
     FiniteFieldBMParameters,
     FiniteFieldHartreeFockState,
@@ -13,6 +14,7 @@ from mean_field.systems.tbg.finite_field import (
     build_finite_field_hf_inputs_from_parameters,
     build_finite_field_hf_inputs_from_spectra,
     build_finite_field_hf_kernel,
+    build_finite_field_hf_problem,
     build_finite_field_hf_kernel_from_inputs,
     build_finite_field_hf_state_from_spectra,
     build_full_flavor_overlap_data_from_spectra,
@@ -104,6 +106,43 @@ def test_density_update_uses_stored_projector_convention_and_filling() -> None:
     assert finite_field_filling(update.density) == pytest.approx(0.0)
     np.testing.assert_allclose(np.diag(update.density[:, :, 0]).real, np.array([0.5, 0.5, 0.5, 0.5]))
     np.testing.assert_allclose(np.diag(update.density[:, :, 1]).real, np.array([-0.5, -0.5, -0.5, -0.5]))
+
+
+def test_finite_field_problem_preserves_author_mixed_density_convergence_rule() -> None:
+    h0 = np.zeros((2, 2, 1), dtype=np.complex128)
+    state = FiniteFieldHartreeFockState.from_h0(
+        h0,
+        nu=0.0,
+        flux=MagneticFlux(1, 1),
+        nq=1,
+        v0=0.0,
+        precision=1.0e-8,
+    )
+    target_density = np.zeros_like(state.density)
+    target_density[:, :, 0] = np.diag([0.5, -0.5])
+
+    kernel = HartreeFockKernel(
+        interaction_builder=lambda density: np.zeros_like(density),
+        density_builder=lambda hamiltonian: DensityUpdateResult(
+            density=target_density,
+            energies=np.asarray([[-1.0], [1.0]], dtype=float),
+            mu=0.0,
+        ),
+        energy_functional=lambda interaction_h, h0_in, density: 0.0,
+        oda_parameterizer=lambda state_obj, delta_density: 0.0,
+        convergence_rule="mixed",
+    )
+    problem = build_finite_field_hf_problem(kernel, initializer=lambda state_obj, init_mode, seed: None)
+
+    run = run_hartree_fock_problem(state, problem, init_mode="bm", seed=0, max_iter=3)
+
+    assert run.converged
+    assert run.exit_reason == "converged"
+    assert run.iterations == 1
+    assert np.isclose(run.iter_err[0], 0.0)
+    assert np.isclose(run.iter_oda[0], 0.0)
+    np.testing.assert_allclose(state.density, np.zeros_like(state.density))
+    assert np.isclose(state.diagnostics["final_raw_norm"], 1.0)
 
 
 def test_expand_valley_overlap_data_to_full_spin_valley_basis() -> None:

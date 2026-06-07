@@ -4,7 +4,7 @@ from typing import Iterable
 
 import numpy as np
 
-from ....core.lattice import KPath
+from ....core.lattice import KPath, build_kpath_from_nodes as _build_core_kpath_from_nodes
 from ..params import TBGParameters
 
 
@@ -29,34 +29,7 @@ def select_adjacent_m_point(params: TBGParameters) -> complex:
 
 
 def build_kpath_from_nodes(nodes: Iterable[complex], labels: Iterable[str], points_per_segment: int) -> KPath:
-    if points_per_segment <= 0:
-        raise ValueError("points_per_segment must be positive")
-
-    node_values = tuple(complex(value) for value in nodes)
-    node_labels = tuple(str(label) for label in labels)
-    if len(node_values) < 2:
-        raise ValueError("At least two path nodes are required.")
-    if len(node_values) != len(node_labels):
-        raise ValueError(f"Expected one label per node, got {len(node_labels)} labels for {len(node_values)} nodes.")
-
-    kvec: list[complex] = [node_values[0]]
-    kdist: list[float] = [0.0]
-    node_indices: list[int] = [1]
-
-    for start_k, end_k in zip(node_values[:-1], node_values[1:], strict=True):
-        dk = (end_k - start_k) / points_per_segment
-        for step in range(1, points_per_segment + 1):
-            kvec.append(start_k + step * dk)
-            kdist.append(kdist[-1] + abs(dk))
-        node_indices.append(len(kvec))
-
-    return KPath(
-        kvec=np.asarray(kvec, dtype=np.complex128),
-        kdist=np.asarray(kdist, dtype=float),
-        labels=node_labels,
-        node_indices=tuple(node_indices),
-    )
-
+    return _build_core_kpath_from_nodes(nodes, labels, int(points_per_segment))
 
 def build_kpath_from_reference_nodes(reference_nodes: Iterable[object]) -> KPath:
     nodes = tuple(reference_nodes)
