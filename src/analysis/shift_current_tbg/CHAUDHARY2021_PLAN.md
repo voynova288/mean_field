@@ -30,18 +30,15 @@ reference/Chaudhary 等 - 2021 - Shift-current response as a probe of quantum ge
 
 ## Current implementation status
 
-Implemented corrected noninteracting scaffold plus a Hartree prototype:
+Implemented corrected noninteracting scaffold plus a Hartree prototype in reusable modules:
 
 ```text
 src/analysis/shift_current_tbg/chaudhary2021.py
 src/analysis/shift_current_tbg/hartree.py
-src/analysis/shift_current_tbg/run_chaudhary2021_b0_bands.py
-src/analysis/shift_current_tbg/run_chaudhary2021_b0_noninteracting.py
-src/analysis/shift_current_tbg/run_chaudhary2021_hartree_bands.py
-src/analysis/shift_current_tbg/run_chaudhary2021_hartree_shift_current.py
-src/analysis/shift_current_tbg/plot_chaudhary2021_fig2.py
-src/analysis/shift_current_tbg/plot_chaudhary2021_hartree_comparison.py
+src/analysis/response_derivative_gauge.py
 ```
+
+Historical per-panel run/plot scripts have been retired from the tracked package surface. If a workflow below is needed again, recover the reusable logic from git history into a dispatcher-backed devtool or CLI command rather than restoring a one-off script.
 
 Important correction: the initial `run_chaudhary2021_noninteracting.py` used the newer `atmg` shell-gauge adapter and produced a wrong Fig. 2(a)-style band structure.  Those outputs are archived as wrong/superseded under:
 

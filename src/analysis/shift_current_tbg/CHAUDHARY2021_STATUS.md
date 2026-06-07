@@ -40,27 +40,19 @@ Current focus: quantum geometry first.  The `|A|^2 S` shift-vector integrand is 
 
    This makes the FD response Pauli-blocked at neutrality, as stated around Fig. 2(e).
 
-## Current code
+## Current tracked code surface
+
+The Chaudhary/TBG shift-current workspace now keeps reusable code in modules and retires the historical per-panel `run_*` / `plot_*` scripts from the tracked package surface.  Historical commands and output paths remain in this status file, reports, result metadata, and git history; they should not be restored as standalone scripts unless the workflow is promoted into a dispatcher-backed reusable tool.
+
+Current reusable modules:
 
 ```text
 chaudhary2021.py
 hartree.py
 ../response_derivative_gauge.py
-run_chaudhary2021_quantum_geometry_audit.py
-run_chaudhary2021_b0_noninteracting.py
-run_chaudhary2021_hartree_bands.py
-run_chaudhary2021_hartree_shift_current.py
-run_chaudhary2021_hartree_fd_decomposition.py
-run_chaudhary2021_wannierberri_fd_group_audit.py
-plot_chaudhary2021_paperstyle_comparison.py
 ```
 
-`run_chaudhary2021_b0_noninteracting.py` and `run_chaudhary2021_hartree_shift_current.py` now support:
-
-```text
---response-formula sum_rule
---response-formula wannierberri --sc-eta-mev <meV>
-```
+The validated reusable response piece is the common WannierBerri-style derivative path in `../response_derivative_gauge.py`. Future production response workflows should call that common layer and should be exposed through `scripts/mean_field_tools.py`, `src/mean_field/cli.py`, or a curated devtool instead of adding another tracked paper-panel script.
 
 ## Current outputs after cleanup
 
@@ -179,13 +171,13 @@ The qualitative trend matches the Supplement S1 discussion: increasing `Delta` s
 
 ## Hartree prototype
 
-Implemented a full-continuum Hartree-only prototype:
+Implemented a full-continuum Hartree-only prototype in reusable module form:
 
 ```text
 hartree.py
-run_chaudhary2021_hartree_bands.py
-run_chaudhary2021_hartree_shift_current.py
 ```
+
+The historical Hartree band/response launch scripts were retired from the tracked package surface during cleanup. Treat archived command lines as provenance only; future reruns should use a dispatcher-backed tool or recover reusable logic into `hartree.py` / `chaudhary2021.py`.
 
 This is intentionally separate from the repository's older active-band projected HF code.  The prototype constructs Fourier components of the Hartree potential from the two flat-band wavefunctions, with the density measured relative to charge neutrality, and applies the resulting scalar potential in the full local continuum basis.  This keeps `dH/dk` equal to the continuum kinetic derivative, so the existing shift-current formula remains usable.
 

@@ -9,8 +9,7 @@ This note records what is currently reproducible after comparing the local code 
 ### Shift-current formula
 
 - The local gauge-free response implementation agrees with a direct transcription of the official Wannier90/postw90 and WannierBerri shift-current internal formula for the gapped-SLG toy model.
-- Audit script:
-  `run_slg_toy_reference_formula_audit.py`
+- Historical audit script: `run_slg_toy_reference_formula_audit.py` (retired from the tracked package surface; the reusable reference-code integrand now lives in `../response_derivative_gauge.py`).
 - Reference source locations inspected:
   - `reference/upstream/wannier90/src/postw90/berry.F90::berry_get_sc_klist`
   - `reference/upstream/wannier-berri/wannierberri/calculators/dynamic.py::ShiftCurrentFormula`

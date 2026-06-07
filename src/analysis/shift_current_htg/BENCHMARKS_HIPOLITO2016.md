@@ -8,6 +8,8 @@ Reference:
 
 Purpose: make the gapped-graphene part of Hipolito 2016 a reusable benchmark for the local shift-current / photoconductivity code.  This benchmark is independent evidence that a neutral gapped honeycomb model has a K/K' direct-gap response at `hbar omega = Delta`, which is why Mao Appendix-A Fig. 10 is not a reliable full-model validation gate.
 
+Cleanup note: the historical per-figure `run_*` scripts named below were retired from the tracked package surface during repository cleanup. Treat the command lines as provenance for archived outputs, not as current entrypoints. Future reruns should promote the needed logic into `hipolito2016.py`, `response.py`, `src/analysis/response_derivative_gauge.py`, or a dispatcher-backed devtool.
+
 ## Implemented benchmark figures
 
 ### Benchmark A: Hipolito Fig. 4
