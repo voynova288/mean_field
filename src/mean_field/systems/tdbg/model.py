@@ -151,6 +151,7 @@ class TDBGModel:
         valley: int | None = None,
         endpoint: bool = False,
         n_bands: int | None = None,
+        boundary_sewing: bool = True,
     ) -> TopologyResult:
         resolved_valley = self.params.valley if valley is None else int(valley)
         return compute_topology_on_grid(
@@ -161,4 +162,5 @@ class TDBGModel:
             valley=resolved_valley,
             endpoint=endpoint,
             n_bands=n_bands,
+            boundary_sewing=boundary_sewing,
         )

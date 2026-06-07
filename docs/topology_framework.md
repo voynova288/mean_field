@@ -29,6 +29,10 @@ Canonical framework:
 ```text
 src/analysis/topology/
   core.py
+  system.py
+  quantum_geometry.py
+  wavefunction.py
+  targets.py
   __init__.py
   README.md
   validate_existing_results.py
@@ -42,6 +46,11 @@ Main public objects:
 - `berry_curvature_from_links`: computes plaquette flux from links.
 - `chern_number_from_berry_curvature`: integrates saved or freshly computed Berry flux.
 - `matrix_sewing_transform`: convenience helper for matrix-valued boundary transition functions.
+- `TopologyResult`, `compute_system_topology_from_eigenvectors`, `compute_system_topology_from_grid_result`, and `compute_system_topology_on_grid`: common historical-system wrapper API. System modules should provide only the wavefunction/grid builder and optional sewing transforms, then delegate result packaging and retry logic here.
+- `compute_quantum_geometry`: projector-QGT / Fubini-Study metric / Berry-curvature-density maps for selected bands or subspaces.
+- `WavefunctionLayout` and `canonicalize_wavefunction_grid`: canonical adapters for `(mesh1, mesh2, basis, band/flavor/...)` arrays.
+- `normalize_quantum_geometry_maps`: paper/checkpoint convention helper for `A_BZ Omega/(2π)`, `A_BZ g_ab/(2π)`, and `A_BZ Tr[g]/(2π)`.
+- `infer_berry_sign_from_chern`: explicit Berry-sign convention helper; use it to record paper-vs-framework sign differences, not to hide topology failures.
 
 The framework intentionally lives under `src/analysis/`, not `mean_field.core`, because it is currently a local analysis layer that unifies system workflows without committing to a stable package API.
 
@@ -69,6 +78,18 @@ C = sum_k F_12(k) / (2 pi).
 
 `berry_connection` in the result is the pair of link phases `arg U_1`, `arg U_2` with shape `(2, mesh_1, mesh_2)`.  `berry_curvature` is the dimensionless plaquette flux, not divided by physical plaquette area.
 
+For projector quantum geometry the framework uses
+
+```text
+Q_ab = g_ab + i Omega_ab/2
+Omega_12 = -i Tr[P [d_1 P, d_2 P]]
+g_ab = 1/2 Tr[d_a P d_b P]
+```
+
+Use `finite_difference="central"` for paper-style local Berry/FS maps.  If the input mesh is a regular fractional BZ mesh and Cartesian components are desired, call `compute_quantum_geometry(..., coordinate_system="cartesian", reciprocal_vectors=B)`.  If the input is already a local Cartesian patch, call `compute_quantum_geometry(..., coordinate_system="cartesian", derivative_coordinates="cartesian", coordinate_steps=(dkx,dky))` so the framework does not apply a second fractional-to-Cartesian transform.
+
+Paper-normalized maps should go through `normalize_quantum_geometry_maps` or `QuantumGeometryResult.normalized_maps` rather than ad-hoc plotting code.  This returns `A_BZ Omega/(2π)`, `A_BZ g_ab/(2π)`, `A_BZ Tr[g]/(2π)`, and trace-condition maps with an explicit `berry_sign` field for reference-convention differences.
+
 ## Boundary sewing rule
 
 Many continuum-model plane-wave bases are not literally periodic under `k -> k + G_M`.  At the torus boundary the same physical Bloch state may be represented by relabeling reciprocal vectors, for example `G -> G + G_Mi`.  In that case a periodic raw array comparison is wrong even if it gives an integer.
@@ -84,10 +105,10 @@ Always ask these questions before computing Chern numbers:
 
 ## Current adapters
 
-The following system modules now delegate their Berry geometry to `analysis.topology`:
+The following system modules now delegate their Berry geometry to `analysis.topology`. For ordinary band topology, the intended adapter is now one thin call into `compute_system_topology_on_grid` / `compute_system_topology_from_grid_result` / `compute_system_topology_from_eigenvectors`; system code supplies only `compute_bands_on_grid` and optional boundary sewing.
 
 - `mean_field.systems.tmbg.topology`
-- `mean_field.systems.tdbg.topology`
+- `mean_field.systems.tdbg.topology` (TDBG `topology_on_grid` uses q-site boundary sewing by default; pass `boundary_sewing=False` only for diagnostics)
 - `mean_field.systems.atmg.topology`
 - `mean_field.systems.RnG_hBN.topology`
 - `mean_field.systems.tmbg.topology_sewn`
