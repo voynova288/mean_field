@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from mean_field.core.hf import build_projected_interaction_hamiltonian
+from mean_field.core.hf import HartreeFockProblem, build_projected_interaction_hamiltonian
 from mean_field.systems.htg.hamiltonian import build_hamiltonian, centered_band_indices
 from mean_field.systems.htg.mean_field_adapter import (
     _central_chern_basis_at_k,
@@ -17,6 +17,7 @@ from mean_field.systems.htg import (
     HTGModel,
     HTGParams,
     InteractionParams,
+    build_htg_hf_problem,
     build_htg_interaction_components,
     build_htg_overlap_blocks,
     build_htg_projected_basis,
@@ -338,6 +339,23 @@ def test_htg_initializer_and_density_builder_preserve_filling_and_projector_cons
     density_update = HTGDensityBuilder(0.0, sigma_z=state.sigma_z)(state.h0)
     assert np.isclose(htg_filling_from_density(density_update.density), 0.0)
     assert projector_idempotency_residual(density_update.density) < 1.0e-10
+
+
+def test_htg_hf_problem_builder_uses_common_problem_api() -> None:
+    basis_data = build_htg_projected_basis(
+        _small_model(),
+        InteractionParams(n_k=2, g_shells=0),
+    )
+    overlap_blocks = build_htg_overlap_blocks(basis_data)
+    state = HTGHartreeFockState.from_projected_basis(basis_data, nu=0.0, precision=1.0e-8)
+
+    problem = build_htg_hf_problem(state, overlap_blocks, use_numba=False)
+    problem.initializer(state, init_mode="fb", seed=1)
+
+    assert isinstance(problem, HartreeFockProblem)
+    assert state.density.shape == basis_data.h0.shape
+    assert np.isclose(htg_filling_from_density(state.density), 0.0)
+    assert projector_idempotency_residual(state.density) < 1.0e-12
 
 
 def test_htg_overlap_blocks_feed_generic_projected_interaction_builder() -> None:

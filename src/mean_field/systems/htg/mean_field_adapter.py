@@ -10,6 +10,8 @@ from ...core.hf import (
     DensityUpdateResult,
     FlavorBandData,
     HFOverlapBlockSet,
+    HartreeFockKernel,
+    HartreeFockProblem,
     HartreeFockRun,
     HartreeFockStepResult,
     ProjectedWavefunctionBasis,
@@ -17,6 +19,7 @@ from ...core.hf import (
     random_unitary_from_hermitian,
     build_flavor_band_data,
     build_projected_hf_kernel,
+    build_projected_hf_problem,
     build_projected_interaction_hamiltonian,
     build_projected_target_hamiltonian,
     calculate_projected_overlap_between,
@@ -24,7 +27,7 @@ from ...core.hf import (
     find_chemical_potential,
     occupied_state_mask,
     real_space_cell_area_nm2_from_reciprocal,
-    run_projected_hartree_fock,
+    run_hartree_fock_problem,
     screened_coulomb_matrix,
 )
 from .hamiltonian import build_hamiltonian, centered_band_indices
@@ -1504,7 +1507,7 @@ def build_htg_hf_kernel(
     *,
     beta: float = 1.0,
     use_numba: bool | None = None,
-):
+) -> HartreeFockKernel:
     return build_projected_hf_kernel(
         state,
         overlap_blocks,
@@ -1524,6 +1527,27 @@ def build_htg_hf_kernel(
         v0=state.v0,
         beta=beta,
         use_numba=use_numba,
+    )
+
+
+def build_htg_hf_problem(
+    state: HTGHartreeFockState,
+    overlap_blocks: HFOverlapBlockSet,
+    *,
+    beta: float = 1.0,
+    initial_density: np.ndarray | None = None,
+    use_numba: bool | None = None,
+) -> HartreeFockProblem:
+    """Build the shared core-HF problem wrapper for an HTG projected state."""
+
+    return build_projected_hf_problem(
+        initializer=HTGInitializer(initial_density=initial_density),
+        kernel=build_htg_hf_kernel(
+            state,
+            overlap_blocks,
+            beta=beta,
+            use_numba=use_numba,
+        ),
     )
 
 
@@ -1566,30 +1590,20 @@ def run_htg_hf(
         occupation_counts=occupation_counts,
     )
     overlap_blocks = build_htg_overlap_blocks(basis_data, g_shells=g_shells)
-    base_run = run_projected_hartree_fock(
+    problem = build_htg_hf_problem(
         state,
-        initializer=HTGInitializer(initial_density=initial_density),
-        density_builder=HTGDensityBuilder(
-            nu,
-            sigma_z=state.sigma_z,
-            occupation_counts=occupation_counts,
-            n_spin=state.n_spin,
-            n_eta=state.n_eta,
-            n_band=state.n_band,
-        ),
-        overlap_blocks=overlap_blocks,
+        overlap_blocks,
+        beta=beta,
+        initial_density=initial_density,
+        use_numba=use_numba,
+    )
+    base_run = run_hartree_fock_problem(
+        state,
+        problem,
         init_mode=normalized_init_mode,
         seed=seed,
-        v0=state.v0,
-        beta=beta,
-        energy_functional=compute_hf_energy,
-        oda_parameterizer="default",
-        step_callback=_update_htg_hf_step_state,
-        final_state_callback=_update_htg_hf_density_update_state,
-        convergence_rule="raw",
         max_iter=max_iter,
         oda_stall_threshold=oda_stall_threshold,
-        use_numba=use_numba,
     )
     return HTGHartreeFockRun(
         state=state,
@@ -1646,30 +1660,19 @@ def scan_htg_ground_state(
                 precision=precision,
                 occupation_counts=occupation_counts,
             )
-            base_run = run_projected_hartree_fock(
+            problem = build_htg_hf_problem(
                 state,
-                initializer=HTGInitializer(),
-                density_builder=HTGDensityBuilder(
-                    nu,
-                    sigma_z=state.sigma_z,
-                    occupation_counts=occupation_counts,
-                    n_spin=state.n_spin,
-                    n_eta=state.n_eta,
-                    n_band=state.n_band,
-                ),
-                overlap_blocks=overlap_blocks,
+                overlap_blocks,
+                beta=beta,
+                use_numba=use_numba,
+            )
+            base_run = run_hartree_fock_problem(
+                state,
+                problem,
                 init_mode=normalized,
                 seed=int(seed),
-                v0=state.v0,
-                beta=beta,
-                energy_functional=compute_hf_energy,
-                oda_parameterizer="default",
-                step_callback=_update_htg_hf_step_state,
-                final_state_callback=_update_htg_hf_density_update_state,
-                convergence_rule="raw",
                 max_iter=max_iter,
                 oda_stall_threshold=oda_stall_threshold,
-                use_numba=use_numba,
             )
             runs.append(
                 HTGHartreeFockRun(
