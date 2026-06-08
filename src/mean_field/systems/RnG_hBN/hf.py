@@ -10,6 +10,8 @@ import numpy as np
 from ...core.lattice import KPath
 from ...core.hf import (
     DensityUpdateResult,
+    HartreeFockKernel,
+    HartreeFockProblem,
     HartreeFockRun,
     HartreeFockStepResult,
     apply_random_projector_rotation,
@@ -21,7 +23,7 @@ from ...core.hf import (
     compute_density_overlap_trace_from_diagonal,
     find_chemical_potential,
     occupied_state_mask,
-    run_hartree_fock_iterations,
+    run_hartree_fock_problem,
 )
 from .hamiltonian import build_hamiltonian, diagonalize_hamiltonian, valence_band_count
 from .interaction import RLGhBNInteractionParams, VALID_INTERACTION_SCHEMES, layer_coulomb_matrix_mev_nm2
@@ -2055,6 +2057,57 @@ class RLGhBNDensityBuilder:
         )
 
 
+def build_rlg_hbn_hf_problem(
+    state: RLGhBNHartreeFockState,
+    overlap_blocks: RLGhBNLayerOverlapBlockSet,
+    *,
+    beta: float = 1.0,
+    initial_density: np.ndarray | None = None,
+    step_callback: Callable[[RLGhBNHartreeFockState, HartreeFockStepResult], None] | None = None,
+) -> HartreeFockProblem:
+    """Build the reusable core-HF problem wrapper for an RLG/hBN state.
+
+    The RLG/hBN system layer still owns the projected basis, layer-resolved
+    Coulomb tables, filling convention, and ODA functional.  This adapter only
+    packages those system-specific callables behind the shared
+    :class:`mean_field.core.hf.HartreeFockProblem` interface.
+    """
+
+    density_builder = RLGhBNDensityBuilder(
+        nu=state.nu,
+        reference_density=state.reference_density,
+        active_valence_bands=state.active_valence_bands,
+        occupation_counts=state.occupation_counts,
+        n_spin=state.n_spin,
+        n_eta=state.n_eta,
+        n_band=state.n_band,
+    )
+    kernel = HartreeFockKernel(
+        interaction_builder=lambda density: build_rlg_hbn_hf_interaction_hamiltonian(
+            density,
+            overlap_blocks,
+            v0=state.v0,
+            beta=beta,
+        ),
+        density_builder=density_builder,
+        energy_functional=compute_hf_energy,
+        oda_parameterizer=lambda state_obj, delta_density: compute_rlg_hbn_oda_parameter(
+            state_obj,  # type: ignore[arg-type]
+            delta_density,
+            overlap_blocks,
+            beta=beta,
+        ),
+        hamiltonian_postprocessor=_hermitize_blocks_inplace,
+        density_postprocessor=_hermitize_blocks_inplace,
+        step_callback=step_callback,  # type: ignore[arg-type]
+        convergence_rule="raw",
+    )
+    return HartreeFockProblem(
+        initializer=RLGhBNInitializer(initial_density=initial_density),
+        kernel=kernel,
+    )
+
+
 def run_rlg_hbn_hartree_fock(
     basis_data: RLGhBNProjectedBasisData,
     *,
@@ -2088,40 +2141,18 @@ def run_rlg_hbn_hartree_fock(
         occupation_counts=resolved_counts,
     )
     resolved_blocks = overlap_blocks if overlap_blocks is not None else build_rlg_hbn_layer_overlap_blocks(basis_data)
-    initializer = RLGhBNInitializer(initial_density=initial_density)
-    density_builder = RLGhBNDensityBuilder(
-        nu=nu,
-        reference_density=state.reference_density,
-        active_valence_bands=state.active_valence_bands,
-        occupation_counts=resolved_counts,
-        n_spin=state.n_spin,
-        n_eta=state.n_eta,
-        n_band=state.n_band,
-    )
-
-    initializer(state, init_mode=init_mode, seed=seed)
-    core_run = run_hartree_fock_iterations(
+    problem = build_rlg_hbn_hf_problem(
         state,
+        resolved_blocks,
+        beta=beta,
+        initial_density=initial_density,
+        step_callback=step_callback,
+    )
+    core_run = run_hartree_fock_problem(
+        state,
+        problem,
         init_mode=init_mode,
         seed=seed,
-        interaction_builder=lambda density: build_rlg_hbn_hf_interaction_hamiltonian(
-            density,
-            resolved_blocks,
-            v0=state.v0,
-            beta=beta,
-        ),
-        density_builder=density_builder,
-        energy_functional=compute_hf_energy,
-        oda_parameterizer=lambda state_obj, delta_density: compute_rlg_hbn_oda_parameter(
-            state_obj,  # type: ignore[arg-type]
-            delta_density,
-            resolved_blocks,
-            beta=beta,
-        ),
-        hamiltonian_postprocessor=_hermitize_blocks_inplace,
-        density_postprocessor=_hermitize_blocks_inplace,
-        step_callback=step_callback,
-        convergence_rule="raw",
         max_iter=max_iter,
         oda_stall_threshold=oda_stall_threshold,
     )
@@ -2198,6 +2229,7 @@ __all__ = [
     "average_scheme_density_delta",
     "build_rlg_hbn_density_from_hamiltonian",
     "build_rlg_hbn_hf_interaction_hamiltonian",
+    "build_rlg_hbn_hf_problem",
     "build_rlg_hbn_interaction_components",
     "build_rlg_hbn_layer_overlap_blocks",
     "build_rlg_hbn_projected_basis",
