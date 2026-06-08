@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import numpy as np
 
+from mean_field.core.hf import HartreeFockProblem, empty_overlap_block_set, run_hartree_fock_problem
 from mean_field.systems.tmbg.polshyn_supercell import (
+    PolshynWangHFState,
+    build_wang_hf_problem,
     cdw_density_blocks,
     flatten_sector_blocks,
     polshyn_nu_7over2_filling_summary,
@@ -57,6 +60,38 @@ def test_polshyn_cdw_initializer_has_maximal_target_fold_order() -> None:
     assert np.allclose(density[0, 0, 5, 4, :], 0.5)
     assert np.allclose(density[1, 0, 4, 5, :], 0.0)
     assert np.allclose(density[0, 1, 4, 5, :], 0.0)
+
+
+def test_polshyn_wang_hf_problem_builder_uses_common_problem_api() -> None:
+    h0 = np.zeros((2, 2, 1), dtype=np.complex128)
+    h0[:, :, 0] = np.diag([-1.0, 1.0])
+    state = PolshynWangHFState(
+        h0=h0.copy(),
+        density=np.zeros_like(h0),
+        hamiltonian=h0.copy(),
+        energies=np.zeros((2, 1), dtype=float),
+        mu=0.0,
+        precision=1.0e-12,
+        v0=1.0,
+        diagnostics={},
+    )
+
+    problem = build_wang_hf_problem(
+        state,
+        empty_overlap_block_set(),
+        occupation_counts=np.asarray([[1]], dtype=int),
+        reference_diagonal=np.asarray([0.0, 0.0], dtype=float),
+        n_spin=1,
+        n_eta=1,
+        nb=2,
+    )
+    run = run_hartree_fock_problem(state, problem, init_mode="toy_wang", seed=0, max_iter=1)
+
+    assert isinstance(problem, HartreeFockProblem)
+    assert run.iterations == 1
+    assert state.density.shape == h0.shape
+    assert np.isclose(state.density[0, 0, 0].real, 1.0)
+    assert np.isclose(state.density[1, 1, 0].real, 0.0)
 
 
 def test_polshyn_sector_flatten_round_trip_preserves_block_layout() -> None:

@@ -9,6 +9,8 @@ from scipy.linalg import eigh
 from ...core.hf import (
     DensityUpdateResult,
     HFOverlapBlockSet,
+    HartreeFockKernel,
+    HartreeFockProblem,
     ProjectedWavefunctionBasis,
     build_projected_interaction_hamiltonian,
     build_projected_target_hamiltonian,
@@ -20,7 +22,7 @@ from ...core.hf import (
     flat_sector_indices as _core_flat_sector_indices,
     flatten_sector_blocks as _core_flatten_sector_blocks,
     real_space_cell_area_nm2_from_reciprocal,
-    run_hartree_fock_iterations,
+    run_hartree_fock_problem,
     screened_coulomb,
     screened_coulomb_matrix,
     sector_block_energies,
@@ -1419,6 +1421,48 @@ def build_wang_overlap_blocks(
     )
 
 
+def build_wang_hf_problem(
+    state: PolshynWangHFState,
+    overlap_blocks: HFOverlapBlockSet,
+    *,
+    occupation_counts: np.ndarray,
+    reference_diagonal: np.ndarray,
+    n_spin: int,
+    n_eta: int,
+    nb: int,
+) -> HartreeFockProblem:
+    """Build the shared core-HF problem wrapper for Wang/Xiaoyu tMBG HF."""
+
+    def interaction_builder(density_flat_in: np.ndarray) -> np.ndarray:
+        return build_projected_interaction_hamiltonian(
+            density_flat_in,
+            overlap_blocks,
+            v0=float(state.v0),
+            beta=1.0,
+        )
+
+    def density_builder(hamiltonian_flat: np.ndarray) -> DensityUpdateResult:
+        return wang_density_from_fixed_sector_occupations(
+            hamiltonian_flat,
+            occupation_counts,
+            reference_diagonal,
+            n_spin=n_spin,
+            n_eta=n_eta,
+            nb=nb,
+        )
+
+    return HartreeFockProblem(
+        initializer=lambda _state, *, init_mode, seed: None,
+        kernel=HartreeFockKernel(
+            interaction_builder=interaction_builder,
+            density_builder=density_builder,
+            energy_functional=compute_hf_energy,
+            oda_delta_interaction_builder=interaction_builder,
+            convergence_rule="mixed",
+        ),
+    )
+
+
 def run_projected_hf_scf_wang(
     basis: PolshynProjectedBasis,
     *,
@@ -1502,33 +1546,20 @@ def run_projected_hf_scf_wang(
         diagnostics={},
     )
 
-    def interaction_builder(density_flat_in: np.ndarray) -> np.ndarray:
-        return build_projected_interaction_hamiltonian(
-            density_flat_in,
-            overlap_blocks,
-            v0=float(v0),
-            beta=1.0,
-        )
-
-    def density_builder(hamiltonian_flat: np.ndarray) -> DensityUpdateResult:
-        return wang_density_from_fixed_sector_occupations(
-            hamiltonian_flat,
-            occupation_counts,
-            basis.reference_diagonal,
-            n_spin=basis.n_spin,
-            n_eta=basis.n_eta,
-            nb=basis.nb,
-        )
-
-    run = run_hartree_fock_iterations(
+    problem = build_wang_hf_problem(
         state,
+        overlap_blocks,
+        occupation_counts=occupation_counts,
+        reference_diagonal=basis.reference_diagonal,
+        n_spin=basis.n_spin,
+        n_eta=basis.n_eta,
+        nb=basis.nb,
+    )
+    run = run_hartree_fock_problem(
+        state,
+        problem,
         init_mode=init_mode,
         seed=int(seed),
-        interaction_builder=interaction_builder,
-        density_builder=density_builder,
-        energy_functional=compute_hf_energy,
-        oda_delta_interaction_builder=interaction_builder,
-        convergence_rule="mixed",
         max_iter=int(max_iter),
         oda_stall_threshold=float(oda_stall_threshold),
     )
