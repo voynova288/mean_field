@@ -64,8 +64,14 @@ def _q_site_sewing_transform(lattice: TDBGLattice, gvec: complex) -> SewingTrans
     return transform
 
 
-def _boundary_sewing_transforms(lattice: TDBGLattice) -> tuple[SewingTransform, SewingTransform]:
+def boundary_sewing_transforms(lattice: TDBGLattice) -> tuple[SewingTransform, SewingTransform]:
+    """Return TDBG q-site sewing transforms for the two moire boundaries."""
+
     return (_q_site_sewing_transform(lattice, lattice.g_m1), _q_site_sewing_transform(lattice, lattice.g_m2))
+
+
+# Backward-compatible private alias for older local callers.
+_boundary_sewing_transforms = boundary_sewing_transforms
 
 
 def compute_topology_from_eigenvectors(
@@ -138,13 +144,14 @@ def compute_topology_on_grid(
         grid_builder=grid_builder,
         valley=valley,
         n_bands=n_bands,
-        sewing_transforms_builder=(lambda: _boundary_sewing_transforms(lattice)) if boundary_sewing else None,
+        sewing_transforms_builder=(lambda: boundary_sewing_transforms(lattice)) if boundary_sewing else None,
         index_metadata=metadata,
     )
 
 
 __all__ = [
     "TopologyResult",
+    "boundary_sewing_transforms",
     "compute_topology_from_eigenvectors",
     "compute_topology_from_grid_result",
     "compute_topology_on_grid",
