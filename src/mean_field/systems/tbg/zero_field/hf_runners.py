@@ -39,6 +39,7 @@ class HFPathResult:
     screening_lm: float | None = None
     finite_zero_limit: bool = False
     zero_cutoff: float = 1e-6
+    include_interaction: bool = True
 
 
 @dataclass(frozen=True)
@@ -138,6 +139,7 @@ def build_restricted_hf_path_hamiltonian(
     screening_lm: float | None = None,
     finite_zero_limit: bool = False,
     zero_cutoff: float = 1e-6,
+    include_interaction: bool = True,
 ) -> tuple[KPath, BMSolution, np.ndarray]:
     state = hf_run.state
     params = grid_solution.params
@@ -152,29 +154,30 @@ def build_restricted_hf_path_hamiltonian(
     path_solution = solve_bm_model(params, path.kvec, lg=bm_lg, sigma_rotation=True)
     h_path = build_h0_from_bm(path_solution)
 
-    screening_kwargs = {
-        "relative_permittivity": float(relative_permittivity),
-        "screening_lm": screening_lm,
-        "finite_zero_limit": bool(finite_zero_limit),
-        "zero_cutoff": float(zero_cutoff),
-    }
-    grid_overlap = build_overlap_block_set(grid_solution, lg=resolved_overlap_lg, **screening_kwargs)
-    path_overlap = build_overlap_block_set(path_solution, lg=resolved_overlap_lg, **screening_kwargs)
-    path_grid_overlap = build_overlap_block_set(
-        path_solution,
-        source_solution=grid_solution,
-        lg=resolved_overlap_lg,
-        **screening_kwargs,
-    )
-    h_path = build_projected_target_hamiltonian(
-        h_path,
-        state.density,
-        source_overlap_blocks=grid_overlap,
-        target_overlap_blocks=path_overlap,
-        target_source_overlap_blocks=path_grid_overlap,
-        v0=state.v0,
-        beta=resolved_beta,
-    )
+    if include_interaction:
+        screening_kwargs = {
+            "relative_permittivity": float(relative_permittivity),
+            "screening_lm": screening_lm,
+            "finite_zero_limit": bool(finite_zero_limit),
+            "zero_cutoff": float(zero_cutoff),
+        }
+        grid_overlap = build_overlap_block_set(grid_solution, lg=resolved_overlap_lg, **screening_kwargs)
+        path_overlap = build_overlap_block_set(path_solution, lg=resolved_overlap_lg, **screening_kwargs)
+        path_grid_overlap = build_overlap_block_set(
+            path_solution,
+            source_solution=grid_solution,
+            lg=resolved_overlap_lg,
+            **screening_kwargs,
+        )
+        h_path = build_projected_target_hamiltonian(
+            h_path,
+            state.density,
+            source_overlap_blocks=grid_overlap,
+            target_overlap_blocks=path_overlap,
+            target_source_overlap_blocks=path_grid_overlap,
+            v0=state.v0,
+            beta=resolved_beta,
+        )
 
     return path, path_solution, h_path
 
@@ -193,6 +196,7 @@ def evaluate_restricted_hf_path(
     screening_lm: float | None = None,
     finite_zero_limit: bool = False,
     zero_cutoff: float = 1e-6,
+    include_interaction: bool = True,
 ) -> HFPathResult:
     path, _, h_path = build_restricted_hf_path_hamiltonian(
         hf_run,
@@ -206,6 +210,7 @@ def evaluate_restricted_hf_path(
         screening_lm=screening_lm,
         finite_zero_limit=finite_zero_limit,
         zero_cutoff=zero_cutoff,
+        include_interaction=include_interaction,
     )
     band_data = build_flavor_band_data(
         h_path,
@@ -241,6 +246,7 @@ def evaluate_restricted_hf_path(
         screening_lm=screening_lm,
         finite_zero_limit=bool(finite_zero_limit),
         zero_cutoff=float(zero_cutoff),
+        include_interaction=bool(include_interaction),
     )
 
 
@@ -346,6 +352,7 @@ def write_hf_path_summary(path: Path, result: HFPathResult, *, hf_state_path: st
         ("finite_zero_limit", str(result.finite_zero_limit).lower()),
         ("drop_q0_coulomb", str(not result.finite_zero_limit).lower()),
         ("zero_cutoff", f"{result.zero_cutoff}"),
+        ("include_interaction", str(result.include_interaction).lower()),
         ("points_per_segment", str(result.points_per_segment)),
         ("mu", f"{result.mu}"),
         ("exit_reason", result.exit_reason),

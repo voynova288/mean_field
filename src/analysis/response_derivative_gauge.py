@@ -594,10 +594,14 @@ def wannierberri_shift_current_internal_imn(
     DV_bit = (
         np.einsum("nmc,nna->nmca", D_H, V, optimize=True)
         - np.einsum("nmc,mma->nmca", D_H, V, optimize=True)
-        + np.einsum("nma,nnc->nmac", D_H, V, optimize=True)
-        - np.einsum("nma,mmc->nmac", D_H, V, optimize=True)
+        + np.einsum("nma,nnc->nmca", D_H, V, optimize=True)
+        - np.einsum("nma,mmc->nmca", D_H, V, optimize=True)
     )
-    A_gen_der = 1.0j * (del2e + sum_HD + DV_bit) * inv[:, :, None, None]
+    # WannierBerri uses ``data_K.dEig_inv.swapaxes(2, 1)`` for this final
+    # optical-pair denominator, while ``D_H`` and ``D_H_Pval`` above use the
+    # unswapped denominator.  Keep that asymmetry for line-by-line parity with
+    # ``calculators/dynamic.py::ShiftCurrentFormula``.
+    A_gen_der = 1.0j * (del2e + sum_HD + DV_bit) * inv.T[:, :, None, None]
     A_H = 1.0j * D_H
     imn = -np.einsum("nmca,mnb->nmabc", A_gen_der, A_H, optimize=True).imag
     return imn + np.swapaxes(imn, 3, 4)

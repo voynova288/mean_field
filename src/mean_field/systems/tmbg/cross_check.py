@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 import math
+from typing import Any
 
 import numpy as np
 
@@ -31,7 +32,7 @@ def _complex_key(value: complex, *, digits: int = 12) -> tuple[float, float]:
     return (round(float(value.real), digits), round(float(value.imag), digits))
 
 
-def _resolve_params(params: TMBGParameters | Mapping[str, float]) -> dict[str, float]:
+def _resolve_params(params: TMBGParameters | Mapping[str, float]) -> dict[str, Any]:
     if isinstance(params, TMBGParameters):
         return {
             "graphene_lattice_constant_nm": float(params.graphene_lattice_constant_nm),
@@ -47,13 +48,31 @@ def _resolve_params(params: TMBGParameters | Mapping[str, float]) -> dict[str, f
             "vf": float(params.vf),
             "v3": float(params.v3),
             "v4": float(params.v4),
+            "blg_stacking": str(params.blg_stacking),
+            "bernal_convention": str(params.bernal_convention),
         }
 
-    resolved = {str(key): float(value) for key, value in dict(params).items()}
+    resolved: dict[str, Any] = dict(params)
+    for key in (
+        "graphene_lattice_constant_nm",
+        "t0",
+        "t1",
+        "t3",
+        "t4",
+        "delta",
+        "omega",
+        "omega_prime",
+        "interlayer_potential",
+        "staggered_potential",
+    ):
+        if key in resolved:
+            resolved[key] = float(resolved[key])
     a_nm = float(resolved.get("graphene_lattice_constant_nm", GRAPHENE_LATTICE_CONSTANT_NM))
     resolved.setdefault("vf", hopping_to_velocity(float(resolved["t0"]), a_nm))
     resolved.setdefault("v3", hopping_to_velocity(float(resolved["t3"]), a_nm))
     resolved.setdefault("v4", hopping_to_velocity(float(resolved["t4"]), a_nm))
+    resolved.setdefault("blg_stacking", "AB")
+    resolved.setdefault("bernal_convention", "park")
     return resolved
 
 
@@ -133,12 +152,30 @@ def blg_interlayer(
     v3: float,
     v4: float,
     valley: int,
+    blg_stacking: str = "AB",
+    bernal_convention: str = "park",
 ) -> np.ndarray:
     pi, pi_dag = _valley_pi(kvec, phi, valley)
+    if bernal_convention == "polshyn2020":
+        return np.asarray(
+            [
+                [-v4 * pi, t1],
+                [-v3 * pi_dag, -v4 * pi],
+            ],
+            dtype=np.complex128,
+        )
+    if blg_stacking == "AB":
+        return np.asarray(
+            [
+                [-v4 * pi_dag, -v3 * pi],
+                [t1, -v4 * pi_dag],
+            ],
+            dtype=np.complex128,
+        )
     return np.asarray(
         [
-            [-v4 * pi, -v3 * pi_dag],
-            [t1, -v4 * pi],
+            [-v4 * pi_dag, t1],
+            [-v3 * pi, -v4 * pi_dag],
         ],
         dtype=np.complex128,
     )
@@ -170,6 +207,8 @@ def tmbg_diagonal_block(
         v3=resolved["v3"],
         v4=resolved["v4"],
         valley=valley,
+        blg_stacking=str(resolved["blg_stacking"]),
+        bernal_convention=str(resolved["bernal_convention"]),
     )
 
     block = np.zeros((6, 6), dtype=np.complex128)
@@ -179,8 +218,15 @@ def tmbg_diagonal_block(
     block[0:2, 2:4] = t_blg
     block[2:4, 0:2] = t_blg.conjugate().T
 
-    block[0, 0] += resolved["delta"]
-    block[3, 3] -= resolved["delta"]
+    if resolved["bernal_convention"] == "polshyn2020":
+        block[0, 0] += resolved["delta"]
+        block[3, 3] -= resolved["delta"]
+    elif resolved["blg_stacking"] == "AB":
+        block[1, 1] += resolved["delta"]
+        block[2, 2] += resolved["delta"]
+    else:
+        block[0, 0] += resolved["delta"]
+        block[3, 3] += resolved["delta"]
     block[0:2, 0:2] += -resolved["interlayer_potential"] * np.eye(2, dtype=np.complex128)
     block[4:6, 4:6] += resolved["interlayer_potential"] * np.eye(2, dtype=np.complex128)
     block[4:6, 4:6] += resolved["staggered_potential"] * np.asarray(

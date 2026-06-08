@@ -108,12 +108,13 @@ def build_diagonal_block(
     valley: int,
 ) -> np.ndarray:
     valley = _validate_valley(valley)
-    # Use an extended-zone gauge in which the uncoupled bilayer low-energy point
-    # sits at K~ and the monolayer Dirac point sits at K~'. This amounts to
-    # measuring the intralayer Dirac momenta relative to valley-dependent mBZ
-    # corners rather than relative to Γ~.
-    k_bottom = complex(k_tilde + gvec - valley * lattice.k_m)
-    k_top = complex(k_tilde + gvec - valley * lattice.kprime_m)
+    # Use the code gauge encoded by the Park/Park-like checkpoints: the
+    # bottom-middle bilayer block is measured from its own low-energy point,
+    # while the top monolayer Dirac cone is displaced by the q0 moire vector.
+    # In the n_shells=0, k=0 minimal limit this gives the exact spectrum
+    # {-t1, 0, 0, +t1} for the bilayer plus +/- vf |q0| for the monolayer.
+    k_bottom = complex(k_tilde + gvec)
+    k_top = complex(k_tilde + gvec + valley * lattice.q0)
     h_bottom = dirac_block(k_bottom, -lattice.theta_rad / 2.0, params.vf, valley)
     h_middle = dirac_block(k_bottom, -lattice.theta_rad / 2.0, params.vf, valley)
     h_top = dirac_block(k_top, lattice.theta_rad / 2.0, params.vf, valley)
@@ -135,10 +136,10 @@ def build_diagonal_block(
         block[3, 3] -= params.delta
     elif _validate_blg_stacking(params.blg_stacking) == "AB":
         block[1, 1] += params.delta
-        block[2, 2] -= params.delta
+        block[2, 2] += params.delta
     else:
         block[0, 0] += params.delta
-        block[3, 3] -= params.delta
+        block[3, 3] += params.delta
 
     block[0:2, 0:2] += -params.interlayer_potential * np.eye(2, dtype=np.complex128)
     block[4:6, 4:6] += params.interlayer_potential * np.eye(2, dtype=np.complex128)
