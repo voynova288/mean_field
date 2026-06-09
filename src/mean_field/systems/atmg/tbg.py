@@ -6,6 +6,7 @@ import math
 import numpy as np
 from scipy.linalg import eigh
 
+from mean_field.core.lattice import build_shift_coupling_edges, complex_lattice_key
 from mean_field.core.validation import validate_valley as _validate_valley
 
 from .lattice import ATMGLattice
@@ -15,9 +16,6 @@ VALID_VALLEYS = (-1, 1)
 MOIRE_CHANNELS = ("0", "+", "-")
 
 
-
-def _complex_key(value: complex, *, digits: int = 12) -> tuple[float, float]:
-    return (round(float(value.real), digits), round(float(value.imag), digits))
 
 
 def _valley_pi(kvec: complex, valley: int) -> tuple[complex, complex]:
@@ -78,23 +76,21 @@ def build_coupling_table(
 ) -> tuple[TBGCouplingEntry, ...]:
     g_vectors = np.asarray(g_vectors, dtype=np.complex128)
     valley = _validate_valley(valley)
-    mapping = {_complex_key(complex(gvec)): idx for idx, gvec in enumerate(g_vectors)}
-
-    entries: list[TBGCouplingEntry] = []
-    for odd_index, g_odd in enumerate(g_vectors):
-        for channel in MOIRE_CHANNELS:
-            shift = complex(valley * (q_vectors[channel] - q_vectors["0"]))
-            even_index = mapping.get(_complex_key(complex(g_odd + shift)))
-            if even_index is None:
-                continue
-            entries.append(
-                TBGCouplingEntry(
-                    channel=str(channel),
-                    odd_index=int(odd_index),
-                    even_index=int(even_index),
-                )
-            )
-    return tuple(entries)
+    channel_shifts = (
+        (channel, complex(valley * (q_vectors[channel] - q_vectors["0"]))) for channel in MOIRE_CHANNELS
+    )
+    return tuple(
+        TBGCouplingEntry(
+            channel=str(edge.channel),
+            odd_index=int(edge.source_index),
+            even_index=int(edge.target_index),
+        )
+        for edge in build_shift_coupling_edges(
+            g_vectors,
+            channel_shifts,
+            key=complex_lattice_key,
+        )
+    )
 
 
 def build_monolayer_hamiltonian(

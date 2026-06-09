@@ -1,10 +1,71 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Hashable, Iterable, Mapping
 from dataclasses import dataclass
 import math
-from typing import Iterable
+from typing import Any
 
 import numpy as np
+
+CouplingChannel = int | str
+
+
+@dataclass(frozen=True)
+class CouplingEdge:
+    """System-independent sparse edge between two reciprocal-lattice sites."""
+
+    channel: CouplingChannel
+    source_index: int
+    target_index: int
+
+
+def complex_lattice_key(value: complex, *, digits: int = 12) -> tuple[float, float]:
+    """Return a rounded hash key for complex reciprocal-lattice coordinates."""
+
+    z_value = complex(value)
+    return (round(float(z_value.real), int(digits)), round(float(z_value.imag), int(digits)))
+
+
+def build_shift_coupling_edges(
+    source_points: Iterable[Any],
+    shifts_by_channel: Mapping[CouplingChannel, Any] | Iterable[tuple[CouplingChannel, Any]],
+    *,
+    target_points: Iterable[Any] | None = None,
+    key: Callable[[Any], Hashable] | None = None,
+    add_shift: Callable[[Any, Any], Any] | None = None,
+) -> tuple[CouplingEdge, ...]:
+    """Build sparse edges by matching ``source + channel_shift`` to target sites.
+
+    This helper owns only the geometry/bookkeeping part of moire coupling tables.
+    System layers still choose the channel labels, valley-dependent shifts, matrix
+    blocks, phases, and Hamiltonian insertion slices.
+    """
+
+    source_tuple = tuple(source_points)
+    target_tuple = source_tuple if target_points is None else tuple(target_points)
+    key_fn = (lambda value: value) if key is None else key
+    add_fn = (lambda point, shift: point + shift) if add_shift is None else add_shift
+    shift_items = shifts_by_channel.items() if isinstance(shifts_by_channel, Mapping) else tuple(shifts_by_channel)
+
+    target_lookup: dict[Hashable, int] = {}
+    for target_index, target_point in enumerate(target_tuple):
+        target_lookup[key_fn(target_point)] = int(target_index)
+
+    edges: list[CouplingEdge] = []
+    for source_index, source_point in enumerate(source_tuple):
+        for channel, channel_shift in shift_items:
+            target_point = add_fn(source_point, channel_shift)
+            target_index = target_lookup.get(key_fn(target_point))
+            if target_index is None:
+                continue
+            edges.append(
+                CouplingEdge(
+                    channel=channel,
+                    source_index=int(source_index),
+                    target_index=int(target_index),
+                )
+            )
+    return tuple(edges)
 
 
 @dataclass(frozen=True)

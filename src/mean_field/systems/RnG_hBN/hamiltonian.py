@@ -7,6 +7,7 @@ from typing import Iterable
 import numpy as np
 from scipy.linalg import eigh
 
+from mean_field.core.lattice import build_shift_coupling_edges
 from mean_field.core.validation import validate_valley as _validate_valley
 
 from .lattice import RLGhBNLattice
@@ -129,21 +130,21 @@ def moire_potential(g_i: tuple[int, int] | np.ndarray, g_j: tuple[int, int] | np
 
 
 def build_coupling_table(lattice: RLGhBNLattice) -> tuple[MoireCouplingEntry, ...]:
-    lookup = lattice.g_index_lookup()
-    entries: list[MoireCouplingEntry] = []
-    for source_index, source_coords in enumerate(lattice.g_indices):
-        source = (int(source_coords[0]), int(source_coords[1]))
-        for channel, delta in enumerate(MOIRE_DELTAS, start=1):
-            target = (source[0] + delta[0], source[1] + delta[1])
-            if target in lookup:
-                entries.append(
-                    MoireCouplingEntry(
-                        source_g_index=int(source_index),
-                        target_g_index=int(lookup[target]),
-                        channel=int(channel),
-                    )
-                )
-    return tuple(entries)
+    coords = tuple((int(coord[0]), int(coord[1])) for coord in lattice.g_indices)
+    edges = build_shift_coupling_edges(
+        coords,
+        tuple(enumerate(MOIRE_DELTAS, start=1)),
+        key=lambda coord: (int(coord[0]), int(coord[1])),
+        add_shift=lambda coord, delta: (int(coord[0]) + int(delta[0]), int(coord[1]) + int(delta[1])),
+    )
+    return tuple(
+        MoireCouplingEntry(
+            source_g_index=int(edge.source_index),
+            target_g_index=int(edge.target_index),
+            channel=int(edge.channel),
+        )
+        for edge in edges
+    )
 
 
 def build_hamiltonian(

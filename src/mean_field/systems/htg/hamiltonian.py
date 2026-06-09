@@ -6,9 +6,10 @@ import math
 import numpy as np
 from scipy.linalg import eigh
 
+from mean_field.core.lattice import build_shift_coupling_edges, complex_lattice_key
 from mean_field.core.validation import validate_valley as _validate_valley
 
-from .lattice import HTGLattice, _complex_key, dot_2d
+from .lattice import HTGLattice, dot_2d
 from .params import HTGParams, VALID_VALLEYS
 
 
@@ -119,24 +120,21 @@ def build_coupling_table(
     valley = _validate_valley(valley)
     g_vectors = np.asarray(g_vectors, dtype=np.complex128)
     q_vectors = np.asarray(q_vectors, dtype=np.complex128)
-    mapping = {_complex_key(complex(gvec)): idx for idx, gvec in enumerate(g_vectors)}
     q0 = complex(q_vectors[0])
-
-    entries: list[MoireCouplingEntry] = []
-    for middle_index, g_middle in enumerate(g_vectors):
-        for channel in (0, 1, 2):
-            shift = complex(valley * (q_vectors[channel] - q0))
-            outer_index = mapping.get(_complex_key(complex(g_middle + int(shift_sign) * shift)))
-            if outer_index is None:
-                continue
-            entries.append(
-                MoireCouplingEntry(
-                    channel=int(channel),
-                    middle_index=int(middle_index),
-                    outer_index=int(outer_index),
-                )
-            )
-    return tuple(entries)
+    signed_shift = int(shift_sign) * int(valley)
+    channel_shifts = ((channel, complex(signed_shift * (q_vectors[channel] - q0))) for channel in (0, 1, 2))
+    return tuple(
+        MoireCouplingEntry(
+            channel=int(edge.channel),
+            middle_index=int(edge.source_index),
+            outer_index=int(edge.target_index),
+        )
+        for edge in build_shift_coupling_edges(
+            g_vectors,
+            channel_shifts,
+            key=complex_lattice_key,
+        )
+    )
 
 
 def default_displacements(lattice: HTGLattice, *, domain: str = "h") -> tuple[complex, complex]:

@@ -6,9 +6,10 @@ import math
 import numpy as np
 from scipy.linalg import eigh
 
+from mean_field.core.lattice import build_shift_coupling_edges, complex_lattice_key
 from mean_field.core.validation import validate_valley as _validate_valley
 
-from .lattice import TMBGLattice, _complex_key
+from .lattice import TMBGLattice
 from .params import TMBGParameters, VALID_BLG_STACKINGS
 
 
@@ -183,25 +184,22 @@ def build_coupling_table(
     valley: int = 1,
 ) -> tuple[MoireCouplingEntry, ...]:
     g_vectors = np.asarray(g_vectors, dtype=np.complex128)
-    mapping = {_complex_key(complex(gvec)): idx for idx, gvec in enumerate(g_vectors)}
     valley = _validate_valley(valley)
-    q0 = complex(valley * q_vectors["0"])
-
-    entries: list[MoireCouplingEntry] = []
-    for middle_index, g_middle in enumerate(g_vectors):
-        for channel in MOIRE_CHANNELS:
-            shift = complex(valley * q_vectors[channel] - q0)
-            top_index = mapping.get(_complex_key(complex(g_middle + shift)))
-            if top_index is None:
-                continue
-            entries.append(
-                MoireCouplingEntry(
-                    channel=channel,
-                    middle_index=int(middle_index),
-                    top_index=int(top_index),
-                )
-            )
-    return tuple(entries)
+    channel_shifts = (
+        (channel, complex(valley * (q_vectors[channel] - q_vectors["0"]))) for channel in MOIRE_CHANNELS
+    )
+    return tuple(
+        MoireCouplingEntry(
+            channel=str(edge.channel),
+            middle_index=int(edge.source_index),
+            top_index=int(edge.target_index),
+        )
+        for edge in build_shift_coupling_edges(
+            g_vectors,
+            channel_shifts,
+            key=complex_lattice_key,
+        )
+    )
 
 
 def build_hamiltonian(
