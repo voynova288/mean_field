@@ -27,12 +27,15 @@ from mean_field.systems.tbg.finite_field import (
     compute_magnetic_spectrum,
     density_update_from_hamiltonian,
     expand_valley_overlap_data_to_flavors,
+    finite_field_diophantine_filling,
     finite_field_filling,
     magnetic_k_vectors,
     magnetic_normalization_count,
     magnetic_orbit_indices,
     magnetic_r_orbit_positions,
     magnetic_shell_shifts,
+    paper_fig6_branch_cases,
+    paper_fig6_finite_b_fluxes,
     run_finite_field_hartree_fock,
     run_finite_field_hartree_fock_from_inputs,
     screened_coulomb_finite_b,
@@ -66,6 +69,33 @@ def test_magnetic_mesh_matches_author_code_ordering() -> None:
     assert (0, 0) in shifts
     assert shifts[0][0] == -1
     assert all(isinstance(m, int) and isinstance(n, int) for m, n in shifts)
+
+
+def test_paper_fig6_branch_helpers_match_author_selected_replay_grid() -> None:
+    fluxes = paper_fig6_finite_b_fluxes()
+    assert [(flux.p, flux.q) for flux in fluxes] == [
+        (1, 2),
+        (2, 5),
+        (1, 3),
+        (2, 7),
+        (1, 4),
+        (2, 9),
+        (1, 5),
+        (2, 11),
+        (1, 6),
+        (1, 8),
+        (1, 12),
+    ]
+    assert finite_field_diophantine_filling(-1, -3, MagneticFlux(1, 12)) == pytest.approx(-1.25)
+    assert finite_field_diophantine_filling(-2, -2, (1, 12)) == pytest.approx(-13.0 / 6.0)
+    assert finite_field_diophantine_filling(-3, -1, "1/12") == pytest.approx(-37.0 / 12.0)
+
+    branch = paper_fig6_branch_cases(-2, -2)
+    assert len(branch) == 11
+    assert branch[0][0] == MagneticFlux(1, 2)
+    assert branch[0][1] == pytest.approx(-3.0)
+    assert branch[-1][0] == MagneticFlux(1, 12)
+    assert branch[-1][1] == pytest.approx(-13.0 / 6.0)
 
 
 def test_build_h0_from_hofstadter_metadata_repeats_strips_and_zeeman() -> None:

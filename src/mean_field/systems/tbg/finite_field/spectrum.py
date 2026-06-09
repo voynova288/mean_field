@@ -22,7 +22,8 @@ import numpy as np
 from scipy.linalg import eigh
 from scipy.special import eval_genlaguerre, gammaln
 
-from .hf import MagneticFlux, MagneticOverlapData, choose_magnetic_nq, magnetic_reciprocal_vector
+from ....core.magnetic_field import MagneticFlux, choose_magnetic_nq, magnetic_reciprocal_vector
+from .hf import MagneticOverlapData
 
 Array = np.ndarray
 Valley = Literal["K", "Kprime"]

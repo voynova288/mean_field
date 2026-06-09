@@ -94,6 +94,7 @@ When future systems need optical-response or shift-current analysis, connect the
 The zero-field TBG port now has three explicit layers instead of one large `hf.py` bucket:
 
 - `core/hf/`: flavor-sector indexing, band labeling, occupation helpers, and generic convergence utilities.
+- `core/magnetic_field.py`: system-agnostic finite-magnetic-field bookkeeping such as rational fluxes, magnetic mesh/orbit indexing, reciprocal-shell shifts, and Streda/Diophantine filling helpers. System layers should import/re-export these helpers rather than redefining them.
 - `core/hf/engine.py`: generic SCF iteration, ODA mixing, convergence-rule handling, and density-update plumbing. This layer should be reusable across moire systems even when the Coulomb kernel or projected basis changes.
 - `core/hf/problem.py`: generic HF problem definitions that let each physical system swap in its own non-interacting model, Coulomb kernel, projected basis, and initialization policy without rewriting the SCF loop.
 - `systems/tbg/zero_field/hf.py`: the TBG-specific interaction kernels, density builders, and initialization semantics that still depend on BM overlaps, Coulomb conventions, and Julia B0 benchmark rules.

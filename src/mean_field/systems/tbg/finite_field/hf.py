@@ -33,6 +33,18 @@ from typing import Literal
 
 import numpy as np
 
+from ....core.magnetic_field import (
+    MagneticFlux,
+    choose_magnetic_nq,
+    diophantine_filling,
+    in_hex_shell,
+    magnetic_k_vectors,
+    magnetic_normalization_count,
+    magnetic_orbit_indices,
+    magnetic_r_orbit_positions,
+    magnetic_reciprocal_vector,
+    magnetic_shell_shifts,
+)
 from ....core.hf import (
     DensityUpdateResult,
     HartreeFockKernel,
@@ -50,37 +62,6 @@ from ....core.hf import (
 Array = np.ndarray
 InitMode = Literal["bm", "random", "flavor", "bm_cascade", "sublattice"]
 
-
-@dataclass(frozen=True)
-class MagneticFlux:
-    """Rational flux ``phi/phi0 = p/q`` with coprime positive integers."""
-
-    p: int
-    q: int
-
-    def __post_init__(self) -> None:
-        p = int(self.p)
-        q = int(self.q)
-        if q <= 0:
-            raise ValueError(f"Flux denominator q must be positive, got {self.q}")
-        if p == 0:
-            raise ValueError("Finite-field HF expects nonzero flux numerator p")
-        frac = Fraction(p, q)
-        object.__setattr__(self, "p", int(frac.numerator))
-        object.__setattr__(self, "q", int(frac.denominator))
-
-    @classmethod
-    def from_value(cls, value: Fraction | tuple[int, int] | str) -> "MagneticFlux":
-        if isinstance(value, Fraction):
-            return cls(value.numerator, value.denominator)
-        if isinstance(value, tuple):
-            return cls(int(value[0]), int(value[1]))
-        frac = Fraction(value)
-        return cls(frac.numerator, frac.denominator)
-
-    @property
-    def ratio(self) -> float:
-        return float(self.p / self.q)
 
 
 @dataclass(frozen=True)
@@ -285,107 +266,57 @@ class FiniteFieldHartreeFockState:
         )
 
 
-def magnetic_reciprocal_vector(m: int, n: int, *, g1: complex, g2: complex, q: int) -> complex:
-    """Return ``G = m*g1 + (n/q)*g2`` used by the finite-B overlap files."""
+def finite_field_diophantine_filling(
+    s: int,
+    t: int,
+    flux: MagneticFlux | Fraction | tuple[int, int] | str,
+) -> float:
+    """Return the Fig. 6 / Streda-line filling ``nu = s + t*phi/phi0``.
 
-    return complex(int(m) * g1 + int(n) / int(q) * g2)
-
-
-def in_hex_shell(m: int, n: int, *, g1: complex, g2: complex, q: int, shell_ng: int = 3) -> bool:
-    """Author-code hexagonal shell cutoff for ``G=m*g1+n/q*g2``.
-
-    This mirrors ``abs(G) < G0*cos(pi/6)/abs(cos(mod(angle(G),pi/3)-pi/6))``
-    in ``MagneticFieldHF*.jl`` and keeps the shell through ``ng*g1+ng*g2``.
+    The paper labels finite-B CHF branches by integer pairs ``(s,t)``. For a
+    rational flux ``phi/phi0=p/q``, the density plotted in Fig. 6 is
+    ``nu = s + t*p/q`` in units of ``n_s``. Keeping this as a small helper
+    avoids hard-coded decimal fillings in replay wrappers.
     """
 
-    g = magnetic_reciprocal_vector(m, n, g1=g1, g2=g2, q=q)
-    if abs(g) < 1e-15:
-        return True
-    g0 = abs(shell_ng * g1 + shell_ng * g2) * 1.00001
-    angle_mod = np.mod(np.angle(g), np.pi / 3.0) - np.pi / 6.0
-    radius = g0 * np.cos(np.pi / 6.0) / abs(np.cos(angle_mod))
-    return bool(abs(g) < radius)
+    return diophantine_filling(s, t, flux)
 
 
-def choose_magnetic_nq(q: int, *, max_q_points: int = 12) -> int:
-    """Return the author-code/paper magnetic-mesh ``nq`` for denominator ``q``.
+def paper_fig6_finite_b_fluxes() -> tuple[MagneticFlux, ...]:
+    """Return the selected finite-B flux grid used by the Fig. 6 replay scripts.
 
-    The SI states that ``nq*q`` is chosen below a small cutoff.  The original
-    production scripts use ``12//q`` with a special ``q=7 -> nq=2`` case, which
-    gives ``nq*q=14`` and matches the stated upper mesh envelope.
+    The order mirrors ``proj/run_fig6_bfield_selected_analysis.jl`` in the
+    author-code workspace: high-field points first, then lower fields down to
+    ``1/12``.
     """
 
-    q = int(q)
-    if q <= 0:
-        raise ValueError(f"q must be positive, got {q}")
-    nq = int(max_q_points) // q
-    if q == 7 and max_q_points >= 12:
-        nq = max(nq, 2)
-    return max(int(nq), 1)
+    return (
+        MagneticFlux(1, 2),
+        MagneticFlux(2, 5),
+        MagneticFlux(1, 3),
+        MagneticFlux(2, 7),
+        MagneticFlux(1, 4),
+        MagneticFlux(2, 9),
+        MagneticFlux(1, 5),
+        MagneticFlux(2, 11),
+        MagneticFlux(1, 6),
+        MagneticFlux(1, 8),
+        MagneticFlux(1, 12),
+    )
 
 
-def magnetic_shell_shifts(*, g1: complex, g2: complex, q: int, shell_ng: int = 3) -> tuple[tuple[int, int], ...]:
-    """Return author-code finite-B interaction-shell shifts.
-
-    This mirrors the production loop in ``bmLL*.jl`` / ``MagneticFieldHF*.jl``:
-    ``for m in -ng:ng, n in (ng*q):-1:(-ng*q)`` followed by the hexagonal
-    shell cutoff.  The shift ``(m,n)`` represents ``G=m*g1+(n/q)*g2``.
-    """
-
-    q = int(q)
-    shell_ng = int(shell_ng)
-    if q <= 0:
-        raise ValueError(f"q must be positive, got {q}")
-    if shell_ng < 0:
-        raise ValueError(f"shell_ng must be non-negative, got {shell_ng}")
-    shifts: list[tuple[int, int]] = []
-    for m in range(-shell_ng, shell_ng + 1):
-        for n in range(shell_ng * q, -shell_ng * q - 1, -1):
-            if in_hex_shell(m, n, g1=g1, g2=g2, q=q, shell_ng=shell_ng):
-                shifts.append((int(m), int(n)))
-    return tuple(shifts)
-
-def magnetic_orbit_indices(q: int, nq: int) -> Array:
-    """Return full-strip indices ``(q, nq**2)`` used by tL-symmetric HF."""
-
-    q = int(q)
-    nq = int(nq)
-    return np.arange(q * nq * nq, dtype=int).reshape((q, nq * nq), order="F")
-
-
-def magnetic_r_orbit_positions(p: int, q: int) -> Array:
-    """Return the ``rps`` orbit of ``t_L2`` in zero-based indexing."""
-
-    p = int(p)
-    q = int(q)
-    return (np.arange(q, dtype=int) * p) % q
-
-
-def magnetic_k_vectors(
+def paper_fig6_branch_cases(
+    s: int,
+    t: int,
     *,
-    g1: complex,
-    g2: complex,
-    flux: MagneticFlux,
-    nq: int,
-    reduced_translation: bool = False,
-) -> Array:
-    """Return the magnetic-BZ k vectors in the author-code flattening order."""
+    fluxes: Sequence[MagneticFlux | Fraction | tuple[int, int] | str] | None = None,
+) -> tuple[tuple[MagneticFlux, float], ...]:
+    """Return ``(flux, nu)`` cases for one Fig. 6 finite-B ``(s,t)`` branch."""
 
-    q = int(flux.q)
-    nq = int(nq)
-    fine = np.arange(nq, dtype=float) / float(nq * q)
-    if reduced_translation:
-        k = fine.reshape(nq, 1) * g1 + fine.reshape(1, nq) * g2
-        return np.asarray(k.reshape(-1, order="F"), dtype=np.complex128)
-    strips = np.arange(q, dtype=float) / float(q)
-    k = strips.reshape(q, 1, 1) * g1 + fine.reshape(1, nq, 1) * g1 + fine.reshape(1, 1, nq) * g2
-    return np.asarray(k.reshape(-1, order="F"), dtype=np.complex128)
-
-
-def magnetic_normalization_count(flux: MagneticFlux, nq: int) -> int:
-    """Return ``hf.latt.nk = (q*nq)^2`` from the Julia finite-B code."""
-
-    return int(flux.q * flux.q * int(nq) * int(nq))
+    selected_fluxes = paper_fig6_finite_b_fluxes() if fluxes is None else tuple(
+        flux if isinstance(flux, MagneticFlux) else MagneticFlux.from_value(flux) for flux in fluxes
+    )
+    return tuple((flux, finite_field_diophantine_filling(s, t, flux)) for flux in selected_fluxes)
 
 
 def screened_coulomb_finite_b(
@@ -1500,6 +1431,7 @@ __all__ = [
     "coulomb_unit_from_lattice",
     "density_update_from_hamiltonian",
     "expand_valley_overlap_data_to_flavors",
+    "finite_field_diophantine_filling",
     "finite_field_filling",
     "finite_field_occupied_state_count",
     "in_hex_shell",
@@ -1511,6 +1443,8 @@ __all__ = [
     "magnetic_reciprocal_vector",
     "magnetic_shell_shifts",
     "normalize_finite_field_init_mode",
+    "paper_fig6_branch_cases",
+    "paper_fig6_finite_b_fluxes",
     "run_finite_field_hartree_fock",
     "run_finite_field_hartree_fock_from_inputs",
     "run_tl_symmetric_finite_field_hartree_fock_from_inputs",

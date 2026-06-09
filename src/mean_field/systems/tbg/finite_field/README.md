@@ -11,9 +11,12 @@ into the `Mean_Field` layered framework.
 
 Reference: `/data/home/ziyuzhu/TBG_HartreeFock/2310.15982v3.pdf`, SI Sec. III.
 
+Generic finite-magnetic-field bookkeeping — rational fluxes, magnetic meshes, reciprocal-shell shifts, and Streda/Diophantine fillings — lives in `mean_field.core.magnetic_field`.  This TBG package re-exports those helpers for backward compatibility while keeping BM/LL spectrum construction, TBG projected-overlap assembly, B-SCHF physics, and Fig. 6 paper bookkeeping in the TBG system layer.
+
 ## Layering
 
 - `mean_field.core.hf` still owns the generic SCF/ODA loop.
+- `mean_field.core.magnetic_field` owns system-agnostic finite-B flux/mesh/shell/Diophantine helpers.
 - `mean_field.systems.tbg.finite_field.spectrum` owns the non-interacting finite-B BM/LL spectrum:
   - author-code `Params`/`initParamsWithStrain` conventions;
   - LL translation matrix elements `_tLL_v1` / `_tLL_v1_valleyKprime`;
@@ -22,13 +25,14 @@ Reference: `/data/home/ziyuzhu/TBG_HartreeFock/2310.15982v3.pdf`, SI Sec. III.
   - magnetic-translation orbit generation for `Vec`;
   - projected `PΣz` and optional `Λ_(m,n)` overlap blocks, including the author `computeCoulombOverlap_v2` symmetry reduction as `compute_coulomb_overlap_fast`.
 - `mean_field.systems.tbg.finite_field.hf` owns finite-B/TBG-specific HF details:
-  - rational flux `p/q` and magnetic mesh ordering;
+  - TBG adapters for rational flux `p/q` and magnetic mesh ordering supplied by `mean_field.core.magnetic_field`;
   - finite-B normalization `1/(q*nq)^2`;
   - projected density convention `P=<d†d>-I/2` stored as `conj(U_occ) U_occ^T - I/2`;
   - Hofstadter metadata -> `H0`/`Σz` adapter;
   - full magnetic-BZ Hartree-Fock contraction;
   - magnetic-translation-symmetric/IKS-reduced contraction with the `phi` phase;
   - expansion of valley-resolved `bmLL` overlaps into the full spin/valley HF basis via `expand_valley_overlap_data_to_flavors`;
+  - selected Fig. 6 Streda-line bookkeeping via the core-backed `finite_field_diophantine_filling`, plus TBG/paper-specific `paper_fig6_finite_b_fluxes` and `paper_fig6_branch_cases`;
   - no-I/O assembly helpers for finite-B HF inputs from K/K′ `MagneticSpectrumResult` objects or from BM parameters: `magnetic_shell_shifts`, `build_finite_field_hf_state_from_spectra`, `build_full_flavor_overlap_data_from_spectra`, and the unified `build_finite_field_hf_inputs_from_spectra` / `build_finite_field_hf_inputs_from_parameters` APIs. Use `reduced_translation=True` on those unified builders for the reduced tL-symmetric/IKS path; the older `build_tl_symmetric_*` names are compatibility wrappers.
 - JLD2 metadata production remains outside this module; adapters should save/load the returned arrays in workflow code rather than putting file I/O in the core physics layer.
 
@@ -64,6 +68,9 @@ from mean_field.systems.tbg.finite_field import (
     FiniteFieldTLSymmetricHartreeFockInputs,
     MagneticOverlapData,
     magnetic_shell_shifts,
+    finite_field_diophantine_filling,
+    paper_fig6_finite_b_fluxes,
+    paper_fig6_branch_cases,
     build_h0_from_hofstadter_metadata,
     build_finite_field_hf_state_from_spectra,
     build_full_flavor_overlap_data_from_spectra,
@@ -82,7 +89,7 @@ Use `compute_magnetic_spectrum` for a single non-interacting Hofstadter spectrum
 
 `compute_coulomb_overlap(result, m, n)` returns one projected `Λ_(m,n)` block in the shape expected by `MagneticOverlapData`; `compute_coulomb_overlap_fast` is the production-style symmetry-reduced path corresponding to author `computeCoulombOverlap_v2`.
 
-Use `magnetic_shell_shifts` plus `build_finite_field_hf_inputs_from_spectra` to assemble an HF input bundle from already computed K/K′ spectra. Use `build_finite_field_hf_inputs_from_parameters` when the no-I/O helper should also compute the two valley spectra. These helpers require explicit `shifts` or `shell_ng`, so expensive overlap generation is never accidental.
+Use `paper_fig6_finite_b_fluxes` and `paper_fig6_branch_cases(s,t)` to reproduce the selected Fig. 6 finite-B branch grid and its fillings `nu=s+t*phi/phi0` without hard-coded decimal fillings. Use `magnetic_shell_shifts` plus `build_finite_field_hf_inputs_from_spectra` to assemble an HF input bundle from already computed K/K′ spectra. Use `build_finite_field_hf_inputs_from_parameters` when the no-I/O helper should also compute the two valley spectra. These helpers require explicit `shifts` or `shell_ng`, so expensive overlap generation is never accidental.
 
 The same builder API covers both finite-B HF variants:
 
