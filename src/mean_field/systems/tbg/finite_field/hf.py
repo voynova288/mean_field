@@ -55,6 +55,7 @@ from ....core.hf import (
     compute_density_overlap_trace_from_diagonal,
     compute_oda_parameter,
     contract_fock_term_from_overlap,
+    diagonal_overlap_blocks,
     find_chemical_potential,
     occupied_state_linear_indices,
     run_hartree_fock_problem,
@@ -334,6 +335,24 @@ def screened_coulomb_finite_b(
     if q_abs < zero_cutoff:
         return 0.0
     return float(2.0 * np.pi / (relative_permittivity * q_abs) * np.tanh(q_abs * 4.0 * float(lm) / 2.0))
+
+
+def _screened_coulomb_finite_b_array(
+    qvec: Array,
+    lm: float,
+    *,
+    relative_permittivity: float = 15.0,
+    zero_cutoff: float = 1e-6,
+) -> Array:
+    """Vectorized finite-B screened Coulomb kernel with the scalar helper's cutoff."""
+
+    q_abs = np.abs(np.asarray(qvec, dtype=np.complex128))
+    out = np.zeros(q_abs.shape, dtype=float)
+    mask = q_abs >= float(zero_cutoff)
+    if np.any(mask):
+        q_selected = q_abs[mask]
+        out[mask] = 2.0 * np.pi / (float(relative_permittivity) * q_selected) * np.tanh(q_selected * 4.0 * float(lm) / 2.0)
+    return out
 
 
 def coulomb_unit_from_lattice(a1: complex, a2: complex) -> float:
@@ -961,17 +980,14 @@ def build_magnetic_interaction_hamiltonian(
         if overlap.shape != (nt, nk, nt, nk):
             raise ValueError(f"Expected overlap block shape {(nt, nk, nt, nk)}, got {overlap.shape} for shift {shift}")
         if use_hartree:
-            diagonal = np.stack([overlap[:, ik, :, ik] for ik in range(nk)], axis=2).astype(np.complex128, copy=False)
+            diagonal = diagonal_overlap_blocks(overlap, nt=nt, nk=nk)
             hartree_kernel = screened_coulomb_finite_b(gvec, screening_lm, relative_permittivity=relative_permittivity)
             if hartree_kernel != 0.0:
                 tr_pg = compute_density_overlap_trace_from_diagonal(density, diagonal, use_numba=use_numba)
                 out += prefactor * hartree_kernel * tr_pg * diagonal
         if use_fock:
             qvals = kvec.reshape(1, nk) - kvec.reshape(nk, 1) + gvec  # target ik rows, source ip cols.
-            fock_kernel = np.vectorize(
-                lambda z: screened_coulomb_finite_b(z, screening_lm, relative_permittivity=relative_permittivity),
-                otypes=[float],
-            )(qvals)
+            fock_kernel = _screened_coulomb_finite_b_array(qvals, screening_lm, relative_permittivity=relative_permittivity)
             out -= contract_fock_term_from_overlap(overlap, density, prefactor * fock_kernel, use_numba=use_numba)
     return out
 
@@ -1002,6 +1018,39 @@ def apply_iks_phase_to_transposed_density(
     return mat
 
 
+def _expanded_iks_transposed_source_density(
+    density: Array,
+    *,
+    indices: Array,
+    rps: Array,
+    q: int,
+    phi: float,
+    n_eta: int,
+    n_spin: int,
+    n_band: int,
+) -> Array:
+    """Expand reduced IKS ``P.T`` slices onto the full magnetic-orbit source grid."""
+
+    nt, _, nk_reduced = density.shape
+    expanded = np.empty((nt, nt, int(q) * nk_reduced), dtype=np.complex128)
+    for ip in range(nk_reduced):
+        for rp in range(int(q)):
+            full_source = int(indices[rp, ip])
+            if abs(float(phi)) < 1e-15:
+                expanded[:, :, full_source] = density[:, :, ip].T
+            else:
+                expanded[:, :, full_source] = apply_iks_phase_to_transposed_density(
+                    density[:, :, ip].T,
+                    q=q,
+                    rp_position=int(rps[rp]),
+                    phi=phi,
+                    n_eta=n_eta,
+                    n_spin=n_spin,
+                    n_band=n_band,
+                )
+    return expanded
+
+
 def build_tl_symmetric_magnetic_interaction_hamiltonian(
     density: Array,
     overlap_data: MagneticOverlapData,
@@ -1018,6 +1067,7 @@ def build_tl_symmetric_magnetic_interaction_hamiltonian(
     n_eta: int = 2,
     n_spin: int = 2,
     n_band: int = 2,
+    use_numba: bool | None = None,
 ) -> Array:
     """Build the magnetic-translation-symmetric / IKS-reduced HF Hamiltonian.
 
@@ -1042,6 +1092,17 @@ def build_tl_symmetric_magnetic_interaction_hamiltonian(
     rps = magnetic_r_orbit_positions(flux.p, flux.q)
     out = np.zeros_like(density)
     prefactor = float(beta) * float(v0) / float(normalization_count)
+    reduced_targets = indices[0, :].astype(int, copy=False)
+    source_density_t = _expanded_iks_transposed_source_density(
+        density,
+        indices=indices,
+        rps=rps,
+        q=q,
+        phi=phi,
+        n_eta=n_eta,
+        n_spin=n_spin,
+        n_band=n_band,
+    )
 
     for shift, gvec in zip(overlap_data.shifts, overlap_data.gvecs, strict=True):
         m, n = shift
@@ -1052,35 +1113,21 @@ def build_tl_symmetric_magnetic_interaction_hamiltonian(
             raise ValueError(f"Expected tL overlap shape {expected_shape}, got {overlap.shape} for shift {shift}")
         kernel_g = screened_coulomb_finite_b(gvec, screening_lm, relative_permittivity=relative_permittivity)
         if n % q == 0 and kernel_g != 0.0:
-            diag_full = indices[0, :]
-            diagonal = np.stack([overlap[:, int(full_ik), :, int(full_ik)] for full_ik in diag_full], axis=2).astype(np.complex128, copy=False)
-            tr_pg = compute_density_overlap_trace_from_diagonal(density, diagonal)
+            diagonal = np.stack([overlap[:, int(full_ik), :, int(full_ik)] for full_ik in reduced_targets], axis=2).astype(np.complex128, copy=False)
+            tr_pg = compute_density_overlap_trace_from_diagonal(density, diagonal, use_numba=use_numba)
             out += prefactor * kernel_g * tr_pg * q * diagonal
 
-        for ik in range(nk_reduced):
-            full_target = indices[0, ik]
+        target_k = full_k[reduced_targets]
+        qvals = full_k.reshape(1, q * nk_reduced) - target_k.reshape(nk_reduced, 1) + gvec
+        fock_kernel = prefactor * _screened_coulomb_finite_b_array(qvals, screening_lm, relative_permittivity=relative_permittivity)
+        for ik, full_target in enumerate(reduced_targets):
             tmp_fock = np.zeros((nt, nt), dtype=np.complex128)
-            for ip in range(nk_reduced):
-                for rp in range(q):
-                    full_source = indices[rp, ip]
-                    coeff = prefactor * screened_coulomb_finite_b(
-                        full_k[full_source] - full_k[full_target] + gvec,
-                        screening_lm,
-                        relative_permittivity=relative_permittivity,
-                    )
-                    if coeff == 0.0:
-                        continue
-                    phased_density_t = apply_iks_phase_to_transposed_density(
-                        density[:, :, ip].T,
-                        q=q,
-                        rp_position=int(rps[rp]),
-                        phi=phi,
-                        n_eta=n_eta,
-                        n_spin=n_spin,
-                        n_band=n_band,
-                    )
-                    lam = overlap[:, full_target, :, full_source]
-                    tmp_fock += coeff * (lam @ phased_density_t @ lam.conj().T)
+            for full_source in range(q * nk_reduced):
+                coeff = fock_kernel[ik, full_source]
+                if coeff == 0.0:
+                    continue
+                lam = overlap[:, int(full_target), :, full_source]
+                tmp_fock += coeff * (lam @ source_density_t[:, :, full_source] @ lam.conj().T)
             out[:, :, ik] -= tmp_fock
     return out
 
@@ -1213,6 +1260,7 @@ def build_tl_symmetric_finite_field_hf_kernel(
     beta: float = 1.0,
     phi: float = 0.0,
     relative_permittivity: float = 15.0,
+    use_numba: bool | None = None,
 ) -> HartreeFockKernel:
     interaction_builder = lambda density: build_tl_symmetric_magnetic_interaction_hamiltonian(
         density,
@@ -1226,6 +1274,7 @@ def build_tl_symmetric_finite_field_hf_kernel(
         beta=beta,
         phi=phi,
         relative_permittivity=relative_permittivity,
+        use_numba=use_numba,
     )
 
     def density_builder(hamiltonian: Array) -> DensityUpdateResult:
@@ -1305,6 +1354,7 @@ def build_finite_field_hf_kernel_from_inputs(
             beta=beta,
             phi=phi,
             relative_permittivity=relative_permittivity,
+            use_numba=use_numba,
         )
     if isinstance(inputs, FiniteFieldHartreeFockInputs):
         return build_finite_field_hf_kernel(
@@ -1362,6 +1412,7 @@ def build_tl_symmetric_finite_field_hf_kernel_from_inputs(
     beta: float = 1.0,
     phi: float = 0.0,
     relative_permittivity: float = 15.0,
+    use_numba: bool | None = None,
 ) -> HartreeFockKernel:
     """Compatibility wrapper for reduced tL-symmetric/IKS HF kernels."""
 
@@ -1371,6 +1422,7 @@ def build_tl_symmetric_finite_field_hf_kernel_from_inputs(
         beta=beta,
         phi=phi,
         relative_permittivity=relative_permittivity,
+        use_numba=use_numba,
     )
 
 def run_tl_symmetric_finite_field_hartree_fock_from_inputs(
@@ -1384,6 +1436,7 @@ def run_tl_symmetric_finite_field_hartree_fock_from_inputs(
     beta: float = 1.0,
     phi: float = 0.0,
     relative_permittivity: float = 15.0,
+    use_numba: bool | None = None,
 ) -> HartreeFockRun:
     """Compatibility wrapper for reduced tL-symmetric/IKS HF runs."""
 
@@ -1397,6 +1450,7 @@ def run_tl_symmetric_finite_field_hartree_fock_from_inputs(
         beta=beta,
         phi=phi,
         relative_permittivity=relative_permittivity,
+        use_numba=use_numba,
     )
 
 __all__ = [
