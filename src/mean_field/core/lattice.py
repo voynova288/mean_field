@@ -32,6 +32,11 @@ class KPathNode:
     def ky(self) -> float:
         return float(self.kvec.imag)
 
+    @property
+    def k_value(self) -> complex:
+        """Backward-compatible alias used by older system-local KPath nodes."""
+        return complex(self.kvec)
+
 
 @dataclass(frozen=True)
 class KPath:

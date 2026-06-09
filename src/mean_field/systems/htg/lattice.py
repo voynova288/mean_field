@@ -5,46 +5,12 @@ import math
 
 import numpy as np
 
+from ...core.lattice import KPath, KPathNode, build_kpath_from_nodes as _build_core_kpath_from_nodes
 from .params import GRAPHENE_LATTICE_CONSTANT_NM
 
 
 
-@dataclass(frozen=True)
-class KPathNode:
-    label: str
-    index: int
-    k_value: complex
-    k_dist: float
 
-
-@dataclass(frozen=True)
-class KPath:
-    kvec: np.ndarray
-    kdist: np.ndarray
-    labels: tuple[str, ...]
-    node_indices: tuple[int, ...]
-
-    @property
-    def nodes(self) -> tuple[KPathNode, ...]:
-        return tuple(
-            KPathNode(
-                label=str(label),
-                index=int(index),
-                k_value=complex(self.kvec[int(index) - 1]),
-                k_dist=float(self.kdist[int(index) - 1]),
-            )
-            for label, index in zip(self.labels, self.node_indices, strict=True)
-        )
-
-
-def cumulative_distance(kvec: np.ndarray) -> np.ndarray:
-    values = np.asarray(kvec, dtype=np.complex128).reshape(-1)
-    if values.size == 0:
-        return np.zeros(0, dtype=float)
-    distances = np.zeros(values.size, dtype=float)
-    if values.size > 1:
-        distances[1:] = np.cumsum(np.abs(np.diff(values)))
-    return distances
 
 def _cross_2d(a: complex, b: complex) -> float:
     return float(a.real * b.imag - a.imag * b.real)
@@ -217,28 +183,7 @@ def build_kpath_from_nodes(
     labels: tuple[str, ...],
     points_per_segment: int,
 ) -> KPath:
-    if points_per_segment <= 0:
-        raise ValueError("points_per_segment must be positive")
-    if len(nodes) < 2:
-        raise ValueError("At least two path nodes are required.")
-    if len(nodes) != len(labels):
-        raise ValueError(f"Expected {len(nodes)} labels, got {len(labels)}")
-
-    kvec: list[complex] = [complex(nodes[0])]
-    node_indices = [1]
-    for start_k, end_k in zip(nodes[:-1], nodes[1:], strict=True):
-        step = (end_k - start_k) / float(points_per_segment)
-        for idx in range(1, points_per_segment + 1):
-            kvec.append(complex(start_k + idx * step))
-        node_indices.append(len(kvec))
-
-    kvec_array = np.asarray(kvec, dtype=np.complex128)
-    return KPath(
-        kvec=kvec_array,
-        kdist=cumulative_distance(kvec_array),
-        labels=labels,
-        node_indices=tuple(node_indices),
-    )
+    return _build_core_kpath_from_nodes(nodes, labels, int(points_per_segment))
 
 
 def _paper_edge_kappa_prime(lattice: HTGLattice) -> complex:
