@@ -162,13 +162,18 @@ def build_hamiltonian(
         sl = slice(2 * params.layer_count * g_index, 2 * params.layer_count * (g_index + 1))
         hamiltonian[sl, sl] = build_rlg_block(complex(k_tilde + g_vector), params)
 
-    for row_g_index, row_coords in enumerate(lattice.g_indices):
-        row_slice = layer_slice(row_g_index, 0, params)
-        for col_g_index, col_coords in enumerate(lattice.g_indices):
-            potential = moire_potential(row_coords, col_coords, params)
-            if np.any(np.abs(potential) > 0.0):
-                col_slice = layer_slice(col_g_index, 0, params)
-                hamiltonian[row_slice, col_slice] += potential
+    bottom_identity = float(params.moire_v0_mev) * np.eye(2, dtype=np.complex128)
+    for g_index in range(lattice.n_g):
+        sl = layer_slice(g_index, 0, params)
+        hamiltonian[sl, sl] += bottom_identity
+
+    coupling_phase = float(params.moire_v1_mev) * np.exp(1.0j * params.moire_phase_rad)
+    for entry in build_coupling_table(lattice):
+        source_slice = layer_slice(entry.source_g_index, 0, params)
+        target_slice = layer_slice(entry.target_g_index, 0, params)
+        coupling = coupling_phase * moire_coupling_matrix(entry.channel, params)
+        hamiltonian[target_slice, source_slice] += coupling
+        hamiltonian[source_slice, target_slice] += coupling.conjugate().T
     return hamiltonian
 
 
