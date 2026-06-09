@@ -96,7 +96,7 @@ def _reciprocal_translation(lattice: HTGLattice, dn1: int, dn2: int) -> Callable
     return apply
 
 
-def _compute_link_arrays_line_bundle(vectors: np.ndarray, lattice: HTGLattice) -> tuple[np.ndarray, np.ndarray]:
+def _compute_link_arrays(vectors: np.ndarray, lattice: HTGLattice) -> tuple[np.ndarray, np.ndarray]:
     links = compute_link_variables(
         vectors,
         sewing_transforms=(
@@ -107,32 +107,9 @@ def _compute_link_arrays_line_bundle(vectors: np.ndarray, lattice: HTGLattice) -
     )
     return links.link_1, links.link_2
 
-
-def _compute_link_arrays_subspace(vectors: np.ndarray, lattice: HTGLattice) -> tuple[np.ndarray, np.ndarray]:
-    links = compute_link_variables(
-        vectors,
-        sewing_transforms=(
-            _reciprocal_translation(lattice, 1, 0),
-            _reciprocal_translation(lattice, 0, 1),
-        ),
-        link_method="determinant",
-    )
-    return links.link_1, links.link_2
-
-
-def _chern_from_link_arrays(link_1: np.ndarray, link_2: np.ndarray) -> float:
+def _chern_from_link_vectors(vectors: np.ndarray, lattice: HTGLattice) -> float:
+    link_1, link_2 = _compute_link_arrays(vectors, lattice)
     return chern_number_from_berry_curvature(berry_curvature_from_links(link_1, link_2))
-
-
-def _chern_from_line_bundle(vectors: np.ndarray, lattice: HTGLattice) -> float:
-    link_1, link_2 = _compute_link_arrays_line_bundle(vectors, lattice)
-    return _chern_from_link_arrays(link_1, link_2)
-
-
-def _chern_from_subspace(vectors: np.ndarray, lattice: HTGLattice) -> float:
-    link_1, link_2 = _compute_link_arrays_subspace(vectors, lattice)
-    return _chern_from_link_arrays(link_1, link_2)
-
 
 def _central_eigensystem(
     k_tilde: complex,
@@ -233,9 +210,9 @@ def compute_chern_basis_on_grid(
             vectors_b[i, j, :] = evecs @ eigvecs[:, 0]
             vectors_a[i, j, :] = evecs @ eigvecs[:, -1]
 
-    raw_chern_a = _chern_from_line_bundle(vectors_a, lattice)
-    raw_chern_b = _chern_from_line_bundle(vectors_b, lattice)
-    total_chern = _chern_from_subspace(subspace_vectors, lattice)
+    raw_chern_a = _chern_from_link_vectors(vectors_a, lattice)
+    raw_chern_b = _chern_from_link_vectors(vectors_b, lattice)
+    total_chern = _chern_from_link_vectors(subspace_vectors, lattice)
 
     return ChernBasisResult(
         mesh_size=int(mesh_size),

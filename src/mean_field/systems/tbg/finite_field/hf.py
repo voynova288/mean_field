@@ -36,6 +36,7 @@ import numpy as np
 from ....core.magnetic_field import (
     MagneticFlux,
     choose_magnetic_nq,
+    diophantine_branch_cases,
     diophantine_filling,
     in_hex_shell,
     magnetic_k_vectors,
@@ -313,10 +314,7 @@ def paper_fig6_branch_cases(
 ) -> tuple[tuple[MagneticFlux, float], ...]:
     """Return ``(flux, nu)`` cases for one Fig. 6 finite-B ``(s,t)`` branch."""
 
-    selected_fluxes = paper_fig6_finite_b_fluxes() if fluxes is None else tuple(
-        flux if isinstance(flux, MagneticFlux) else MagneticFlux.from_value(flux) for flux in fluxes
-    )
-    return tuple((flux, finite_field_diophantine_filling(s, t, flux)) for flux in selected_fluxes)
+    return diophantine_branch_cases(s, t, fluxes=paper_fig6_finite_b_fluxes() if fluxes is None else fluxes)
 
 
 def screened_coulomb_finite_b(
