@@ -6,7 +6,13 @@ from pathlib import Path
 
 import numpy as np
 
-from ...plotting import load_plot_backend
+from ...plotting import (
+    format_kpath_axis,
+    load_plot_backend,
+    save_figure_pair,
+    write_kpath_band_tsv,
+    write_kpath_nodes_tsv,
+)
 from ...core.lattice import KPath
 from .projected_hf import TDBGProjectedHFData
 
@@ -154,15 +160,9 @@ def write_tdbg_hf_path_band_plot(
     if not traces:
         return {}
     plt, Line2D = load_plot_backend(include_line2d=True)
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    png_path = output_dir / f"{stem}.png"
-    pdf_path = output_dir / f"{stem}.pdf"
 
     n = len(traces)
     fig, axes = plt.subplots(n, 1, figsize=(8.0, max(3.2, 2.9 * n)), squeeze=False)
-    node_x = [float(node.k_dist) for node in path.nodes]
-    node_labels = [_display_node_label(node.label) for node in path.nodes]
     any_referenced = False
     for ax, trace in zip(axes[:, 0], traces.values(), strict=False):
         energies_mev, referenced = _energy_mev(trace)
@@ -183,13 +183,15 @@ def write_tdbg_hf_path_band_plot(
                 markeredgecolor=DEFAULT_MARKER_EDGE_COLOR,
                 markeredgewidth=DEFAULT_MARKER_EDGE_WIDTH,
             )
-        for xpos in node_x:
-            ax.axvline(x=xpos, color="#999999", ls=":", lw=0.8)
+        format_kpath_axis(
+            ax,
+            path,
+            label_formatter=_display_node_label,
+            vertical_line_kwargs={"color": "#999999", "linestyle": ":", "linewidth": 0.8},
+            xlabel=None,
+        )
         if referenced:
             ax.axhline(y=0.0, color="#444444", ls="--", lw=0.9)
-        ax.set_xticks(node_x)
-        ax.set_xticklabels(node_labels)
-        ax.set_xlim(float(node_x[0]), float(node_x[-1]))
         ax.set_title(trace.label, fontsize=10)
         ax.set_ylabel("Energy - E_F (meV)" if referenced else "Energy (meV)")
         ax.grid(alpha=0.22)
@@ -208,10 +210,9 @@ def write_tdbg_hf_path_band_plot(
     )
     rect_top = 0.91 if title or any_referenced else 0.94
     fig.tight_layout(rect=(0.0, 0.0, 1.0, rect_top))
-    fig.savefig(png_path, dpi=300, bbox_inches="tight")
-    fig.savefig(pdf_path, bbox_inches="tight")
+    paths = save_figure_pair(fig, output_dir, stem, key_prefix="band_plot")
     plt.close(fig)
-    return {"band_plot_png": png_path, "band_plot_pdf": pdf_path}
+    return paths
 
 
 def write_tdbg_hf_grid_band_plot(
@@ -226,10 +227,6 @@ def write_tdbg_hf_grid_band_plot(
     if not traces:
         return {}
     plt, Line2D = load_plot_backend(include_line2d=True)
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    png_path = output_dir / f"{stem}.png"
-    pdf_path = output_dir / f"{stem}.pdf"
 
     n = len(traces)
     fig, axes = plt.subplots(n, 1, figsize=(8.0, max(3.0, 2.7 * n)), squeeze=False)
@@ -260,38 +257,26 @@ def write_tdbg_hf_grid_band_plot(
         columnspacing=1.2,
     )
     fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.92 if title else 0.94))
-    fig.savefig(png_path, dpi=300, bbox_inches="tight")
-    fig.savefig(pdf_path, bbox_inches="tight")
+    paths = save_figure_pair(fig, output_dir, stem, key_prefix="band_plot")
     plt.close(fig)
-    return {"band_plot_png": png_path, "band_plot_pdf": pdf_path}
+    return paths
 
 def write_tdbg_hf_path_tsv(path: Path | str, *, kpath: KPath, trace: TDBGHFPlotTrace) -> None:
     """Write raw HF path eigenvalues in benchmark-style TSV format."""
 
-    output_path = Path(path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    energies = np.asarray(trace.band_data.energies_ev, dtype=float)
-    if energies.shape[1] != kpath.kdist.size:
-        raise ValueError(f"Expected {kpath.kdist.size} k-points, got energies shape {energies.shape}")
-    with output_path.open("w", encoding="utf-8") as handle:
-        handle.write("\t".join(["k_dist", *trace.band_data.band_labels]) + "\n")
-        for ik, kdist in enumerate(kpath.kdist):
-            row = [f"{float(kdist):.16f}"]
-            row.extend(f"{float(energies[ib, ik]):.16f}" for ib in range(energies.shape[0]))
-            handle.write("\t".join(row) + "\n")
+    write_kpath_band_tsv(
+        path,
+        kdist=kpath.kdist,
+        energies=trace.band_data.energies_ev,
+        band_labels=trace.band_data.band_labels,
+        bands_axis="rows",
+    )
 
 
 def write_tdbg_hf_path_nodes_tsv(path: Path | str, kpath: KPath) -> None:
     """Write high-symmetry path node metadata in benchmark-style TSV format."""
 
-    output_path = Path(path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8") as handle:
-        handle.write("label\tindex\tk_dist\tkx\tky\n")
-        for node in kpath.nodes:
-            handle.write(
-                f"{node.label}\t{node.index}\t{node.k_dist:.16f}\t{node.kx:.16f}\t{node.ky:.16f}\n"
-            )
+    write_kpath_nodes_tsv(path, kpath)
 
 
 def write_tdbg_hf_scf_path_tsv(

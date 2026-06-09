@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import os
 from pathlib import Path
-import tempfile
 
 import numpy as np
 
-from ...plotting import load_plot_backend
+from ...plotting import format_kpath_axis, load_plot_backend, plot_band_columns, save_figure_pair
 from .bands import PathBandsResult
 from .lattice import TMBGLattice
 from .topology import TopologyResult
@@ -113,44 +111,29 @@ def write_tmbg_band_plot(
 ) -> dict[str, Path]:
     plt = _load_plot_backend()
 
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    png_path = output_dir / f"{stem}.png"
-    pdf_path = output_dir / f"{stem}.pdf"
-
-    energies = np.asarray(result.energies, dtype=float)
     fig, ax = plt.subplots(figsize=(6.2, 4.2))
-    for ib in range(energies.shape[1]):
-        ax.plot(
-            result.path.kdist,
-            energies[:, ib],
-            color="#1f1f1f",
-            lw=1.0,
-            marker="o",
-            markersize=1.9,
-            markerfacecolor="#1f1f1f",
-            markeredgecolor="#ffffff",
-            markeredgewidth=0.2,
-        )
+    plot_band_columns(
+        ax,
+        result.path.kdist,
+        result.energies,
+        color="#1f1f1f",
+        lw=1.0,
+        marker="o",
+        markersize=1.9,
+        markerfacecolor="#1f1f1f",
+        markeredgecolor="#ffffff",
+        markeredgewidth=0.2,
+    )
 
-    node_x = [float(node.k_dist) for node in result.path.nodes]
-    node_labels = [_display_node_label(node.label) for node in result.path.nodes]
-    for xpos in node_x:
-        ax.axvline(x=xpos, color="#999999", ls=":", lw=0.8)
-
-    ax.set_xticks(node_x)
-    ax.set_xticklabels(node_labels)
-    ax.set_xlim(float(node_x[0]), float(node_x[-1]))
-    ax.set_xlabel("k-path")
+    format_kpath_axis(ax, result.path, label_formatter=_display_node_label)
     ax.set_ylabel("Energy (eV)")
     if title is not None:
         ax.set_title(title, fontsize=10)
     fig.tight_layout()
 
-    fig.savefig(png_path, dpi=300, bbox_inches="tight")
-    fig.savefig(pdf_path, bbox_inches="tight")
+    paths = save_figure_pair(fig, output_dir, stem, key_prefix="band_plot")
     plt.close(fig)
-    return {"band_plot_png": png_path, "band_plot_pdf": pdf_path}
+    return paths
 
 
 def write_tmbg_paper_band_figure(
