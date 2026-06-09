@@ -95,6 +95,34 @@ def test_tmbg_blg_interlayer_matches_standard_mccann_koshino_structure() -> None
     )
     assert np.allclose(coupling, expected, atol=1.0e-12)
 
+def test_precomputed_coupling_table_matches_default_tmbg_hamiltonian_and_spectrum() -> None:
+    lattice = build_tmbg_lattice(1.21, n_shells=1)
+    params = TMBGParameters.full(interlayer_potential=0.015, staggered_potential=0.004)
+    valley = -1
+    k_tilde = lattice.k_m / 6.0 - lattice.m_m / 8.0
+    coupling_table = build_coupling_table(lattice.g_vectors, lattice.q_vectors, valley=valley)
+
+    default_h = build_hamiltonian(k_tilde, lattice, params, valley=valley)
+    cached_h = build_hamiltonian(
+        k_tilde,
+        lattice,
+        params,
+        valley=valley,
+        coupling_table=coupling_table,
+    )
+    default_evals, _ = diagonalize_hamiltonian(k_tilde, lattice, params, valley=valley, n_bands=12)
+    cached_evals, _ = diagonalize_hamiltonian(
+        k_tilde,
+        lattice,
+        params,
+        valley=valley,
+        n_bands=12,
+        coupling_table=coupling_table,
+    )
+
+    assert np.allclose(cached_h, default_h, atol=1.0e-12)
+    assert np.allclose(cached_evals, default_evals, atol=1.0e-12)
+
 
 def test_tmbg_full_hamiltonian_is_hermitian_and_time_reversal_symmetric() -> None:
     lattice = build_tmbg_lattice(1.21, n_shells=1)

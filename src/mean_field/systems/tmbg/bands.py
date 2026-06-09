@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .core_lattice import KPath
-from .hamiltonian import diagonalize_hamiltonian
+from .hamiltonian import build_coupling_table, diagonalize_hamiltonian
 from .lattice import TMBGLattice, build_moire_k_grid
 from .params import TMBGParameters
 
@@ -39,6 +39,7 @@ def compute_bands_along_path(
 
     energies = np.zeros((path.kvec.size, n_bands), dtype=float)
     eigenvectors = None if not return_eigenvectors else np.zeros((path.kvec.size, lattice.matrix_dim, n_bands), dtype=np.complex128)
+    coupling_table = build_coupling_table(lattice.g_vectors, lattice.q_vectors, valley=valley)
 
     for ik, kval in enumerate(path.kvec):
         evals, evecs = diagonalize_hamiltonian(
@@ -48,6 +49,7 @@ def compute_bands_along_path(
             valley=valley,
             n_bands=n_bands,
             return_eigenvectors=return_eigenvectors,
+            coupling_table=coupling_table,
         )
         energies[ik, :] = evals
         if return_eigenvectors and eigenvectors is not None:
@@ -75,6 +77,7 @@ def compute_bands_on_grid(
     eigenvectors = None
     if return_eigenvectors:
         eigenvectors = np.zeros((mesh_size, mesh_size, lattice.matrix_dim, n_bands), dtype=np.complex128)
+    coupling_table = build_coupling_table(lattice.g_vectors, lattice.q_vectors, valley=valley)
 
     for i in range(mesh_size):
         for j in range(mesh_size):
@@ -85,6 +88,7 @@ def compute_bands_on_grid(
                 valley=valley,
                 n_bands=n_bands,
                 return_eigenvectors=return_eigenvectors,
+                coupling_table=coupling_table,
             )
             energies[i, j, :] = evals
             if return_eigenvectors and eigenvectors is not None:

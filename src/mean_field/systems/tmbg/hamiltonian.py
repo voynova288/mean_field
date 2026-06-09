@@ -205,7 +205,12 @@ def build_coupling_table(
 
 
 def build_hamiltonian(
-    k_tilde: complex, lattice: TMBGLattice, params: TMBGParameters, valley: int = 1
+    k_tilde: complex,
+    lattice: TMBGLattice,
+    params: TMBGParameters,
+    valley: int = 1,
+    *,
+    coupling_table: tuple[MoireCouplingEntry, ...] | None = None,
 ) -> np.ndarray:
     valley = _validate_valley(valley)
     n_g = lattice.n_g
@@ -218,12 +223,22 @@ def build_hamiltonian(
             k_tilde, complex(gvec), lattice, params, valley
         )
 
-    for entry in build_coupling_table(
-        lattice.g_vectors, lattice.q_vectors, valley=valley
-    ):
+    resolved_table = coupling_table
+    if resolved_table is None:
+        resolved_table = build_coupling_table(
+            lattice.g_vectors, lattice.q_vectors, valley=valley
+        )
+    coupling_matrices = {
+        channel: moire_coupling_matrix(channel, params, valley) for channel in MOIRE_CHANNELS
+    }
+
+    for entry in resolved_table:
         middle_slice = slice(6 * entry.middle_index + 2, 6 * entry.middle_index + 4)
         top_slice = slice(6 * entry.top_index + 4, 6 * entry.top_index + 6)
-        coupling = moire_coupling_matrix(entry.channel, params, valley)
+        try:
+            coupling = coupling_matrices[entry.channel]
+        except KeyError as exc:
+            raise ValueError(f"Unsupported moire coupling channel: {entry.channel}") from exc
         hamiltonian[middle_slice, top_slice] += coupling
         hamiltonian[top_slice, middle_slice] += coupling.conjugate().T
 
@@ -238,8 +253,15 @@ def diagonalize_hamiltonian(
     valley: int = 1,
     n_bands: int | None = None,
     return_eigenvectors: bool = True,
+    coupling_table: tuple[MoireCouplingEntry, ...] | None = None,
 ) -> tuple[np.ndarray, np.ndarray | None]:
-    hmat = build_hamiltonian(k_tilde, lattice, params, valley)
+    hmat = build_hamiltonian(
+        k_tilde,
+        lattice,
+        params,
+        valley=valley,
+        coupling_table=coupling_table,
+    )
     if not return_eigenvectors:
         evals = eigh(hmat, eigvals_only=True, driver="evr")
         if n_bands is None:
