@@ -5,6 +5,7 @@ import numpy as np
 from mean_field.systems.tbg.finite_field import (
     FiniteFieldBMParameters,
     MagneticFlux,
+    associated_laguerre_element,
     associated_laguerre_matrix,
     author_landau_cutoff,
     compute_coulomb_overlap,
@@ -52,6 +53,21 @@ def test_magnetic_spectrum_sweep_matches_single_flux_result_and_builds_plot_tabl
 def test_associated_laguerre_zero_momentum_is_identity() -> None:
     mat = associated_laguerre_matrix(6, 0.0 + 0.0j, 3.0)
     np.testing.assert_allclose(mat, np.eye(6), atol=1.0e-14)
+
+
+def test_associated_laguerre_matrix_matches_element_formula() -> None:
+    n_landau = 7
+    qvec = 0.137 - 0.421j
+    l_b = 4.3
+    cplus = -1j * l_b / np.sqrt(2.0) * (qvec.real - 1j * qvec.imag)
+    cminus = -1j * l_b / np.sqrt(2.0) * (qvec.real + 1j * qvec.imag)
+    expected = np.zeros((n_landau, n_landau), dtype=np.complex128)
+    for n in range(n_landau):
+        for m in range(n_landau):
+            expected[n, m] = associated_laguerre_element(n, m, cplus, cminus)
+
+    mat = associated_laguerre_matrix(n_landau, qvec, l_b)
+    np.testing.assert_allclose(mat, expected, atol=1.0e-14, rtol=1.0e-14)
 
 
 def test_zero_tunneling_spectrum_has_two_central_zero_landau_levels() -> None:

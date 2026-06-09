@@ -414,10 +414,25 @@ def associated_laguerre_element(n: int, m: int, cplus: complex, cminus: complex)
 def associated_laguerre_matrix(n_landau: int, qvec: complex, l_b: float) -> Array:
     cplus = -1j * float(l_b) / np.sqrt(2.0) * (qvec.real - 1j * qvec.imag)
     cminus = -1j * float(l_b) / np.sqrt(2.0) * (qvec.real + 1j * qvec.imag)
-    out = np.zeros((int(n_landau), int(n_landau)), dtype=np.complex128)
-    for n in range(int(n_landau)):
-        for m in range(int(n_landau)):
-            out[n, m] = associated_laguerre_element(n, m, cplus, cminus)
+    n_ll = int(n_landau)
+    out = np.zeros((n_ll, n_ll), dtype=np.complex128)
+    x = -float((cplus * cminus).real)
+    for delta in range(n_ll):
+        idx = np.arange(n_ll - delta)
+        prefactor = np.exp(
+            -x / 2.0 + 0.5 * (gammaln(idx + 1.0) - gammaln(idx + delta + 1.0))
+        )
+        laguerre = eval_genlaguerre(idx, delta, x)
+        lower = prefactor * cplus**delta * laguerre
+        lower = np.asarray(lower, dtype=np.complex128)
+        lower[np.abs(lower) < 1e-16] = 0.0
+        out[idx + delta, idx] = lower
+        if delta == 0:
+            continue
+        upper = prefactor * cminus**delta * laguerre
+        upper = np.asarray(upper, dtype=np.complex128)
+        upper[np.abs(upper) < 1e-16] = 0.0
+        out[idx, idx + delta] = upper
     return out
 
 
