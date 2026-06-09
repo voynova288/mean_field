@@ -9,6 +9,7 @@ from .bilayer_map import build_atmg_via_tbg_sum
 from .hamiltonian import diagonalize_hamiltonian
 from .lattice import ATMGLattice, build_moire_k_grid
 from .params import ATMGParameters
+from .tbg import build_coupling_table
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,8 @@ def compute_bands_along_path(
     if include_mapped:
         mapped_energies = np.zeros((path.kvec.size, resolved_n_bands), dtype=float)
 
+    coupling_table = build_coupling_table(lattice.g_vectors, lattice.q_vectors, valley=valley)
+
     for ik, kval in enumerate(path.kvec):
         evals, evecs = diagonalize_hamiltonian(
             complex(kval),
@@ -61,6 +64,7 @@ def compute_bands_along_path(
             params,
             valley=valley,
             n_bands=resolved_n_bands,
+            coupling_table=coupling_table,
         )
         energies[ik, :] = evals
         if return_eigenvectors and eigenvectors is not None:
@@ -112,6 +116,8 @@ def compute_bands_on_grid(
     if include_mapped:
         mapped_energies = np.zeros((mesh_size, mesh_size, resolved_n_bands), dtype=float)
 
+    coupling_table = build_coupling_table(lattice.g_vectors, lattice.q_vectors, valley=valley)
+
     for i in range(mesh_size):
         for j in range(mesh_size):
             evals, evecs = diagonalize_hamiltonian(
@@ -120,6 +126,7 @@ def compute_bands_on_grid(
                 params,
                 valley=valley,
                 n_bands=resolved_n_bands,
+                coupling_table=coupling_table,
             )
             energies[i, j, :] = evals
             if return_eigenvectors and eigenvectors is not None:
