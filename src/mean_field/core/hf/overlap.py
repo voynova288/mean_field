@@ -313,13 +313,20 @@ def contract_fock_term_from_overlap(
         raise ValueError(f"Expected coeff_matrix shape {(nk_target, nk_source)}, got {coeff_matrix.shape}")
 
     if _numba_enabled(use_numba):
-        return _contract_fock_term_from_overlap_numba(overlap, density, np.asarray(coeff_matrix, dtype=np.complex128))
+        numba_coeff_matrix = _coerce_fock_coeff_matrix_for_numba(coeff_matrix)
+        return _contract_fock_term_from_overlap_numba(overlap, density, numba_coeff_matrix)
 
     lambda_blocks = np.transpose(overlap, (1, 3, 0, 2))
     density_t = np.transpose(density, (2, 1, 0))
     intermediate = np.einsum("tsac,scd->tsad", lambda_blocks, density_t, optimize=True)
     fock = np.einsum("ts,tsad,tsbd->tab", coeff_matrix, intermediate, np.conj(lambda_blocks), optimize=True)
     return np.transpose(fock, (1, 2, 0))
+
+
+def _coerce_fock_coeff_matrix_for_numba(coeff_matrix: np.ndarray) -> np.ndarray:
+    if np.iscomplexobj(coeff_matrix):
+        return np.asarray(coeff_matrix, dtype=np.complex128)
+    return np.asarray(coeff_matrix, dtype=np.float64)
 
 
 def summarize_overlap(
@@ -372,22 +379,21 @@ if njit is not None:  # pragma: no branch
         nk_target = overlap.shape[1]
         nk_source = overlap.shape[3]
         out = np.zeros((nt, nt, nk_target), dtype=np.complex128)
-        zero = 0.0 + 0.0j
         for ik_target in prange(nk_target):
             for ik_source in range(nk_source):
                 coeff = coeff_matrix[ik_target, ik_source]
-                if coeff == zero:
+                if coeff == 0.0:
                     continue
                 for a in range(nt):
                     for b in range(nt):
                         total = 0.0 + 0.0j
                         for c in range(nt):
                             left = overlap[a, ik_target, c, ik_source]
-                            if left == zero:
+                            if left == 0.0:
                                 continue
                             for d in range(nt):
                                 right = overlap[b, ik_target, d, ik_source]
-                                if right == zero:
+                                if right == 0.0:
                                     continue
                                 total += left * density[d, c, ik_source] * np.conjugate(right)
                         out[a, b, ik_target] += coeff * total

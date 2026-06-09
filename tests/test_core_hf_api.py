@@ -221,7 +221,19 @@ def test_core_hf_projected_overlap_zero_fill_drops_boundary_wraps() -> None:
         calculate_projected_overlap_between(periodic_target, zero_fill_source, 1, 0)
 
 
-def test_core_hf_fock_contraction_numba_path_matches_numpy_path() -> None:
+def _explicit_fock_term_from_overlap(overlap: np.ndarray, density: np.ndarray, coeff: np.ndarray) -> np.ndarray:
+    nt, nk_target, _nt_rhs, nk_source = overlap.shape
+    expected = np.zeros((nt, nt, nk_target), dtype=np.complex128)
+    for ik_target in range(nk_target):
+        for ik_source in range(nk_source):
+            lam = overlap[:, ik_target, :, ik_source]
+            expected[:, :, ik_target] += coeff[ik_target, ik_source] * (
+                lam @ density[:, :, ik_source].T @ lam.conjugate().T
+            )
+    return expected
+
+
+def test_core_hf_fock_contraction_paths_match_explicit_formula() -> None:
     overlap = np.zeros((2, 2, 2, 2), dtype=np.complex128)
     overlap[:, 0, :, 0] = np.asarray([[1.0, 0.2], [0.0, 0.9]], dtype=np.complex128)
     overlap[:, 0, :, 1] = np.asarray([[0.5, 0.0], [0.1, 1.5]], dtype=np.complex128)
@@ -230,12 +242,16 @@ def test_core_hf_fock_contraction_numba_path_matches_numpy_path() -> None:
     density = np.zeros((2, 2, 2), dtype=np.complex128)
     density[:, :, 0] = np.asarray([[0.5, 0.1j], [-0.1j, -0.25]], dtype=np.complex128)
     density[:, :, 1] = np.asarray([[0.2, 0.3], [0.3, -0.4]], dtype=np.complex128)
-    coeff = np.asarray([[1.0, 0.5], [0.2, 0.8]], dtype=float)
+    real_coeff = np.asarray([[1.0, 0.5], [0.2, 0.8]], dtype=float)
+    complex_coeff = real_coeff.astype(np.complex128) * (1.0 + 0.25j)
 
-    numpy_result = contract_fock_term_from_overlap(overlap, density, coeff, use_numba=False)
-    optional_numba_result = contract_fock_term_from_overlap(overlap, density, coeff, use_numba=True)
+    for coeff in (real_coeff, complex_coeff):
+        expected = _explicit_fock_term_from_overlap(overlap, density, coeff)
+        numpy_result = contract_fock_term_from_overlap(overlap, density, coeff, use_numba=False)
+        optional_numba_result = contract_fock_term_from_overlap(overlap, density, coeff, use_numba=True)
 
-    assert np.allclose(optional_numba_result, numpy_result)
+        np.testing.assert_allclose(numpy_result, expected, atol=1.0e-14)
+        np.testing.assert_allclose(optional_numba_result, expected, atol=1.0e-14)
 
 
 def test_core_hf_projected_interaction_builds_hartree_and_fock_terms_from_precomputed_blocks() -> None:
