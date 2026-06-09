@@ -5,7 +5,8 @@ import math
 
 import numpy as np
 
-from .core_lattice import KPath, cumulative_distance
+from ...core.lattice import build_kpath_from_nodes as _build_core_kpath_from_nodes, build_moire_k_grid_from_reciprocal
+from .core_lattice import KPath
 from .params import GRAPHENE_LATTICE_CONSTANT_NM
 
 
@@ -145,28 +146,7 @@ def build_tmbg_lattice(
 
 
 def build_kpath_from_nodes(nodes: tuple[complex, ...], labels: tuple[str, ...], points_per_segment: int) -> KPath:
-    if points_per_segment <= 0:
-        raise ValueError("points_per_segment must be positive")
-    if len(nodes) < 2:
-        raise ValueError("At least two path nodes are required.")
-    if len(nodes) != len(labels):
-        raise ValueError(f"Expected {len(nodes)} labels, got {len(labels)}")
-
-    kvec: list[complex] = [complex(nodes[0])]
-    node_indices = [1]
-    for start_k, end_k in zip(nodes[:-1], nodes[1:], strict=True):
-        step = (end_k - start_k) / float(points_per_segment)
-        for idx in range(1, points_per_segment + 1):
-            kvec.append(complex(start_k + idx * step))
-        node_indices.append(len(kvec))
-
-    kvec_array = np.asarray(kvec, dtype=np.complex128)
-    return KPath(
-        kvec=kvec_array,
-        kdist=cumulative_distance(kvec_array),
-        labels=labels,
-        node_indices=tuple(node_indices),
-    )
+    return _build_core_kpath_from_nodes(nodes, labels, int(points_per_segment))
 
 
 def build_standard_kpath(lattice: TMBGLattice, points_per_segment: int = 120) -> KPath:
@@ -223,18 +203,10 @@ def build_moire_k_grid(
     endpoint: bool = False,
     frac_shift: tuple[float, float] = (0.0, 0.0),
 ) -> tuple[np.ndarray, np.ndarray]:
-    if mesh_size <= 0:
-        raise ValueError(f"Expected a positive mesh_size, got {mesh_size}")
-
-    shift_1 = float(frac_shift[0])
-    shift_2 = float(frac_shift[1])
-    if endpoint:
-        frac_1 = np.linspace(0.0, 1.0, mesh_size, dtype=float) + shift_1
-        frac_2 = np.linspace(0.0, 1.0, mesh_size, dtype=float) + shift_2
-    else:
-        frac_1 = np.mod(np.arange(mesh_size, dtype=float) / float(mesh_size) + shift_1, 1.0)
-        frac_2 = np.mod(np.arange(mesh_size, dtype=float) / float(mesh_size) + shift_2, 1.0)
-    frac_i, frac_j = np.meshgrid(frac_1, frac_2, indexing="ij")
-    kvec = frac_i * lattice.g_m1 + frac_j * lattice.g_m2
-    frac_grid = np.stack([frac_i, frac_j], axis=-1)
-    return frac_grid, np.asarray(kvec, dtype=np.complex128)
+    return build_moire_k_grid_from_reciprocal(
+        lattice.g_m1,
+        lattice.g_m2,
+        mesh_size,
+        endpoint=endpoint,
+        frac_shift=frac_shift,
+    )
