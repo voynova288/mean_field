@@ -6,6 +6,8 @@ import math
 import numpy as np
 from scipy.linalg import eigh
 
+from mean_field.core.validation import validate_valley as _validate_valley
+
 from .lattice import HTGLattice, _complex_key, dot_2d
 from .params import HTGParams, VALID_VALLEYS
 
@@ -16,12 +18,6 @@ class MoireCouplingEntry:
     middle_index: int
     outer_index: int
 
-
-def _validate_valley(valley: int) -> int:
-    valley = int(valley)
-    if valley not in VALID_VALLEYS:
-        raise ValueError(f"Expected valley in {VALID_VALLEYS}, got {valley}")
-    return valley
 
 
 def centered_band_indices(matrix_dim: int, band_count: int) -> tuple[int, ...]:

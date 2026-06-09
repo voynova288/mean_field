@@ -6,18 +6,14 @@ import math
 import numpy as np
 from scipy.linalg import eigh
 
+from mean_field.core.validation import validate_valley as _validate_valley
+
 from .lattice import ATMGLattice
 
 
 VALID_VALLEYS = (-1, 1)
 MOIRE_CHANNELS = ("0", "+", "-")
 
-
-def _validate_valley(valley: int) -> int:
-    valley = int(valley)
-    if valley not in VALID_VALLEYS:
-        raise ValueError(f"Expected valley in {VALID_VALLEYS}, got {valley}")
-    return valley
 
 
 def _complex_key(value: complex, *, digits: int = 12) -> tuple[float, float]:

@@ -10,7 +10,11 @@ from time import perf_counter
 import numpy as np
 
 from mean_field.core.lattice import KPath
-from mean_field.devtools._runtime import ensure_not_running_compute_on_login_node, write_json
+from mean_field.devtools._runtime import (
+    complex_from_pairs as _complex_from_pairs,
+    ensure_not_running_compute_on_login_node,
+    write_json,
+)
 from mean_field.devtools.run_rlg_hbn_paper_hf import PAPER_CONFIGS
 from mean_field.systems.RnG_hBN import (
     RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
@@ -66,12 +70,6 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
-
-def _complex_from_pairs(values: np.ndarray) -> np.ndarray:
-    pairs = np.asarray(values, dtype=float)
-    if pairs.shape[-1] != 2:
-        raise ValueError(f"Expected final axis of length 2 for complex pairs, got {pairs.shape}")
-    return np.asarray(pairs[..., 0] + 1j * pairs[..., 1], dtype=np.complex128)
 
 
 def _panel_values(panel_dir: Path) -> tuple[int, float]:

@@ -7,6 +7,8 @@ from typing import Iterable
 import numpy as np
 from scipy.linalg import eigh
 
+from mean_field.core.validation import validate_valley as _validate_valley
+
 from .lattice import RLGhBNLattice
 from .params import RLGhBNParams, VALID_VALLEYS
 
@@ -20,12 +22,6 @@ class MoireCouplingEntry:
     target_g_index: int
     channel: int
 
-
-def _validate_valley(valley: int) -> int:
-    valley = int(valley)
-    if valley not in VALID_VALLEYS:
-        raise ValueError(f"Expected valley in {VALID_VALLEYS}, got {valley}")
-    return valley
 
 
 def _momentum_complex(momentum: complex | Iterable[float] | np.ndarray) -> complex:

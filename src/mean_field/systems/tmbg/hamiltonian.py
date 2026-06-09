@@ -6,6 +6,8 @@ import math
 import numpy as np
 from scipy.linalg import eigh
 
+from mean_field.core.validation import validate_valley as _validate_valley
+
 from .lattice import TMBGLattice, _complex_key
 from .params import TMBGParameters, VALID_BLG_STACKINGS
 
@@ -20,12 +22,6 @@ class MoireCouplingEntry:
     middle_index: int
     top_index: int
 
-
-def _validate_valley(valley: int) -> int:
-    valley = int(valley)
-    if valley not in VALID_VALLEYS:
-        raise ValueError(f"Expected valley in {VALID_VALLEYS}, got {valley}")
-    return valley
 
 
 def _rotated_complex_momentum(kvec: complex, phi: float) -> complex:

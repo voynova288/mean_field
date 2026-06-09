@@ -7,6 +7,8 @@ from typing import Any
 
 import numpy as np
 
+from mean_field.core.validation import validate_valley as _validate_valley
+
 from .params import GRAPHENE_LATTICE_CONSTANT_NM, TMBGParameters, hopping_to_velocity
 
 
@@ -20,12 +22,6 @@ class CrossCheckCouplingEntry:
     middle_index: int
     top_index: int
 
-
-def _validate_valley(valley: int) -> int:
-    valley = int(valley)
-    if valley not in VALID_VALLEYS:
-        raise ValueError(f"Expected valley in {VALID_VALLEYS}, got {valley}")
-    return valley
 
 
 def _complex_key(value: complex, *, digits: int = 12) -> tuple[float, float]:
