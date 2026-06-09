@@ -14,9 +14,6 @@ def _cross_2d(a: complex, b: complex) -> float:
     return float(a.real * b.imag - a.imag * b.real)
 
 
-def _complex_key(value: complex, *, digits: int = 12) -> tuple[float, float]:
-    return (round(float(value.real), digits), round(float(value.imag), digits))
-
 
 @dataclass(frozen=True)
 class TMBGLattice:

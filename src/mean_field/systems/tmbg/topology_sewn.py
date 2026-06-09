@@ -19,9 +19,9 @@ import numpy as np
 from scipy.linalg import eigh
 
 from analysis.topology import WavefunctionIndex, compute_lattice_topology
+from mean_field.core.lattice import complex_lattice_key
 
 from .hamiltonian import build_hamiltonian
-from .lattice import _complex_key
 from .model import TMBGModel
 
 Orientation = Literal["raw", "physical"]
@@ -56,10 +56,10 @@ class SewnGridResult:
 
 def translation_srcmap(lattice, reciprocal_shift: complex) -> np.ndarray:
     """Map target G index to source G index for G -> G + reciprocal_shift."""
-    mapping = {_complex_key(complex(g)): idx for idx, g in enumerate(lattice.g_vectors)}
+    mapping = {complex_lattice_key(complex(g)): idx for idx, g in enumerate(lattice.g_vectors)}
     src = np.full(lattice.n_g, -1, dtype=int)
     for target_index, g in enumerate(lattice.g_vectors):
-        source_index = mapping.get(_complex_key(complex(g + reciprocal_shift)))
+        source_index = mapping.get(complex_lattice_key(complex(g + reciprocal_shift)))
         if source_index is not None:
             src[target_index] = source_index
     return src

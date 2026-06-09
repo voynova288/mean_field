@@ -24,9 +24,6 @@ def rotate_complex(value: complex, angle_rad: float) -> complex:
     return complex(value) * complex(math.cos(angle_rad), math.sin(angle_rad))
 
 
-def _complex_key(value: complex, *, digits: int = 12) -> tuple[float, float]:
-    return (round(float(value.real), digits), round(float(value.imag), digits))
-
 
 @dataclass(frozen=True)
 class HTGLattice:

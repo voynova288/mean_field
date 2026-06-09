@@ -7,6 +7,7 @@ from typing import Any
 
 import numpy as np
 
+from mean_field.core.lattice import complex_lattice_key
 from mean_field.core.validation import validate_valley as _validate_valley
 
 from .params import GRAPHENE_LATTICE_CONSTANT_NM, TMBGParameters, hopping_to_velocity
@@ -23,9 +24,6 @@ class CrossCheckCouplingEntry:
     top_index: int
 
 
-
-def _complex_key(value: complex, *, digits: int = 12) -> tuple[float, float]:
-    return (round(float(value.real), digits), round(float(value.imag), digits))
 
 
 def _resolve_params(params: TMBGParameters | Mapping[str, float]) -> dict[str, Any]:
@@ -116,13 +114,13 @@ def build_coupling_table(
     valley = _validate_valley(valley)
     g_vectors = np.asarray(g_vectors, dtype=np.complex128)
     q_vectors = {"0": complex(q0), "+": complex(q_plus), "-": complex(q_minus)}
-    mapping = {_complex_key(complex(gvec)): idx for idx, gvec in enumerate(g_vectors)}
+    mapping = {complex_lattice_key(complex(gvec)): idx for idx, gvec in enumerate(g_vectors)}
 
     entries: list[CrossCheckCouplingEntry] = []
     for middle_index, g_middle in enumerate(g_vectors):
         for channel in MOIRE_CHANNELS:
             shift = complex(valley * (q_vectors[channel] - q_vectors["0"]))
-            top_index = mapping.get(_complex_key(complex(g_middle + shift)))
+            top_index = mapping.get(complex_lattice_key(complex(g_middle + shift)))
             if top_index is None:
                 continue
             entries.append(
