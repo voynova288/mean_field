@@ -17,6 +17,7 @@ from .core import (
     LatticeTopologyResult,
     LinkMethod,
     SewingTransform,
+    default_k_grid_frac,
     WavefunctionIndex,
     compute_lattice_topology,
     normalize_state_indices,
@@ -110,11 +111,7 @@ def compute_system_topology_from_eigenvectors(
         )
 
     mesh_x, mesh_y = vectors.shape[:2]
-    resolved_grid = (
-        np.zeros((mesh_x, mesh_y, 2), dtype=float)
-        if k_grid_frac is None
-        else np.asarray(k_grid_frac, dtype=float)
-    )
+    resolved_grid = default_k_grid_frac(mesh_x, mesh_y) if k_grid_frac is None else np.asarray(k_grid_frac, dtype=float)
     geometry = compute_lattice_topology(
         vectors,
         normalized_bands,

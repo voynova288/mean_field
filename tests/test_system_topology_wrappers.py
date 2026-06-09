@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from analysis.topology import TopologyResult, compute_system_topology_on_grid
+from analysis.topology import TopologyResult, compute_system_topology_from_eigenvectors, compute_system_topology_on_grid
 
 
 def _qiwuzhang_eigenvectors(mesh_size: int, *, mass: float) -> np.ndarray:
@@ -30,6 +30,20 @@ def _qiwuzhang_eigenvectors(mesh_size: int, *, mass: float) -> np.ndarray:
             _, vecs = np.linalg.eigh(hamiltonian)
             eigenvectors[ix, iy] = vecs
     return eigenvectors
+
+
+def test_compute_system_topology_from_eigenvectors_uses_canonical_default_grid() -> None:
+    mesh_size = 11
+    eigenvectors = _qiwuzhang_eigenvectors(mesh_size, mass=-1.0)
+
+    result = compute_system_topology_from_eigenvectors(eigenvectors, 0, system="toy_system", valley=1)
+
+    frac = np.arange(mesh_size, dtype=float) / float(mesh_size)
+    np.testing.assert_allclose(result.k_grid_frac[:, :, 0], np.broadcast_to(frac[:, None], (mesh_size, mesh_size)))
+    np.testing.assert_allclose(result.k_grid_frac[:, :, 1], np.broadcast_to(frac[None, :], (mesh_size, mesh_size)))
+    assert not np.allclose(result.k_grid_frac, 0.0)
+    assert result.is_nearly_integer
+    assert abs(result.chern_number) == pytest.approx(1.0, abs=1.0e-8)
 
 
 @pytest.mark.parametrize(

@@ -68,15 +68,6 @@ def sublattice_sigma_z(lattice: HTGLattice) -> np.ndarray:
     return np.diag(np.tile(pattern, lattice.n_g)).astype(np.complex128)
 
 
-def _unit_link(overlap: complex, *, atol: float = 1.0e-14) -> complex:
-    magnitude = abs(overlap)
-    if magnitude <= atol:
-        raise ValueError(
-            "Encountered a near-zero overlap link while computing Berry flux. "
-            "Try a finer mesh, a small fractional mesh shift, or a larger plane-wave cutoff."
-        )
-    return overlap / magnitude
-
 
 def _reciprocal_translation(lattice: HTGLattice, dn1: int, dn2: int) -> Callable[[np.ndarray], np.ndarray]:
     """Return the transition function for crossing a moire BZ boundary.
