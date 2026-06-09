@@ -13,10 +13,122 @@ from mean_field.systems.tbg.finite_field import (
     compute_magnetic_spectrum,
     compute_magnetic_spectrum_sweep,
     construct_ll_hamiltonian,
+    in_gamma,
     paper_hofstadter_fluxes,
     red_chern_minus_one_group_mask,
+    tll_matrix,
 )
 from mean_field.systems.tbg.finite_field.spectrum import _hermitian_from_upper
+
+
+def _scalar_tll_reference(
+    tunnel: np.ndarray,
+    qvec: complex,
+    *,
+    n_landau: int,
+    n_h: int,
+    l_b: float,
+    theta0: float,
+    theta1: float,
+    theta2: float,
+    sigma_rotation: bool = False,
+    valley: str = "K",
+) -> np.ndarray:
+    """Scalar copy of the pre-cache ``tll_matrix`` branch formulas."""
+
+    t = np.asarray(tunnel, dtype=np.complex128)
+    al = associated_laguerre_matrix(n_landau, qvec, l_b)
+    out = np.zeros((n_h, n_h), dtype=np.complex128)
+    is_kprime = valley == "Kprime"
+
+    for i1 in range(n_h):
+        n1, gamma1 = in_gamma(i1)
+        for i2 in range(n_h):
+            n2, gamma2 = in_gamma(i2)
+            if not is_kprime:
+                if sigma_rotation:
+                    if n1 != 0 and n2 != 0:
+                        out[i1, i2] = (
+                            t[0, 0] * gamma1 * gamma2 * np.exp(1j * (theta2 - theta1)) * al[n1 - 1, n2 - 1]
+                            + t[1, 1] * al[n1, n2]
+                            + t[0, 1] * (1j * gamma1 * np.exp(-1j * (theta1 - theta0))) * al[n1 - 1, n2]
+                            + t[1, 0] * (-1j * gamma2 * np.exp(1j * (theta2 - theta0))) * al[n1, n2 - 1]
+                        ) / 2.0
+                    elif n1 == 0 and n2 == 0:
+                        out[i1, i2] = t[1, 1] * al[0, 0]
+                    elif n1 == 0:
+                        out[i1, i2] = (
+                            t[1, 1] * al[0, n2]
+                            + t[1, 0] * (-1j * gamma2 * np.exp(1j * (theta2 - theta0))) * al[0, n2 - 1]
+                        ) / np.sqrt(2.0)
+                    else:
+                        out[i1, i2] = (
+                            t[1, 1] * al[n1, 0]
+                            + t[0, 1] * (1j * gamma1 * np.exp(-1j * (theta1 - theta0))) * al[n1 - 1, 0]
+                        ) / np.sqrt(2.0)
+                else:
+                    if n1 != 0 and n2 != 0:
+                        out[i1, i2] = (
+                            t[0, 0] * gamma1 * gamma2 * al[n1 - 1, n2 - 1]
+                            + t[1, 1] * al[n1, n2]
+                            + t[0, 1] * (1j * gamma1 * np.exp(1j * theta0)) * al[n1 - 1, n2]
+                            + t[1, 0] * (-1j * gamma2 * np.exp(-1j * theta0)) * al[n1, n2 - 1]
+                        ) / 2.0
+                    elif n1 == 0 and n2 == 0:
+                        out[i1, i2] = t[1, 1] * al[0, 0]
+                    elif n1 == 0:
+                        out[i1, i2] = (
+                            t[1, 1] * al[0, n2]
+                            + t[1, 0] * (-1j * gamma2 * np.exp(-1j * theta0)) * al[0, n2 - 1]
+                        ) / np.sqrt(2.0)
+                    else:
+                        out[i1, i2] = (
+                            t[1, 1] * al[n1, 0]
+                            + t[0, 1] * (1j * gamma1 * np.exp(1j * theta0)) * al[n1 - 1, 0]
+                        ) / np.sqrt(2.0)
+            else:
+                if sigma_rotation:
+                    if n1 != 0 and n2 != 0:
+                        out[i1, i2] = (
+                            t[0, 0] * al[n1, n2]
+                            + t[1, 1] * gamma1 * gamma2 * np.exp(1j * (theta2 - theta1)) * al[n1 - 1, n2 - 1]
+                            + t[0, 1] * (1j * gamma2 * np.exp(1j * (theta2 - theta0))) * al[n1, n2 - 1]
+                            + t[1, 0] * (-1j * gamma1 * np.exp(-1j * (theta1 - theta0))) * al[n1 - 1, n2]
+                        ) / 2.0
+                    elif n1 == 0 and n2 == 0:
+                        out[i1, i2] = t[0, 0] * al[0, 0]
+                    elif n2 == 0:
+                        out[i1, i2] = (
+                            t[0, 0] * al[n1, 0]
+                            + t[1, 0] * (-1j * gamma1 * np.exp(-1j * (theta1 - theta0))) * al[n1 - 1, 0]
+                        ) / np.sqrt(2.0)
+                    else:
+                        out[i1, i2] = (
+                            t[0, 0] * al[0, n2]
+                            + t[0, 1] * (1j * gamma2 * np.exp(1j * (theta2 - theta0))) * al[0, n2 - 1]
+                        ) / np.sqrt(2.0)
+                else:
+                    if n1 != 0 and n2 != 0:
+                        out[i1, i2] = (
+                            t[0, 0] * al[n1, n2]
+                            + t[1, 1] * gamma1 * gamma2 * al[n1 - 1, n2 - 1]
+                            + t[0, 1] * (1j * gamma2 * np.exp(-1j * theta0)) * al[n1, n2 - 1]
+                            + t[1, 0] * (-1j * gamma1 * np.exp(1j * theta0)) * al[n1 - 1, n2]
+                        ) / 2.0
+                    elif n1 == 0 and n2 == 0:
+                        out[i1, i2] = t[0, 0] * al[0, 0]
+                    elif n2 == 0:
+                        out[i1, i2] = (
+                            t[0, 0] * al[n1, 0]
+                            + t[1, 0] * (-1j * gamma1 * np.exp(1j * theta0)) * al[n1 - 1, 0]
+                        ) / np.sqrt(2.0)
+                    else:
+                        out[i1, i2] = (
+                            t[0, 0] * al[0, n2]
+                            + t[0, 1] * (1j * gamma2 * np.exp(-1j * theta0)) * al[0, n2 - 1]
+                        ) / np.sqrt(2.0)
+    return out
+
 
 
 def test_paper_hofstadter_flux_rules_and_red_group_mask() -> None:
@@ -68,6 +180,48 @@ def test_associated_laguerre_matrix_matches_element_formula() -> None:
 
     mat = associated_laguerre_matrix(n_landau, qvec, l_b)
     np.testing.assert_allclose(mat, expected, atol=1.0e-14, rtol=1.0e-14)
+
+
+def test_tll_matrix_matches_scalar_reference_for_valleys_and_sigma_rotation() -> None:
+    tunnel = np.array(
+        [[0.31 + 0.17j, -0.23 + 0.41j], [0.19 - 0.37j, -0.11 + 0.29j]],
+        dtype=np.complex128,
+    )
+    theta0 = 0.37
+    theta1 = -0.19
+    theta2 = 0.83
+
+    for n_landau, n_h, qvec, l_b in (
+        (3, 5, 0.137 - 0.421j, 4.3),
+        (4, 6, -0.071 + 0.213j, 2.7),
+    ):
+        for valley in ("K", "Kprime"):
+            for sigma_rotation in (False, True):
+                actual = tll_matrix(
+                    tunnel,
+                    qvec,
+                    n_landau=n_landau,
+                    n_h=n_h,
+                    l_b=l_b,
+                    theta0=theta0,
+                    theta1=theta1,
+                    theta2=theta2,
+                    sigma_rotation=sigma_rotation,
+                    valley=valley,
+                )
+                expected = _scalar_tll_reference(
+                    tunnel,
+                    qvec,
+                    n_landau=n_landau,
+                    n_h=n_h,
+                    l_b=l_b,
+                    theta0=theta0,
+                    theta1=theta1,
+                    theta2=theta2,
+                    sigma_rotation=sigma_rotation,
+                    valley=valley,
+                )
+                np.testing.assert_allclose(actual, expected, atol=1.0e-14, rtol=1.0e-14)
 
 
 def test_zero_tunneling_spectrum_has_two_central_zero_landau_levels() -> None:
