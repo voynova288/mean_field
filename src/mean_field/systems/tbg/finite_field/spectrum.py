@@ -473,12 +473,20 @@ def tll_matrix(
     t = np.asarray(tunnel, dtype=np.complex128)
     al = associated_laguerre_matrix(n_landau, qvec, l_b)
     out = np.zeros((n_h, n_h), dtype=np.complex128)
-    n_values, gamma_values, nonzero_mask = _in_gamma_table(n_h)
+    if n_h == 0:
+        return out
+    n_values, gamma_values, _ = _in_gamma_table(n_h)
     sqrt2 = np.sqrt(2.0)
     t00 = t[0, 0]
     t01 = t[0, 1]
     t10 = t[1, 0]
     t11 = t[1, 1]
+    n_pos = n_values[1:]
+    gamma_pos = gamma_values[1:]
+    n_row = n_pos[:, None]
+    n_col = n_pos[None, :]
+    gamma_row = gamma_pos[:, None]
+    gamma_col = gamma_pos[None, :]
     is_kprime = valley == "Kprime"
 
     if not is_kprime:
@@ -486,101 +494,41 @@ def tll_matrix(
             phase_00 = np.exp(1j * (theta2 - theta1))
             phase_01 = np.exp(-1j * (theta1 - theta0))
             phase_10 = np.exp(1j * (theta2 - theta0))
-            for i1 in range(n_h):
-                n1 = int(n_values[i1])
-                gamma1 = int(gamma_values[i1])
-                n1_nonzero = bool(nonzero_mask[i1])
-                for i2 in range(n_h):
-                    n2 = int(n_values[i2])
-                    gamma2 = int(gamma_values[i2])
-                    n2_nonzero = bool(nonzero_mask[i2])
-                    if n1_nonzero and n2_nonzero:
-                        out[i1, i2] = (
-                            t00 * gamma1 * gamma2 * phase_00 * al[n1 - 1, n2 - 1]
-                            + t11 * al[n1, n2]
-                            + t01 * (1j * gamma1 * phase_01) * al[n1 - 1, n2]
-                            + t10 * (-1j * gamma2 * phase_10) * al[n1, n2 - 1]
-                        ) / 2.0
-                    elif not n1_nonzero and not n2_nonzero:
-                        out[i1, i2] = t11 * al[0, 0]
-                    elif not n1_nonzero:
-                        out[i1, i2] = (t11 * al[0, n2] + t10 * (-1j * gamma2 * phase_10) * al[0, n2 - 1]) / sqrt2
-                    else:
-                        out[i1, i2] = (t11 * al[n1, 0] + t01 * (1j * gamma1 * phase_01) * al[n1 - 1, 0]) / sqrt2
         else:
+            phase_00 = 1.0
             phase_01 = np.exp(1j * theta0)
             phase_10 = np.exp(-1j * theta0)
-            for i1 in range(n_h):
-                n1 = int(n_values[i1])
-                gamma1 = int(gamma_values[i1])
-                n1_nonzero = bool(nonzero_mask[i1])
-                for i2 in range(n_h):
-                    n2 = int(n_values[i2])
-                    gamma2 = int(gamma_values[i2])
-                    n2_nonzero = bool(nonzero_mask[i2])
-                    if n1_nonzero and n2_nonzero:
-                        out[i1, i2] = (
-                            t00 * gamma1 * gamma2 * al[n1 - 1, n2 - 1]
-                            + t11 * al[n1, n2]
-                            + t01 * (1j * gamma1 * phase_01) * al[n1 - 1, n2]
-                            + t10 * (-1j * gamma2 * phase_10) * al[n1, n2 - 1]
-                        ) / 2.0
-                    elif not n1_nonzero and not n2_nonzero:
-                        out[i1, i2] = t11 * al[0, 0]
-                    elif not n1_nonzero:
-                        out[i1, i2] = (t11 * al[0, n2] + t10 * (-1j * gamma2 * phase_10) * al[0, n2 - 1]) / sqrt2
-                    else:
-                        out[i1, i2] = (t11 * al[n1, 0] + t01 * (1j * gamma1 * phase_01) * al[n1 - 1, 0]) / sqrt2
+
+        out[0, 0] = t11 * al[0, 0]
+        if n_pos.size:
+            out[1:, 1:] = (
+                t00 * gamma_row * gamma_col * phase_00 * al[n_row - 1, n_col - 1]
+                + t11 * al[n_row, n_col]
+                + t01 * (1j * gamma_row * phase_01) * al[n_row - 1, n_col]
+                + t10 * (-1j * gamma_col * phase_10) * al[n_row, n_col - 1]
+            ) / 2.0
+            out[0, 1:] = (t11 * al[0, n_pos] + t10 * (-1j * gamma_pos * phase_10) * al[0, n_pos - 1]) / sqrt2
+            out[1:, 0] = (t11 * al[n_pos, 0] + t01 * (1j * gamma_pos * phase_01) * al[n_pos - 1, 0]) / sqrt2
     else:
         if sigma_rotation:
             phase_00 = np.exp(1j * (theta2 - theta1))
             phase_01 = np.exp(1j * (theta2 - theta0))
             phase_10 = np.exp(-1j * (theta1 - theta0))
-            for i1 in range(n_h):
-                n1 = int(n_values[i1])
-                gamma1 = int(gamma_values[i1])
-                n1_nonzero = bool(nonzero_mask[i1])
-                for i2 in range(n_h):
-                    n2 = int(n_values[i2])
-                    gamma2 = int(gamma_values[i2])
-                    n2_nonzero = bool(nonzero_mask[i2])
-                    if n1_nonzero and n2_nonzero:
-                        out[i1, i2] = (
-                            t00 * al[n1, n2]
-                            + t11 * gamma1 * gamma2 * phase_00 * al[n1 - 1, n2 - 1]
-                            + t01 * (1j * gamma2 * phase_01) * al[n1, n2 - 1]
-                            + t10 * (-1j * gamma1 * phase_10) * al[n1 - 1, n2]
-                        ) / 2.0
-                    elif not n1_nonzero and not n2_nonzero:
-                        out[i1, i2] = t00 * al[0, 0]
-                    elif not n2_nonzero:
-                        out[i1, i2] = (t00 * al[n1, 0] + t10 * (-1j * gamma1 * phase_10) * al[n1 - 1, 0]) / sqrt2
-                    else:
-                        out[i1, i2] = (t00 * al[0, n2] + t01 * (1j * gamma2 * phase_01) * al[0, n2 - 1]) / sqrt2
         else:
+            phase_00 = 1.0
             phase_01 = np.exp(-1j * theta0)
             phase_10 = np.exp(1j * theta0)
-            for i1 in range(n_h):
-                n1 = int(n_values[i1])
-                gamma1 = int(gamma_values[i1])
-                n1_nonzero = bool(nonzero_mask[i1])
-                for i2 in range(n_h):
-                    n2 = int(n_values[i2])
-                    gamma2 = int(gamma_values[i2])
-                    n2_nonzero = bool(nonzero_mask[i2])
-                    if n1_nonzero and n2_nonzero:
-                        out[i1, i2] = (
-                            t00 * al[n1, n2]
-                            + t11 * gamma1 * gamma2 * al[n1 - 1, n2 - 1]
-                            + t01 * (1j * gamma2 * phase_01) * al[n1, n2 - 1]
-                            + t10 * (-1j * gamma1 * phase_10) * al[n1 - 1, n2]
-                        ) / 2.0
-                    elif not n1_nonzero and not n2_nonzero:
-                        out[i1, i2] = t00 * al[0, 0]
-                    elif not n2_nonzero:
-                        out[i1, i2] = (t00 * al[n1, 0] + t10 * (-1j * gamma1 * phase_10) * al[n1 - 1, 0]) / sqrt2
-                    else:
-                        out[i1, i2] = (t00 * al[0, n2] + t01 * (1j * gamma2 * phase_01) * al[0, n2 - 1]) / sqrt2
+
+        out[0, 0] = t00 * al[0, 0]
+        if n_pos.size:
+            out[1:, 1:] = (
+                t00 * al[n_row, n_col]
+                + t11 * gamma_row * gamma_col * phase_00 * al[n_row - 1, n_col - 1]
+                + t01 * (1j * gamma_col * phase_01) * al[n_row, n_col - 1]
+                + t10 * (-1j * gamma_row * phase_10) * al[n_row - 1, n_col]
+            ) / 2.0
+            out[1:, 0] = (t00 * al[n_pos, 0] + t10 * (-1j * gamma_pos * phase_10) * al[n_pos - 1, 0]) / sqrt2
+            out[0, 1:] = (t00 * al[0, n_pos] + t01 * (1j * gamma_pos * phase_01) * al[0, n_pos - 1]) / sqrt2
     return out
 
 
