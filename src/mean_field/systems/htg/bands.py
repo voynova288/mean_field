@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .hamiltonian import centered_band_indices, diagonalize_hamiltonian
+from .hamiltonian import build_coupling_table, centered_band_indices, diagonalize_hamiltonian
 from .lattice import HTGLattice, KPath, build_moire_k_grid
 from .params import HTGParams
 
@@ -66,6 +66,9 @@ def compute_bands_along_path(
             dtype=np.complex128,
         )
 
+    top_coupling_table = build_coupling_table(lattice.g_vectors, lattice.q_vectors, valley=valley, shift_sign=1)
+    bottom_coupling_table = build_coupling_table(lattice.g_vectors, lattice.q_vectors, valley=valley, shift_sign=-1)
+
     for ik, kval in enumerate(path.kvec):
         evals, evecs = diagonalize_hamiltonian(
             complex(kval),
@@ -74,6 +77,8 @@ def compute_bands_along_path(
             valley=valley,
             d_top=d_top,
             d_bot=d_bot,
+            top_coupling_table=top_coupling_table,
+            bottom_coupling_table=bottom_coupling_table,
             band_indices=resolved_indices,
             return_eigenvectors=return_eigenvectors,
         )
@@ -117,6 +122,9 @@ def compute_bands_on_grid(
             dtype=np.complex128,
         )
 
+    top_coupling_table = build_coupling_table(lattice.g_vectors, lattice.q_vectors, valley=valley, shift_sign=1)
+    bottom_coupling_table = build_coupling_table(lattice.g_vectors, lattice.q_vectors, valley=valley, shift_sign=-1)
+
     for i in range(mesh_size):
         for j in range(mesh_size):
             evals, evecs = diagonalize_hamiltonian(
@@ -126,6 +134,8 @@ def compute_bands_on_grid(
                 valley=valley,
                 d_top=d_top,
                 d_bot=d_bot,
+                top_coupling_table=top_coupling_table,
+                bottom_coupling_table=bottom_coupling_table,
                 band_indices=resolved_indices,
                 return_eigenvectors=return_eigenvectors,
             )

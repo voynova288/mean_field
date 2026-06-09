@@ -165,6 +165,8 @@ def build_hamiltonian(
     valley: int = 1,
     d_top: complex | None = None,
     d_bot: complex | None = None,
+    top_coupling_table: tuple[MoireCouplingEntry, ...] | None = None,
+    bottom_coupling_table: tuple[MoireCouplingEntry, ...] | None = None,
 ) -> np.ndarray:
     valley = _validate_valley(valley)
     if d_top is None or d_bot is None:
@@ -188,16 +190,35 @@ def build_hamiltonian(
                 layer,
             )
 
-    top_entries = build_coupling_table(lattice.g_vectors, lattice.q_vectors, valley=valley, shift_sign=1)
-    bottom_entries = build_coupling_table(lattice.g_vectors, lattice.q_vectors, valley=valley, shift_sign=-1)
+    # Coupling tables depend only on lattice geometry, valley, and interface
+    # orientation.  Path/grid helpers can build them once and reuse them for
+    # every k-point in the sweep.
+    top_entries = (
+        build_coupling_table(lattice.g_vectors, lattice.q_vectors, valley=valley, shift_sign=1)
+        if top_coupling_table is None
+        else tuple(top_coupling_table)
+    )
+    bottom_entries = (
+        build_coupling_table(lattice.g_vectors, lattice.q_vectors, valley=valley, shift_sign=-1)
+        if bottom_coupling_table is None
+        else tuple(bottom_coupling_table)
+    )
+    top_channel_couplings = tuple(
+        _phase_for_displacement(complex(lattice.q_vectors[channel]), complex(d_top), valley)
+        * moire_coupling_matrix(channel, params, valley=valley)
+        for channel in (0, 1, 2)
+    )
+    bottom_channel_couplings = tuple(
+        _phase_for_displacement(complex(lattice.q_vectors[channel]), complex(d_bot), valley)
+        * moire_coupling_matrix(channel, params, valley=valley)
+        for channel in (0, 1, 2)
+    )
 
     for entry in top_entries:
         top_slice = _orbital_slice(entry.outer_index, 1)
         middle_slice = _orbital_slice(entry.middle_index, 2)
 
-        base_coupling = moire_coupling_matrix(entry.channel, params, valley=valley)
-        q_channel = complex(lattice.q_vectors[entry.channel])
-        top_coupling = _phase_for_displacement(q_channel, complex(d_top), valley) * base_coupling
+        top_coupling = top_channel_couplings[entry.channel]
 
         hamiltonian[top_slice, middle_slice] += top_coupling
         hamiltonian[middle_slice, top_slice] += top_coupling.conjugate().T
@@ -206,9 +227,7 @@ def build_hamiltonian(
         middle_slice = _orbital_slice(entry.middle_index, 2)
         bottom_slice = _orbital_slice(entry.outer_index, 3)
 
-        base_coupling = moire_coupling_matrix(entry.channel, params, valley=valley)
-        q_channel = complex(lattice.q_vectors[entry.channel])
-        bottom_coupling = _phase_for_displacement(q_channel, complex(d_bot), valley) * base_coupling
+        bottom_coupling = bottom_channel_couplings[entry.channel]
 
         hamiltonian[middle_slice, bottom_slice] += bottom_coupling
         hamiltonian[bottom_slice, middle_slice] += bottom_coupling.conjugate().T
@@ -224,6 +243,8 @@ def diagonalize_hamiltonian(
     valley: int = 1,
     d_top: complex | None = None,
     d_bot: complex | None = None,
+    top_coupling_table: tuple[MoireCouplingEntry, ...] | None = None,
+    bottom_coupling_table: tuple[MoireCouplingEntry, ...] | None = None,
     band_indices: tuple[int, ...] | None = None,
     return_eigenvectors: bool = True,
 ) -> tuple[np.ndarray, np.ndarray | None]:
@@ -234,6 +255,8 @@ def diagonalize_hamiltonian(
         valley=valley,
         d_top=d_top,
         d_bot=d_bot,
+        top_coupling_table=top_coupling_table,
+        bottom_coupling_table=bottom_coupling_table,
     )
     subset_by_index = None
     if band_indices is not None:
