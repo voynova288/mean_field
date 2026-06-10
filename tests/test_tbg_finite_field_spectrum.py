@@ -140,7 +140,7 @@ def test_paper_hofstadter_flux_rules_and_red_group_mask() -> None:
 
     mask = red_chern_minus_one_group_mask(MagneticFlux(2, 5))
     assert mask.shape == (10,)
-    np.testing.assert_array_equal(np.flatnonzero(mask), np.array([3, 4]))
+    np.testing.assert_array_equal(np.flatnonzero(mask), np.array([0, 1, 2]))
 
 def test_magnetic_spectrum_sweep_matches_single_flux_result_and_builds_plot_table() -> None:
     params = FiniteFieldBMParameters.from_degrees(1.20, w0=0.0, w1=0.0, strain=0.0, deformation_potential=0.0)

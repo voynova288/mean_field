@@ -300,13 +300,19 @@ def author_landau_cutoff(flux: MagneticFlux, *, cutoff: int = 25) -> int:
     return int(int(cutoff) * flux.q // flux.p)
 
 def red_chern_minus_one_group_mask(flux: MagneticFlux) -> Array:
-    """Mask the red C=-1 subband group below CNP in Fig. 3(a)."""
+    """Mask the lower C=-1 magnetic-subband group used in Fig. 3(a).
+
+    For flux ``p/q`` the C=-1 group below charge neutrality contains the
+    lower ``q-p`` subbands of the ascending-energy ``2q`` central spectrum.
+    The complementary ``p`` subbands immediately below charge neutrality are
+    not the red group in the paper panel.
+    """
 
     p_flux, q_flux = int(flux.p), int(flux.q)
     if p_flux <= 0 or p_flux > q_flux:
         raise ValueError(f"Expected 0 < p <= q for red-group mask, got p/q={p_flux}/{q_flux}")
     mask = np.zeros(2 * q_flux, dtype=bool)
-    mask[q_flux - p_flux : q_flux] = True
+    mask[: q_flux - p_flux] = True
     return mask
 
 def _value_for_flux(value, flux: MagneticFlux):
