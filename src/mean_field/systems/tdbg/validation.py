@@ -2,65 +2,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
 
 import numpy as np
 
+from ...core.validation import (
+    ValidationCheck,
+    ValidationReport,
+    ValidationStatus,
+    format_validation_value,
+    status_from_bool,
+)
 from .bands import PathBandsResult
 from .lattice import build_standard_kpath
 from .model import TDBGModel
 
-
-ValidationStatus = Literal["pass", "fail", "skipped"]
-
-
-def _status_from_bool(condition: bool) -> ValidationStatus:
-    return "pass" if condition else "fail"
-
-
-def _format_value(value: object | None) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, float):
-        return f"{value:.6e}"
-    return str(value)
-
-
-@dataclass(frozen=True)
-class ValidationCheck:
-    name: str
-    status: ValidationStatus
-    detail: str
-    value: float | int | str | None = None
-
-    @property
-    def passed(self) -> bool:
-        return self.status == "pass"
-
-
-@dataclass(frozen=True)
-class ValidationReport:
-    title: str
-    checks: tuple[ValidationCheck, ...]
-
-    @property
-    def failure_count(self) -> int:
-        return sum(check.status == "fail" for check in self.checks)
-
-    @property
-    def has_failures(self) -> bool:
-        return self.failure_count > 0
-
-    def to_markdown(self) -> str:
-        lines = [f"# {self.title}", ""]
-        for check in self.checks:
-            value_text = _format_value(check.value)
-            suffix = f" ({value_text})" if value_text else ""
-            lines.append(f"- [{check.status}] {check.name}{suffix}: {check.detail}")
-        lines.append("")
-        lines.append(f"- failures: {self.failure_count}")
-        return "\n".join(lines)
-
+_status_from_bool = status_from_bool
+_format_value = format_validation_value
 
 @dataclass(frozen=True)
 class ReferenceComparisonResult:
