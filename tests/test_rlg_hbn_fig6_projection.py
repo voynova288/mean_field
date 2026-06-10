@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from mean_field.devtools.plot_rlg_hbn_paper_hf_bands import _paper_hf_path
+from mean_field.core.hf import conventional_projector_to_stored, stored_projector_to_conventional
 from mean_field.systems.RnG_hBN import (
     InterlayerHartreeResult,
     LayerChargeResult,
@@ -15,6 +16,7 @@ from mean_field.systems.RnG_hBN import (
     diagonalize_hamiltonian,
     initialize_rlg_hbn_density,
     normalize_rlg_hbn_init_mode,
+    rlg_hbn_projector_from_density,
     rlg_hbn_projector_idempotency_residual,
     rlg_hbn_reference_density,
 )
@@ -179,6 +181,21 @@ def test_fig6_average_scheme_h0_includes_fixed_remote_hamiltonian() -> None:
         atol=1.0e-10,
     )
     assert not np.allclose(basis_data.h0, basis_data.physical_h0)
+
+
+def test_rlg_hbn_density_archive_convention_recovers_ket_projector_with_transpose() -> None:
+    occupied = np.asarray([1.0, 1.0j], dtype=np.complex128) / np.sqrt(2.0)
+    ket_projector = occupied[:, None] @ occupied.conjugate()[None, :]
+    stored_projector = conventional_projector_to_stored(ket_projector)
+    reference = rlg_hbn_reference_density(2, 1, scheme="average", active_valence_bands=0, n_spin=1, n_eta=1)
+    density_delta = stored_projector[:, :, None] - reference
+
+    archived_stored_projector = rlg_hbn_projector_from_density(density_delta, reference)[:, :, 0]
+    recovered_ket_projector = stored_projector_to_conventional(archived_stored_projector)
+
+    np.testing.assert_allclose(archived_stored_projector, stored_projector, atol=1.0e-12)
+    np.testing.assert_allclose(recovered_ket_projector, ket_projector, atol=1.0e-12)
+    assert rlg_hbn_projector_idempotency_residual(density_delta, reference) < 1.0e-12
 
 
 def test_fig6_random_init_mode_alias_builds_valid_projector() -> None:
