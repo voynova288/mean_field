@@ -8,7 +8,7 @@ from typing import Literal
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-from ...plotting import format_kpath_axis, load_plot_backend, plot_band_columns, save_figure_pair
+from ...plotting import PathBandPlotTrace, load_plot_backend, write_path_band_plot
 from .bands import PathBandsResult
 
 
@@ -47,53 +47,34 @@ def write_htg_path_band_plot(
     ylim: tuple[float, float] | None = None,
     annotate: str | None = None,
 ) -> dict[str, Path]:
-    if not traces:
-        raise ValueError("Expected at least one trace to plot.")
-    plt = _load_plot_backend()
-    fig, ax = plt.subplots(figsize=(7.0, 4.7))
-    reference_path = traces[0].path_result.path
-    format_kpath_axis(
-        ax,
-        reference_path,
-        label_formatter=_display_node_label,
-        vertical_line_kwargs={"color": "#9a9a9a", "linestyle": ":", "linewidth": 0.8, "zorder": 0},
-        xlabel=None,
-    )
-    ax.axhline(y=0.0, color="#777777", linestyle="-", linewidth=0.45, alpha=0.55, zorder=0)
-
-    for trace in traces:
-        plot_band_columns(
-            ax,
-            trace.path_result.path.kdist,
-            trace.path_result.energies,
-            energy_scale=float(trace.energy_scale),
+    common_traces = tuple(
+        PathBandPlotTrace(
+            label=trace.label,
+            path_result=trace.path_result,
             color=trace.color,
             linestyle=trace.linestyle,
             linewidth=trace.linewidth,
             alpha=trace.alpha,
+            energy_scale=float(trace.energy_scale),
             zorder=2,
         )
-    if ylim is not None:
-        ax.set_ylim(*ylim)
-    ax.set_xlabel("k-path")
-    ax.set_ylabel(ylabel)
-    if title is not None:
-        ax.set_title(title, fontsize=10)
-    if annotate:
-        ax.text(
-            0.02,
-            0.96,
-            annotate,
-            transform=ax.transAxes,
-            va="top",
-            ha="left",
-            fontsize=8.5,
-            bbox={"facecolor": "white", "edgecolor": "#d0d0d0", "alpha": 0.82, "pad": 4},
-        )
-    fig.tight_layout()
-    paths = save_figure_pair(fig, output_dir, stem, key_prefix="band_plot")
-    plt.close(fig)
-    return paths
+        for trace in traces
+    )
+    return write_path_band_plot(
+        output_dir,
+        common_traces,
+        stem=stem,
+        title=title,
+        ylabel=ylabel,
+        ylim=ylim,
+        label_formatter=_display_node_label,
+        vertical_line_kwargs={"color": "#9a9a9a", "linestyle": ":", "linewidth": 0.8, "zorder": 0},
+        horizontal_lines=(
+            {"y": 0.0, "color": "#777777", "linestyle": "-", "linewidth": 0.45, "alpha": 0.55, "zorder": 0},
+        ),
+        figsize=(7.0, 4.7),
+        annotate=annotate,
+    )
 
 
 def write_htg_hf_path_band_plot(

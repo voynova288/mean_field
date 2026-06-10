@@ -27,6 +27,20 @@ class PlotOutputPaths:
 
         return {f"{key_prefix}_png": self.png, f"{key_prefix}_pdf": self.pdf}
 
+@dataclass(frozen=True)
+class PathBandPlotTrace:
+    """Generic styling container for a high-symmetry path band trace."""
+
+    label: str
+    path_result: Any
+    color: str = "#1f1f1f"
+    linestyle: str = "-"
+    linewidth: float = 0.8
+    alpha: float = 0.85
+    energy_scale: float = 1.0
+    energy_shift: float = 0.0
+    zorder: float | None = None
+
 def load_plot_backend(*, include_line2d: bool = False) -> Any:
     """Load Matplotlib with a safe non-interactive backend.
 
@@ -163,6 +177,91 @@ def plot_band_columns(
         ax.plot(x_values, values[:, band_index], **line_kwargs)
     return values
 
+def write_path_band_plot(
+    output_dir: PathLike,
+    traces: Sequence[PathBandPlotTrace],
+    *,
+    stem: str = "bands_path",
+    title: str | None = None,
+    ylabel: str = "Energy",
+    ylim: tuple[float, float] | None = None,
+    label_map: Mapping[str, str] | None = None,
+    label_formatter: LabelFormatter | None = None,
+    vertical_line_kwargs: Mapping[str, Any] | None = None,
+    horizontal_lines: Sequence[Mapping[str, Any]] = (),
+    xlabel: str = "k-path",
+    figsize: tuple[float, float] = (7.2, 4.8),
+    annotate: str | None = None,
+    annotate_kwargs: Mapping[str, Any] | None = None,
+    key_prefix: str = "band_plot",
+) -> dict[str, Path]:
+    """Write a standard high-symmetry path band plot as PNG/PDF.
+
+    The trace ``path_result`` objects are intentionally duck-typed: system
+    wrappers keep owning their concrete band result classes, while this helper
+    only requires ``path_result.path.kdist``, ``path_result.path.nodes``, and a
+    2D ``path_result.energies`` array.
+    """
+
+    if not traces:
+        raise ValueError("Expected at least one trace to plot.")
+
+    plt = load_plot_backend()
+    fig, ax = plt.subplots(figsize=figsize)
+    for trace in traces:
+        plot_kwargs: dict[str, Any] = {
+            "color": trace.color,
+            "linestyle": trace.linestyle,
+            "linewidth": trace.linewidth,
+            "alpha": trace.alpha,
+        }
+        if trace.zorder is not None:
+            plot_kwargs["zorder"] = trace.zorder
+        plot_band_columns(
+            ax,
+            trace.path_result.path.kdist,
+            trace.path_result.energies,
+            energy_scale=float(trace.energy_scale),
+            energy_shift=float(trace.energy_shift),
+            **plot_kwargs,
+        )
+
+    reference_path = traces[0].path_result.path
+    format_kpath_axis(
+        ax,
+        reference_path,
+        label_map=label_map,
+        label_formatter=label_formatter,
+        vertical_line_kwargs=vertical_line_kwargs,
+        xlabel=None,
+    )
+    for line_kwargs in horizontal_lines:
+        ax.axhline(**dict(line_kwargs))
+    if ylim is not None:
+        ax.set_ylim(*ylim)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    if title is not None:
+        ax.set_title(title, fontsize=10)
+    if annotate:
+        text_kwargs: dict[str, Any] = {
+            "x": 0.02,
+            "y": 0.96,
+            "s": annotate,
+            "transform": ax.transAxes,
+            "va": "top",
+            "ha": "left",
+            "fontsize": 8.5,
+            "bbox": {"facecolor": "white", "edgecolor": "#d0d0d0", "alpha": 0.82, "pad": 4},
+        }
+        if annotate_kwargs is not None:
+            text_kwargs.update(dict(annotate_kwargs))
+        ax.text(**text_kwargs)
+    fig.tight_layout()
+    paths = save_figure_pair(fig, output_dir, stem, key_prefix=key_prefix)
+    plt.close(fig)
+    return paths
+
 def write_kpath_band_tsv(
     path: PathLike,
     *,
@@ -220,6 +319,7 @@ def write_kpath_nodes_tsv(path: PathLike, kpath: Any, *, float_format: str = ".1
             )
 
 __all__ = [
+    "PathBandPlotTrace",
     "PlotOutputPaths",
     "format_kpath_axis",
     "kpath_node_ticks",
@@ -229,4 +329,5 @@ __all__ = [
     "save_figure_pair",
     "write_kpath_band_tsv",
     "write_kpath_nodes_tsv",
+    "write_path_band_plot",
 ]
