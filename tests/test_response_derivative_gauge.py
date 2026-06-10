@@ -6,6 +6,7 @@ import types
 from pathlib import Path
 
 import numpy as np
+import pytest
 from scipy.linalg import eigh
 
 from analysis.response_derivative_gauge import (
@@ -42,6 +43,8 @@ def _load_wannierberri_formula_module():
 
     root = Path(__file__).resolve().parents[1]
     formula_path = root / "reference/upstream/wannier-berri/wannierberri/formula/formula.py"
+    if not formula_path.is_file():
+        pytest.skip(f"WannierBerri upstream formula reference is unavailable: {formula_path}")
     package = "wannierberri_ref_test"
     for name in [
         package,
@@ -88,6 +91,8 @@ def _load_wannierberri_dynamic_module():
 
     root = Path(__file__).resolve().parents[1]
     dynamic_path = root / "reference/upstream/wannier-berri/wannierberri/calculators/dynamic.py"
+    if not dynamic_path.is_file():
+        pytest.skip(f"WannierBerri upstream dynamic reference is unavailable: {dynamic_path}")
     package = "wannierberri_dynamic_ref_test"
     for name in list(sys.modules):
         if name == package or name.startswith(f"{package}."):
