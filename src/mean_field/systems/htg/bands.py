@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 
+from ...core.bands import solve_bands_along_path, solve_bands_on_grid
 from .hamiltonian import build_coupling_table, centered_band_indices, diagonalize_hamiltonian
 from .lattice import HTGLattice, KPath, build_moire_k_grid
 from .params import HTGParams
@@ -15,6 +18,7 @@ class PathBandsResult:
     energies: np.ndarray
     band_indices: tuple[int, ...]
     eigenvectors: np.ndarray | None = None
+    metadata: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -24,6 +28,7 @@ class GridBandsResult:
     energies: np.ndarray
     band_indices: tuple[int, ...]
     eigenvectors: np.ndarray | None = None
+    metadata: Mapping[str, Any] = field(default_factory=dict)
 
 
 def _resolve_band_indices(
@@ -58,19 +63,15 @@ def compute_bands_along_path(
         band_indices=band_indices,
         central_band_count=central_band_count,
     )
-    energies = np.zeros((path.kvec.size, len(resolved_indices)), dtype=float)
-    eigenvectors = None
-    if return_eigenvectors:
-        eigenvectors = np.zeros(
-            (path.kvec.size, lattice.matrix_dim, len(resolved_indices)),
-            dtype=np.complex128,
-        )
-
     top_coupling_table = build_coupling_table(lattice.g_vectors, lattice.q_vectors, valley=valley, shift_sign=1)
     bottom_coupling_table = build_coupling_table(lattice.g_vectors, lattice.q_vectors, valley=valley, shift_sign=-1)
 
-    for ik, kval in enumerate(path.kvec):
-        evals, evecs = diagonalize_hamiltonian(
+    def diagonalize(
+        kval: complex,
+        _resolved_n_bands: int,
+        want_eigenvectors: bool,
+    ) -> tuple[np.ndarray, np.ndarray | None]:
+        return diagonalize_hamiltonian(
             complex(kval),
             lattice,
             params,
@@ -80,13 +81,25 @@ def compute_bands_along_path(
             top_coupling_table=top_coupling_table,
             bottom_coupling_table=bottom_coupling_table,
             band_indices=resolved_indices,
-            return_eigenvectors=return_eigenvectors,
+            return_eigenvectors=want_eigenvectors,
         )
-        energies[ik, :] = evals
-        if return_eigenvectors and eigenvectors is not None and evecs is not None:
-            eigenvectors[ik, :, :] = evecs
 
-    return PathBandsResult(path=path, energies=energies, band_indices=resolved_indices, eigenvectors=eigenvectors)
+    core_result = solve_bands_along_path(
+        path,
+        basis_dim=lattice.matrix_dim,
+        diagonalize=diagonalize,
+        n_bands=len(resolved_indices),
+        return_eigenvectors=return_eigenvectors,
+        band_indices=resolved_indices,
+        metadata={"system": "HTG", "valley": int(valley)},
+    )
+    return PathBandsResult(
+        path=core_result.path,
+        energies=core_result.energies,
+        band_indices=resolved_indices,
+        eigenvectors=core_result.eigenvectors,
+        metadata=core_result.metadata,
+    )
 
 
 def compute_bands_on_grid(
@@ -114,41 +127,44 @@ def compute_bands_on_grid(
         endpoint=endpoint,
         frac_shift=frac_shift,
     )
-    energies = np.zeros((mesh_size, mesh_size, len(resolved_indices)), dtype=float)
-    eigenvectors = None
-    if return_eigenvectors:
-        eigenvectors = np.zeros(
-            (mesh_size, mesh_size, lattice.matrix_dim, len(resolved_indices)),
-            dtype=np.complex128,
-        )
-
     top_coupling_table = build_coupling_table(lattice.g_vectors, lattice.q_vectors, valley=valley, shift_sign=1)
     bottom_coupling_table = build_coupling_table(lattice.g_vectors, lattice.q_vectors, valley=valley, shift_sign=-1)
 
-    for i in range(mesh_size):
-        for j in range(mesh_size):
-            evals, evecs = diagonalize_hamiltonian(
-                complex(kvec[i, j]),
-                lattice,
-                params,
-                valley=valley,
-                d_top=d_top,
-                d_bot=d_bot,
-                top_coupling_table=top_coupling_table,
-                bottom_coupling_table=bottom_coupling_table,
-                band_indices=resolved_indices,
-                return_eigenvectors=return_eigenvectors,
-            )
-            energies[i, j, :] = evals
-            if return_eigenvectors and eigenvectors is not None and evecs is not None:
-                eigenvectors[i, j, :, :] = evecs
+    def diagonalize(
+        kval: complex,
+        _resolved_n_bands: int,
+        want_eigenvectors: bool,
+    ) -> tuple[np.ndarray, np.ndarray | None]:
+        return diagonalize_hamiltonian(
+            complex(kval),
+            lattice,
+            params,
+            valley=valley,
+            d_top=d_top,
+            d_bot=d_bot,
+            top_coupling_table=top_coupling_table,
+            bottom_coupling_table=bottom_coupling_table,
+            band_indices=resolved_indices,
+            return_eigenvectors=want_eigenvectors,
+        )
 
-    return GridBandsResult(
-        k_grid_frac=k_grid_frac,
-        kvec=np.asarray(kvec, dtype=np.complex128),
-        energies=energies,
+    core_result = solve_bands_on_grid(
+        k_grid_frac,
+        kvec,
+        basis_dim=lattice.matrix_dim,
+        diagonalize=diagonalize,
+        n_bands=len(resolved_indices),
+        return_eigenvectors=return_eigenvectors,
         band_indices=resolved_indices,
-        eigenvectors=eigenvectors,
+        metadata={"system": "HTG", "valley": int(valley), "mesh_size": int(mesh_size)},
+    )
+    return GridBandsResult(
+        k_grid_frac=core_result.k_grid_frac,
+        kvec=core_result.kvec,
+        energies=core_result.energies,
+        band_indices=resolved_indices,
+        eigenvectors=core_result.eigenvectors,
+        metadata=core_result.metadata,
     )
 
 
