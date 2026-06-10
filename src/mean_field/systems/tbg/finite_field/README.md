@@ -11,12 +11,13 @@ into the `Mean_Field` layered framework.
 
 Reference: `/data/home/ziyuzhu/TBG_HartreeFock/2310.15982v3.pdf`, SI Sec. III.
 
-Generic finite-magnetic-field bookkeeping — rational fluxes, magnetic meshes, reciprocal-shell shifts, and Streda/Diophantine fillings — lives in `mean_field.core.magnetic_field`.  This TBG package re-exports those helpers for backward compatibility while keeping BM/LL spectrum construction, TBG projected-overlap assembly, B-SCHF physics, and Fig. 6 paper bookkeeping in the TBG system layer.
+Generic finite-magnetic-field bookkeeping — rational fluxes, magnetic meshes, reciprocal-shell shifts, and Streda/Diophantine fillings — lives in `mean_field.core.magnetic_field`. Generic finite-B Hartree-Fock calculation — state/input bundles, stored-projector initialization, density updates, screened interaction contractions, full and tL/IKS reduced kernels, SCF/run helpers, and summaries — lives in `mean_field.core.hf.finite_field`. This TBG package re-exports those helpers for backward compatibility while keeping only BM/LL spectrum construction, TBG projected-overlap assembly, spectrum-to-core adapter APIs, and Fig. 6 paper bookkeeping in the TBG system layer.
 
 ## Layering
 
-- `mean_field.core.hf` still owns the generic SCF/ODA loop.
+- `mean_field.core.hf` owns the generic SCF/ODA loop.
 - `mean_field.core.magnetic_field` owns system-agnostic finite-B flux/mesh/shell/Diophantine helpers.
+- `mean_field.core.hf.finite_field` owns the generic finite-B HF calculation: input bundles, stored-projector conventions, finite-B interaction contractions, full/tL-reduced kernels, initialization, run helpers, and summaries.
 - `mean_field.systems.tbg.finite_field.spectrum` owns the non-interacting finite-B BM/LL spectrum:
   - author-code `Params`/`initParamsWithStrain` conventions;
   - LL translation matrix elements `_tLL_v1` / `_tLL_v1_valleyKprime`;
@@ -24,16 +25,14 @@ Generic finite-magnetic-field bookkeeping — rational fluxes, magnetic meshes, 
   - paper-style Hofstadter sweep helpers for Fig.3(a)-like spectra: `paper_hofstadter_fluxes`, `author_landau_cutoff`, `red_chern_minus_one_group_mask`, and `compute_magnetic_spectrum_sweep`;
   - magnetic-translation orbit generation for `Vec`;
   - projected `PΣz` and optional `Λ_(m,n)` overlap blocks, including the author `computeCoulombOverlap_v2` symmetry reduction as `compute_coulomb_overlap_fast`.
-- `mean_field.systems.tbg.finite_field.hf` owns finite-B/TBG-specific HF details:
-  - TBG adapters for rational flux `p/q` and magnetic mesh ordering supplied by `mean_field.core.magnetic_field`;
-  - finite-B normalization `1/(q*nq)^2`;
-  - projected density convention `P=<d†d>-I/2` stored as `conj(U_occ) U_occ^T - I/2`;
-  - Hofstadter metadata -> `H0`/`Σz` adapter;
-  - full magnetic-BZ Hartree-Fock contraction;
-  - magnetic-translation-symmetric/IKS-reduced contraction with the `phi` phase;
-  - expansion of valley-resolved `bmLL` overlaps into the full spin/valley HF basis via `expand_valley_overlap_data_to_flavors`;
-  - selected Fig. 6 Streda-line bookkeeping via the core-backed `finite_field_diophantine_filling`, plus TBG/paper-specific `paper_fig6_finite_b_fluxes` and `paper_fig6_branch_cases`;
-  - no-I/O assembly helpers for finite-B HF inputs from K/K′ `MagneticSpectrumResult` objects or from BM parameters: `magnetic_shell_shifts`, `build_finite_field_hf_state_from_spectra`, `build_full_flavor_overlap_data_from_spectra`, and the unified `build_finite_field_hf_inputs_from_spectra` / `build_finite_field_hf_inputs_from_parameters` APIs. Use `reduced_translation=True` on those unified builders for the reduced tL-symmetric/IKS path; the older `build_tl_symmetric_*` names are compatibility wrappers.
+- `mean_field.systems.tbg.finite_field.hf` is a thin adapter into the generic finite-B HF core:
+  - validates K/K′ `MagneticSpectrumResult` pairs;
+  - maps TBG Hofstadter metadata to generic `H0`/`Σz` state inputs;
+  - expands valley-resolved `bmLL` overlaps into the generic spin/valley HF basis via the core `expand_valley_overlap_data_to_flavors`;
+  - supplies TBG magnetic k-vectors and normalization counts from `mean_field.core.magnetic_field`;
+  - provides no-I/O assembly helpers for finite-B HF inputs from K/K′ spectra or BM parameters: `build_finite_field_hf_state_from_spectra`, `build_full_flavor_overlap_data_from_spectra`, and `build_finite_field_hf_inputs_from_spectra` / `build_finite_field_hf_inputs_from_parameters`;
+  - keeps only TBG/paper Fig. 6 Streda-line conveniences (`paper_fig6_finite_b_fluxes`, `paper_fig6_branch_cases`).
+  Use `reduced_translation=True` on the unified builders for the reduced tL-symmetric/IKS path; the older `build_tl_symmetric_*` names are compatibility wrappers.
 - JLD2 metadata production remains outside this module; adapters should save/load the returned arrays in workflow code rather than putting file I/O in the core physics layer.
 
 ## Formula map

@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from mean_field.core.hf import DensityUpdateResult, HartreeFockKernel, run_hartree_fock_problem
+import mean_field.systems.tbg.finite_field.hf as tbg_finite_field_hf
 from mean_field.systems.tbg.finite_field import (
     FiniteFieldBMParameters,
     FiniteFieldHartreeFockState,
@@ -46,6 +47,25 @@ from mean_field.systems.tbg.finite_field import (
 
 def _random_complex(rng: np.random.Generator, shape: tuple[int, ...]) -> np.ndarray:
     return rng.normal(size=shape) + 1j * rng.normal(size=shape)
+
+
+def test_tbg_finite_field_hf_is_thin_core_adapter() -> None:
+    assert build_finite_field_hf_inputs_from_parameters.__module__ == "mean_field.systems.tbg.finite_field.hf"
+    assert build_magnetic_interaction_hamiltonian.__module__ == "mean_field.core.hf.finite_field"
+    assert build_tl_symmetric_magnetic_interaction_hamiltonian.__module__ == "mean_field.core.hf.finite_field"
+    assert density_update_from_hamiltonian.__module__ == "mean_field.core.hf.finite_field"
+    assert run_finite_field_hartree_fock_from_inputs.__module__ == "mean_field.core.hf.finite_field"
+    tbg_owned = {
+        "build_finite_field_hf_inputs_from_parameters",
+        "build_finite_field_hf_inputs_from_spectra",
+        "build_finite_field_hf_state_from_spectra",
+        "build_full_flavor_overlap_data_from_spectra",
+        "build_tl_symmetric_finite_field_hf_inputs_from_parameters",
+        "build_tl_symmetric_finite_field_hf_inputs_from_spectra",
+        "paper_fig6_branch_cases",
+        "paper_fig6_finite_b_fluxes",
+    }
+    assert set(name for name in tbg_finite_field_hf.__all__ if getattr(getattr(tbg_finite_field_hf, name), "__module__", None) == tbg_finite_field_hf.__name__) == tbg_owned
 
 
 def test_magnetic_mesh_matches_author_code_ordering() -> None:
@@ -535,3 +555,19 @@ def test_finite_field_state_initialization_smoke() -> None:
     initialize_density_from_h0(state, init_mode="bm", seed=0)
     assert state.density.shape == h0.shape
     assert finite_field_filling(state.density) == pytest.approx(0.0)
+
+
+def test_random_initialization_applies_author_coherent_rotations() -> None:
+    h0 = np.zeros((8, 8, 3), dtype=np.complex128)
+    sigma_z = np.zeros_like(h0)
+    state = FiniteFieldHartreeFockState.from_h0(h0, sigma_z=sigma_z, nu=0.0, flux=MagneticFlux(1, 1), nq=1, v0=1.0)
+
+    from mean_field.systems.tbg.finite_field import initialize_density_from_h0
+
+    initialize_density_from_h0(state, init_mode="random", seed=3)
+    assert finite_field_filling(state.density) == pytest.approx(0.0)
+    offdiag = state.density - np.asarray([np.diag(np.diag(state.density[:, :, ik])) for ik in range(state.nk)]).transpose(1, 2, 0)
+    assert np.max(np.abs(offdiag)) > 1.0e-3
+    for ik in range(state.nk):
+        eigs = np.linalg.eigvalsh((state.density[:, :, ik] + state.density[:, :, ik].conj().T) / 2.0)
+        np.testing.assert_allclose(np.abs(eigs), np.full(8, 0.5), atol=1.0e-12)
