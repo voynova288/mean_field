@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
+from mean_field.core.io import write_text_artifact
 from mean_field.crpa import CRPACoulombParams, write_crpa_outputs
 from mean_field.crpa.band_classifier import classify_flat_bands
 from mean_field.crpa.bm import read_all_band_bm_solution
@@ -13,6 +14,14 @@ from mean_field.crpa.grid import build_uniform_crpa_grid
 from mean_field.crpa.plotting import write_epsilon_vs_q_plot
 from mean_field.crpa.validation import validation_summary, write_validation_report
 from mean_field.crpa.workflow import compute_crpa_from_solution
+from mean_field.workflows import (
+    WorkflowJobSpec,
+    WorkflowJobState,
+    WorkflowManifest,
+    WorkflowRunState,
+    write_workflow_manifest,
+    write_workflow_run_state,
+)
 
 
 def _parse_range(value: str) -> tuple[int, int]:
@@ -83,8 +92,104 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> None:
-    args = build_parser().parse_args(argv)
+def _crpa_chunk_command(args: argparse.Namespace) -> tuple[str, ...]:
+    command: list[str] = [
+        "python",
+        "-m",
+        "mean_field.devtools.run_tbg_crpa_chunk",
+        "--bm-solution",
+        str(args.bm_solution),
+        "--q-lg",
+        str(int(args.q_lg)),
+        "--epsilon-bn",
+        f"{float(args.epsilon_bn):.12g}",
+        "--ds-angstrom",
+        f"{float(args.ds_angstrom):.12g}",
+        "--eta-mev",
+        f"{float(args.eta_mev):.12g}",
+        "--form-factor-mode",
+        str(args.form_factor_mode),
+        "--occupation-mode",
+        str(args.occupation_mode),
+        "--chi0-energy-mode",
+        str(args.chi0_energy_mode),
+        "--output-dir",
+        str(args.output_dir),
+    ]
+    if args.q_range is not None:
+        command.extend(["--q-range", str(args.q_range)])
+    if args.chunk_index is not None:
+        command.extend(["--chunk-index", str(int(args.chunk_index))])
+    if args.chunk_count is not None:
+        command.extend(["--chunk-count", str(int(args.chunk_count))])
+    if args.chi0_eq19_overlap_lg is not None:
+        command.extend(["--chi0-eq19-overlap-lg", str(int(args.chi0_eq19_overlap_lg))])
+    if bool(args.hf_compatible):
+        command.append("--hf-compatible")
+    if bool(args.legacy_zero_fill_test):
+        command.append("--legacy-zero-fill-test")
+    return tuple(command)
+
+
+def _crpa_chunk_workflow_manifest(args: argparse.Namespace) -> WorkflowManifest:
+    output_dir = Path(args.output_dir)
+    return WorkflowManifest(
+        name="tbg_crpa_chunk",
+        root=output_dir,
+        jobs=(
+            WorkflowJobSpec(
+                name="crpa_chunk",
+                command=_crpa_chunk_command(args),
+                output_dir=output_dir,
+                metadata={
+                    "kind": "crpa_chunk",
+                    "bm_solution": str(args.bm_solution),
+                    "q_range": "" if args.q_range is None else str(args.q_range),
+                    "chunk_index": None if args.chunk_index is None else int(args.chunk_index),
+                    "chunk_count": None if args.chunk_count is None else int(args.chunk_count),
+                    "q_lg": int(args.q_lg),
+                },
+            ),
+        ),
+        metadata={
+            "system": "TBG",
+            "workflow": "cRPA chunk",
+            "bm_solution": str(args.bm_solution),
+            "slurm_hint": "Run production cRPA chunks on compute nodes or through Slurm; do not run heavy chunks on login nodes.",
+        },
+    )
+
+
+def _crpa_chunk_workflow_state(
+    manifest: WorkflowManifest,
+    status: str,
+    *,
+    message: str | None = None,
+) -> WorkflowRunState:
+    return WorkflowRunState(
+        name=manifest.name,
+        jobs=(
+            WorkflowJobState(
+                name="crpa_chunk",
+                status=status,
+                message=message,
+            ),
+        ),
+        metadata={"manifest": "workflow_manifest.json"},
+    )
+
+
+def _write_crpa_chunk_workflow_artifacts(
+    output_dir: Path,
+    manifest: WorkflowManifest,
+    state: WorkflowRunState,
+) -> None:
+    write_workflow_manifest(manifest, output_dir / "workflow_manifest.json")
+    write_workflow_run_state(state, output_dir / "workflow_run_state.json")
+    write_text_artifact(state.to_markdown() + "\n", output_dir / "workflow_run_state.md")
+
+
+def _run_crpa_chunk(args: argparse.Namespace) -> None:
     solution = read_all_band_bm_solution(args.bm_solution)
     lk_float = math.sqrt(float(solution.nk))
     lk = int(round(lk_float))
@@ -159,6 +264,31 @@ def main(argv: list[str] | None = None) -> None:
         flush=True,
     )
 
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = build_parser().parse_args(argv)
+    output_dir = Path(args.output_dir)
+    manifest = _crpa_chunk_workflow_manifest(args)
+    _write_crpa_chunk_workflow_artifacts(
+        output_dir,
+        manifest,
+        _crpa_chunk_workflow_state(manifest, "running", message="cRPA chunk started"),
+    )
+    try:
+        _run_crpa_chunk(args)
+    except Exception as exc:
+        _write_crpa_chunk_workflow_artifacts(
+            output_dir,
+            manifest,
+            _crpa_chunk_workflow_state(manifest, "failed", message=str(exc)),
+        )
+        raise
+    _write_crpa_chunk_workflow_artifacts(
+        output_dir,
+        manifest,
+        _crpa_chunk_workflow_state(manifest, "succeeded", message="cRPA chunk outputs written"),
+    )
 
 if __name__ == "__main__":
     main()
