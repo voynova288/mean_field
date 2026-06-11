@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
+import sys
+
 import numpy as np
 import pytest
 
-from mean_field.devtools.run_rlg_hbn_paper_hf import _load_archive_density, _preflight_run_specs
+from mean_field.devtools.run_rlg_hbn_paper_hf import _load_archive_density, _preflight_run_specs, main
 
 
 def _config_for_specs(run_specs: list[dict[str, object]]) -> dict[str, object]:
@@ -64,3 +67,49 @@ def test_rlg_hbn_paper_hf_preflight_rejects_unsupported_init_mode_before_setup()
     message = str(exc_info.value)
     assert "before expensive setup" in message
     assert "Unsupported RLG/hBN HF init mode: vp" in message
+
+
+def test_rlg_hbn_paper_hf_dry_run_writes_workflow_artifacts(tmp_path, monkeypatch) -> None:
+    output_dir = tmp_path / "paper_hf"
+    cache_dir = tmp_path / "cache"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_rlg_hbn_paper_hf",
+            "--paper-target",
+            "fig5",
+            "--output-dir",
+            str(output_dir),
+            "--cache-dir",
+            str(cache_dir),
+            "--xi-values",
+            "1",
+            "--v-values-mev",
+            "40",
+            "--run-specs",
+            "bm:1",
+            "--max-iter",
+            "1",
+            "--dry-run",
+        ],
+    )
+
+    main()
+
+    manifest = json.loads((output_dir / "workflow_manifest.json").read_text(encoding="utf-8"))
+    state = json.loads((output_dir / "workflow_run_state.json").read_text(encoding="utf-8"))
+    markdown = (output_dir / "workflow_run_state.md").read_text(encoding="utf-8")
+
+    assert manifest["name"] == "rlg_hbn_fig5_paper_hf"
+    assert [job["name"] for job in manifest["jobs"]] == ["preflight", "panel_xi1_V040meV", "summary"]
+    assert manifest["jobs"][0]["command"][-1] == "--dry-run"
+    assert "--dry-run" not in manifest["jobs"][1]["command"]
+    assert manifest["jobs"][1]["dependencies"] == ["preflight"]
+    status_by_name = {job["name"]: job["status"] for job in state["jobs"]}
+    assert status_by_name == {
+        "preflight": "succeeded",
+        "panel_xi1_V040meV": "pending",
+        "summary": "pending",
+    }
+    assert "[succeeded] preflight" in markdown

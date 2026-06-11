@@ -14,6 +14,14 @@ import numpy as np
 
 from mean_field.core.hf import summarize_hf_state_archive, validate_hf_archive_shapes
 from mean_field.core.io import write_text_artifact
+from mean_field.workflows import (
+    WorkflowJobSpec,
+    WorkflowJobState,
+    WorkflowManifest,
+    WorkflowRunState,
+    write_workflow_manifest,
+    write_workflow_run_state,
+)
 from mean_field.devtools._runtime import (
     complex_to_pairs as _complex_to_pairs,
     ensure_not_running_compute_on_login_node,
@@ -281,6 +289,205 @@ def _default_output_dir(paper_target: str) -> Path:
     else:
         stem = f"rlg_hbn_{paper_target}_hf_paper_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     return DEFAULT_OUTPUT_ROOT / stem
+
+
+def _format_cli_float(value: object) -> str:
+    return f"{float(value):.12g}"
+
+
+def _comma_join(values: tuple[object, ...] | list[object]) -> str:
+    return ",".join(str(value) for value in values)
+
+
+def _run_specs_cli_value(config: dict[str, object]) -> str:
+    return ",".join(
+        f"{row['init_mode']}:{int(row['seed'])}" for row in _serialize_run_specs(_run_specs_from_config(config))
+    )
+
+
+def _rlg_hbn_paper_hf_command(
+    *,
+    paper_target: str,
+    output_dir: Path,
+    cache_dir: Path,
+    config: dict[str, object],
+    dry_run: bool = False,
+    xi: int | None = None,
+    v_mev: float | None = None,
+) -> tuple[str, ...]:
+    xi_values = (int(xi),) if xi is not None else tuple(int(value) for value in config["xi_values"])
+    v_values = (float(v_mev),) if v_mev is not None else tuple(float(value) for value in config["v_values_mev"])
+    command: list[str] = [
+        "python",
+        "-m",
+        "mean_field.devtools.run_rlg_hbn_paper_hf",
+        "--paper-target",
+        str(paper_target),
+        "--output-dir",
+        str(output_dir),
+        "--cache-dir",
+        str(cache_dir),
+        "--cache-policy",
+        str(config["cache_policy"]),
+        "--screening-solver",
+        str(config["screening_solver"]),
+        "--screening-u-min-mev",
+        _format_cli_float(config["screening_u_min_mev"]),
+        "--screening-u-max-mev",
+        _format_cli_float(config["screening_u_max_mev"]),
+        "--screening-u-grid-points",
+        str(int(config["screening_u_grid_points"])),
+        "--xi-values",
+        _comma_join(list(xi_values)),
+        "--v-values-mev",
+        _comma_join([_format_cli_float(value) for value in v_values]),
+        "--epsilon-r",
+        _format_cli_float(config["epsilon_r"]),
+        "--gate-distance-nm",
+        _format_cli_float(config["gate_distance_nm"]),
+        "--scheme",
+        str(config["scheme"]),
+        "--interaction-cutoff-q1",
+        _format_cli_float(config["interaction_cutoff_q1"]),
+        "--hbn-moire-scale",
+        _format_cli_float(config["hbn_moire_scale"]),
+        "--active-valence-bands",
+        str(int(config["active_valence_bands"])),
+        "--active-conduction-bands",
+        str(int(config["active_conduction_bands"])),
+        "--k-mesh-size",
+        str(int(config["k_mesh_size"])),
+        "--run-specs",
+        _run_specs_cli_value(config),
+        "--max-iter",
+        str(int(config["max_iter"])),
+        "--precision",
+        _format_cli_float(config["precision"]),
+        "--beta",
+        _format_cli_float(config["beta"]),
+        "--oda-stall-threshold",
+        _format_cli_float(config["oda_stall_threshold"]),
+        "--checkpoint-interval",
+        str(int(config["checkpoint_interval"])),
+        "--screening-mesh-size",
+        str(int(config["screening_mesh_size"])),
+    ]
+    if bool(config.get("skip_screening_check", False)):
+        command.append("--skip-screening-check")
+    if dry_run:
+        command.append("--dry-run")
+    return tuple(command)
+
+
+def _rlg_hbn_workflow_manifest(
+    *,
+    paper_target: str,
+    output_dir: Path,
+    cache_dir: Path,
+    config: dict[str, object],
+) -> WorkflowManifest:
+    jobs: list[WorkflowJobSpec] = [
+        WorkflowJobSpec(
+            name="preflight",
+            command=_rlg_hbn_paper_hf_command(
+                paper_target=paper_target,
+                output_dir=output_dir,
+                cache_dir=cache_dir,
+                config=config,
+                dry_run=True,
+            ),
+            output_dir=output_dir,
+            metadata={"kind": "preflight"},
+        )
+    ]
+    panel_dependency = "preflight"
+    if str(paper_target) == "fig6" and not bool(config.get("skip_screening_check", False)):
+        jobs.append(
+            WorkflowJobSpec(
+                name="fig6_screening_prereq",
+                command=("internal", "validate_rlg_hbn_fig6_prereqs"),
+                output_dir=output_dir,
+                dependencies=("preflight",),
+                metadata={"kind": "preflight", "artifact": "prereq_screening_checkpoint.json"},
+            )
+        )
+        panel_dependency = "fig6_screening_prereq"
+    panel_names: list[str] = []
+    for xi_value in tuple(int(value) for value in config["xi_values"]):
+        for v_value in tuple(float(value) for value in config["v_values_mev"]):
+            panel = _panel_name(xi=xi_value, v_mev=v_value)
+            job_name = f"panel_{panel}"
+            panel_names.append(job_name)
+            jobs.append(
+                WorkflowJobSpec(
+                    name=job_name,
+                    command=_rlg_hbn_paper_hf_command(
+                        paper_target=paper_target,
+                        output_dir=output_dir,
+                        cache_dir=cache_dir,
+                        config=config,
+                        xi=xi_value,
+                        v_mev=v_value,
+                    ),
+                    output_dir=output_dir / panel,
+                    dependencies=(panel_dependency,),
+                    metadata={"kind": "panel", "panel": panel, "xi": xi_value, "v_mev": float(v_value)},
+                )
+            )
+    jobs.append(
+        WorkflowJobSpec(
+            name="summary",
+            command=("internal", "write", "paper_hf_summary.json"),
+            output_dir=output_dir,
+            dependencies=tuple(panel_names),
+            metadata={"kind": "summary", "artifact": "paper_hf_summary.json"},
+        )
+    )
+    return WorkflowManifest(
+        name=f"rlg_hbn_{paper_target}_paper_hf",
+        root=output_dir,
+        jobs=tuple(jobs),
+        metadata={
+            "system": "RLG/hBN",
+            "paper_target": str(paper_target),
+            "cache_dir": str(cache_dir),
+            "cache_policy": str(config["cache_policy"]),
+            "run_specs": _serialize_run_specs(_run_specs_from_config(config)),
+            "slurm_hint": "Submit heavy jobs through Slurm or scripts/mean_field_tools.py; do not run HF on login nodes.",
+        },
+    )
+
+
+def _rlg_hbn_workflow_state(
+    manifest: WorkflowManifest,
+    statuses: dict[str, str],
+    *,
+    messages: dict[str, str] | None = None,
+) -> WorkflowRunState:
+    resolved_messages = {} if messages is None else dict(messages)
+    return WorkflowRunState(
+        name=manifest.name,
+        jobs=tuple(
+            WorkflowJobState(
+                name=job.name,
+                status=statuses.get(job.name, "pending"),
+                message=resolved_messages.get(job.name),
+                metadata={"dependencies": list(job.dependencies)},
+            )
+            for job in manifest.jobs
+        ),
+        metadata={"manifest": "workflow_manifest.json"},
+    )
+
+
+def _write_rlg_hbn_workflow_artifacts(
+    output_dir: Path,
+    manifest: WorkflowManifest,
+    state: WorkflowRunState,
+) -> None:
+    write_workflow_manifest(manifest, output_dir / "workflow_manifest.json")
+    write_workflow_run_state(state, output_dir / "workflow_run_state.json")
+    write_text_artifact(state.to_markdown() + "\n", output_dir / "workflow_run_state.md")
 
 
 def _atomic_write_json(path: Path, payload: object, *, sort_keys: bool = True) -> None:
@@ -1049,6 +1256,20 @@ def main() -> None:
         },
     )
 
+    workflow_manifest = _rlg_hbn_workflow_manifest(
+        paper_target=str(args.paper_target),
+        output_dir=output_dir,
+        cache_dir=cache_dir,
+        config=config,
+    )
+    workflow_statuses: dict[str, str] = {"preflight": "succeeded"}
+    workflow_messages: dict[str, str] = {"preflight": "run_specs and cheap config checks passed"}
+    _write_rlg_hbn_workflow_artifacts(
+        output_dir,
+        workflow_manifest,
+        _rlg_hbn_workflow_state(workflow_manifest, workflow_statuses, messages=workflow_messages),
+    )
+
     if args.dry_run:
         print(f"[dry-run] output_dir={output_dir}")
         print(f"[dry-run] target={args.paper_target} config={config}")
@@ -1069,6 +1290,13 @@ def main() -> None:
         write_json(output_dir / "prereq_screening_checkpoint.json", prereq_payload)
         failed = [entry for entry in prereq_payload["checks"] if not bool(entry["passed"])]
         if failed:
+            workflow_statuses["fig6_screening_prereq"] = "failed"
+            workflow_messages["fig6_screening_prereq"] = "Fig. 6 screening checkpoint failed"
+            _write_rlg_hbn_workflow_artifacts(
+                output_dir,
+                workflow_manifest,
+                _rlg_hbn_workflow_state(workflow_manifest, workflow_statuses, messages=workflow_messages),
+            )
             write_json(
                 output_dir / "prereq_screening_failure.json",
                 {
@@ -1078,6 +1306,13 @@ def main() -> None:
                 },
             )
             raise RuntimeError("Fig. 6 screening checkpoint failed; see prereq_screening_failure.json")
+        workflow_statuses["fig6_screening_prereq"] = "succeeded"
+        workflow_messages["fig6_screening_prereq"] = "Fig. 6 screening checkpoint passed"
+        _write_rlg_hbn_workflow_artifacts(
+            output_dir,
+            workflow_manifest,
+            _rlg_hbn_workflow_state(workflow_manifest, workflow_statuses, messages=workflow_messages),
+        )
 
     panel_summaries: list[dict[str, object]] = []
     for xi in tuple(int(value) for value in config["xi_values"]):
@@ -1087,6 +1322,14 @@ def main() -> None:
             panel_dir = output_dir / panel
             panel_dir.mkdir(parents=True, exist_ok=True)
             print(f"[panel] start {panel}", flush=True)
+            panel_job_name = f"panel_{panel}"
+            workflow_statuses[panel_job_name] = "running"
+            workflow_messages[panel_job_name] = f"panel {panel} started"
+            _write_rlg_hbn_workflow_artifacts(
+                output_dir,
+                workflow_manifest,
+                _rlg_hbn_workflow_state(workflow_manifest, workflow_statuses, messages=workflow_messages),
+            )
 
             model_params = _rlg_hbn_params_with_moire_scale(
                 layer_count=int(config["layer_count"]),
@@ -1133,17 +1376,27 @@ def main() -> None:
                 },
             )
 
-            convergence_payload, _ = _run_panel_with_incremental_outputs(
-                output_dir=output_dir,
-                cache_dir=cache_dir,
-                cache_policy=str(args.cache_policy),
-                panel_dir=panel_dir,
-                panel=panel,
-                model=model,
-                interaction=interaction,
-                config=config,
-                panel_start=panel_start,
-            )
+            try:
+                convergence_payload, _ = _run_panel_with_incremental_outputs(
+                    output_dir=output_dir,
+                    cache_dir=cache_dir,
+                    cache_policy=str(args.cache_policy),
+                    panel_dir=panel_dir,
+                    panel=panel,
+                    model=model,
+                    interaction=interaction,
+                    config=config,
+                    panel_start=panel_start,
+                )
+            except Exception as exc:
+                workflow_statuses[panel_job_name] = "failed"
+                workflow_messages[panel_job_name] = str(exc)
+                _write_rlg_hbn_workflow_artifacts(
+                    output_dir,
+                    workflow_manifest,
+                    _rlg_hbn_workflow_state(workflow_manifest, workflow_statuses, messages=workflow_messages),
+                )
+                raise
             panel_elapsed = perf_counter() - panel_start
             panel_summaries.append(
                 {
@@ -1152,6 +1405,13 @@ def main() -> None:
                     "elapsed_sec": float(panel_elapsed),
                     "best": convergence_payload["best"],
                 }
+            )
+            workflow_statuses[panel_job_name] = "succeeded"
+            workflow_messages[panel_job_name] = f"panel {panel} completed in {panel_elapsed:.3f} sec"
+            _write_rlg_hbn_workflow_artifacts(
+                output_dir,
+                workflow_manifest,
+                _rlg_hbn_workflow_state(workflow_manifest, workflow_statuses, messages=workflow_messages),
             )
             print(f"[panel] done {panel} elapsed_sec={panel_elapsed:.3f}", flush=True)
 
@@ -1164,6 +1424,13 @@ def main() -> None:
             "elapsed_sec": float(elapsed),
             "panels": panel_summaries,
         },
+    )
+    workflow_statuses["summary"] = "succeeded"
+    workflow_messages["summary"] = "paper_hf_summary.json written"
+    _write_rlg_hbn_workflow_artifacts(
+        output_dir,
+        workflow_manifest,
+        _rlg_hbn_workflow_state(workflow_manifest, workflow_statuses, messages=workflow_messages),
     )
     latest_path = DEFAULT_OUTPUT_ROOT / f"LATEST_{str(args.paper_target).upper()}_HF_PAPER.txt"
     write_text_artifact(str(output_dir) + "\n", latest_path)
