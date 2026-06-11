@@ -105,12 +105,12 @@ Always ask these questions before computing Chern numbers:
 
 ## Current adapters
 
-The following system modules now delegate their Berry geometry to `analysis.topology`. For ordinary band topology, the intended adapter is now one thin call into `compute_system_topology_on_grid` / `compute_system_topology_from_grid_result` / `compute_system_topology_from_eigenvectors`; system code supplies only `compute_bands_on_grid` and optional boundary sewing.
+The following system modules now delegate their Berry geometry to `analysis.topology`. For ordinary band topology, the intended adapter is `make_topology_adapter(...)`, which binds repeated system metadata/defaults and returns thin `from_eigenvectors`, `from_grid_result`, and optional `on_grid` callables. System code supplies only `compute_bands_on_grid`, selected state labels, optional boundary sewing, and system-specific orientation conventions.
 
-- `mean_field.systems.tmbg.topology`
-- `mean_field.systems.tdbg.topology` (TDBG `topology_on_grid` uses q-site boundary sewing by default; pass `boundary_sewing=False` only for diagnostics)
-- `mean_field.systems.atmg.topology`
-- `mean_field.systems.RnG_hBN.topology`
+- `mean_field.systems.tmbg.topology` via `make_topology_adapter`
+- `mean_field.systems.tdbg.topology` via `make_topology_adapter` (TDBG `topology_on_grid` uses q-site boundary sewing by default; pass `boundary_sewing=False` only for diagnostics)
+- `mean_field.systems.atmg.topology` via `make_topology_adapter`
+- `mean_field.systems.RnG_hBN.topology` via `make_topology_adapter` while keeping RnG/hBN reciprocal-shift sewing and paper-orientation choice system-local
 - `mean_field.systems.tmbg.topology_sewn`
 - `mean_field.systems.htg.topology` for link/Chern construction with HTG boundary sewing
 

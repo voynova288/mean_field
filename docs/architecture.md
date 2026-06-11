@@ -63,7 +63,17 @@ The architectural rule is that topology is system-independent after wavefunction
 - `WavefunctionIndex` metadata that labels band, Chern-basis, flavor, valley, and system meaning;
 - optional boundary sewing transforms for non-periodic plane-wave gauges.
 
-The common framework then builds FHS link variables, Berry-connection phases, plaquette flux, and Chern numbers.  Do not duplicate `_unit_link`, `_subspace_link`, determinant-link, or plaquette loops in future system modules; extend `analysis.topology` instead.  See `docs/topology_framework.md` for conventions, validation status, and examples.
+The common framework then builds FHS link variables, Berry-connection phases, plaquette flux, and Chern numbers.  Ordinary system topology wrappers should use `analysis.topology.make_topology_adapter(...)` to bind system labels, retry behavior, optional sewing transforms, orientation signs, and metadata while keeping Hamiltonian/grid construction in the system layer.  Do not duplicate `_unit_link`, `_subspace_link`, determinant-link, or plaquette loops in future system modules; extend `analysis.topology` instead.  See `docs/topology_framework.md` for conventions, validation status, and examples.
+
+## Common plotting surface
+
+Shared band/path plotting helpers are exposed under:
+
+```text
+src/mean_field/core/plotting/bands.py
+```
+
+System plot modules should import generic helpers such as `load_plot_backend`, `format_kpath_axis`, `plot_band_columns`, `save_figure_pair`, and k-path TSV writers from this core namespace.  Systems still own paper-specific labels, panel layouts, colors, overlays, and default filenames.
 
 ## Gauge-safe response derivative layer
 
