@@ -7,15 +7,16 @@ from typing import Iterable, Mapping
 import numpy as np
 from scipy.linalg import eigh
 
-from .constants import CARBON_BOND_NM
-from .response import (
+from mean_field.systems.htg.mao2025 import CARBON_BOND_NM
+from analysis.shift_current import (
+    HTG_LEGACY_CONVENTION,
     Component,
     add_transitions_to_integral,
     component_label,
+    conductivity_from_integral,
     parse_component,
     positive_transition_terms,
-    precompute_response_tensors,
-    sigma_from_integral,
+    precompute_shift_current_tensors,
 )
 
 
@@ -234,7 +235,7 @@ def compute_slg_shift_current(
         k_weights = np.asarray(rotated_weights, dtype=float)
     for k_xy, weight in zip(k_points, k_weights, strict=True):
         evals, evecs = diagonalize(k_xy, params)
-        tensors = precompute_response_tensors(
+        tensors = precompute_shift_current_tensors(
             evals,
             evecs,
             dhdk(k_xy, params),
@@ -242,7 +243,7 @@ def compute_slg_shift_current(
             denominator_cutoff_ev=denominator_cutoff_ev,
         )
         for name, component in parsed.items():
-            transitions, weights = positive_transition_terms(tensors, component)
+            transitions, weights = positive_transition_terms(tensors, component, convention=HTG_LEGACY_CONVENTION)
             add_transitions_to_integral(
                 integrals[name],
                 photon_energies,
@@ -250,8 +251,9 @@ def compute_slg_shift_current(
                 weights,
                 k_weight_nm_inv_sq=float(weight),
                 eta_ev=eta_ev,
+                convention=HTG_LEGACY_CONVENTION,
             )
-    return {name: sigma_from_integral(integral) for name, integral in integrals.items()}
+    return {name: conductivity_from_integral(integral) for name, integral in integrals.items()}
 
 
 def c3_tensor_relation_errors(spectra: Mapping[str, np.ndarray]) -> dict[str, float]:

@@ -85,9 +85,9 @@ Do not implement response derivatives by differentiating raw eigenvector phases 
 
 ## Shift-current workspace status
 
-The directories under `src/analysis/shift_current_htg` and `src/analysis/shift_current_tbg` are active reproduction and diagnostic workspaces, not a stable general shift-current framework.  They contain useful audits, adapters, scripts, and paper-specific workflows.  The reusable mathematical piece that should be shared with future systems is the WannierBerri-style derivative layer described above.
+The old directories `src/analysis/shift_current_htg` and `src/analysis/shift_current_tbg` have been retired.  Reusable response mathematics lives in `src/analysis/response_derivative_gauge.py` and `src/analysis/shift_current/`; reference/toy benchmarks live under `src/analysis/shift_current/toy_models/`; physical-system Hamiltonians, derivatives, basis/gauge conventions, and paper compatibility adapters belong under `src/mean_field/systems/<system>/`.  Historical audits and reproduction notes are archived under `docs/shift_current/`.
 
-When future systems need optical-response or shift-current analysis, connect the system model through a thin adapter that supplies Hamiltonians, derivatives, energies/eigenvectors, occupation data, units, and conventions.  Keep paper-specific scans, plotting, and unresolved reproduction diagnostics out of the common framework until the relevant formula and convention gates have passed.
+When future systems need optical-response or shift-current analysis, connect the system model through a thin adapter that supplies Hamiltonians, derivatives, energies/eigenvectors, occupation data, units, and conventions to the common analysis helpers.  Keep paper-specific scans, plotting, and unresolved reproduction diagnostics out of the common framework until the relevant formula and convention gates have passed.
 
 ## Current reusable HF split
 

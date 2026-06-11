@@ -6,7 +6,7 @@
 
 - 通用 Hartree-Fock 框架在 `src/mean_field/core/hf`。SCF/ODA/占据/投影重叠/相互作用拼装等可复用逻辑应留在这里，不要写进某个具体体系。
 - 通用量子几何分析框架在 `src/analysis`：`topology` 负责 Berry connection、plaquette flux、Chern；`response_derivative_gauge.py` 是按 WannierBerri 约定整理的规范安全求导器，可被不同响应/量子几何问题复用。
-- `src/analysis/shift_current_*` 目前是 shift-current 复现/诊断工作区，不是已经完成的稳定框架。不要把这些目录里的图像复现状态当成通用公式已经验证完成；其中可复用的求导逻辑应上收到 `src/analysis/response_derivative_gauge.py` 或其它通用分析层。
+- `src/analysis/shift_current/` 是通用 shift-current API；旧的 `src/analysis/shift_current_htg` / `src/analysis/shift_current_tbg` 工作区已清理。体系相关适配应放在 `src/mean_field/systems/<system>`，历史复现/audit 文档放在 `docs/shift_current/`，不要把图像复现状态当成通用公式已经验证完成。
 - 不同物理体系应在 `src/mean_field/systems/<system>` 中接入通用 HF 框架和通用分析框架。体系目录负责 Hamiltonian、基底/规范、参数、sewing、投影窗口、历史 API 适配；不要在体系目录重复实现通用 SCF loop、FHS plaquette 或 WannierBerri generalized-derivative 公式。
 
 ## 复杂逻辑必须先理解

@@ -6,7 +6,7 @@ import math
 import numpy as np
 from numpy.polynomial.legendre import leggauss
 
-from .response import fermi_occupation, precompute_response_tensors
+from analysis.shift_current import fermi_occupation, precompute_shift_current_tensors
 from .slg_toy import GappedSLGParams, _nearest_reciprocal_vectors, d2hdk, dhdk, diagonalize, hex_bz_grid, hex_bz_vertices, reciprocal_vectors
 
 
@@ -148,22 +148,22 @@ def build_energy_quadrature_table(
                 )
                 k_xy = vertex + radius * direction
                 evals, evecs = diagonalize(k_xy, params)
-                tensors = precompute_response_tensors(
+                tensors = precompute_shift_current_tensors(
                     evals,
                     evecs,
                     dhdk(k_xy, params),
                     d2hdk=d2hdk(k_xy, params),
                     denominator_cutoff_ev=float(denominator_cutoff_ev),
                 )
-                radial_D = direction[0] * tensors.D[0] + direction[1] * tensors.D[1]
+                radial_D = direction[0] * tensors.velocity_h[0] + direction[1] * tensors.velocity_h[1]
                 d_transition_dr = float(np.real(radial_D[1, 1] - radial_D[0, 0]))
                 if d_transition_dr <= 0.0:
                     continue
                 weights.append(float(radius / d_transition_dr * transition_weight * dtheta))
                 evals_list.append(np.asarray(evals, dtype=float))
-                D_list.append(np.asarray(tensors.D, dtype=np.complex128))
-                r_list.append(np.asarray(tensors.r, dtype=np.complex128))
-                rcov_list.append(np.asarray(tensors.r_covariant, dtype=np.complex128))
+                D_list.append(np.asarray(tensors.velocity_h, dtype=np.complex128))
+                r_list.append(np.asarray(tensors.berry_connection, dtype=np.complex128))
+                rcov_list.append(np.asarray(tensors.berry_connection_gen_derivative, dtype=np.complex128))
 
     if not weights:
         raise RuntimeError("No transition-energy quadrature points were generated")
@@ -281,7 +281,7 @@ def hipolito_eq25b_spectrum_energy_intervals(
                 )
                 k_xy = vertex + radius * direction
                 evals, evecs = diagonalize(k_xy, params)
-                tensors = precompute_response_tensors(
+                tensors = precompute_shift_current_tensors(
                     evals,
                     evecs,
                     dhdk(k_xy, params),
@@ -290,14 +290,14 @@ def hipolito_eq25b_spectrum_energy_intervals(
                     temperature_k=float(temperature_k),
                     denominator_cutoff_ev=float(denominator_cutoff_ev),
                 )
-                radial_D = direction[0] * tensors.D[0] + direction[1] * tensors.D[1]
+                radial_D = direction[0] * tensors.velocity_h[0] + direction[1] * tensors.velocity_h[1]
                 d_transition_dr = float(np.real(radial_D[1, 1] - radial_D[0, 0]))
                 if d_transition_dr <= 0.0:
                     continue
                 density = float(radius / d_transition_dr * dtheta) / (2.0 * math.pi) ** 2
-                D = tensors.D
-                r = tensors.r
-                rcov = tensors.r_covariant
+                D = tensors.velocity_h
+                r = tensors.berry_connection
+                rcov = tensors.berry_connection_gen_derivative
                 occ = tensors.occupations
                 for m, n, sign in ((1, 0, 1), (0, 1, -1)):
                     f_nm = float(occ[n] - occ[m])
@@ -401,7 +401,7 @@ def hipolito_eq25b_spectrum_fixed_grid(
     k_points, k_weights = hex_bz_grid(int(mesh_size), params)
     for k_xy, k_weight in zip(k_points, k_weights, strict=True):
         evals, evecs = diagonalize(k_xy, params)
-        tensors = precompute_response_tensors(
+        tensors = precompute_shift_current_tensors(
             evals,
             evecs,
             dhdk(k_xy, params),
@@ -410,9 +410,9 @@ def hipolito_eq25b_spectrum_fixed_grid(
             temperature_k=float(temperature_k),
             denominator_cutoff_ev=float(denominator_cutoff_ev),
         )
-        D = tensors.D
-        r = tensors.r
-        rcov = tensors.r_covariant
+        D = tensors.velocity_h
+        r = tensors.berry_connection
+        rcov = tensors.berry_connection_gen_derivative
         occ = tensors.occupations
         for m, n in ((1, 0), (0, 1)):
             delta_mn = float(evals[m] - evals[n])
@@ -484,7 +484,7 @@ def _eq25b_vertex_coefficients(
 
     lam, alpha, beta = component
     evals, evecs = diagonalize(k_xy, params)
-    tensors = precompute_response_tensors(
+    tensors = precompute_shift_current_tensors(
         evals,
         evecs,
         dhdk(k_xy, params),
@@ -495,9 +495,9 @@ def _eq25b_vertex_coefficients(
     )
     out = np.zeros((2, 2), dtype=np.complex128)
     transition_ev = float(evals[1] - evals[0])
-    D = tensors.D
-    r = tensors.r
-    rcov = tensors.r_covariant
+    D = tensors.velocity_h
+    r = tensors.berry_connection
+    rcov = tensors.berry_connection_gen_derivative
     occ = tensors.occupations
     for sign_index, (m, n, sign) in enumerate(((1, 0, 1), (0, 1, -1))):
         delta_mn = float(evals[m] - evals[n])
