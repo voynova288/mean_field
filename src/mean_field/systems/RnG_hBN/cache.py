@@ -11,6 +11,7 @@ import subprocess
 import numpy as np
 
 from ...core.hf import ProjectedWavefunctionBasis
+from ...core.io import write_json_artifact
 from .hf import (
     RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
     RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING,
@@ -81,10 +82,7 @@ def _canonical_json(payload: object) -> str:
 
 
 def _write_json(path: Path, payload: object) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_name(path.name + ".tmp")
-    tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True, default=_json_default) + "\n", encoding="utf-8")
-    tmp_path.replace(path)
+    write_json_artifact(payload, path, default=_json_default)
 
 
 def _read_json(path: Path) -> dict[str, object]:

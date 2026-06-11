@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import numpy as np
 
@@ -37,3 +38,26 @@ def test_write_json_and_text_artifacts_are_stable_and_create_parents(tmp_path) -
     assert json_path.read_text(encoding="utf-8").splitlines()[1].strip() == '"a": 1,'
     assert text_path.read_text(encoding="utf-8") == "hello\n"
     assert not (tmp_path / "nested" / "payload.json.tmp").exists()
+
+
+def test_write_json_artifact_accepts_custom_encoder(tmp_path) -> None:
+    def encode(value: object) -> object:
+        if isinstance(value, Path):
+            return str(value)
+        if isinstance(value, np.generic):
+            return value.item()
+        if isinstance(value, complex):
+            return [float(value.real), float(value.imag)]
+        raise TypeError(f"Cannot encode {type(value).__name__}")
+
+    path = write_json_artifact(
+        {"path": tmp_path, "scalar": np.int64(7), "z": 1.5 - 2.0j},
+        tmp_path / "encoded" / "payload.json",
+        default=encode,
+    )
+
+    assert json.loads(path.read_text(encoding="utf-8")) == {
+        "path": str(tmp_path),
+        "scalar": 7,
+        "z": [1.5, -2.0],
+    }

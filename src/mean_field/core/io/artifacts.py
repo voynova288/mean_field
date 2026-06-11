@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 
@@ -64,11 +64,17 @@ def write_json_artifact(
     *,
     indent: int | None = 2,
     sort_keys: bool = True,
+    default: Callable[[object], object] | None = None,
 ) -> Path:
-    """Atomically write a JSON artifact with the repository's stable defaults."""
+    """Atomically write a JSON artifact with the repository's stable defaults.
+
+    ``default`` is forwarded to ``json.dumps`` so system adapters can preserve
+    local encoders for paths, NumPy scalars, complex numbers, or other metadata
+    without reimplementing atomic file replacement.
+    """
 
     return write_text_artifact(
-        json.dumps(payload, indent=indent, sort_keys=sort_keys) + "\n",
+        json.dumps(payload, indent=indent, sort_keys=sort_keys, default=default) + "\n",
         path,
     )
 
