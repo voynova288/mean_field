@@ -265,8 +265,12 @@ def make_topology_adapter(
     sewing_transforms_builder: Callable[[], Sequence[SewingTransform | None] | None] | None = None,
     index_metadata: Mapping[str, object] | None = None,
     role: str = "band",
+    labels: Iterable[str] = (),
     link_method: LinkMethod = "polar",
     orientation_sign: float = 1.0,
+    atol: float = 1.0e-14,
+    regularization: float = 1.0e-12,
+    metadata: Mapping[str, object] | None = None,
 ) -> dict[str, Callable[..., TopologyResult]]:
     """Build thin, system-labeled topology adapter callables.
 
@@ -281,8 +285,12 @@ def make_topology_adapter(
         "sewing_transforms": sewing_transforms,
         "index_metadata": None if index_metadata is None else dict(index_metadata),
         "role": str(role),
+        "labels": tuple(str(label) for label in labels),
         "link_method": link_method,
         "orientation_sign": float(orientation_sign),
+        "atol": float(atol),
+        "regularization": float(regularization),
+        "metadata": None if metadata is None else dict(metadata),
     }
     adapters: dict[str, Callable[..., TopologyResult]] = {
         "from_eigenvectors": partial(compute_system_topology_from_eigenvectors, **base_kwargs),
@@ -299,8 +307,12 @@ def make_topology_adapter(
             sewing_transforms_builder=sewing_transforms_builder,
             index_metadata=None if index_metadata is None else dict(index_metadata),
             role=str(role),
+            labels=tuple(str(label) for label in labels),
             link_method=link_method,
             orientation_sign=float(orientation_sign),
+            atol=float(atol),
+            regularization=float(regularization),
+            metadata=None if metadata is None else dict(metadata),
         )
     return adapters
 

@@ -21,6 +21,21 @@ def test_make_topology_adapter_from_eigenvectors_preserves_system_metadata() -> 
     assert result.index_metadata["metadata"] == {"sewing": False}
 
 
+def test_make_topology_adapter_forwards_index_role_and_labels() -> None:
+    adapter = make_topology_adapter(
+        system="toy",
+        valley=1,
+        role="occupied_subspace",
+        labels=("band0",),
+        index_metadata={"source": "unit-test"},
+    )
+    result = adapter["from_eigenvectors"](_trivial_eigenvectors(), 0)
+
+    assert result.index_metadata["role"] == "occupied_subspace"
+    assert result.index_metadata["labels"] == ["band0"]
+    assert result.index_metadata["metadata"] == {"source": "unit-test"}
+
+
 def test_make_topology_adapter_on_grid_uses_supplied_grid_builder() -> None:
     def grid_builder(mesh: int, frac_shift: tuple[float, float], n_bands: int):
         del frac_shift
