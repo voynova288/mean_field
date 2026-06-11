@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ...plotting import format_kpath_axis, load_plot_backend, plot_band_columns, save_figure_pair
+from ...core.plotting.bands import format_kpath_axis, load_plot_backend, plot_band_columns, save_figure_pair
 from .bands import PathBandsResult
 from .lattice import TMBGLattice
 from .topology import TopologyResult

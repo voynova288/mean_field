@@ -4,14 +4,7 @@ from typing import Iterable
 
 import numpy as np
 
-from analysis.topology import (
-    SewingTransform,
-    TopologyResult,
-    compute_system_topology_from_eigenvectors,
-    compute_system_topology_from_grid_result,
-    compute_system_topology_on_grid,
-    normalize_state_indices,
-)
+from analysis.topology import SewingTransform, TopologyResult, make_topology_adapter, normalize_state_indices
 
 from .bands import GridBandsResult, compute_bands_on_grid
 from .lattice import TDBGLattice
@@ -20,6 +13,24 @@ from .params import TDBGParameters
 
 def _normalize_band_indices(band_indices: int | Iterable[int]) -> tuple[int, ...]:
     return normalize_state_indices(band_indices)
+
+
+def _topology_adapters(
+    *,
+    valley: int = 1,
+    grid_builder=None,
+    sewing_transforms=None,
+    sewing_transforms_builder=None,
+    metadata: dict[str, object] | None = None,
+):
+    return make_topology_adapter(
+        system="tdbg",
+        valley=valley,
+        grid_builder=grid_builder,
+        sewing_transforms=sewing_transforms,
+        sewing_transforms_builder=sewing_transforms_builder,
+        index_metadata=metadata,
+    )
 
 
 def translation_srcmap(lattice: TDBGLattice, gvec: complex, *, atol: float = 1.0e-8) -> np.ndarray:
@@ -83,14 +94,14 @@ def compute_topology_from_eigenvectors(
     sewing_transforms: tuple[SewingTransform | None, SewingTransform | None] | None = None,
     metadata: dict[str, object] | None = None,
 ) -> TopologyResult:
-    return compute_system_topology_from_eigenvectors(
+    return _topology_adapters(
+        valley=valley,
+        sewing_transforms=sewing_transforms,
+        metadata=metadata,
+    )["from_eigenvectors"](
         eigenvectors,
         band_indices,
-        system="tdbg",
-        valley=valley,
         k_grid_frac=k_grid_frac,
-        sewing_transforms=sewing_transforms,
-        index_metadata=metadata,
     )
 
 
@@ -102,14 +113,11 @@ def compute_topology_from_grid_result(
     sewing_transforms: tuple[SewingTransform | None, SewingTransform | None] | None = None,
     metadata: dict[str, object] | None = None,
 ) -> TopologyResult:
-    return compute_system_topology_from_grid_result(
-        grid_result,
-        band_indices,
-        system="tdbg",
+    return _topology_adapters(
         valley=valley,
         sewing_transforms=sewing_transforms,
-        index_metadata=metadata,
-    )
+        metadata=metadata,
+    )["from_grid_result"](grid_result, band_indices)
 
 
 def compute_topology_on_grid(
@@ -137,15 +145,15 @@ def compute_topology_on_grid(
             frac_shift=frac_shift,
         )
 
-    return compute_system_topology_on_grid(
+    return _topology_adapters(
+        valley=valley,
+        grid_builder=grid_builder,
+        sewing_transforms_builder=(lambda: boundary_sewing_transforms(lattice)) if boundary_sewing else None,
+        metadata=metadata,
+    )["on_grid"](
         mesh_size,
         band_indices,
-        system="tdbg",
-        grid_builder=grid_builder,
-        valley=valley,
         n_bands=n_bands,
-        sewing_transforms_builder=(lambda: boundary_sewing_transforms(lattice)) if boundary_sewing else None,
-        index_metadata=metadata,
     )
 
 

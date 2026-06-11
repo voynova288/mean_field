@@ -10,7 +10,7 @@ from typing import Literal
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-from ...plotting import load_plot_backend
+from ...core.plotting.bands import load_plot_backend
 from .bands import PathBandsResult
 
 

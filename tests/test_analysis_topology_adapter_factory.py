@@ -39,3 +39,30 @@ def test_make_topology_adapter_on_grid_uses_supplied_grid_builder() -> None:
 
     assert result.rounded_chern_number == 0
     assert result.index_metadata["system"] == "toy"
+
+
+def test_make_topology_adapter_on_grid_forwards_custom_topology_builder() -> None:
+    calls: list[tuple[int, tuple[int, ...]]] = []
+
+    def grid_builder(mesh: int, frac_shift: tuple[float, float], n_bands: int):
+        del frac_shift, n_bands
+        return type(
+            "Grid",
+            (),
+            {
+                "mesh": mesh,
+                "eigenvectors": _trivial_eigenvectors(mesh),
+                "k_grid_frac": np.zeros((mesh, mesh, 2), dtype=float),
+            },
+        )()
+
+    def topology_builder(grid_result, band_indices: tuple[int, ...]):
+        calls.append((grid_result.mesh, band_indices))
+        return make_topology_adapter(system="toy", valley=-1)["from_grid_result"](grid_result, band_indices)
+
+    adapter = make_topology_adapter(system="toy", grid_builder=grid_builder, topology_builder=topology_builder)
+    result = adapter["on_grid"](3, 0)
+
+    assert calls == [(3, (0,))]
+    assert result.rounded_chern_number == 0
+    assert result.valley == -1

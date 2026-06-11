@@ -6,7 +6,7 @@ import tempfile
 
 import numpy as np
 
-from ....plotting import load_plot_backend
+from ....core.plotting.bands import load_plot_backend
 from ....core.lattice import KPath
 from .hf_runners import HFPathResult, HFSCFPathPlotResult
 from .model import BMSolution

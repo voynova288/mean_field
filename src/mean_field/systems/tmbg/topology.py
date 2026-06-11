@@ -2,13 +2,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from analysis.topology import (
-    TopologyResult,
-    compute_system_topology_from_eigenvectors,
-    compute_system_topology_from_grid_result,
-    compute_system_topology_on_grid,
-    normalize_state_indices,
-)
+from analysis.topology import TopologyResult, make_topology_adapter, normalize_state_indices
 
 from .bands import GridBandsResult, compute_bands_on_grid
 from .lattice import TMBGLattice
@@ -19,6 +13,15 @@ def _normalize_band_indices(band_indices: int | Iterable[int]) -> tuple[int, ...
     return normalize_state_indices(band_indices)
 
 
+def _topology_adapters(*, valley: int = 1, grid_builder=None, topology_builder=None):
+    return make_topology_adapter(
+        system="tmbg",
+        valley=valley,
+        grid_builder=grid_builder,
+        topology_builder=topology_builder,
+    )
+
+
 def compute_topology_from_eigenvectors(
     eigenvectors,
     band_indices: int | Iterable[int],
@@ -26,11 +29,9 @@ def compute_topology_from_eigenvectors(
     valley: int = 1,
     k_grid_frac=None,
 ) -> TopologyResult:
-    return compute_system_topology_from_eigenvectors(
+    return _topology_adapters(valley=valley)["from_eigenvectors"](
         eigenvectors,
         band_indices,
-        system="tmbg",
-        valley=valley,
         k_grid_frac=k_grid_frac,
     )
 
@@ -41,7 +42,8 @@ def compute_topology_from_grid_result(
     *,
     valley: int = 1,
 ) -> TopologyResult:
-    return compute_system_topology_from_grid_result(grid_result, band_indices, system="tmbg", valley=valley)
+    return _topology_adapters(valley=valley)["from_grid_result"](grid_result, band_indices)
+
 
 
 def _topology_from_grid_result(
@@ -75,13 +77,13 @@ def compute_topology_on_grid(
             frac_shift=frac_shift,
         )
 
-    return compute_system_topology_on_grid(
-        mesh_size,
-        band_indices,
-        system="tmbg",
+    return _topology_adapters(
+        valley=valley,
         grid_builder=grid_builder,
         topology_builder=lambda grid_result, bands: _topology_from_grid_result(grid_result, bands, valley=valley),
-        valley=valley,
+    )["on_grid"](
+        mesh_size,
+        band_indices,
         n_bands=n_bands,
     )
 

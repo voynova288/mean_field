@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ...plotting import (
+from ...core.plotting.bands import (
     format_kpath_axis,
     load_plot_backend,
     save_figure_pair,
