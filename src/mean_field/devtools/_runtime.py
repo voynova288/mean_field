@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 from pathlib import Path
 import socket
 from typing import Literal
 
 import numpy as np
+
+from mean_field.core.io import write_json_artifact
 
 
 def ensure_not_running_compute_on_login_node(workload_name: str) -> None:
@@ -22,7 +23,7 @@ def ensure_not_running_compute_on_login_node(workload_name: str) -> None:
 
 
 def write_json(path: Path, payload: object, *, sort_keys: bool = True) -> None:
-    path.write_text(json.dumps(payload, indent=2, sort_keys=sort_keys) + "\n", encoding="utf-8")
+    write_json_artifact(payload, path, sort_keys=sort_keys)
 
 
 def _parse_csv_values(text: str, converter, item_name: str):
