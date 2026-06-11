@@ -9,6 +9,8 @@ from typing import Any
 
 import numpy as np
 
+from mean_field.core.io import write_json_artifact
+
 ArrayKey = tuple[int, int]
 
 
@@ -252,9 +254,7 @@ class DiskBackedArrayMapping(MutableMapping[ArrayKey, np.ndarray]):
             item = dict(self._entries[key])
             item["key"] = [int(key[0]), int(key[1])]
             arrays.append(item)
-        tmp = self._manifest_path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps({"arrays": arrays}, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        os.replace(tmp, self._manifest_path)
+        write_json_artifact({"arrays": arrays}, self._manifest_path)
 
     def path_for_key(self, key: ArrayKey) -> Path:
         return self.root / _key_to_name((int(key[0]), int(key[1])))
