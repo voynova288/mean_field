@@ -1,25 +1,19 @@
 from __future__ import annotations
 
 import argparse
-import os
 from pathlib import Path
-import socket
 from typing import Literal
 
 import numpy as np
 
 from mean_field.core.io import write_json_artifact
+from mean_field.runtime import ensure_not_running_compute_on_login_node as _ensure_not_running_compute_on_login_node
 
 
 def ensure_not_running_compute_on_login_node(workload_name: str) -> None:
     """Guard devtool entrypoints that can launch BLAS/eigensolver/HF work."""
-    if os.environ.get("SLURM_JOB_ID"):
-        return
-    hostname = socket.gethostname().strip().lower()
-    if hostname.startswith("login001") or hostname.startswith("login002"):
-        raise SystemExit(
-            f"Refusing to run {workload_name} on login node {hostname}; submit it through Slurm from login002."
-        )
+
+    _ensure_not_running_compute_on_login_node(workload_name)
 
 
 def write_json(path: Path, payload: object, *, sort_keys: bool = True) -> None:

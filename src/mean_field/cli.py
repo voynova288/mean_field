@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 from time import perf_counter
-import socket
 
 import numpy as np
 
@@ -17,7 +15,7 @@ from .benchmarks import (
     load_bm_unstrained_references,
     load_bm_unstrained_runtime_benchmarks,
 )
-from .runtime import collect_runtime_environment, current_timestamp
+from .runtime import collect_runtime_environment, current_timestamp, ensure_not_running_compute_on_login_node
 from .systems.tmbg import diagnose_ktilde_symmetry, reproduce_paper_checkpoints
 from .systems.tbg.zero_field import (
     export_overlap_diagnostics,
@@ -190,13 +188,7 @@ def _write_key_value_summary(path: Path, entries: list[tuple[str, str]]) -> Path
 
 
 def _ensure_not_running_compute_on_login_node(workload_name: str) -> None:
-    if os.environ.get("SLURM_JOB_ID"):
-        return
-    hostname = socket.gethostname().strip().lower()
-    if hostname.startswith("login001") or hostname.startswith("login002"):
-        raise SystemExit(
-            f"Refusing to run {workload_name} on login node {hostname}; submit it through Slurm from login002."
-        )
+    ensure_not_running_compute_on_login_node(workload_name)
 
 
 def _tmbg_report_payload(report) -> dict[str, object]:
