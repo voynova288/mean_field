@@ -200,22 +200,7 @@ def _ensure_not_running_compute_on_login_node(workload_name: str) -> None:
 
 
 def _tmbg_report_payload(report) -> dict[str, object]:
-    return {
-        "title": report.title,
-        "failure_count": report.failure_count,
-        "skipped_count": report.skipped_count,
-        "has_failures": report.has_failures,
-        "has_skips": report.has_skips,
-        "checks": [
-            {
-                "name": check.name,
-                "status": check.status,
-                "detail": check.detail,
-                "value": check.value,
-            }
-            for check in report.checks
-        ],
-    }
+    return report.to_dict()
 
 
 def cmd_benchmarks_list() -> int:

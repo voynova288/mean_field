@@ -12,6 +12,7 @@ def test_validation_check_accepts_value_and_val_aliases() -> None:
     assert with_value.passed
     assert with_value.value == 1.25
     assert with_value.val == 1.25
+    assert with_value.to_dict()["passed"] is True
     assert not with_val.passed
     assert with_val.value == 2.5
     assert with_val.val == 2.5
@@ -41,6 +42,10 @@ def test_validation_report_counts_skips_and_combines() -> None:
     assert combined.skipped_count == 1
     assert combined.has_failures
     assert combined.has_skips
+    payload = combined.to_dict()
+    assert payload["failure_count"] == 1
+    assert payload["checks"][1]["name"] == "bad"
+    assert payload["checks"][1]["value"] == 3.0
     markdown = combined.to_markdown()
     assert "bad" in markdown
     assert "3.000000e+00" in markdown

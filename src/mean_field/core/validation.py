@@ -65,6 +65,15 @@ class ValidationCheck:
     def passed(self) -> bool:
         return self.status == "pass"
 
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "name": self.name,
+            "status": self.status,
+            "detail": self.detail,
+            "value": self.value,
+            "passed": self.passed,
+        }
+
 
 @dataclass(frozen=True)
 class ValidationReport:
@@ -93,6 +102,16 @@ class ValidationReport:
         for report in reports:
             merged.extend(report.checks)
         return cls(title=title, checks=tuple(merged))
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "title": self.title,
+            "failure_count": self.failure_count,
+            "skipped_count": self.skipped_count,
+            "has_failures": self.has_failures,
+            "has_skips": self.has_skips,
+            "checks": [check.to_dict() for check in self.checks],
+        }
 
     def to_markdown(self) -> str:
         lines = [f"# {self.title}", ""]
