@@ -14,6 +14,7 @@ from .hamiltonian import (
     moire_coupling_matrix,
 )
 from .lattice import HTGLattice, build_htg_lattice, build_kpath_from_nodes, build_moire_k_grid, build_paper_hf_kpath, build_standard_kpath
+from .mao2025 import MaoHTGConfig, analytic_dhdk, build_mao_hamiltonian, finite_difference_dhdk, make_mao_model
 from .mean_field_adapter import (
     HTGDensityBuilder,
     HTGGroundStateScan,
@@ -104,6 +105,7 @@ __all__ = [
     "KWAN_2023_FERMI_VELOCITY_M_PER_S",
     "KWAN_2023_TUNNELING_EV",
     "MAGIC_ALPHA_ZETA0",
+    "MaoHTGConfig",
     "MoireCouplingEntry",
     "PathBandsResult",
     "ValidationCheck",
@@ -120,6 +122,7 @@ __all__ = [
     "build_htg_projected_basis",
     "build_htg_projected_basis_for_kvec",
     "build_kpath_from_nodes",
+    "build_mao_hamiltonian",
     "build_moire_k_grid",
     "build_paper_hf_kpath",
     "build_standard_kpath",
@@ -134,10 +137,12 @@ __all__ = [
     "compute_chern_basis_on_grid",
     "default_displacements",
     "diagonalize_hamiltonian",
+    "analytic_dhdk",
     "dirac_block",
     "estimate_central_band_metrics",
     "evaluate_htg_hf_path",
     "evaluate_htg_interaction_path",
+    "finite_difference_dhdk",
     "flavor_band_occupations",
     "flavor_occupations",
     "hermitian_residual",
@@ -153,6 +158,7 @@ __all__ = [
     "htg_seed_occupation_summary",
     "initialize_htg_density",
     "moire_coupling_matrix",
+    "make_mao_model",
     "moire_cell_area_nm2",
     "normalize_htg_init_mode",
     "projector_idempotency_residual",
