@@ -13,6 +13,7 @@ from time import perf_counter
 import numpy as np
 
 from mean_field.core.hf import summarize_hf_state_archive, validate_hf_archive_shapes
+from mean_field.core.io import write_text_artifact
 from mean_field.devtools._runtime import (
     complex_to_pairs as _complex_to_pairs,
     ensure_not_running_compute_on_login_node,
@@ -1165,8 +1166,7 @@ def main() -> None:
         },
     )
     latest_path = DEFAULT_OUTPUT_ROOT / f"LATEST_{str(args.paper_target).upper()}_HF_PAPER.txt"
-    latest_path.parent.mkdir(parents=True, exist_ok=True)
-    latest_path.write_text(str(output_dir) + "\n", encoding="utf-8")
+    write_text_artifact(str(output_dir) + "\n", latest_path)
     print(f"[done] output_dir={output_dir}")
 
 

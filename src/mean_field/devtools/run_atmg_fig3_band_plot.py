@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
 
+from mean_field.core.io import write_text_artifact
 from mean_field.devtools._runtime import (
     ensure_not_running_compute_on_login_node,
     select_energy_window_bands,
@@ -526,7 +527,7 @@ def _write_report(
                 "",
             ]
         )
-    path.write_text("\n".join(lines), encoding="utf-8")
+    write_text_artifact("\n".join(lines), path)
 
 
 def main() -> int:

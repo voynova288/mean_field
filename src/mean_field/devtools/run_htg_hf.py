@@ -9,6 +9,7 @@ from time import perf_counter
 
 import numpy as np
 
+from mean_field.core.io import write_text_artifact
 from mean_field.devtools._runtime import (
     complex_to_pairs as _complex_to_pairs,
     ensure_not_running_compute_on_login_node,
@@ -419,7 +420,7 @@ def main() -> None:
     for check in validation:
         report_lines.append(f"- `{check['name']} = {check['passed']}` (`value = {check['value']}`)")
     report_lines.append("")
-    (output_dir / "validation_report.md").write_text("\n".join(report_lines), encoding="utf-8")
+    write_text_artifact("\n".join(report_lines), output_dir / "validation_report.md")
 
     print(f"[done] output_dir={output_dir}")
     print(f"best_init_mode={best.init_mode}")

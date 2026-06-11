@@ -6,6 +6,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+from mean_field.core.io import write_text_artifact
 
 DEFAULT_SAMPLE_Q = (0.4, 0.5, 0.540481454, 0.6, 0.8, 1.0, 1.2)
 DEFAULT_WINDOWS = ((0.0, 0.2), (0.2, 0.4), (0.4, 0.65), (0.65, 1.0), (1.0, 1.2), (1.0, 2.0))
@@ -252,8 +253,9 @@ def main(argv: list[str] | None = None) -> None:
             "- `epsilon_vs_q_digitized_overlay.png`",
         ]
     )
-    (output_dir / "summary.md").write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
-    print((output_dir / "summary.md").read_text(encoding="utf-8"), end="")
+    summary_path = output_dir / "summary.md"
+    write_text_artifact("\n".join(summary_lines) + "\n", summary_path)
+    print(summary_path.read_text(encoding="utf-8"), end="")
 
 
 if __name__ == "__main__":
