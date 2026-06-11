@@ -11,6 +11,14 @@ from mean_field.core.io import write_text_artifact
 from mean_field.crpa.diagnostics import write_all_epsilon_diagnostics
 from mean_field.crpa.workflow import load_crpa_result
 from mean_field.devtools._runtime import write_json
+from mean_field.workflows import (
+    WorkflowJobSpec,
+    WorkflowJobState,
+    WorkflowManifest,
+    WorkflowRunState,
+    write_workflow_manifest,
+    write_workflow_run_state,
+)
 
 
 def _load_json(path: Path) -> dict[str, object]:
@@ -41,8 +49,81 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> None:
-    args = build_parser().parse_args(argv)
+def _merge_command(output_dir: Path, chunks: tuple[Path, ...]) -> tuple[str, ...]:
+    command: list[str] = [
+        "python",
+        "-m",
+        "mean_field.devtools.merge_tbg_crpa_chunks",
+        "--output-dir",
+        str(output_dir),
+    ]
+    for chunk in chunks:
+        command.extend(["--chunk", str(chunk)])
+    return tuple(command)
+
+
+def _merge_workflow_manifest(output_dir: Path, chunks: tuple[Path, ...]) -> WorkflowManifest:
+    chunk_jobs = tuple(
+        WorkflowJobSpec(
+            name=f"input_chunk_{index}",
+            command=("external", str(chunk)),
+            output_dir=chunk,
+            metadata={"kind": "input_chunk", "chunk_dir": str(chunk)},
+        )
+        for index, chunk in enumerate(chunks)
+    )
+    merge_job = WorkflowJobSpec(
+        name="merge",
+        command=_merge_command(output_dir, chunks),
+        output_dir=output_dir,
+        dependencies=tuple(job.name for job in chunk_jobs),
+        metadata={"kind": "crpa_merge", "chunk_count": len(chunks)},
+    )
+    return WorkflowManifest(
+        name="tbg_crpa_merge",
+        root=output_dir,
+        jobs=chunk_jobs + (merge_job,),
+        metadata={
+            "system": "TBG",
+            "workflow": "cRPA merge",
+            "chunk_count": len(chunks),
+            "slurm_hint": "Run production cRPA merge/diagnostics on compute nodes or through Slurm if inputs are large.",
+        },
+    )
+
+
+def _merge_workflow_state(
+    manifest: WorkflowManifest,
+    merge_status: str,
+    *,
+    message: str | None = None,
+) -> WorkflowRunState:
+    states: list[WorkflowJobState] = []
+    for job in manifest.jobs:
+        if job.name.startswith("input_chunk_"):
+            states.append(WorkflowJobState(name=job.name, status="succeeded", message="input chunk present"))
+        elif job.name == "merge":
+            states.append(WorkflowJobState(name=job.name, status=merge_status, message=message))
+        else:
+            states.append(WorkflowJobState(name=job.name, status="pending"))
+    return WorkflowRunState(
+        name=manifest.name,
+        jobs=tuple(states),
+        metadata={"manifest": "workflow_manifest.json"},
+    )
+
+
+def _write_merge_workflow_artifacts(
+    output_dir: Path,
+    manifest: WorkflowManifest,
+    state: WorkflowRunState,
+) -> None:
+    write_workflow_manifest(manifest, output_dir / "workflow_manifest.json")
+    write_workflow_run_state(state, output_dir / "workflow_run_state.json")
+    write_text_artifact(state.to_markdown() + "\n", output_dir / "workflow_run_state.md")
+
+
+def _run_merge(args: argparse.Namespace) -> None:
     chunks = [Path(item) for item in args.chunk]
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -217,6 +298,32 @@ def main(argv: list[str] | None = None) -> None:
         flush=True,
     )
 
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = build_parser().parse_args(argv)
+    chunks = tuple(Path(item) for item in args.chunk)
+    output_dir = Path(args.output_dir)
+    manifest = _merge_workflow_manifest(output_dir, chunks)
+    _write_merge_workflow_artifacts(
+        output_dir,
+        manifest,
+        _merge_workflow_state(manifest, "running", message="cRPA merge started"),
+    )
+    try:
+        _run_merge(args)
+    except Exception as exc:
+        _write_merge_workflow_artifacts(
+            output_dir,
+            manifest,
+            _merge_workflow_state(manifest, "failed", message=str(exc)),
+        )
+        raise
+    _write_merge_workflow_artifacts(
+        output_dir,
+        manifest,
+        _merge_workflow_state(manifest, "succeeded", message="cRPA merge outputs written"),
+    )
 
 if __name__ == "__main__":
     main()
