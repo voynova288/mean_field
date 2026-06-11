@@ -7,8 +7,10 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+from mean_field.core.io import write_text_artifact
 from mean_field.crpa.diagnostics import write_all_epsilon_diagnostics
 from mean_field.crpa.workflow import load_crpa_result
+from mean_field.devtools._runtime import write_json
 
 
 def _load_json(path: Path) -> dict[str, object]:
@@ -113,7 +115,7 @@ def main(argv: list[str] | None = None) -> None:
 
     params["q_point_count"] = int(q_indices.shape[0])
     params["q_shift_count"] = int(q_shifts_ref.shape[0])
-    (output_dir / "crpa_params.json").write_text(json.dumps(params, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_json(output_dir / "crpa_params.json", params)
 
     _save_npz(
         output_dir / "chi0_q.npz",
@@ -202,7 +204,7 @@ def main(argv: list[str] | None = None) -> None:
         ]
     )
     report.extend(f"- `{chunk}`" for chunk in chunks)
-    (output_dir / "validation_report.md").write_text("\n".join(report) + "\n", encoding="utf-8")
+    write_text_artifact("\n".join(report) + "\n", output_dir / "validation_report.md")
     diagnostic_summary = write_all_epsilon_diagnostics(load_crpa_result(output_dir), output_dir)
     print(f"[crpa-merge] wrote merged artifact to {output_dir}", flush=True)
     print(f"[crpa-merge] q_point_count={params['q_point_count']} chunks={len(chunks)}", flush=True)

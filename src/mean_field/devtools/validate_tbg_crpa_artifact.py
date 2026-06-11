@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 
 import numpy as np
@@ -18,7 +17,8 @@ from mean_field.crpa.validation import (
     hermitian_positivity_summary,
     validation_summary,
 )
-from mean_field.devtools._runtime import ensure_not_running_compute_on_login_node
+from mean_field.core.io import write_text_artifact
+from mean_field.devtools._runtime import ensure_not_running_compute_on_login_node, write_json
 from mean_field.systems.tbg import TBGParameters
 
 
@@ -68,7 +68,7 @@ def _write_report(path: Path, payload: dict[str, object]) -> None:
         lines.extend(f"- {item}" for item in failures)
     else:
         lines.append("- none")
-    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    write_text_artifact("\n".join(lines).rstrip() + "\n", path)
 
 
 def _load_reference_points(path: Path) -> tuple[tuple[float, float], ...]:
@@ -259,7 +259,7 @@ def main(argv: list[str] | None = None) -> int:
     }
     json_path = out / f"{safe_name}_validation.json"
     report_path = out / f"{safe_name}_validation.md"
-    json_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_json(json_path, payload)
     _write_report(report_path, payload)
     print(f"[crpa-artifact-validation] status={status} json={json_path} report={report_path}", flush=True)
     if failures:
