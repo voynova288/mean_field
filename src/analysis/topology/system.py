@@ -9,6 +9,7 @@ boundary sewing transforms.  This module only packages the repeated historical
 """
 
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 import numpy as np
@@ -253,10 +254,60 @@ def compute_system_topology_on_grid(
     assert last_error is not None
     raise last_error
 
+
+def make_topology_adapter(
+    *,
+    system: str,
+    grid_builder: Callable[[int, tuple[float, float], int], Any] | None = None,
+    valley: int = 1,
+    sewing_transforms: Sequence[SewingTransform | None] | None = None,
+    sewing_transforms_builder: Callable[[], Sequence[SewingTransform | None] | None] | None = None,
+    index_metadata: Mapping[str, object] | None = None,
+    role: str = "band",
+    link_method: LinkMethod = "polar",
+    orientation_sign: float = 1.0,
+) -> dict[str, Callable[..., TopologyResult]]:
+    """Build thin, system-labeled topology adapter callables.
+
+    The factory only fixes repeated metadata/default arguments. Systems must
+    still provide physical wavefunctions, grid builders, and any boundary
+    sewing transforms; no sewing convention is inferred here.
+    """
+
+    base_kwargs = {
+        "system": str(system),
+        "valley": int(valley),
+        "sewing_transforms": sewing_transforms,
+        "index_metadata": None if index_metadata is None else dict(index_metadata),
+        "role": str(role),
+        "link_method": link_method,
+        "orientation_sign": float(orientation_sign),
+    }
+    adapters: dict[str, Callable[..., TopologyResult]] = {
+        "from_eigenvectors": partial(compute_system_topology_from_eigenvectors, **base_kwargs),
+        "from_grid_result": partial(compute_system_topology_from_grid_result, **base_kwargs),
+    }
+    if grid_builder is not None:
+        adapters["on_grid"] = partial(
+            compute_system_topology_on_grid,
+            system=str(system),
+            grid_builder=grid_builder,
+            valley=int(valley),
+            sewing_transforms=sewing_transforms,
+            sewing_transforms_builder=sewing_transforms_builder,
+            index_metadata=None if index_metadata is None else dict(index_metadata),
+            role=str(role),
+            link_method=link_method,
+            orientation_sign=float(orientation_sign),
+        )
+    return adapters
+
+
 __all__ = [
     "TopologyResult",
     "compute_system_topology_from_eigenvectors",
     "compute_system_topology_from_grid_result",
     "compute_system_topology_on_grid",
+    "make_topology_adapter",
     "topology_result_from_lattice_result",
 ]

@@ -45,6 +45,7 @@ from .system import (
     compute_system_topology_from_eigenvectors,
     compute_system_topology_from_grid_result,
     compute_system_topology_on_grid,
+    make_topology_adapter,
     topology_result_from_lattice_result,
 )
 from .targets import GeometryReproductionTarget, known_geometry_reproduction_targets
@@ -80,6 +81,7 @@ __all__ = [
     "compute_system_topology_from_eigenvectors",
     "compute_system_topology_from_grid_result",
     "compute_system_topology_on_grid",
+    "make_topology_adapter",
     "default_k_grid_frac",
     "fubini_study_trace",
     "infer_berry_sign_from_chern",
