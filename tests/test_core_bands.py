@@ -38,9 +38,23 @@ def test_compute_path_bands_with_eigenvectors() -> None:
     )
 
     assert result.energies.shape == (2, 1)
+    assert result.band_indices == ()
     assert result.eigenvectors is not None
     assert result.eigenvectors.shape == (2, 2, 1)
     np.testing.assert_allclose(result.energies[:, 0], [0.0, 0.5])
+
+
+def test_compute_path_bands_records_result_band_indices() -> None:
+    result = compute_path_bands(
+        _toy_path(),
+        matrix_dim=2,
+        n_bands=1,
+        return_eigenvectors=False,
+        diagonalize=_toy_diagonalize,
+        result_band_indices=(10,),
+    )
+
+    assert result.band_indices == (10,)
 
 
 def test_compute_grid_bands_without_eigenvectors() -> None:
@@ -56,5 +70,6 @@ def test_compute_grid_bands_without_eigenvectors() -> None:
     )
 
     assert result.energies.shape == (2, 2, 2)
+    assert result.band_indices == ()
     assert result.eigenvectors is None
     np.testing.assert_allclose(result.energies[..., 0], [[0.0, 0.25], [0.5, 0.75]])

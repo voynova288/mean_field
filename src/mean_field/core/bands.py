@@ -59,6 +59,7 @@ def compute_path_bands(
     n_bands: int | None = None,
     return_eigenvectors: bool = False,
     diagonalize: DiagonalizeCallback,
+    result_band_indices: Iterable[int] = (),
     result_metadata: dict[str, object] | None = None,
 ) -> PathBandsResult:
     """Generic path-band loop for systems that supply a diagonalizer callback.
@@ -86,6 +87,7 @@ def compute_path_bands(
         path=path,
         energies=energies,
         eigenvectors=eigenvectors,
+        band_indices=tuple(int(index) for index in result_band_indices),
         metadata={} if result_metadata is None else dict(result_metadata),
     )
 
@@ -98,6 +100,7 @@ def compute_grid_bands(
     n_bands: int | None = None,
     return_eigenvectors: bool = False,
     diagonalize: DiagonalizeCallback,
+    result_band_indices: Iterable[int] = (),
     result_metadata: dict[str, object] | None = None,
 ) -> GridBandsResult:
     """Generic 2D-grid band loop for systems that supply a diagonalizer callback."""
@@ -123,6 +126,7 @@ def compute_grid_bands(
         kvec=kvec_array,
         energies=energies,
         eigenvectors=eigenvectors,
+        band_indices=tuple(int(index) for index in result_band_indices),
         metadata={} if result_metadata is None else dict(result_metadata),
     )
 
