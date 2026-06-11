@@ -7,6 +7,8 @@ from pathlib import Path
 import numpy as np
 from scipy.linalg import eigh
 
+from mean_field.core.io import write_json_artifact
+
 from ..systems.tbg.params import TBGParameters
 from ..systems.tbg.zero_field.model import (
     _construct_diagonal_block,
@@ -92,7 +94,7 @@ def write_all_band_bm_solution(
     }
     if not path.suffix or path.is_dir():
         path.mkdir(parents=True, exist_ok=True)
-        (path / "metadata.json").write_text(json.dumps(metadata, sort_keys=True) + "\n", encoding="utf-8")
+        write_json_artifact(metadata, path / "metadata.json", indent=None, sort_keys=True)
         np.save(path / "lattice_kvec.npy", np.asarray(solution.lattice_kvec, dtype=np.complex128))
         np.save(path / "spectrum.npy", np.asarray(solution.spectrum, dtype=float))
         np.save(path / "uk.npy", np.asarray(solution.uk, dtype=np.complex128))

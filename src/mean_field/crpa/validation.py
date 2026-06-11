@@ -5,6 +5,8 @@ from typing import Any
 
 import numpy as np
 
+from mean_field.core.io import write_text_artifact
+
 from ..systems.tbg.params import TBGParameters
 from .band_classifier import classify_flat_bands
 from .bm import solve_all_band_bm_model
@@ -422,7 +424,7 @@ def write_validation_report(
             "- CP-cRPA2/3 HF+cRPA: requires feeding this screening table into HF runs.",
         ]
     )
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    write_text_artifact("\n".join(lines) + "\n", path)
     return path
 
 

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import csv
-import json
 import math
 from pathlib import Path
 from typing import Iterable
 
 import numpy as np
+
+from mean_field.core.io import write_json_artifact, write_text_artifact
 
 from .workflow import CRPAResult
 
@@ -382,10 +383,7 @@ def write_diagnostic_plots_and_report(
     )
 
     params = diagnostic_parameter_summary(result)
-    (out / "crpa_epsilon_diagnostics_parameters.json").write_text(
-        json.dumps(params, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
+    write_json_artifact(params, out / "crpa_epsilon_diagnostics_parameters.json")
     lines = [
         "# cRPA Epsilon Diagnostics",
         "",
@@ -423,7 +421,7 @@ def write_diagnostic_plots_and_report(
             "- crpa_epsilon_diagnostics_parameters.json",
         ]
     )
-    (out / "crpa_epsilon_diagnostics_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    write_text_artifact("\n".join(lines) + "\n", out / "crpa_epsilon_diagnostics_summary.md")
     return summary
 
 

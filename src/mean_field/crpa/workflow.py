@@ -7,6 +7,8 @@ from time import strftime
 
 import numpy as np
 
+from mean_field.core.io import write_json_artifact
+
 from ..systems.tbg.params import TBGParameters
 from .band_classifier import BandClassification, classify_flat_bands
 from .bm import AllBandBMSolution, solve_all_band_bm_model
@@ -355,7 +357,7 @@ def write_crpa_outputs(result: CRPAResult, output_dir: Path | str) -> Path:
         "q_shift_count": int(result.q_shifts.shape[0]),
         "metadata": result.metadata,
     }
-    (out / "crpa_params.json").write_text(json.dumps(params_json, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_json_artifact(params_json, out / "crpa_params.json")
     np.savez_compressed(
         out / "chi0_q.npz",
         chi0=result.chi0,
