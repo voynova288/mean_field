@@ -5,6 +5,8 @@ import math
 
 import numpy as np
 
+from mean_field.core.validation import ValidationCheck as CoreValidationCheck, ValidationReport
+
 from .hamiltonian import build_hamiltonian, moire_coupling_matrix
 from .lattice import HTGLattice, dot_2d
 from .params import HTGParams
@@ -25,6 +27,10 @@ class ValidationCheck:
     value: float | str
     tolerance: float | None = None
 
+    @property
+    def status(self) -> str:
+        return "pass" if bool(self.passed) else "fail"
+
     def to_dict(self) -> dict[str, object]:
         return {
             "name": self.name,
@@ -32,6 +38,23 @@ class ValidationCheck:
             "value": self.value,
             "tolerance": self.tolerance,
         }
+
+    def to_core_check(self) -> CoreValidationCheck:
+        detail = f"value={self.value}"
+        if self.tolerance is not None:
+            detail += f", tolerance={self.tolerance}"
+        return CoreValidationCheck(
+            name=self.name,
+            status=self.status,
+            detail=detail,
+            value=self.value,
+        )
+
+
+def htg_validation_report(title: str, checks: tuple[ValidationCheck, ...]) -> ValidationReport:
+    """Convert legacy HTG validation checks to the shared report container."""
+
+    return ValidationReport(title=str(title), checks=tuple(check.to_core_check() for check in checks))
 
 
 def validate_lattice(lattice: HTGLattice, *, atol: float = 1.0e-10) -> tuple[ValidationCheck, ...]:

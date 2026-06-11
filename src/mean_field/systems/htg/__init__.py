@@ -81,7 +81,7 @@ from .strong_coupling import (
     flavor_occupations,
 )
 from .topology import ChernBasisResult, compute_chern_basis_on_grid, sublattice_sigma_z
-from .validation import ValidationCheck, validate_hf_state, validate_lattice, validate_static_hamiltonian
+from .validation import ValidationCheck, htg_validation_report, validate_hf_state, validate_lattice, validate_static_hamiltonian
 
 __all__ = [
     "ChernBasisResult",
@@ -150,6 +150,7 @@ __all__ = [
     "htg_flavor_occupation_counts_for_init_mode",
     "htg_filling_from_density",
     "htg_gap_estimate",
+    "htg_validation_report",
     "htg_gap_from_occupation_mask",
     "htg_occupation_mask_from_density",
     "htg_occupied_bands_per_k",
