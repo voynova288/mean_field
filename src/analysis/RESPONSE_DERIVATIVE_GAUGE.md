@@ -8,7 +8,13 @@ This note records the local derivative module introduced for response calculatio
 src/analysis/response_derivative_gauge.py
 ```
 
-Main API:
+The higher-level reusable shift-current API that consumes this derivative layer is:
+
+```text
+src/analysis/shift_current/
+```
+
+Main derivative API:
 
 ```python
 hamiltonian_gauge_data(...)
@@ -108,12 +114,15 @@ Focused validation lives in:
 
 ```text
 tests/test_response_derivative_gauge.py
+tests/test_shift_current_generic.py
 ```
+
+The generic shift-current module adds system-facing helpers for component parsing, named WannierBerri/Joya conventions, Fermi occupations, Lorentzian conventions, transition tables, heatmap accumulation, and selected-pair/full-tensor transition weights. Paper-specific workspaces should call `analysis.shift_current` rather than reimplementing these pieces.
 
 Current validation checks:
 
 1. Loads the actual upstream WannierBerri `formula.py` source with minimal stubs and verifies our `wannierberri_matrix_gen_derivative_ln/nn` against `Matrix_GenDer_ln` numerically.
-2. Verifies `berry_connection_generalized_derivative` against the existing validated shift-current sum rule in `analysis.shift_current_htg.response` on a nonlinear two-band toy model with nonzero `d2H/dkdk`.
+2. Verifies `berry_connection_generalized_derivative` against the existing validated shift-current sum rule in `mean_field.systems.htg.shift_current` / `analysis.shift_current` on a nonlinear two-band toy model with nonzero `d2H/dkdk`.
 3. Verifies the optimized selected-pair generalized derivative against the full tensor and pair integrand/shift-vector helpers against their full-tensor forms.
 4. Verifies the optional WannierBerri/Wannier90 principal-value regularized selected-pair derivative against the full tensor.
 5. Random U(1) gauge test: `Im[A_mn(A_nm)_;]` is invariant under eigenvector phase rotations.
@@ -122,15 +131,16 @@ Current validation checks:
 8. Wilson-link phase derivative test: `link_shift_vector` agrees with the covariant derivative shift vector on a smooth nondegenerate point.
 9. Ported WannierBerri `ShiftCurrentFormula` internal-term integrand matches the existing SLG reference-formula audit and exposes group-trace helpers.
 10. Chaudhary TBG b0 point-level gate: the common WannierBerri-style derivative helper matches the existing selected-pair response core, and its covariant shift vector agrees with a Wilson-link finite difference after converting b0 dimensionless momentum to nm.
+11. Generic `analysis.shift_current` gates: hTG legacy wrappers match the common API, `JOYA_EQ7_GEOMETRIC_CONVENTION` matches the ordered pair integrand/no-`1/pi` Lorentzian, `WANNIERBERRI_INTERNAL_IMN_CONVENTION` matches upstream internal `Imn`, and the generic selected-pair API matches the Chaudhary b0 pair core.
 
 Command used:
 
 ```bash
-PYTHONPATH=src pytest -q tests/test_response_derivative_gauge.py tests/test_chaudhary2021_response_derivative_gauge.py
+PYTHONPATH=src pytest -q tests/test_tdbg_shift_current_adapter.py tests/test_chaudhary2021_response_derivative_gauge.py tests/test_shift_current_generic.py tests/test_response_derivative_gauge.py
 ```
 
 Result:
 
 ```text
-11 passed
+24 passed
 ```

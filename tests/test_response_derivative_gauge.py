@@ -28,8 +28,8 @@ from analysis.response_derivative_gauge import (
     wannierberri_shift_current_group_trace,
     wannierberri_shift_current_internal_imn,
 )
-from analysis.shift_current_htg.response import generalized_derivative_from_D, second_derivative_matrices, velocity_matrices
-from analysis.shift_current_htg.slg_toy import GappedSLGParams, d2hdk, dhdk, diagonalize
+from mean_field.systems.htg.shift_current import generalized_derivative_from_D, second_derivative_matrices, velocity_matrices
+from analysis.shift_current.toy_models.slg_toy import GappedSLGParams, d2hdk, dhdk, diagonalize
 
 
 def _load_wannierberri_formula_module():
