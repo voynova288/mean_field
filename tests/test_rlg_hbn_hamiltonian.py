@@ -4,6 +4,7 @@ import numpy as np
 
 from mean_field.systems.RnG_hBN import (
     RLGhBNParams,
+    basis_index,
     build_coupling_table,
     build_hamiltonian,
     build_rlg_hbn_lattice,
@@ -68,6 +69,32 @@ def test_rlg_hbn_hamiltonian_is_hermitian_and_moire_only_touches_bottom_layer() 
             mask[row_slice, col_slice] = False
     assert np.max(np.abs(moire[mask])) < 1.0e-12
     assert np.max(np.abs(moire[~mask])) > 0.0
+
+
+def test_rlg_hbn_time_reversal_relabels_physical_kprime_g_indices() -> None:
+    params = RLGhBNParams.from_table(layer_count=3, xi=0, displacement_field_mev=20.0)
+    lattice = build_rlg_hbn_lattice(theta_deg=0.77, shell_count=2, layer_count=params.layer_count)
+    k_tilde = lattice.k_m / 7.0 + lattice.m_m / 11.0
+    lookup = lattice.g_index_lookup()
+    dim = 2 * params.layer_count * lattice.n_g
+    physical_to_code = np.zeros((dim, dim), dtype=np.complex128)
+    for physical_g_index, coords in enumerate(lattice.g_indices):
+        code_g_index = lookup[(-int(coords[0]), -int(coords[1]))]
+        for layer in range(params.layer_count):
+            for sublattice in range(2):
+                code_index = basis_index(code_g_index, layer, sublattice, params)
+                physical_index = basis_index(physical_g_index, layer, sublattice, params)
+                physical_to_code[code_index, physical_index] = 1.0
+
+    code_kprime = build_hamiltonian(k_tilde, lattice, params, valley=-1)
+    physical_kprime = physical_to_code.conjugate().T @ code_kprime @ physical_to_code
+    expected_physical = (
+        physical_to_code.conjugate().T
+        @ build_hamiltonian(-k_tilde, lattice, params, valley=1).conjugate()
+        @ physical_to_code
+    )
+
+    assert np.max(np.abs(physical_kprime - expected_physical)) < 1.0e-12
 
 
 def test_rlg_hbn_time_reversal_and_flat_band_count_conventions() -> None:
