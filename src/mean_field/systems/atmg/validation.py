@@ -1,56 +1,19 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal
-
 import numpy as np
 
+from ...core.validation import ValidationCheck, ValidationReport, ValidationStatus, status_from_bool
 from .bilayer_map import analytic_singular_values, build_W_matrix, svd_decompose
 from .model import ATMGModel
 from .params import ATMGParameters
 from .tbg import build_tbg_hamiltonian
 
 
-ValidationStatus = Literal["pass", "fail", "skipped"]
 
-
-@dataclass(frozen=True)
-class ValidationCheck:
-    name: str
-    status: ValidationStatus
-    detail: str
-    value: float | None = None
-
-    @property
-    def passed(self) -> bool:
-        return self.status == "pass"
-
-
-@dataclass(frozen=True)
-class ValidationReport:
-    title: str
-    checks: tuple[ValidationCheck, ...]
-
-    @property
-    def failure_count(self) -> int:
-        return sum(check.status == "fail" for check in self.checks)
-
-    @property
-    def has_failures(self) -> bool:
-        return self.failure_count > 0
-
-    def to_markdown(self) -> str:
-        lines = [f"# {self.title}", ""]
-        for check in self.checks:
-            value = "" if check.value is None else f" ({check.value:.6e})"
-            lines.append(f"- [{check.status}] {check.name}{value}: {check.detail}")
-        lines.append("")
-        lines.append(f"- failures: {self.failure_count}")
-        return "\n".join(lines)
 
 
 def _status(condition: bool) -> ValidationStatus:
-    return "pass" if condition else "fail"
+    return status_from_bool(condition)
 
 
 def _generic_k(model: ATMGModel) -> complex:

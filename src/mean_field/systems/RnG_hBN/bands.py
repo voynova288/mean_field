@@ -1,29 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 
 import numpy as np
 from scipy.linalg import eigvalsh
 
+from ...core.bands import GridBandsResult, PathBandsResult
 from ...core.lattice import KPath
 from .hamiltonian import build_hamiltonian, diagonalize_hamiltonian, flat_band_indices, hamiltonian_dimension
 from .lattice import RLGhBNLattice, build_moire_k_grid
 from .params import RLGhBNParams
-
-
-@dataclass(frozen=True)
-class PathBandsResult:
-    path: KPath
-    energies: np.ndarray
-    eigenvectors: np.ndarray | None = None
-
-
-@dataclass(frozen=True)
-class GridBandsResult:
-    k_grid_frac: np.ndarray
-    kvec: np.ndarray
-    energies: np.ndarray
-    eigenvectors: np.ndarray | None = None
 
 
 def neutrality_energy_mev(path_result: PathBandsResult, lattice: RLGhBNLattice, params: RLGhBNParams) -> float:

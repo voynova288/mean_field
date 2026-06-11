@@ -1,34 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 
 import numpy as np
 
+from ...core.bands import GridBandsResult, PathBandsResult
 from ...core.lattice import KPath
 from .bilayer_map import build_atmg_via_tbg_sum
 from .hamiltonian import diagonalize_hamiltonian
 from .lattice import ATMGLattice, build_moire_k_grid
 from .params import ATMGParameters
 from .tbg import build_coupling_table
-
-
-@dataclass(frozen=True)
-class PathBandsResult:
-    path: KPath
-    energies: np.ndarray
-    eigenvectors: np.ndarray | None = None
-    mapped_energies: np.ndarray | None = None
-    subspace_labels: tuple[str, ...] = ()
-    subspace_energies: tuple[np.ndarray, ...] | None = None
-
-
-@dataclass(frozen=True)
-class GridBandsResult:
-    k_grid_frac: np.ndarray
-    kvec: np.ndarray
-    energies: np.ndarray
-    eigenvectors: np.ndarray | None = None
-    mapped_energies: np.ndarray | None = None
 
 
 def compute_bands_along_path(

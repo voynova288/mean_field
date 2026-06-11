@@ -8,6 +8,7 @@ from typing import Literal
 
 import numpy as np
 
+from ...core.validation import ValidationCheck, ValidationReport, ValidationStatus, status_from_bool
 from .bands import PathBandsResult
 from .cross_check import (
     build_coupling_table as build_cross_coupling_table,
@@ -20,71 +21,12 @@ from .params import TMBGParameters
 from .plot import TMBGBandPlotPanel, infer_flat_band_indices, write_tmbg_lattice_plot, write_tmbg_paper_band_figure
 
 
-ValidationStatus = Literal["pass", "fail", "skipped"]
-
 
 def _status_from_bool(condition: bool) -> ValidationStatus:
-    return "pass" if condition else "fail"
+    return status_from_bool(condition)
 
 
-def _format_value(value: object | None) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, float):
-        return f"{value:.6e}"
-    return str(value)
 
-
-@dataclass(frozen=True)
-class ValidationCheck:
-    name: str
-    status: ValidationStatus
-    detail: str
-    value: float | int | str | None = None
-
-    @property
-    def passed(self) -> bool:
-        return self.status == "pass"
-
-
-@dataclass(frozen=True)
-class ValidationReport:
-    title: str
-    checks: tuple[ValidationCheck, ...]
-
-    @property
-    def failure_count(self) -> int:
-        return sum(check.status == "fail" for check in self.checks)
-
-    @property
-    def skipped_count(self) -> int:
-        return sum(check.status == "skipped" for check in self.checks)
-
-    @property
-    def has_failures(self) -> bool:
-        return self.failure_count > 0
-
-    @property
-    def has_skips(self) -> bool:
-        return self.skipped_count > 0
-
-    @classmethod
-    def combine(cls, title: str, *reports: "ValidationReport") -> "ValidationReport":
-        merged: list[ValidationCheck] = []
-        for report in reports:
-            merged.extend(report.checks)
-        return cls(title=title, checks=tuple(merged))
-
-    def to_markdown(self) -> str:
-        lines = [f"# {self.title}", ""]
-        for check in self.checks:
-            value_text = _format_value(check.value)
-            suffix = f" ({value_text})" if value_text else ""
-            lines.append(f"- [{check.status}] {check.name}{suffix}: {check.detail}")
-        lines.append("")
-        lines.append(f"- failures: {self.failure_count}")
-        lines.append(f"- skipped: {self.skipped_count}")
-        return "\n".join(lines)
 
 
 @dataclass(frozen=True)

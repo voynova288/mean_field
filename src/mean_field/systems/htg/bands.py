@@ -1,29 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 
 import numpy as np
 
 from .hamiltonian import build_coupling_table, centered_band_indices, diagonalize_hamiltonian
+from ...core.bands import GridBandsResult, PathBandsResult
 from .lattice import HTGLattice, KPath, build_moire_k_grid
 from .params import HTGParams
-
-
-@dataclass(frozen=True)
-class PathBandsResult:
-    path: KPath
-    energies: np.ndarray
-    band_indices: tuple[int, ...]
-    eigenvectors: np.ndarray | None = None
-
-
-@dataclass(frozen=True)
-class GridBandsResult:
-    k_grid_frac: np.ndarray
-    kvec: np.ndarray
-    energies: np.ndarray
-    band_indices: tuple[int, ...]
-    eigenvectors: np.ndarray | None = None
 
 
 def _resolve_band_indices(

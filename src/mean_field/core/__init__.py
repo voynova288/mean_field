@@ -1,5 +1,20 @@
 """Core reusable building blocks for mean-field solvers."""
 
+from .bands import (
+    GridBandsResult,
+    PathBandsResult,
+    compute_grid_bands,
+    compute_path_bands,
+    resolve_n_bands,
+)
+from .validation import (
+    ValidationCheck,
+    ValidationReport,
+    ValidationStatus,
+    ValidationValue,
+    format_validation_value,
+    status_from_bool,
+)
 from .magnetic_field import (
     MagneticFlux,
     choose_magnetic_nq,
@@ -15,6 +30,17 @@ from .magnetic_field import (
 )
 
 __all__ = [
+    "GridBandsResult",
+    "PathBandsResult",
+    "compute_grid_bands",
+    "compute_path_bands",
+    "resolve_n_bands",
+    "ValidationCheck",
+    "ValidationReport",
+    "ValidationStatus",
+    "ValidationValue",
+    "format_validation_value",
+    "status_from_bool",
     "MagneticFlux",
     "choose_magnetic_nq",
     "diophantine_branch_cases",
