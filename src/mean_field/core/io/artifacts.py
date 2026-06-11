@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +47,32 @@ class NpzArtifactSummary:
         }
 
 
+def write_text_artifact(text: str, path: str | Path) -> Path:
+    """Atomically write a small text artifact and return its path."""
+
+    output = Path(path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    tmp = output.with_name(output.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(output)
+    return output
+
+
+def write_json_artifact(
+    payload: object,
+    path: str | Path,
+    *,
+    indent: int | None = 2,
+    sort_keys: bool = True,
+) -> Path:
+    """Atomically write a JSON artifact with the repository's stable defaults."""
+
+    return write_text_artifact(
+        json.dumps(payload, indent=indent, sort_keys=sort_keys) + "\n",
+        path,
+    )
+
+
 def summarize_npz_artifact(path: str | Path) -> NpzArtifactSummary:
     artifact_path = Path(path)
     with np.load(artifact_path, allow_pickle=False) as payload:
@@ -84,4 +111,6 @@ __all__ = [
     "NpzArtifactSummary",
     "read_npz_scalar",
     "summarize_npz_artifact",
+    "write_json_artifact",
+    "write_text_artifact",
 ]

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-import json
 from typing import Literal, Mapping
+
+from mean_field.core.io import write_json_artifact
 
 WorkflowJobStatus = Literal["pending", "running", "succeeded", "failed", "skipped"]
 TERMINAL_WORKFLOW_STATUSES: tuple[WorkflowJobStatus, ...] = ("succeeded", "failed", "skipped")
@@ -198,21 +199,12 @@ def blocked_workflow_jobs(
     return tuple(blocked)
 
 
-def _write_json_atomically(payload: dict[str, object], path: str | Path) -> Path:
-    output = Path(path)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    tmp = output.with_name(output.name + ".tmp")
-    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    tmp.replace(output)
-    return output
-
-
 def write_workflow_manifest(manifest: WorkflowManifest, path: str | Path) -> Path:
-    return _write_json_atomically(manifest.to_dict(), path)
+    return write_json_artifact(manifest.to_dict(), path)
 
 
 def write_workflow_run_state(state: WorkflowRunState, path: str | Path) -> Path:
-    return _write_json_atomically(state.to_dict(), path)
+    return write_json_artifact(state.to_dict(), path)
 
 
 __all__ = [
