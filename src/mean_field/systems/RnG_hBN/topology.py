@@ -5,14 +5,7 @@ from typing import Iterable
 
 import numpy as np
 
-from analysis.topology import (
-    SewingTransform,
-    TopologyResult,
-    compute_system_topology_from_eigenvectors,
-    compute_system_topology_from_grid_result,
-    compute_system_topology_on_grid,
-    normalize_state_indices,
-)
+from analysis.topology import SewingTransform, TopologyResult, make_topology_adapter, normalize_state_indices
 
 from .bands import GridBandsResult, compute_bands_on_grid
 from .lattice import RLGhBNLattice
@@ -21,6 +14,26 @@ from .params import RLGhBNParams
 
 def _normalize_band_indices(band_indices: int | Iterable[int]) -> tuple[int, ...]:
     return normalize_state_indices(band_indices)
+
+
+def _topology_adapters(
+    *,
+    valley: int = 1,
+    grid_builder=None,
+    sewing_transforms: Sequence[SewingTransform | None] | None = None,
+    sewing_transforms_builder=None,
+    orientation_sign: float = 1.0,
+    index_metadata: dict[str, object] | None = None,
+):
+    return make_topology_adapter(
+        system="RLG_hBN",
+        valley=valley,
+        grid_builder=grid_builder,
+        sewing_transforms=sewing_transforms,
+        sewing_transforms_builder=sewing_transforms_builder,
+        orientation_sign=orientation_sign,
+        index_metadata=index_metadata,
+    )
 
 
 def _shift_rectangular_g_components(
@@ -263,15 +276,15 @@ def compute_topology_from_eigenvectors(
     """
 
     resolved_orientation = _resolve_orientation_sign(orientation_sign=orientation_sign, paper_orientation=paper_orientation)
-    return compute_system_topology_from_eigenvectors(
-        eigenvectors,
-        band_indices,
-        system="RLG_hBN",
+    return _topology_adapters(
         valley=valley,
-        k_grid_frac=k_grid_frac,
         sewing_transforms=sewing_transforms,
         orientation_sign=resolved_orientation,
         index_metadata={"orientation_sign": float(resolved_orientation)},
+    )["from_eigenvectors"](
+        eigenvectors,
+        band_indices,
+        k_grid_frac=k_grid_frac,
     )
 
 
@@ -295,10 +308,7 @@ def compute_topology_from_grid_result(
         valley=valley,
         use_boundary_sewing=use_boundary_sewing,
     )
-    return compute_system_topology_from_grid_result(
-        grid_result,
-        band_indices,
-        system="RLG_hBN",
+    return _topology_adapters(
         valley=valley,
         sewing_transforms=resolved_sewing,
         orientation_sign=resolved_orientation,
@@ -306,7 +316,7 @@ def compute_topology_from_grid_result(
             "boundary_sewing": resolved_sewing is not None,
             "orientation_sign": float(resolved_orientation),
         },
-    )
+    )["from_grid_result"](grid_result, band_indices)
 
 
 def compute_topology_on_grid(
@@ -340,13 +350,9 @@ def compute_topology_on_grid(
     if sewing_transforms is None and bool(use_boundary_sewing):
         sewing_builder = lambda: rlg_hbn_boundary_sewing_transforms(lattice, params, valley=valley)
 
-    return compute_system_topology_on_grid(
-        mesh_size,
-        band_indices,
-        system="RLG_hBN",
-        grid_builder=grid_builder,
+    return _topology_adapters(
         valley=valley,
-        n_bands=n_bands,
+        grid_builder=grid_builder,
         sewing_transforms=sewing_transforms,
         sewing_transforms_builder=sewing_builder,
         orientation_sign=resolved_orientation,
@@ -354,6 +360,10 @@ def compute_topology_on_grid(
             "boundary_sewing": sewing_transforms is not None or sewing_builder is not None,
             "orientation_sign": float(resolved_orientation),
         },
+    )["on_grid"](
+        mesh_size,
+        band_indices,
+        n_bands=n_bands,
     )
 
 

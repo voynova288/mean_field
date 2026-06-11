@@ -62,11 +62,17 @@ def test_rlg_hbn_grid_result_wrapper_passes_default_sewing_and_explicit_paper_or
     )
     captured: dict[str, object] = {}
 
-    def fake_common_grid_result(*args, **kwargs):
+    def fake_make_topology_adapter(**kwargs):
         captured.update(kwargs)
-        return SimpleNamespace(ok=True)
 
-    monkeypatch.setattr(rlg_topology, "compute_system_topology_from_grid_result", fake_common_grid_result)
+        def from_grid_result(*args, **call_kwargs):
+            captured["call_args"] = args
+            captured["call_kwargs"] = call_kwargs
+            return SimpleNamespace(ok=True)
+
+        return {"from_grid_result": from_grid_result}
+
+    monkeypatch.setattr(rlg_topology, "make_topology_adapter", fake_make_topology_adapter)
     result = rlg_topology.compute_topology_from_grid_result(
         grid,
         0,
@@ -77,9 +83,11 @@ def test_rlg_hbn_grid_result_wrapper_passes_default_sewing_and_explicit_paper_or
     )
 
     assert result.ok is True
+    assert captured["system"] == "RLG_hBN"
     assert captured["orientation_sign"] == -1.0
     assert captured["sewing_transforms"] is not None
     assert captured["index_metadata"] == {"boundary_sewing": True, "orientation_sign": -1.0}
+    assert captured["call_args"] == (grid, 0)
 
 
 def test_rlg_hbn_on_grid_wrapper_uses_sewing_builder_by_default(monkeypatch) -> None:
@@ -87,14 +95,21 @@ def test_rlg_hbn_on_grid_wrapper_uses_sewing_builder_by_default(monkeypatch) -> 
     lattice = build_rlg_hbn_lattice(shell_count=1, layer_count=params.layer_count)
     captured: dict[str, object] = {}
 
-    def fake_common_on_grid(*args, **kwargs):
+    def fake_make_topology_adapter(**kwargs):
         captured.update(kwargs)
-        return SimpleNamespace(ok=True)
 
-    monkeypatch.setattr(rlg_topology, "compute_system_topology_on_grid", fake_common_on_grid)
+        def on_grid(*args, **call_kwargs):
+            captured["call_args"] = args
+            captured["call_kwargs"] = call_kwargs
+            return SimpleNamespace(ok=True)
+
+        return {"on_grid": on_grid}
+
+    monkeypatch.setattr(rlg_topology, "make_topology_adapter", fake_make_topology_adapter)
     result = rlg_topology.compute_topology_on_grid(3, lattice, params, 0, valley=-1, orientation_sign=1.0)
 
     assert result.ok is True
+    assert captured["system"] == "RLG_hBN"
     assert captured["orientation_sign"] == 1.0
     assert captured["sewing_transforms"] is None
     builder = captured["sewing_transforms_builder"]
@@ -103,3 +118,5 @@ def test_rlg_hbn_on_grid_wrapper_uses_sewing_builder_by_default(monkeypatch) -> 
     assert callable(sew_1)
     assert callable(sew_2)
     assert captured["index_metadata"] == {"boundary_sewing": True, "orientation_sign": 1.0}
+    assert captured["call_args"] == (3, 0)
+    assert captured["call_kwargs"] == {"n_bands": None}
