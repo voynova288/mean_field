@@ -8,6 +8,7 @@ from typing import Literal
 
 import numpy as np
 
+from ...core.io import write_text_artifact
 from ...core.validation import ValidationCheck, ValidationReport, ValidationStatus, status_from_bool
 from .bands import PathBandsResult
 from .cross_check import (
@@ -486,7 +487,7 @@ def diagnose_ktilde_symmetry(
         resolved_output_dir = Path(output_dir)
         resolved_output_dir.mkdir(parents=True, exist_ok=True)
         report_path = resolved_output_dir / "ktilde_symmetry_report.md"
-        report_path.write_text(report.to_markdown() + "\n", encoding="utf-8")
+        write_text_artifact(report.to_markdown() + "\n", report_path)
     return report
 
 
@@ -848,7 +849,7 @@ def reproduce_paper_checkpoints(
             ylim=(-0.100, 0.100),
         )
         report_path = resolved_output_dir / "paper_checkpoint_report.md"
-        report_path.write_text(report.to_markdown() + "\n", encoding="utf-8")
+        write_text_artifact(report.to_markdown() + "\n", report_path)
         ktilde_report = diagnose_ktilde_symmetry(
             theta_deg=1.21,
             n_shells=n_shells,
@@ -869,9 +870,9 @@ def reproduce_paper_checkpoints(
             report,
         )
         validation_report_path = resolved_output_dir / "validation_report.md"
-        validation_report_path.write_text(validation_report.to_markdown() + "\n", encoding="utf-8")
+        write_text_artifact(validation_report.to_markdown() + "\n", validation_report_path)
         run_log_path = resolved_output_dir / "run.log"
-        run_log_path.write_text(
+        write_text_artifact(
             "\n\n".join(
                 [
                     "# tMBG checkpoint run",
@@ -882,7 +883,7 @@ def reproduce_paper_checkpoints(
                 ]
             )
             + "\n",
-            encoding="utf-8",
+            run_log_path,
         )
 
     return report
