@@ -283,10 +283,7 @@ def _default_output_dir(paper_target: str) -> Path:
 
 
 def _atomic_write_json(path: Path, payload: object, *, sort_keys: bool = True) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_name(path.name + ".tmp")
-    tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=sort_keys) + "\n", encoding="utf-8")
-    tmp_path.replace(path)
+    write_json(path, payload, sort_keys=sort_keys)
 
 
 def _atomic_savez(path: Path, **arrays: object) -> None:
