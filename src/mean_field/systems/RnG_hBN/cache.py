@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import hashlib
 import json
 import os
@@ -14,11 +14,13 @@ from ...core.hf import ProjectedWavefunctionBasis
 from .hf import (
     RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
     RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING,
+    RLG_HBN_FORM_FACTOR_CONVENTION_VERSION,
     RLGhBNLayerOverlapBlockSet,
     RLGhBNProjectedBasisData,
     active_band_indices_for_interaction,
     build_rlg_hbn_layer_overlap_blocks,
     build_rlg_hbn_projected_basis,
+    rlg_hbn_layer_component_groups,
 )
 from .interaction import RLGhBNInteractionParams
 from .model import RLGhBNModel
@@ -365,6 +367,11 @@ def load_projected_basis_cache(cache_dir: Path, key: str) -> RLGhBNProjectedBasi
             f"Basis cache {path} uses stale periodic-gauge metadata "
             f"{extra.get('basis_periodic_gauge')!r}; expected {RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION!r}"
         )
+    if extra.get("form_factor_convention") != RLG_HBN_FORM_FACTOR_CONVENTION_VERSION:
+        raise RLGhBNCacheMiss(
+            f"Basis cache {path} uses stale form-factor convention "
+            f"{extra.get('form_factor_convention')!r}; expected {RLG_HBN_FORM_FACTOR_CONVENTION_VERSION!r}"
+        )
     model = _model_from_payload(model_payload)
     basis_model = _model_from_payload(basis_model_payload)
     interaction_payload = manifest["interaction"]
@@ -382,6 +389,7 @@ def load_projected_basis_cache(cache_dir: Path, key: str) -> RLGhBNProjectedBasi
         n_spin=2,
         local_basis_size=2 * int(basis_model.params.layer_count),
         name=str(extra.get("basis_name", "rlg_hbn_screened_active")),
+        component_groups=rlg_hbn_layer_component_groups(basis_model.params.layer_count),
     )
     return RLGhBNProjectedBasisData(
         model=model,
@@ -440,12 +448,14 @@ def load_or_build_projected_basis(
         )
         screening = screening_cache.value  # type: ignore[assignment]
     if screening is not None and interaction.use_screened_basis:
+        screened_params = replace(model.params, displacement_field_mev=float(screening.screened_u_mev))
         basis_model = RLGhBNModel.from_config(
             layer_count=model.params.layer_count,
             xi=model.params.xi,
             theta_deg=model.lattice.theta_deg,
             displacement_field_mev=float(screening.screened_u_mev),
             shell_count=model.lattice.shell_count,
+            params=screened_params,
         )
     else:
         basis_model = model
@@ -462,6 +472,7 @@ def load_or_build_projected_basis(
         "basis_name": "rlg_hbn_screened_active",
         "basis_periodic_gauge": RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
         "basis_periodic_gauge_padding": int(RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING),
+        "form_factor_convention": RLG_HBN_FORM_FACTOR_CONVENTION_VERSION,
         "active_band_indices": [int(value) for value in active_indices],
         "flat_band_indices": [int(value) for value in basis_model.flat_band_indices],
         "screening_u_min_mev": float(screening_u_min_mev),
@@ -535,6 +546,20 @@ def load_layer_overlap_blocks_cache(cache_dir: Path, key: str) -> RLGhBNLayerOve
     path = _cache_path(cache_dir, "overlap", key)
     if not (path / "manifest.json").exists() or not (path / "shifts.npy").exists():
         raise RLGhBNCacheMiss(f"Overlap cache {path} is missing manifest or shifts")
+    manifest = _read_json(path / "manifest.json")
+    extra = manifest.get("extra", {})
+    if not isinstance(extra, dict):
+        raise RLGhBNCacheMiss(f"Overlap cache {path} has an invalid manifest")
+    if extra.get("basis_periodic_gauge") != RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION:
+        raise RLGhBNCacheMiss(
+            f"Overlap cache {path} uses stale periodic-gauge metadata "
+            f"{extra.get('basis_periodic_gauge')!r}; expected {RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION!r}"
+        )
+    if extra.get("form_factor_convention") != RLG_HBN_FORM_FACTOR_CONVENTION_VERSION:
+        raise RLGhBNCacheMiss(
+            f"Overlap cache {path} uses stale form-factor convention "
+            f"{extra.get('form_factor_convention')!r}; expected {RLG_HBN_FORM_FACTOR_CONVENTION_VERSION!r}"
+        )
     mmap = _env_flag_enabled("MEAN_FIELD_RLG_HBN_MMAP_OVERLAP_CACHE", default=False)
     shifts = tuple((int(row[0]), int(row[1])) for row in np.asarray(np.load(path / "shifts.npy"), dtype=int))
     gvecs_path = path / "gvecs_complex_pairs.npy"
@@ -595,6 +620,7 @@ def load_or_build_layer_overlap_blocks(
         "shifts": None if resolved_shifts is None else [[int(m), int(n)] for m, n in resolved_shifts],
         "basis_periodic_gauge": RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
         "basis_periodic_gauge_padding": int(RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING),
+        "form_factor_convention": RLG_HBN_FORM_FACTOR_CONVENTION_VERSION,
     }
     key = rlg_hbn_cache_key("overlap", basis_data.model, basis_data.interaction, extra)
     manifest = _manifest_for("overlap", basis_data.model, basis_data.interaction, extra=extra)
@@ -641,6 +667,7 @@ def path_cache_key(
         "source_panel": str(panel),
         "basis_periodic_gauge": RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
         "basis_periodic_gauge_padding": int(RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING),
+        "form_factor_convention": RLG_HBN_FORM_FACTOR_CONVENTION_VERSION,
     }
     key = rlg_hbn_cache_key("path_bands", model, interaction, extra)
     return key, _manifest_for("path_bands", model, interaction, extra=extra)

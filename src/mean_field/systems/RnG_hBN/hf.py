@@ -16,6 +16,8 @@ from ...core.hf import (
     HartreeFockStepResult,
     apply_random_projector_rotation,
     random_unitary_from_hermitian,
+    ComponentGroup,
+    component_group_indices,
     compute_hf_energy,
     compute_oda_parameter,
     ProjectedWavefunctionBasis,
@@ -49,6 +51,24 @@ else:
 VALLEY_SEQUENCE = (1, -1)
 RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION = "centered_cell_reciprocal_relabel_pad1_v2"
 RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING = 1
+RLG_HBN_FORM_FACTOR_CONVENTION_VERSION = "physical_q_valley_signed_raw_shift_v1"
+
+
+def rlg_hbn_layer_component_groups(layer_count: int) -> tuple[ComponentGroup, ...]:
+    """Return RnG/hBN layer groups in the local sublattice-resolved basis.
+
+    The core HF layer only knows named local-component subsets.  RnG/hBN owns
+    the physical convention that each layer contributes the two local sublattice
+    components ``[2*layer, 2*layer+1]`` inside every reciprocal-grid cell.
+    """
+
+    resolved_layer_count = int(layer_count)
+    if resolved_layer_count <= 0:
+        raise ValueError(f"layer_count must be positive, got {layer_count}")
+    return tuple(
+        ComponentGroup(f"layer_{layer}", np.asarray([2 * layer, 2 * layer + 1], dtype=int))
+        for layer in range(resolved_layer_count)
+    )
 
 
 def _env_flag_enabled(name: str, *, default: bool) -> bool:
@@ -525,6 +545,29 @@ def _raw_pair_from_canonical_pair(
     )
 
 
+def _raw_overlap_shift_for_physical_g(
+    shift: tuple[int, int] | np.ndarray,
+    *,
+    valley: int,
+) -> tuple[int, int]:
+    """Return the raw reciprocal-grid shift implementing paper Eq. (18).
+
+    In the embedded RLG/hBN basis the K valley uses raw labels equal to the
+    physical reciprocal labels, while the K' valley is stored in the
+    time-reversal relabelled convention ``G_raw = -G_phys``. For a physical
+    Umklapp vector ``G = m g1 + n g2``, Eq. (18) requires
+    ``target_raw = source_raw + valley * G``. The low-level grid shifter used
+    by :func:`calculate_layer_projected_overlap_between` implements
+    ``target_raw = source_raw - raw_shift``. Hence ``raw_shift = -valley * G``.
+    """
+
+    pair = np.asarray(shift, dtype=int).reshape(2)
+    sign = int(valley)
+    if sign not in VALLEY_SEQUENCE:
+        raise ValueError(f"Expected valley in {VALLEY_SEQUENCE}, got {valley}")
+    return (-sign * int(pair[0]), -sign * int(pair[1]))
+
+
 def _screened_basis_model(
     model: RLGhBNModel,
     interaction: RLGhBNInteractionParams,
@@ -699,6 +742,7 @@ def _build_projected_basis_for_indices(
         n_spin=2,
         local_basis_size=local_basis_size,
         name=name,
+        component_groups=rlg_hbn_layer_component_groups(basis_model.params.layer_count),
     )
 
     h0 = np.zeros((basis.nt, basis.nt, basis.nk), dtype=np.complex128)
@@ -827,6 +871,7 @@ def _slice_projected_basis_data_bands(
         n_spin=basis_data.basis.n_spin,
         local_basis_size=basis_data.basis.local_basis_size,
         name=f"{basis_data.basis.name}_bands_{start}_{stop}",
+        component_groups=basis_data.basis.component_groups,
     )
     h0 = np.zeros((basis.nt, basis.nt, basis.nk), dtype=np.complex128)
     return replace(
@@ -847,6 +892,7 @@ def _layer_traces_for_diagonal_band_weights(
     n: int,
     *,
     layer_count: int,
+    valleys: tuple[int, ...] | None = None,
 ) -> np.ndarray:
     weights = np.asarray(weights, dtype=float).reshape(-1)
     if weights.size != basis.n_band:
@@ -856,12 +902,13 @@ def _layer_traces_for_diagonal_band_weights(
         raise ValueError(
             f"Expected local_basis_size={2 * layer_count} for {layer_count} layers, got {basis.local_basis_size}"
         )
+    resolved_valleys = _resolve_basis_valleys(basis.n_flavor, valleys)
 
     nx, ny = basis.grid_shape
     band_k = basis.n_band * basis.nk
     band_k_weights = np.broadcast_to(weights[:, None], (basis.n_band, basis.nk)).reshape(-1, order="F")
     traces = np.zeros(layer_count, dtype=np.complex128)
-    for iflavor in range(basis.n_flavor):
+    for iflavor, valley in enumerate(resolved_valleys):
         source_grid = basis.wavefunctions[:, :, iflavor, :].reshape(
             basis.local_basis_size,
             nx,
@@ -869,11 +916,12 @@ def _layer_traces_for_diagonal_band_weights(
             band_k,
             order="F",
         )
-        shifted = _source_grid_shift_without_wrap(source_grid, int(m), int(n))
+        raw_m, raw_n = _raw_overlap_shift_for_physical_g((m, n), valley=int(valley))
+        shifted = _source_grid_shift_without_wrap(source_grid, raw_m, raw_n)
         for layer in range(layer_count):
-            layer_slice = slice(2 * layer, 2 * layer + 2)
+            layer_indices = _rlg_hbn_layer_local_indices(basis, layer, layer_count=layer_count)
             diagonal = np.sum(
-                np.conj(source_grid[layer_slice, :, :, :]) * shifted[layer_slice, :, :, :],
+                np.conj(source_grid[layer_indices, :, :, :]) * shifted[layer_indices, :, :, :],
                 axis=(0, 1, 2),
             )
             traces[layer] += basis.n_spin * np.sum(band_k_weights * np.conj(diagonal))
@@ -935,6 +983,7 @@ def _remote_average_hamiltonian_from_source(
             shift[0],
             shift[1],
             layer_count=layer_count,
+            valleys=remote_basis_data.valleys,
         )
         for target_layer in range(layer_count):
             prefactor = scale * complex(np.dot(hartree_kernel[target_layer, :], layer_traces))
@@ -1092,6 +1141,39 @@ def build_rlg_hbn_projected_basis_for_kvec(
     )
 
 
+def _resolve_basis_valleys(n_flavor: int, valleys: tuple[int, ...] | None) -> tuple[int, ...]:
+    n = int(n_flavor)
+    if n <= 0:
+        raise ValueError(f"n_flavor must be positive, got {n_flavor}")
+    if valleys is None:
+        if n > len(VALLEY_SEQUENCE):
+            raise ValueError(f"Need explicit valleys for n_flavor={n}")
+        resolved = tuple(int(value) for value in VALLEY_SEQUENCE[:n])
+    else:
+        resolved = tuple(int(value) for value in valleys)
+    if len(resolved) != n:
+        raise ValueError(f"Expected {n} valley labels, got {resolved}")
+    for valley in resolved:
+        if valley not in VALLEY_SEQUENCE:
+            raise ValueError(f"Expected valley labels in {VALLEY_SEQUENCE}, got {resolved}")
+    return resolved
+
+
+def _rlg_hbn_layer_local_indices(
+    basis: ProjectedWavefunctionBasis,
+    layer: int,
+    *,
+    layer_count: int,
+) -> np.ndarray:
+    layer_index = int(layer)
+    if layer_index < 0 or layer_index >= int(layer_count):
+        raise ValueError(f"layer index {layer_index} outside [0, {int(layer_count)})")
+    group_name = f"layer_{layer_index}"
+    if any(group.name == group_name for group in basis.component_groups):
+        return component_group_indices(basis, group_name)
+    return component_group_indices(basis, ComponentGroup(group_name, np.asarray([2 * layer_index, 2 * layer_index + 1])))
+
+
 def _source_grid_shift_without_wrap(source_grid: np.ndarray, m: int, n: int) -> np.ndarray:
     if source_grid.ndim != 4:
         raise ValueError(f"Expected source grid shape (local, nx, ny, states), got {source_grid.shape}")
@@ -1116,6 +1198,7 @@ def calculate_layer_projected_overlap_between(
     n: int,
     *,
     layer_count: int,
+    valleys: tuple[int, ...] | None = None,
 ) -> np.ndarray:
     if target.local_basis_size != source.local_basis_size:
         raise ValueError(f"local_basis_size mismatch: {target.local_basis_size} != {source.local_basis_size}")
@@ -1133,6 +1216,7 @@ def calculate_layer_projected_overlap_between(
             f"Expected local_basis_size={2 * layer_count} for {layer_count} layers, "
             f"got {target.local_basis_size}"
         )
+    resolved_valleys = _resolve_basis_valleys(target.n_flavor, valleys)
 
     nx, ny = target.grid_shape
     target_band_k = target.n_band * target.nk
@@ -1151,7 +1235,7 @@ def calculate_layer_projected_overlap_between(
         order="F",
     )
 
-    for iflavor in range(target.n_flavor):
+    for iflavor, valley in enumerate(resolved_valleys):
         target_grid = target.wavefunctions[:, :, iflavor, :].reshape(
             target.local_basis_size,
             nx,
@@ -1166,11 +1250,23 @@ def calculate_layer_projected_overlap_between(
             source_band_k,
             order="F",
         )
-        shifted = _source_grid_shift_without_wrap(source_grid, int(m), int(n))
+        raw_m, raw_n = _raw_overlap_shift_for_physical_g((m, n), valley=int(valley))
+        shifted = _source_grid_shift_without_wrap(source_grid, raw_m, raw_n)
         for layer in range(layer_count):
-            layer_slice = slice(2 * layer, 2 * layer + 2)
-            target_layer = target_grid[layer_slice, :, :, :].reshape(2 * nx * ny, target_band_k, order="F")
-            shifted_layer = shifted[layer_slice, :, :, :].reshape(2 * nx * ny, source_band_k, order="F")
+            target_layer_indices = _rlg_hbn_layer_local_indices(target, layer, layer_count=layer_count)
+            source_layer_indices = _rlg_hbn_layer_local_indices(source, layer, layer_count=layer_count)
+            if target_layer_indices.size != source_layer_indices.size:
+                raise ValueError(
+                    f"Target/source layer {layer} component sizes differ: "
+                    f"{target_layer_indices.size} != {source_layer_indices.size}"
+                )
+            layer_local_size = int(target_layer_indices.size)
+            target_layer = target_grid[target_layer_indices, :, :, :].reshape(
+                layer_local_size * nx * ny, target_band_k, order="F"
+            )
+            shifted_layer = shifted[source_layer_indices, :, :, :].reshape(
+                layer_local_size * nx * ny, source_band_k, order="F"
+            )
             layer_overlap = target_layer.conj().T @ shifted_layer
             for ispin in range(target.n_spin):
                 layer_blocks[layer, ispin, iflavor, :, ispin, iflavor, :] = layer_overlap
@@ -1252,6 +1348,7 @@ def build_rlg_hbn_layer_overlap_blocks(
             shift[0],
             shift[1],
             layer_count=layer_count,
+            valleys=basis_data.valleys,
         )
         layer_overlaps[shift] = overlap
         layer_diagonal_overlaps[shift] = diagonal_layer_overlap_blocks(overlap)
@@ -1295,6 +1392,11 @@ def build_rlg_hbn_layer_overlap_blocks_between(
             "Target/source reciprocal grid origins differ: "
             f"{target_basis_data.reciprocal_grid_origin} != {source_basis_data.reciprocal_grid_origin}"
         )
+    if target_basis_data.valleys != source_basis_data.valleys:
+        raise ValueError(
+            "Target/source valley order differs: "
+            f"{target_basis_data.valleys} != {source_basis_data.valleys}"
+        )
 
     resolved_shifts = (
         shifts
@@ -1324,6 +1426,7 @@ def build_rlg_hbn_layer_overlap_blocks_between(
             shift[0],
             shift[1],
             layer_count=layer_count,
+            valleys=target_basis_data.valleys,
         )
         layer_overlaps[shift] = overlap
         if target_basis_data.nk == source_basis_data.nk and target_basis_data.nt == source_basis_data.nt:
@@ -1625,6 +1728,7 @@ def evaluate_rlg_hbn_hf_path(
             n_spin=first_basis.basis.n_spin,
             local_basis_size=first_basis.basis.local_basis_size,
             name=first_basis.basis.name,
+            component_groups=first_basis.basis.component_groups,
         ),
         h0=np.concatenate([chunk.h0 for chunk in basis_chunks], axis=2),
         band_energies=np.concatenate([chunk.band_energies for chunk in basis_chunks], axis=2),
@@ -2224,6 +2328,7 @@ __all__ = [
     "RLGhBNProjectedBasisData",
     "RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING",
     "RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION",
+    "RLG_HBN_FORM_FACTOR_CONVENTION_VERSION",
     "VALLEY_SEQUENCE",
     "active_band_indices_for_interaction",
     "average_scheme_density_delta",
@@ -2243,6 +2348,7 @@ __all__ = [
     "rlg_hbn_filling_from_density",
     "rlg_hbn_flavor_occupation_counts_for_init_mode",
     "rlg_hbn_gap_estimate",
+    "rlg_hbn_layer_component_groups",
     "rlg_hbn_hermitian_residual",
     "rlg_hbn_occupied_bands_per_k",
     "rlg_hbn_occupied_state_count",

@@ -12,6 +12,7 @@ from time import perf_counter
 
 import numpy as np
 
+from mean_field.core.hf import summarize_hf_state_archive, validate_hf_archive_shapes
 from mean_field.devtools._runtime import (
     complex_to_pairs as _complex_to_pairs,
     ensure_not_running_compute_on_login_node,
@@ -25,13 +26,17 @@ from mean_field.systems.RnG_hBN import (
     RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
     RLGhBNInteractionParams,
     RLGhBNModel,
+    RLGhBNParams,
     load_or_build_layer_overlap_blocks,
     load_or_build_projected_basis,
     load_or_solve_screening,
+    normalize_rlg_hbn_init_mode,
     run_rlg_hbn_hartree_fock,
     screening_result_to_dict,
+    table_ii_moire_parameters,
     update_cache_manifest_file,
 )
+from mean_field.systems.RnG_hBN.hf import RLG_HBN_FORM_FACTOR_CONVENTION_VERSION
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -163,6 +168,55 @@ def _run_specs_from_config(config: dict[str, object]) -> tuple[tuple[str, int], 
     return tuple(specs)
 
 
+def _preflight_run_specs(config: dict[str, object]) -> dict[str, object]:
+    """Validate cheap run-spec invariants before building screening/basis/overlap caches."""
+
+    specs = _run_specs_from_config(config)
+    validated: list[dict[str, object]] = []
+    errors: list[dict[str, object]] = []
+    for init_mode, seed in specs:
+        try:
+            normalized = normalize_rlg_hbn_init_mode(str(init_mode))
+        except ValueError as exc:
+            errors.append({"init_mode": str(init_mode), "seed": int(seed), "error": str(exc)})
+            continue
+        validated.append(
+            {
+                "init_mode": str(init_mode),
+                "normalized_init_mode": str(normalized),
+                "seed": int(seed),
+            }
+        )
+    if errors:
+        bad = ", ".join(f"{entry['init_mode']}:{entry['seed']}" for entry in errors)
+        details = "; ".join(str(entry["error"]) for entry in errors)
+        raise ValueError(
+            "Invalid RLG/hBN HF run_specs before expensive setup: "
+            f"{bad}. {details}. See run_preflight_failure.json for details."
+        )
+
+    active_valence = int(config["active_valence_bands"])
+    active_conduction = int(config["active_conduction_bands"])
+    k_mesh_size = int(config["k_mesh_size"])
+    if active_valence < 0 or active_conduction < 0:
+        raise ValueError(
+            "active_valence_bands and active_conduction_bands must be non-negative; "
+            f"got {active_valence=} {active_conduction=}"
+        )
+    if active_valence + active_conduction <= 0:
+        raise ValueError("At least one active band is required for RLG/hBN HF.")
+    if k_mesh_size <= 0:
+        raise ValueError(f"k_mesh_size must be positive, got {k_mesh_size}")
+
+    return {
+        "status": "ok",
+        "run_specs": validated,
+        "active_valence_bands": active_valence,
+        "active_conduction_bands": active_conduction,
+        "k_mesh_size": k_mesh_size,
+    }
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run paper-config projected HF source states for R5G/hBN Figs. 5 and 6."
@@ -178,6 +232,17 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-screening-check", action="store_true")
     parser.add_argument("--v-values-mev", type=_parse_csv_floats, default=None)
     parser.add_argument("--xi-values", type=_parse_csv_ints, default=None)
+    parser.add_argument("--epsilon-r", type=float, default=None)
+    parser.add_argument("--gate-distance-nm", type=float, default=None)
+    parser.add_argument("--scheme", choices=("average", "cn"), default=None)
+    parser.add_argument("--interaction-cutoff-q1", type=float, default=None)
+    parser.add_argument(
+        "--hbn-moire-scale",
+        "--kappa-hbn",
+        type=float,
+        default=1.0,
+        help="Scale the Table-II hBN moire potential amplitudes V0,V1. Use 0 for the κ_hBN=0 branch.",
+    )
     parser.add_argument("--active-valence-bands", type=int, default=None)
     parser.add_argument("--active-conduction-bands", type=int, default=None)
     parser.add_argument("--k-mesh-size", type=int, default=None)
@@ -233,6 +298,13 @@ def _atomic_savez(path: Path, **arrays: object) -> None:
 
 def _timestamp() -> str:
     return datetime.now().isoformat(timespec="seconds")
+
+
+def _env_flag_enabled(name: str, *, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return bool(default)
+    return value.strip().lower() not in {"0", "false", "no", "off"}
 
 
 def _git_commit_sha() -> str:
@@ -301,6 +373,18 @@ def _save_state_archive(
         "hamiltonian": np.asarray(run.state.hamiltonian, dtype=np.complex128),
         "h0": np.asarray(run.state.h0, dtype=np.complex128),
         "energies_mev": np.asarray(run.state.energies, dtype=float),
+        "reference_density": np.asarray(run.state.reference_density, dtype=np.complex128),
+        "nu": np.asarray([float(run.state.nu)], dtype=float),
+        "active_valence_bands": np.asarray([int(run.state.active_valence_bands)], dtype=int),
+        "scheme": np.asarray(str(run.state.scheme)),
+        "n_spin": np.asarray([int(run.state.n_spin)], dtype=int),
+        "n_eta": np.asarray([int(run.state.n_eta)], dtype=int),
+        "n_band": np.asarray([int(run.state.n_band)], dtype=int),
+        "occupation_counts": np.asarray(
+            [] if run.state.occupation_counts is None else tuple(int(v) for v in run.state.occupation_counts),
+            dtype=int,
+        ),
+        "mu_mev": np.asarray([float(run.state.mu)], dtype=float),
         "kvec_nm_inv": _complex_to_pairs(run.basis_data.kvec),
         "k_grid_frac": np.asarray(run.basis_data.k_grid_frac, dtype=float),
         "band_energies_mev": np.asarray(run.basis_data.band_energies, dtype=float),
@@ -341,9 +425,25 @@ def _write_checkpoint(
         hamiltonian=np.asarray(state.hamiltonian, dtype=np.complex128),
         h0=np.asarray(state.h0, dtype=np.complex128),
         energies_mev=np.asarray(state.energies, dtype=float),
+        reference_density=np.asarray(state.reference_density, dtype=np.complex128),
+        nu=np.asarray([float(state.nu)], dtype=float),
+        active_valence_bands=np.asarray([int(state.active_valence_bands)], dtype=int),
+        scheme=np.asarray(str(state.scheme)),
+        n_spin=np.asarray([int(state.n_spin)], dtype=int),
+        n_eta=np.asarray([int(state.n_eta)], dtype=int),
+        n_band=np.asarray([int(state.n_band)], dtype=int),
+        occupation_counts=np.asarray(
+            [] if state.occupation_counts is None else tuple(int(v) for v in state.occupation_counts),
+            dtype=int,
+        ),
+        mu_mev=np.asarray([float(state.mu)], dtype=float),
         kvec_nm_inv=_complex_to_pairs(basis_data.kvec),
         k_grid_frac=np.asarray(basis_data.k_grid_frac, dtype=float),
         active_band_indices=np.asarray(basis_data.active_band_indices, dtype=int),
+        zero_literal_q0_fock=np.asarray(
+            [_env_flag_enabled("MEAN_FIELD_RLG_HBN_ZERO_LITERAL_Q0_FOCK", default=False)],
+            dtype=bool,
+        ),
         iteration=np.asarray([int(iteration)], dtype=int),
         iter_energy_mev=iter_energy,
         iter_err=iter_err,
@@ -380,15 +480,19 @@ def _load_trace_json(path: Path) -> dict[str, list[float] | list[int]]:
 
 
 def _load_archive_density(path: Path, expected_shape: tuple[int, int, int]) -> tuple[np.ndarray, dict[str, list[float] | list[int]]]:
-    archive = np.load(path)
-    density = np.asarray(archive["density"], dtype=np.complex128)
-    if density.shape != expected_shape:
-        raise ValueError(f"Checkpoint density shape {density.shape} does not match current basis {expected_shape}")
-    return density, _trace_from_arrays(
-        iter_energy=archive["iter_energy_mev"] if "iter_energy_mev" in archive.files else None,
-        iter_err=archive["iter_err"] if "iter_err" in archive.files else None,
-        iter_oda=archive["iter_oda"] if "iter_oda" in archive.files else None,
-    )
+    summary = summarize_hf_state_archive(path)
+    validate_hf_archive_shapes(summary)
+    if summary.density_shape != tuple(int(value) for value in expected_shape):
+        raise ValueError(
+            f"Checkpoint density shape {summary.density_shape} does not match current basis {expected_shape}"
+        )
+    with np.load(path, allow_pickle=False) as archive:
+        density = np.asarray(archive["density"], dtype=np.complex128)
+        return density, _trace_from_arrays(
+            iter_energy=archive["iter_energy_mev"] if "iter_energy_mev" in archive.files else None,
+            iter_err=archive["iter_err"] if "iter_err" in archive.files else None,
+            iter_oda=archive["iter_oda"] if "iter_oda" in archive.files else None,
+        )
 
 
 def _run_payload(run, trace: dict[str, list[float] | list[int]] | None = None) -> dict[str, object]:
@@ -420,6 +524,32 @@ def _run_payload(run, trace: dict[str, list[float] | list[int]] | None = None) -
 
 def _panel_name(*, xi: int, v_mev: float) -> str:
     return f"xi{int(xi)}_V{int(round(float(v_mev))):03d}meV"
+
+
+def _rlg_hbn_params_with_moire_scale(
+    *,
+    layer_count: int,
+    xi: int,
+    displacement_field_mev: float,
+    hbn_moire_scale: float,
+) -> RLGhBNParams:
+    """Build RLG/hBN parameters for the paper κ_hBN branch.
+
+    κ_hBN scales only the hBN moire potential amplitudes. The lattice mismatch
+    still defines the moire reciprocal lattice, so κ_hBN=0 sets V0=V1=0 in the
+    same folded basis rather than changing the moire cell.
+    """
+
+    scale = float(hbn_moire_scale)
+    table_v0, table_v1, table_phase_deg = table_ii_moire_parameters(int(layer_count), int(xi))
+    return RLGhBNParams(
+        layer_count=int(layer_count),
+        xi=int(xi),
+        displacement_field_mev=float(displacement_field_mev),
+        moire_v0_mev=scale * float(table_v0),
+        moire_v1_mev=scale * float(table_v1),
+        moire_phase_deg=float(table_phase_deg),
+    )
 
 
 def _completed_run_summary(run_dir: Path, *, max_iter: int) -> dict[str, object] | None:
@@ -608,6 +738,7 @@ def _run_panel_with_incremental_outputs(
         "cache_dir": str(cache_dir),
         "basis_periodic_gauge": RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
         "basis_periodic_gauge_padding": int(RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING),
+        "form_factor_convention": RLG_HBN_FORM_FACTOR_CONVENTION_VERSION,
         "cache_hits": {
             "screening": bool(screening_cache_hit),
             "basis": bool(basis_cache.hit),
@@ -623,6 +754,12 @@ def _run_panel_with_incremental_outputs(
         "cache_dir": str(cache_dir),
         "basis_periodic_gauge": RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
         "basis_periodic_gauge_padding": int(RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING),
+        "form_factor_convention": RLG_HBN_FORM_FACTOR_CONVENTION_VERSION,
+        "zero_literal_q0_fock": _env_flag_enabled("MEAN_FIELD_RLG_HBN_ZERO_LITERAL_Q0_FOCK", default=False),
+        "hbn_moire_scale": float(config.get("hbn_moire_scale", 1.0)),
+        "hbn_moire_v0_mev": float(model.params.moire_v0_mev),
+        "hbn_moire_v1_mev": float(model.params.moire_v1_mev),
+        "hbn_moire_phase_deg": float(model.params.moire_phase_deg),
     }
 
     run_payloads: list[dict[str, object]] = []
@@ -805,6 +942,15 @@ def _resolved_config(args: argparse.Namespace) -> dict[str, object]:
         base["v_values_mev"] = tuple(float(v) for v in args.v_values_mev)
     if args.xi_values is not None:
         base["xi_values"] = tuple(int(xi) for xi in args.xi_values)
+    if args.epsilon_r is not None:
+        base["epsilon_r"] = float(args.epsilon_r)
+    if args.gate_distance_nm is not None:
+        base["gate_distance_nm"] = float(args.gate_distance_nm)
+    if args.scheme is not None:
+        base["scheme"] = str(args.scheme)
+    if args.interaction_cutoff_q1 is not None:
+        base["interaction_cutoff_q1"] = float(args.interaction_cutoff_q1)
+    base["hbn_moire_scale"] = float(args.hbn_moire_scale)
     if args.active_valence_bands is not None:
         base["active_valence_bands"] = int(args.active_valence_bands)
     if args.active_conduction_bands is not None:
@@ -871,10 +1017,27 @@ def main() -> None:
     if args.cache_policy != "off":
         cache_dir.mkdir(parents=True, exist_ok=True)
 
+    try:
+        run_preflight = _preflight_run_specs(config)
+    except Exception as exc:
+        write_json(
+            output_dir / "run_preflight_failure.json",
+            {
+                "message": "RLG/hBN paper HF preflight failed before screening/basis/overlap setup.",
+                "error": str(exc),
+                "paper_target": str(args.paper_target),
+                "run_specs": config.get("run_specs"),
+                "init_modes": config.get("init_modes"),
+                "seeds": config.get("seeds"),
+            },
+        )
+        raise
+
     write_json(
         output_dir / "paper_hf_config.json",
         {
             **config,
+            "run_preflight": run_preflight,
             "git_commit_sha": _git_commit_sha(),
             "cache_dir": str(cache_dir),
             "paper_reference": str(REPO_ROOT / "reference" / "2312.11617v1.pdf"),
@@ -927,12 +1090,19 @@ def main() -> None:
             panel_dir.mkdir(parents=True, exist_ok=True)
             print(f"[panel] start {panel}", flush=True)
 
+            model_params = _rlg_hbn_params_with_moire_scale(
+                layer_count=int(config["layer_count"]),
+                xi=int(xi),
+                displacement_field_mev=float(v_mev),
+                hbn_moire_scale=float(config["hbn_moire_scale"]),
+            )
             model = RLGhBNModel.from_config(
                 layer_count=int(config["layer_count"]),
                 xi=int(xi),
                 theta_deg=float(config["theta_deg"]),
                 displacement_field_mev=float(v_mev),
                 shell_count=int(config["shell_count"]),
+                params=model_params,
             )
             interaction = RLGhBNInteractionParams(
                 epsilon_r=float(config["epsilon_r"]),
@@ -955,6 +1125,7 @@ def main() -> None:
                     "seeds": list(config["seeds"]),
                     "run_specs": _serialize_run_specs(_run_specs_from_config(config)),
                     "candidate_count": int(config["candidate_count"]),
+                    "hbn_moire_scale": float(config["hbn_moire_scale"]),
                     "max_iter": int(config["max_iter"]),
                     "precision": float(config["precision"]),
                     "beta": float(config["beta"]),

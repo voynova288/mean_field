@@ -1,5 +1,16 @@
 """Reusable Hartree-Fock helpers shared across physical systems."""
 
+from .archive import (
+    HF_ARCHIVE_READER_VERSION,
+    HFArchiveSummary,
+    ProjectorConvention,
+    ReferencePolicy,
+    average_reference_density,
+    load_projector_from_hf_archive,
+    stored_density_to_projector,
+    summarize_hf_state_archive,
+    validate_hf_archive_shapes,
+)
 from .engine import (
     DensityUpdateResult,
     FixedMixingRun,
@@ -53,15 +64,21 @@ from .coulomb import (
     screened_coulomb_matrix,
 )
 from .overlap import (
+    ComponentGroup,
+    ComponentGroupSelector,
     HFOverlapBlockSet,
     OverlapDiagnostics,
     ProjectedWavefunctionBasis,
     calculate_projected_overlap,
     calculate_projected_overlap_between,
+    calculate_projected_overlap_between_components,
     calculate_projected_overlap_compact,
+    build_projected_overlap_block_set,
+    component_group_indices,
     compute_density_overlap_trace,
     compute_density_overlap_trace_from_diagonal,
     contract_fock_term_from_overlap,
+    mask_projected_wavefunctions_by_component_group,
     diagonal_overlap_blocks,
     shift_wavefunction_grid,
     summarize_overlap,
@@ -152,4 +169,19 @@ __all__ = [
     "unflatten_sector_blocks",
     "unflatten_sector_energies",
     "validate_projected_basis_compatibility",
+    "HF_ARCHIVE_READER_VERSION",
+    "HFArchiveSummary",
+    "ProjectorConvention",
+    "ReferencePolicy",
+    "average_reference_density",
+    "load_projector_from_hf_archive",
+    "stored_density_to_projector",
+    "summarize_hf_state_archive",
+    "validate_hf_archive_shapes",
+    "ComponentGroup",
+    "ComponentGroupSelector",
+    "build_projected_overlap_block_set",
+    "calculate_projected_overlap_between_components",
+    "component_group_indices",
+    "mask_projected_wavefunctions_by_component_group",
 ]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -13,6 +14,29 @@ except Exception:  # pragma: no cover - import failure is the supported fallback
 
 
 @dataclass(frozen=True)
+class ComponentGroup:
+    """Named subset of the local basis inside each reciprocal-grid cell."""
+
+    name: str
+    indices: np.ndarray
+
+    def __post_init__(self) -> None:
+        name = str(self.name)
+        if not name:
+            raise ValueError("ComponentGroup name must be non-empty")
+        indices = np.asarray(self.indices, dtype=int).reshape(-1)
+        if indices.size == 0:
+            raise ValueError(f"ComponentGroup {name!r} must contain at least one local index")
+        if np.unique(indices).size != indices.size:
+            raise ValueError(f"ComponentGroup {name!r} contains duplicate indices")
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "indices", indices)
+
+
+ComponentGroupSelector = str | ComponentGroup | np.ndarray | tuple[int, ...] | list[int] | None
+
+
+@dataclass(frozen=True)
 class ProjectedWavefunctionBasis:
     """Band-projected wavefunctions arranged on a reciprocal-lattice shift grid."""
 
@@ -22,6 +46,7 @@ class ProjectedWavefunctionBasis:
     local_basis_size: int | None = None
     name: str = "projected"
     boundary_mode: str = "periodic"
+    component_groups: tuple[ComponentGroup, ...] = ()
 
     def __post_init__(self) -> None:
         wavefunctions = np.asarray(self.wavefunctions, dtype=np.complex128)
@@ -50,12 +75,14 @@ class ProjectedWavefunctionBasis:
         if n_spin <= 0:
             raise ValueError(f"Expected positive n_spin, got {self.n_spin}")
         boundary_mode = _normalize_boundary_mode(self.boundary_mode)
+        component_groups = _normalize_component_groups(self.component_groups, local_basis_size=local_basis_size)
 
         object.__setattr__(self, "wavefunctions", wavefunctions)
         object.__setattr__(self, "grid_shape", grid_shape)
         object.__setattr__(self, "local_basis_size", local_basis_size)
         object.__setattr__(self, "n_spin", n_spin)
         object.__setattr__(self, "boundary_mode", boundary_mode)
+        object.__setattr__(self, "component_groups", component_groups)
 
     @property
     def n_band(self) -> int:
@@ -121,6 +148,84 @@ def _normalize_boundary_mode(mode: str) -> str:
     if normalized in {"zero_fill", "zerofill", "zhang_zero_fill", "finite_cutoff"}:
         return "zero_fill"
     raise ValueError(f"Unsupported projected-overlap boundary_mode: {mode!r}")
+
+
+def _normalize_component_groups(
+    component_groups: tuple[ComponentGroup, ...], *, local_basis_size: int
+) -> tuple[ComponentGroup, ...]:
+    groups = tuple(component_groups)
+    names: set[str] = set()
+    normalized: list[ComponentGroup] = []
+    for group in groups:
+        resolved = group if isinstance(group, ComponentGroup) else ComponentGroup(*group)  # type: ignore[arg-type]
+        if resolved.name in names:
+            raise ValueError(f"Duplicate component group name {resolved.name!r}")
+        if np.any(resolved.indices < 0) or np.any(resolved.indices >= int(local_basis_size)):
+            raise ValueError(
+                f"ComponentGroup {resolved.name!r} indices must lie in [0, {int(local_basis_size)}), "
+                f"got {resolved.indices.tolist()}"
+            )
+        names.add(resolved.name)
+        normalized.append(resolved)
+    return tuple(normalized)
+
+
+def component_group_indices(
+    basis: ProjectedWavefunctionBasis,
+    group: ComponentGroupSelector = None,
+) -> np.ndarray:
+    """Resolve a component-group selector to local-basis indices.
+
+    ``None`` and ``"all"`` mean all local components. Named groups are read from
+    ``basis.component_groups``. Explicit integer arrays/tuples are validated
+    against ``basis.local_basis_size``.
+    """
+
+    if group is None or (isinstance(group, str) and group == "all"):
+        return np.arange(int(basis.local_basis_size), dtype=int)
+    if isinstance(group, ComponentGroup):
+        indices = np.asarray(group.indices, dtype=int).reshape(-1)
+    elif isinstance(group, str):
+        matches = [item for item in basis.component_groups if item.name == group]
+        if not matches:
+            available = [item.name for item in basis.component_groups]
+            raise KeyError(f"Unknown component group {group!r}; available groups: {available}")
+        indices = np.asarray(matches[0].indices, dtype=int).reshape(-1)
+    else:
+        indices = np.asarray(group, dtype=int).reshape(-1)
+    if indices.size == 0:
+        raise ValueError("component group selection must not be empty")
+    if np.any(indices < 0) or np.any(indices >= int(basis.local_basis_size)):
+        raise ValueError(
+            f"component group indices must lie in [0, {int(basis.local_basis_size)}), got {indices.tolist()}"
+        )
+    if np.unique(indices).size != indices.size:
+        raise ValueError(f"component group indices contain duplicates: {indices.tolist()}")
+    return indices
+
+
+def mask_projected_wavefunctions_by_component_group(
+    basis: ProjectedWavefunctionBasis,
+    group: ComponentGroupSelector,
+) -> np.ndarray:
+    """Return wavefunctions with local components outside ``group`` zeroed."""
+
+    indices = component_group_indices(basis, group)
+    if indices.size == int(basis.local_basis_size):
+        return np.asarray(basis.wavefunctions, dtype=np.complex128)
+    nx, ny = basis.grid_shape
+    reshaped = np.asarray(basis.wavefunctions, dtype=np.complex128).reshape(
+        basis.local_basis_size,
+        nx,
+        ny,
+        basis.n_band,
+        basis.n_flavor,
+        basis.nk,
+        order="F",
+    )
+    masked = np.zeros_like(reshaped)
+    masked[indices, :, :, :, :, :] = reshaped[indices, :, :, :, :, :]
+    return masked.reshape(basis.wavefunctions.shape, order="F")
 
 
 def shift_wavefunction_grid(
@@ -252,9 +357,109 @@ def calculate_projected_overlap_between(
     return overlap_blocks.reshape((target.nt, target.nk, source.nt, source.nk), order="F")
 
 
+def calculate_projected_overlap_between_components(
+    target: ProjectedWavefunctionBasis,
+    source: ProjectedWavefunctionBasis,
+    m: int,
+    n: int,
+    *,
+    target_component_group: ComponentGroupSelector = None,
+    source_component_group: ComponentGroupSelector = None,
+) -> np.ndarray:
+    """Projected overlap restricted to local component groups.
+
+    This is a generic bridge for layer/sublattice/component-resolved form
+    factors.  It preserves the same flattened ``(nt, nk, nt, nk)`` contract as
+    :func:`calculate_projected_overlap_between`, but zeroes local basis
+    components outside the selected target/source groups before contracting.
+    """
+
+    validate_projected_basis_compatibility(target, source)
+    target_masked = ProjectedWavefunctionBasis(
+        mask_projected_wavefunctions_by_component_group(target, target_component_group),
+        grid_shape=target.grid_shape,
+        n_spin=target.n_spin,
+        local_basis_size=target.local_basis_size,
+        name=f"{target.name}:component_group",
+        boundary_mode=target.boundary_mode,
+        component_groups=target.component_groups,
+    )
+    source_masked = ProjectedWavefunctionBasis(
+        mask_projected_wavefunctions_by_component_group(source, source_component_group),
+        grid_shape=source.grid_shape,
+        n_spin=source.n_spin,
+        local_basis_size=source.local_basis_size,
+        name=f"{source.name}:component_group",
+        boundary_mode=source.boundary_mode,
+        component_groups=source.component_groups,
+    )
+    return calculate_projected_overlap_between(target_masked, source_masked, m, n)
+
+
 def calculate_projected_overlap(basis: ProjectedWavefunctionBasis, m: int, n: int) -> np.ndarray:
     overlap = calculate_projected_overlap_between(basis, basis, m, n)
     return overlap.reshape(basis.nt * basis.nk, basis.nt * basis.nk, order="F")
+
+
+def build_projected_overlap_block_set(
+    target: ProjectedWavefunctionBasis,
+    *,
+    shifts: Iterable[tuple[int, int]],
+    source: ProjectedWavefunctionBasis | None = None,
+    gvecs: Iterable[complex] | np.ndarray | None = None,
+    target_component_group: ComponentGroupSelector = None,
+    source_component_group: ComponentGroupSelector = None,
+    include_diagonal_overlaps: bool = True,
+    hartree_screening: Mapping[tuple[int, int], float] | None = None,
+    fock_screening: Mapping[tuple[int, int], np.ndarray] | None = None,
+) -> HFOverlapBlockSet:
+    """Build an ``HFOverlapBlockSet`` from generic projected bases.
+
+    This helper centralizes the reusable form-factor/overlap loop.  Physical
+    systems still own the meaning of ``shifts``, ``gvecs``, screening kernels,
+    and component-group labels.  If component selectors are omitted it is exactly
+    the ordinary projected-overlap path.
+    """
+
+    resolved_source = target if source is None else source
+    validate_projected_basis_compatibility(target, resolved_source)
+    resolved_shifts = tuple((int(shift[0]), int(shift[1])) for shift in shifts)
+    if gvecs is None:
+        resolved_gvecs = np.zeros((len(resolved_shifts),), dtype=np.complex128)
+    else:
+        resolved_gvecs = np.asarray(tuple(gvecs), dtype=np.complex128)
+    if resolved_gvecs.shape != (len(resolved_shifts),):
+        raise ValueError(
+            f"Expected one g-vector per shift with shape {(len(resolved_shifts),)}, got {resolved_gvecs.shape}"
+        )
+
+    use_component_groups = target_component_group is not None or source_component_group is not None
+    overlaps: dict[tuple[int, int], np.ndarray] = {}
+    diagonal: dict[tuple[int, int], np.ndarray] = {}
+    for shift in resolved_shifts:
+        if use_component_groups:
+            overlap = calculate_projected_overlap_between_components(
+                target,
+                resolved_source,
+                shift[0],
+                shift[1],
+                target_component_group=target_component_group,
+                source_component_group=source_component_group,
+            )
+        else:
+            overlap = calculate_projected_overlap_between(target, resolved_source, shift[0], shift[1])
+        overlaps[shift] = overlap
+        if include_diagonal_overlaps:
+            diagonal[shift] = diagonal_overlap_blocks(overlap, nt=target.nt, nk=target.nk)
+
+    return HFOverlapBlockSet(
+        shifts=resolved_shifts,
+        gvecs=resolved_gvecs,
+        overlaps=overlaps,
+        diagonal_overlaps=diagonal,
+        hartree_screening={} if hartree_screening is None else dict(hartree_screening),
+        fock_screening={} if fock_screening is None else dict(fock_screening),
+    )
 
 
 def diagonal_overlap_blocks(overlap: np.ndarray, *, nt: int | None = None, nk: int | None = None) -> np.ndarray:
