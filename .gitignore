@@ -38,6 +38,7 @@ checkpoints/
 scripts/local/
 scripts/oneoff/
 scripts/scratch/
+src/mean_field/devtools/resample_b0_density_stack.py
 
 # Code-agent work notes, local reports, tests, and temporary project documents
 reports/
@@ -54,6 +55,13 @@ docs/*工作文档*.md
 docs/benchmark_strategy.md
 docs/julia_to_python_map.md
 docs/translation_plan.md
+docs/*_diagnosis_*.md
+docs/*_physics_audit_*.md
+docs/*_code_review_report.md
+docs/*_reproduction_plan.md
+docs/*_followup_plan.md
+docs/*_checkpoint_execution.md
+docs/shift_current/
 
 # Generated numerical artifacts
 *.npz

@@ -49,7 +49,7 @@ Current lightweight system/workflow adapters:
 - Chaudhary b0 TBG: `mean_field.systems.tbg.chaudhary2021` exposes
   `b0_shift_current_point_data`, `b0_shift_current_tensors_at_k`, and
   `b0_component_kernel_at_k` around the old b0 model.  Chaudhary audit docs
-  are archived under `docs/shift_current/tbg/`.
+  stay in ignored local reports/internal workspaces.
 - hTG/Mao: `mean_field.systems.htg.shift_current` preserves the hTG legacy
   response surface as wrappers around this generic API; `mean_field.systems.htg.mao2025`
   owns Mao-specific model parameters, stacking phases, sublattice mass, and
@@ -76,24 +76,16 @@ Current lightweight system/workflow adapters:
 - Final paper sign, spin degeneracy, SI prefactor, colorbar normalization, and
   panel layout remain workflow/report-layer choices, not generic formula code.
 
-## Joya/TDBG 50x50 evidence and workflow boundary
+## Workflow boundary
 
 The common module owns the response math (`JOYA_EQ7_GEOMETRIC_CONVENTION`,
 selected-pair/full-virtual-band kernels, Fermi-window and Lorentzian heatmap
-accumulation).  The TDBG adapter in `mean_field.systems.tdbg.shift_current`
-owns only system data and Joya coordinate conventions: analytic lab-frame
-`dH/dk`, zero affine-model `d2H/dk2`, Gamma-centered fractional shifts, and the
-K- mirror-x tensor sign.
+accumulation).  System adapters, such as `mean_field.systems.tdbg.shift_current`,
+own system data and coordinate conventions: analytic lab-frame `dH/dk`, optional
+`d2H/dk2`, reciprocal-cell shifts, valley/mirror conventions, and paper-specific
+labels.
 
-The remaining Joya 2025 pipeline glue is intentionally script/workflow level:
-`tmp/joya2025/run_tdbg_response_eq7_fullc_scout.py` chooses stackings, Delta
-sweep, valleys, mesh, transition window, output schema, plotting, and Slurm
-orchestration.  It imports the common module and TDBG adapter rather than the
-retired `analysis.shift_current_htg` / `analysis.shift_current_tbg` workspaces.
-
-Current saved-output evidence: Slurm job `140728` ran the generic-API `50x50`
-Joya scout into `results/TDBG/joya2025_generic_api_50x50_20260609/`; dependent
-postcheck job `140759` wrote `postcheck_20260609.{json,md}` with `passes=True`,
-`point_count=40000`, `pair_errors_total=0`, `dH_route=analytic`, and
-`d2H_route=zero_affine_tdbg_continuum`.  This validates the migrated generic
-pipeline against the saved corrected bundle, not final paper-level units/signs.
+Paper scans, mesh choices, plotting, Slurm orchestration, and saved-output
+evidence are workflow/report-layer concerns.  They should import this common
+module and the relevant system adapter rather than reviving retired
+`analysis.shift_current_htg` / `analysis.shift_current_tbg` workspaces.

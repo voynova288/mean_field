@@ -15,7 +15,7 @@ The package started as a benchmark-driven rewrite of a Julia `TBG_HartreeFock` w
 - `mean_field.systems.htg`: helical trilayer graphene continuum model and projected-HF adapter for Kwan et al. style calculations.
 - `analysis.topology`: local unified Berry-geometry framework used by system topology adapters for Berry connection, plaquette flux, Chern numbers, wavefunction-index metadata, and boundary sewing.
 - `analysis.response_derivative_gauge`: reusable WannierBerri-style, gauge-safe derivative helpers for Berry-connection generalized derivatives, shift vectors, and subspace/gauge validation.
-- `analysis.shift_current`: common shift-current API for response components, named conventions, occupations, Lorentzian/heatmap accumulation, and one-k-point tensor helpers. System-specific Hamiltonians/derivatives live under `mean_field.systems.*`; historical shift-current audit notes live under `docs/shift_current/`.
+- `analysis.shift_current`: common shift-current API for response components, named conventions, occupations, Lorentzian/heatmap accumulation, and one-k-point tensor helpers. System-specific Hamiltonians/derivatives live under `mean_field.systems.*`; historical shift-current audit notes stay in ignored local reports/internal workspaces.
 
 Large generated outputs, local benchmark bundles, PDFs, Slurm logs, local tests, historical reports, planning notes, and code-agent work documents are intentionally not versioned. They should be regenerated, kept in an internal workspace, or stored separately.
 
@@ -73,7 +73,7 @@ sbatch scripts/submit_mean_field.sbatch python scripts/mean_field_tools.py run_h
 
 - `src/mean_field/`: installable Python package.
 - `scripts/`: stable/generic entrypoints only; one-off wrappers should stay in ignored scratch paths.
-- `docs/`: stable architecture and migration notes.
+- `docs/`: stable architecture, framework/API contracts, script policy, and durable migration maps only.
 
 The following local directories are ignored by design:
 

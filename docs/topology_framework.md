@@ -116,28 +116,9 @@ The following system modules now delegate their Berry geometry to `analysis.topo
 
 The historical API is preserved: each system still returns its existing `TopologyResult` or `ChernBasisResult` shape where applicable.  New fields such as `berry_connection`, `min_link_magnitude`, and `index_metadata` are added to compatible dataclasses when practical.
 
-## Validation status
+## Validation scope
 
-Slurm validation job:
-
-```text
-job id: 132090
-wrapper: historical scripts/validate_unified_topology.sbatch (retired; use scripts/submit_mean_field.sbatch with pytest or saved-result validator)
-node: test001
-result: 37 passed in 3.09s
-saved-result validation: status=pass, failures=0, known_gaps=1
-```
-
-Artifacts:
-
-```text
-logs/topo_framework_val_132090.out
-logs/topo_framework_val_132090.err
-results/topology_framework_validation_20260528/saved_result_validation.md
-results/topology_framework_validation_20260528/saved_result_validation.json
-```
-
-The targeted validation covers:
+Local/internal validation coverage for this framework includes:
 
 - QWZ single-band Chern;
 - full two-band trivial subspace;
@@ -151,9 +132,7 @@ The targeted validation covers:
 - saved TDBG Fig. 3 Chern summary;
 - saved HTG Fig. 2b/3b Chern-basis values.
 
-The one recorded `known_gap` is not a framework failure: existing RnG/hBN Fig. 6 `xi0_V064meV` saved artifacts do not match the paper's expected `|C|=0`, while the `xi1_V064meV` saved artifact does match `|C|=1`.  See `results/reproduction_inventory_20260528.md`.
-
-A broader non-slow test job (`132093`) produced `253 passed, 7 failed, 1 deselected`; the failures were in old B0 HF / tMBG Hamiltonian-validation tests and are not topology-framework regressions.
+Paper-specific saved-artifact mismatches and dated Slurm/test logs are kept in ignored local reports rather than this public framework contract.
 
 ## Saved-result validator
 

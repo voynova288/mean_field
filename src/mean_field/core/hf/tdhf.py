@@ -1,6 +1,6 @@
 """Reusable time-dependent Hartree-Fock / RPA helpers.
 
-The tensor convention used here is the one fixed in ``plan/TDHF工作文档.md``:
+The tensor convention used here is part of the public TDHF core contract:
 ``V[a, b, c, d]`` is the coefficient of both equivalent monomials
 
     c_b^† c_a^† c_c c_d  ==  c_a^† c_b^† c_d c_c.
