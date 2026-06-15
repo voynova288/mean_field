@@ -16,6 +16,7 @@ from mean_field.workflows import (
     WorkflowJobState,
     WorkflowManifest,
     WorkflowRunState,
+    collect_slurm_metadata,
     write_workflow_manifest,
     write_workflow_run_state,
 )
@@ -98,18 +99,23 @@ def _merge_workflow_state(
     *,
     message: str | None = None,
 ) -> WorkflowRunState:
+    slurm_metadata = collect_slurm_metadata()
+    merge_metadata = {"slurm": slurm_metadata} if slurm_metadata and merge_status != "pending" else {}
     states: list[WorkflowJobState] = []
     for job in manifest.jobs:
         if job.name.startswith("input_chunk_"):
             states.append(WorkflowJobState(name=job.name, status="succeeded", message="input chunk present"))
         elif job.name == "merge":
-            states.append(WorkflowJobState(name=job.name, status=merge_status, message=message))
+            states.append(WorkflowJobState(name=job.name, status=merge_status, message=message, metadata=merge_metadata))
         else:
             states.append(WorkflowJobState(name=job.name, status="pending"))
+    state_metadata: dict[str, object] = {"manifest": "workflow_manifest.json"}
+    if slurm_metadata:
+        state_metadata["slurm"] = slurm_metadata
     return WorkflowRunState(
         name=manifest.name,
         jobs=tuple(states),
-        metadata={"manifest": "workflow_manifest.json"},
+        metadata=state_metadata,
     )
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import os
 from pathlib import Path
 from typing import Literal, Mapping
 
@@ -9,6 +10,44 @@ from mean_field.core.io import write_json_artifact
 WorkflowJobStatus = Literal["pending", "running", "succeeded", "failed", "skipped"]
 TERMINAL_WORKFLOW_STATUSES: tuple[WorkflowJobStatus, ...] = ("succeeded", "failed", "skipped")
 SUCCESS_WORKFLOW_STATUSES: tuple[WorkflowJobStatus, ...] = ("succeeded",)
+
+
+_SLURM_METADATA_KEYS: dict[str, str] = {
+    "SLURM_JOB_ID": "job_id",
+    "SLURM_JOB_NAME": "job_name",
+    "SLURM_JOB_PARTITION": "partition",
+    "SLURM_CLUSTER_NAME": "cluster_name",
+    "SLURM_SUBMIT_DIR": "submit_dir",
+    "SLURM_CPUS_PER_TASK": "cpus_per_task",
+    "SLURM_NTASKS": "ntasks",
+    "SLURM_JOB_NODELIST": "node_list",
+    "SLURM_ARRAY_JOB_ID": "array_job_id",
+    "SLURM_ARRAY_TASK_ID": "array_task_id",
+    "SLURM_ARRAY_TASK_COUNT": "array_task_count",
+    "SLURM_ARRAY_TASK_MIN": "array_task_min",
+    "SLURM_ARRAY_TASK_MAX": "array_task_max",
+}
+
+
+def collect_slurm_metadata(env: Mapping[str, str] | None = None) -> dict[str, object]:
+    """Return Slurm identifiers from the current environment, if present.
+
+    The workflow layer remains scheduler-neutral, but this helper gives long
+    task entrypoints one common place to capture the Slurm job/array IDs that
+    are needed for later handoff, resume, or ``sacct``/``squeue`` inspection.
+    Values are intentionally serialized as strings to preserve Slurm's exact
+    formatting.
+    """
+
+    source = os.environ if env is None else env
+    metadata = {
+        payload_name: value
+        for env_name, payload_name in _SLURM_METADATA_KEYS.items()
+        if (value := source.get(env_name)) not in {None, ""}
+    }
+    if not metadata:
+        return {}
+    return {"scheduler": "slurm", **metadata}
 
 
 @dataclass(frozen=True)
@@ -142,6 +181,12 @@ class WorkflowRunState:
 
     def to_markdown(self) -> str:
         lines = [f"# Workflow state: {self.name}", ""]
+        slurm_metadata = self.metadata.get("slurm")
+        if isinstance(slurm_metadata, dict) and slurm_metadata.get("job_id"):
+            lines.append(f"- slurm_job_id: {slurm_metadata['job_id']}")
+            if slurm_metadata.get("array_task_id"):
+                lines.append(f"- slurm_array_task_id: {slurm_metadata['array_task_id']}")
+            lines.append("")
         for job in self.jobs:
             suffix = f" ({job.message})" if job.message else ""
             lines.append(f"- [{job.status}] {job.name}{suffix}")
@@ -215,6 +260,7 @@ __all__ = [
     "WorkflowJobStatus",
     "WorkflowManifest",
     "WorkflowRunState",
+    "collect_slurm_metadata",
     "blocked_workflow_jobs",
     "ready_workflow_jobs",
     "write_workflow_manifest",

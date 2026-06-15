@@ -16,6 +16,7 @@ from mean_field.core.hf import (
     split_pair_indices_by_flavor_channel,
 )
 from mean_field.devtools._runtime import ensure_not_running_compute_on_login_node, write_json
+from mean_field.workflows import collect_slurm_metadata
 from mean_field.systems.RnG_hBN import (
     build_rlg_hbn_tdhf_orbitals,
     build_rlg_hbn_tdhf_q0_matrices_from_pairs,
@@ -158,6 +159,15 @@ def main() -> None:
     output_dir = args.output_dir.expanduser().resolve() if args.output_dir is not None else _default_output_dir(archive_path, args.channel).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    slurm_metadata = collect_slurm_metadata()
+    runtime_metadata: dict[str, object] = {
+        "hostname": socket.gethostname(),
+        "slurm_job_id": os.environ.get("SLURM_JOB_ID", ""),
+        "slurm_job_partition": os.environ.get("SLURM_JOB_PARTITION", ""),
+        "slurm_cpus_per_task": os.environ.get("SLURM_CPUS_PER_TASK", ""),
+    }
+    if slurm_metadata:
+        runtime_metadata["slurm"] = slurm_metadata
     config_payload = {
         "hf_archive": str(archive_path),
         "summary_path": "" if args.summary_path is None else str(args.summary_path.expanduser().resolve()),
@@ -176,12 +186,7 @@ def main() -> None:
         "allow_unconverged": bool(args.allow_unconverged),
         "dry_run": bool(args.dry_run),
         "summary_converged": bool(summary.get("converged", False)) if summary else None,
-        "runtime": {
-            "hostname": socket.gethostname(),
-            "slurm_job_id": os.environ.get("SLURM_JOB_ID", ""),
-            "slurm_job_partition": os.environ.get("SLURM_JOB_PARTITION", ""),
-            "slurm_cpus_per_task": os.environ.get("SLURM_CPUS_PER_TASK", ""),
-        },
+        "runtime": runtime_metadata,
     }
     write_json(output_dir / "tdhf_q0_config.json", config_payload)
     if args.dry_run:

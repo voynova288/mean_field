@@ -17,6 +17,7 @@ from mean_field.devtools._runtime import (
     parse_csv_strings as _parse_csv_strings,
     write_json,
 )
+from mean_field.workflows import collect_slurm_metadata
 from mean_field.systems.htg import (
     HTGModel,
     HTGParams,
@@ -29,6 +30,7 @@ from mean_field.systems.htg import (
     evaluate_htg_interaction_path,
     htg_flavor_occupation_counts_for_init_mode,
     htg_occupied_state_count,
+    htg_validation_report,
     scan_htg_ground_state,
     validate_hf_state,
     write_htg_fig7_spin_resolved_plot,
@@ -229,16 +231,20 @@ def main() -> None:
         "moire_cell_area_nm2": float(best.basis_data.moire_cell_area_nm2),
     }
     write_json(output_dir / "hf_params.json", hf_params)
+    slurm_metadata = collect_slurm_metadata()
+    runtime_metadata: dict[str, object] = {
+        "hostname": socket.gethostname(),
+        "slurm_job_id": os.environ.get("SLURM_JOB_ID", ""),
+        "slurm_job_partition": os.environ.get("SLURM_JOB_PARTITION", ""),
+        "slurm_cpus_per_task": os.environ.get("SLURM_CPUS_PER_TASK", ""),
+        "elapsed_sec": float(elapsed),
+    }
+    if slurm_metadata:
+        runtime_metadata["slurm"] = slurm_metadata
     write_json(
         output_dir / "hf_convergence.json",
         {
-            "runtime": {
-                "hostname": socket.gethostname(),
-                "slurm_job_id": os.environ.get("SLURM_JOB_ID", ""),
-                "slurm_job_partition": os.environ.get("SLURM_JOB_PARTITION", ""),
-                "slurm_cpus_per_task": os.environ.get("SLURM_CPUS_PER_TASK", ""),
-                "elapsed_sec": float(elapsed),
-            },
+            "runtime": runtime_metadata,
             "runs": [_run_payload(run) for run in scan.runs],
             "best": _run_payload(best),
         },
@@ -385,8 +391,12 @@ def main() -> None:
         },
     )
 
-    validation = [check.to_dict() for check in validate_hf_state(best.state)]
+    validation_checks = validate_hf_state(best.state)
+    validation = [check.to_dict() for check in validation_checks]
     write_json(output_dir / "validation_checks.json", validation)
+    validation_report = htg_validation_report("HTG Projected Hartree-Fock Validation", validation_checks)
+    write_json(output_dir / "validation_report.json", validation_report.to_dict())
+    write_text_artifact(validation_report.to_markdown() + "\n", output_dir / "validation_report.md")
     report_lines = [
         "# HTG Projected Hartree-Fock Run",
         "",

@@ -19,6 +19,7 @@ from mean_field.workflows import (
     WorkflowJobState,
     WorkflowManifest,
     WorkflowRunState,
+    collect_slurm_metadata,
     write_workflow_manifest,
     write_workflow_run_state,
 )
@@ -166,6 +167,11 @@ def _crpa_chunk_workflow_state(
     *,
     message: str | None = None,
 ) -> WorkflowRunState:
+    slurm_metadata = collect_slurm_metadata()
+    job_metadata = {"slurm": slurm_metadata} if slurm_metadata and status != "pending" else {}
+    state_metadata: dict[str, object] = {"manifest": "workflow_manifest.json"}
+    if slurm_metadata:
+        state_metadata["slurm"] = slurm_metadata
     return WorkflowRunState(
         name=manifest.name,
         jobs=(
@@ -173,9 +179,10 @@ def _crpa_chunk_workflow_state(
                 name="crpa_chunk",
                 status=status,
                 message=message,
+                metadata=job_metadata,
             ),
         ),
-        metadata={"manifest": "workflow_manifest.json"},
+        metadata=state_metadata,
     )
 
 

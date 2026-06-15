@@ -19,6 +19,7 @@ from mean_field.workflows import (
     WorkflowJobState,
     WorkflowManifest,
     WorkflowRunState,
+    collect_slurm_metadata,
     write_workflow_manifest,
     write_workflow_run_state,
 )
@@ -465,18 +466,28 @@ def _rlg_hbn_workflow_state(
     messages: dict[str, str] | None = None,
 ) -> WorkflowRunState:
     resolved_messages = {} if messages is None else dict(messages)
-    return WorkflowRunState(
-        name=manifest.name,
-        jobs=tuple(
+    slurm_metadata = collect_slurm_metadata()
+    jobs: list[WorkflowJobState] = []
+    for job in manifest.jobs:
+        status = statuses.get(job.name, "pending")
+        metadata: dict[str, object] = {"dependencies": list(job.dependencies)}
+        if slurm_metadata and status != "pending":
+            metadata["slurm"] = slurm_metadata
+        jobs.append(
             WorkflowJobState(
                 name=job.name,
-                status=statuses.get(job.name, "pending"),
+                status=status,
                 message=resolved_messages.get(job.name),
-                metadata={"dependencies": list(job.dependencies)},
+                metadata=metadata,
             )
-            for job in manifest.jobs
-        ),
-        metadata={"manifest": "workflow_manifest.json"},
+        )
+    state_metadata: dict[str, object] = {"manifest": "workflow_manifest.json"}
+    if slurm_metadata:
+        state_metadata["slurm"] = slurm_metadata
+    return WorkflowRunState(
+        name=manifest.name,
+        jobs=tuple(jobs),
+        metadata=state_metadata,
     )
 
 
@@ -1238,6 +1249,16 @@ def main() -> None:
         )
         raise
 
+    slurm_metadata = collect_slurm_metadata()
+    runtime_metadata: dict[str, object] = {
+        "hostname": socket.gethostname(),
+        "slurm_job_id": os.environ.get("SLURM_JOB_ID", ""),
+        "slurm_job_partition": os.environ.get("SLURM_JOB_PARTITION", ""),
+        "slurm_cpus_per_task": os.environ.get("SLURM_CPUS_PER_TASK", ""),
+        "dry_run": bool(args.dry_run),
+    }
+    if slurm_metadata:
+        runtime_metadata["slurm"] = slurm_metadata
     write_json(
         output_dir / "paper_hf_config.json",
         {
@@ -1246,13 +1267,7 @@ def main() -> None:
             "git_commit_sha": _git_commit_sha(),
             "cache_dir": str(cache_dir),
             "paper_reference": str(REPO_ROOT / "reference" / "2312.11617v1.pdf"),
-            "runtime": {
-                "hostname": socket.gethostname(),
-                "slurm_job_id": os.environ.get("SLURM_JOB_ID", ""),
-                "slurm_job_partition": os.environ.get("SLURM_JOB_PARTITION", ""),
-                "slurm_cpus_per_task": os.environ.get("SLURM_CPUS_PER_TASK", ""),
-                "dry_run": bool(args.dry_run),
-            },
+            "runtime": runtime_metadata,
         },
     )
 
