@@ -9,6 +9,8 @@ from mean_field.runtime import collect_runtime_environment, configure_threading,
 
 
 def test_configure_threading_sets_blas_default_and_numba_from_slurm(monkeypatch) -> None:
+    monkeypatch.setattr(runtime, "_configure_numba_threads", lambda value: int(value))
+    monkeypatch.setattr(runtime, "_set_threadpool_limits", lambda value: None)
     for name in (
         "OPENBLAS_NUM_THREADS",
         "MKL_NUM_THREADS",
@@ -36,6 +38,8 @@ def test_configure_threading_sets_blas_default_and_numba_from_slurm(monkeypatch)
 
 
 def test_collect_runtime_environment_records_threading_and_backend_metadata(monkeypatch) -> None:
+    monkeypatch.setattr(runtime, "_configure_numba_threads", lambda value: int(value))
+    monkeypatch.setattr(runtime, "_set_threadpool_limits", lambda value: None)
     monkeypatch.setenv("SLURM_CPUS_PER_TASK", "5")
     monkeypatch.setenv("MEAN_FIELD_HF_BACKEND", "numpy")
 
