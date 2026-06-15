@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
 
 import numpy as np
 
-from mean_field.core.validation import ValidationCheck as CoreValidationCheck, ValidationReport
+from mean_field.core.validation import ValidationCheck, ValidationReport, ValidationStatus, status_from_bool
 
 from .hamiltonian import build_hamiltonian, moire_coupling_matrix
 from .lattice import HTGLattice, dot_2d
@@ -20,41 +19,30 @@ from .mean_field_adapter import (
 )
 
 
-@dataclass(frozen=True)
-class ValidationCheck:
-    name: str
-    passed: bool
-    value: float | str
-    tolerance: float | None = None
+def _status(condition: bool) -> ValidationStatus:
+    return status_from_bool(condition)
 
-    @property
-    def status(self) -> str:
-        return "pass" if bool(self.passed) else "fail"
 
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "name": self.name,
-            "passed": bool(self.passed),
-            "value": self.value,
-            "tolerance": self.tolerance,
-        }
+def _detail(value: float | str, tolerance: float | None = None) -> str:
+    detail = f"value={value}"
+    if tolerance is not None:
+        detail += f", tolerance={tolerance}"
+    return detail
 
-    def to_core_check(self) -> CoreValidationCheck:
-        detail = f"value={self.value}"
-        if self.tolerance is not None:
-            detail += f", tolerance={self.tolerance}"
-        return CoreValidationCheck(
-            name=self.name,
-            status=self.status,
-            detail=detail,
-            value=self.value,
-        )
+
+def _check(name: str, condition: bool, value: float | str, tolerance: float | None = None) -> ValidationCheck:
+    return ValidationCheck(
+        name=name,
+        status=_status(condition),
+        detail=_detail(value, tolerance),
+        value=value,
+    )
 
 
 def htg_validation_report(title: str, checks: tuple[ValidationCheck, ...]) -> ValidationReport:
-    """Convert legacy HTG validation checks to the shared report container."""
+    """Build the shared validation report for HTG checks."""
 
-    return ValidationReport(title=str(title), checks=tuple(check.to_core_check() for check in checks))
+    return ValidationReport(title=str(title), checks=tuple(checks))
 
 
 def validate_lattice(lattice: HTGLattice, *, atol: float = 1.0e-10) -> tuple[ValidationCheck, ...]:
@@ -63,16 +51,22 @@ def validate_lattice(lattice: HTGLattice, *, atol: float = 1.0e-10) -> tuple[Val
     b_angle_dot = dot_2d(lattice.b_m1, lattice.b_m2) / (abs(lattice.b_m1) * abs(lattice.b_m2))
     l_m_from_b = 4.0 * math.pi / (math.sqrt(3.0) * abs(lattice.b_m1))
     has_zero_g = any(abs(complex(value)) <= atol for value in lattice.g_vectors)
+    q_norm_error = float(np.max(np.abs(q_norms - lattice.k_theta)))
+    q_sum_error = float(abs(np.sum(lattice.q_vectors)))
+    b_norm_error = float(abs(abs(lattice.b_m1) - abs(lattice.b_m2)))
+    l_m_error = float(abs(lattice.l_m - l_m_from_b))
+    kappa_m_error = float(abs(lattice.kappa_m + lattice.q0))
+    kappa_prime_error = float(abs(lattice.kappa_prime_m - lattice.q0))
     return (
-        ValidationCheck("q_norm_equal", bool(np.max(np.abs(q_norms - lattice.k_theta)) < atol), float(np.max(np.abs(q_norms - lattice.k_theta))), atol),
-        ValidationCheck("q_sum_zero", bool(abs(np.sum(lattice.q_vectors)) < atol), float(abs(np.sum(lattice.q_vectors))), atol),
-        ValidationCheck("q_angle_120deg", bool(abs(q_angle_dot + 0.5) < atol), float(q_angle_dot), atol),
-        ValidationCheck("b_norm_equal", bool(abs(abs(lattice.b_m1) - abs(lattice.b_m2)) < atol), float(abs(abs(lattice.b_m1) - abs(lattice.b_m2))), atol),
-        ValidationCheck("b_angle_60deg", bool(abs(b_angle_dot - 0.5) < atol), float(b_angle_dot), atol),
-        ValidationCheck("l_m_consistent", bool(abs(lattice.l_m - l_m_from_b) < atol), float(abs(lattice.l_m - l_m_from_b)), atol),
-        ValidationCheck("g_contains_zero", bool(has_zero_g), "yes" if has_zero_g else "no", None),
-        ValidationCheck("kappa_folds_layer1", bool(abs(lattice.kappa_m + lattice.q0) < atol), float(abs(lattice.kappa_m + lattice.q0)), atol),
-        ValidationCheck("kappa_prime_folds_layer3", bool(abs(lattice.kappa_prime_m - lattice.q0) < atol), float(abs(lattice.kappa_prime_m - lattice.q0)), atol),
+        _check("q_norm_equal", q_norm_error < atol, q_norm_error, atol),
+        _check("q_sum_zero", q_sum_error < atol, q_sum_error, atol),
+        _check("q_angle_120deg", abs(q_angle_dot + 0.5) < atol, float(q_angle_dot), atol),
+        _check("b_norm_equal", b_norm_error < atol, b_norm_error, atol),
+        _check("b_angle_60deg", abs(b_angle_dot - 0.5) < atol, float(b_angle_dot), atol),
+        _check("l_m_consistent", l_m_error < atol, l_m_error, atol),
+        _check("g_contains_zero", has_zero_g, "yes" if has_zero_g else "no"),
+        _check("kappa_folds_layer1", kappa_m_error < atol, kappa_m_error, atol),
+        _check("kappa_prime_folds_layer3", kappa_prime_error < atol, kappa_prime_error, atol),
     )
 
 
@@ -84,16 +78,16 @@ def validate_static_hamiltonian(
     atol: float = 1.0e-10,
 ) -> tuple[ValidationCheck, ...]:
     hmat = build_hamiltonian(lattice.gamma_m, lattice, params, valley=valley)
-    hermitian_residual = float(np.max(np.abs(hmat - hmat.conjugate().T)))
+    hermitian_residual_value = float(np.max(np.abs(hmat - hmat.conjugate().T)))
     t0 = moire_coupling_matrix(0, params, valley=valley)
     t1 = moire_coupling_matrix(1, params, valley=valley)
     t2 = moire_coupling_matrix(2, params, valley=valley)
     t0_imag = float(np.max(np.abs(t0.imag)))
     t12_residual = float(np.max(np.abs(t1 - t2.conjugate())))
     return (
-        ValidationCheck("hamiltonian_hermitian_gamma", hermitian_residual < atol, hermitian_residual, atol),
-        ValidationCheck("t0_real", t0_imag < atol, t0_imag, atol),
-        ValidationCheck("t1_equals_t2_conjugate", t12_residual < atol, t12_residual, atol),
+        _check("hamiltonian_hermitian_gamma", hermitian_residual_value < atol, hermitian_residual_value, atol),
+        _check("t0_real", t0_imag < atol, t0_imag, atol),
+        _check("t1_equals_t2_conjugate", t12_residual < atol, t12_residual, atol),
     )
 
 
@@ -113,12 +107,18 @@ def validate_hf_state(
     gap_ev = htg_gap_estimate(state.energies, state.nu)
     occupied_count = htg_occupied_state_count(state.nu, state.nt, state.nk, n_spin=state.n_spin, n_eta=state.n_eta)
     if occupied_count <= 0 or occupied_count >= state.nt * state.nk:
-        gap_check = ValidationCheck("hf_gap_ev", True, "not_applicable_full_or_empty_projected_space", None)
+        gap_check = ValidationCheck(
+            name="hf_gap_ev",
+            status="pass",
+            detail="No internal HF gap is defined at full or empty projected-space filling.",
+            value="not_applicable_full_or_empty_projected_space",
+        )
     else:
-        gap_check = ValidationCheck("hf_gap_ev", bool(np.isfinite(gap_ev)), gap_ev if np.isfinite(gap_ev) else "nan", None)
+        gap_value: float | str = gap_ev if np.isfinite(gap_ev) else "nan"
+        gap_check = _check("hf_gap_ev", bool(np.isfinite(gap_ev)), gap_value)
     return (
-        ValidationCheck("hf_hamiltonian_hermitian", h_residual < hermitian_atol, h_residual, hermitian_atol),
-        ValidationCheck("hf_projector_idempotent", p_residual < projector_atol, p_residual, projector_atol),
-        ValidationCheck("hf_filling", filling_error < filling_atol, filling_error, filling_atol),
+        _check("hf_hamiltonian_hermitian", h_residual < hermitian_atol, h_residual, hermitian_atol),
+        _check("hf_projector_idempotent", p_residual < projector_atol, p_residual, projector_atol),
+        _check("hf_filling", filling_error < filling_atol, filling_error, filling_atol),
         gap_check,
     )

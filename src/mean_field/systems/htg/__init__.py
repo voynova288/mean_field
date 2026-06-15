@@ -81,7 +81,7 @@ from .strong_coupling import (
     flavor_occupations,
 )
 from .topology import ChernBasisResult, compute_chern_basis_on_grid, sublattice_sigma_z
-from .validation import ValidationCheck, htg_validation_report, validate_hf_state, validate_lattice, validate_static_hamiltonian
+from .validation import ValidationCheck, ValidationReport, htg_validation_report, validate_hf_state, validate_lattice, validate_static_hamiltonian
 
 __all__ = [
     "ChernBasisResult",
@@ -109,6 +109,7 @@ __all__ = [
     "MoireCouplingEntry",
     "PathBandsResult",
     "ValidationCheck",
+    "ValidationReport",
     "build_chiral_lattice_from_alpha",
     "build_coupling_table",
     "build_diagonal_block",

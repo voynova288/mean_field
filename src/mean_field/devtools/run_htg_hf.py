@@ -396,7 +396,6 @@ def main() -> None:
     write_json(output_dir / "validation_checks.json", validation)
     validation_report = htg_validation_report("HTG Projected Hartree-Fock Validation", validation_checks)
     write_json(output_dir / "validation_report.json", validation_report.to_dict())
-    write_text_artifact(validation_report.to_markdown() + "\n", output_dir / "validation_report.md")
     report_lines = [
         "# HTG Projected Hartree-Fock Run",
         "",
@@ -419,16 +418,18 @@ def main() -> None:
         f"- `strong_coupling_class = {strong_coupling.class_label}`",
         f"- `projected_band_count = {best.state.n_band}`",
         f"- `hf_bands_path_npz = {path_artifacts.get('hf_bands_path_npz', '')}`",
-            f"- `hf_bands_path_png = {path_artifacts.get('hf_bands_path_png', '')}`",
-            f"- `hartree_fock_potentials_npz = {potential_artifact}`",
-            f"- `fig8a_potential_path_npz = {potential_path_artifacts.get('fig8a_potential_path_npz', '')}`",
-            f"- `fig8a_potential_png = {potential_path_artifacts.get('fig8a_potential_png', '')}`",
-            "",
-            "## Validation",
-            "",
+        f"- `hf_bands_path_png = {path_artifacts.get('hf_bands_path_png', '')}`",
+        f"- `hartree_fock_potentials_npz = {potential_artifact}`",
+        f"- `fig8a_potential_path_npz = {potential_path_artifacts.get('fig8a_potential_path_npz', '')}`",
+        f"- `fig8a_potential_png = {potential_path_artifacts.get('fig8a_potential_png', '')}`",
+        "",
+        "## Validation",
+        "",
     ]
-    for check in validation:
-        report_lines.append(f"- `{check['name']} = {check['passed']}` (`value = {check['value']}`)")
+    for check in validation_report.checks:
+        report_lines.append(
+            f"- `{check.name}`: `{check.status}` (`passed = {check.passed}`, `value = {check.value}`) — {check.detail}"
+        )
     report_lines.append("")
     write_text_artifact("\n".join(report_lines), output_dir / "validation_report.md")
 
