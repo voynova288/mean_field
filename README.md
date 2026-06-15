@@ -17,7 +17,7 @@ The package started as a benchmark-driven rewrite of a Julia `TBG_HartreeFock` w
 - `analysis.response_derivative_gauge`: reusable WannierBerri-style, gauge-safe derivative helpers for Berry-connection generalized derivatives, shift vectors, and subspace/gauge validation.
 - `analysis.shift_current`: common shift-current API for response components, named conventions, occupations, Lorentzian/heatmap accumulation, and one-k-point tensor helpers. System-specific Hamiltonians/derivatives live under `mean_field.systems.*`; historical shift-current audit notes live under `docs/shift_current/`.
 
-Large generated outputs, local benchmark bundles, PDFs, Slurm logs, and code-agent work documents are intentionally not versioned. They should be regenerated or stored separately.
+Large generated outputs, local benchmark bundles, PDFs, Slurm logs, local tests, historical reports, planning notes, and code-agent work documents are intentionally not versioned. They should be regenerated, kept in an internal workspace, or stored separately.
 
 ## Install
 
@@ -81,6 +81,8 @@ The following local directories are ignored by design:
 - `results/`
 - `logs/`
 - `reference/`
+- `reports/`
+- `plan/`
 - `tests/`
 - Python/Jupyter/cache artifacts
 - task-specific work documents and temporary handoff notes

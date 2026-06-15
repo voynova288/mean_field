@@ -48,6 +48,6 @@ Long term, `../scripts/` should contain only a few generic entrypoints plus poss
 When cleaning up existing files:
 
 - migrate reusable logic into system modules, common analysis modules, or an existing devtool;
-- preserve reproducibility details in `docs/`, `reports/`, or result metadata rather than in many near-duplicate launch scripts;
+- preserve durable public design details in `docs/`, and keep run-specific diagnostics in ignored local `reports/` directories or result metadata rather than in many near-duplicate launch scripts;
 - delete or untrack obsolete wrappers after confirming no current documentation or tests depend on them;
 - keep heavy validation on Slurm and use saved-result validators when available.

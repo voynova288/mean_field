@@ -39,7 +39,9 @@ scripts/local/
 scripts/oneoff/
 scripts/scratch/
 
-# Code-agent work notes and temporary project documents
+# Code-agent work notes, local reports, tests, and temporary project documents
+reports/
+plan/
 *工作文档*.md
 *当前指令*.md
 *项目文档*.md
