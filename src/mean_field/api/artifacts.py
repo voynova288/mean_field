@@ -77,6 +77,7 @@ class ResultDirectory:
     root: Path
     manifest: dict[str, Any]
     model: dict[str, Any] | None = None
+    config: dict[str, Any] | None = None
     conventions: dict[str, Any] | None = None
     validation: dict[str, Any] | None = None
     environment: dict[str, Any] | None = None
@@ -282,6 +283,7 @@ def load_result(path: str | Path) -> ResultDirectory:
         root=root,
         manifest=manifest,
         model=_read_json_if_present(root / "model.json"),
+        config=_read_json_if_present(root / "config.yaml"),
         conventions=_read_json_if_present(root / "conventions.json"),
         validation=_read_json_if_present(root / "validation.json"),
         environment=_read_json_if_present(root / "environment.json"),

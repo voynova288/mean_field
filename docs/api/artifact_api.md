@@ -52,4 +52,4 @@ See `docs/conventions.md` for semantics.
 
 ## Compatibility
 
-Legacy outputs may not contain the full schema.  `load_result(path)` is tolerant and returns `None` for missing optional files.  New workflows should write the full schema before being treated as public/stable.
+Legacy outputs may not contain the full schema.  `load_result(path)` is tolerant and returns `None` for missing optional sidecars; for new contract outputs it reads `model.json`, JSON-compatible `config.yaml`, `conventions.json`, `environment.json`, `validation.json`, and `observables.json`.  New workflows should write the full schema before being treated as public/stable.

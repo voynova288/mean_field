@@ -87,6 +87,7 @@ def test_write_contract_artifacts_writes_schema_sidecars_and_npz_summary(tmp_pat
 
     config_payload = json.loads((tmp_path / "config.yaml").read_text(encoding="utf-8"))
     assert config_payload["mesh"] == [1, 3]
+    assert loaded.config == {"mesh": [1, 3]}
 
     manifest = loaded.manifest
     assert manifest["metadata"]["workflow"] == "toy.workflow"
