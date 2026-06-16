@@ -33,9 +33,10 @@ python -m pip install -e ".[dev,perf]"
 
 ## Validation
 
-This public snapshot keeps the core package, stable dispatchers, and a small
-set of durable docs. Local regression tests and benchmark data are not included
-in the published repository.
+This public snapshot keeps the core package, stable dispatchers, durable docs,
+and a small set of public contract tests for the API/density/artifact schema.
+Broad local regression tests and benchmark data are not included in the
+published repository.
 
 A lightweight syntax check can be run from the repository root:
 
@@ -43,7 +44,7 @@ A lightweight syntax check can be run from the repository root:
 python -m compileall -q src scripts
 ```
 
-The generic TDHF/RPA core contract is documented in `docs/tdhf_core_contract.md`.
+Core conventions are documented in `docs/conventions.md`. The generic TDHF/RPA core contract is documented in `docs/tdhf_core_contract.md`.
 
 The unified topology framework has its durable design note in `docs/topology_framework.md`.  Existing saved topology artifacts can be checked without rerunning Hamiltonian solves via:
 
@@ -83,6 +84,6 @@ The following local directories are ignored by design:
 - `reference/`
 - `reports/`
 - `plan/`
-- `tests/`
+- `tests/` for broad/internal regression suites; only small public contract tests are force-tracked
 - Python/Jupyter/cache artifacts
 - task-specific work documents and temporary handoff notes

@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+import numpy as np
+
+from mean_field.api import HFConfig, compute_bands, make_model, run_hf
+
+
+def test_public_api_imports_and_htg_band_smoke() -> None:
+    model = make_model("htg", theta_deg=1.5, n_shells=0)
+    bundle = compute_bands(model, n_bands=2, points_per_segment=2)
+
+    assert bundle.energies.shape[1] == 2
+    assert np.asarray(bundle.k).ndim == 1
+    assert bundle.convention.energy_unit == "meV"
+
+
+def test_public_run_hf_fails_explicitly_until_system_adapter_exists() -> None:
+    cfg = HFConfig(filling=0.0, mesh=(2, 2))
+    model = make_model("htg", theta_deg=1.5, n_shells=0)
+
+    try:
+        run_hf(model, cfg)
+    except NotImplementedError as exc:
+        assert "run_hf(config) adapter" in str(exc)
+    else:  # pragma: no cover - future adapters may implement this
+        raise AssertionError("HTG unexpectedly exposed the public run_hf adapter; update this contract test")

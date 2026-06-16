@@ -3,6 +3,8 @@ from __future__ import annotations
 import numpy as np
 from scipy.linalg import eigh
 
+from .density import ket_projector_to_stored_orientation, stored_orientation_to_ket_projector
+
 
 def find_chemical_potential(energies: np.ndarray, filling_fraction: float) -> float:
     flattened = np.sort(np.ravel(energies))
@@ -138,14 +140,11 @@ def density_from_fixed_sector_occupations(
 
 
 def conventional_projector_to_stored(projector: np.ndarray) -> np.ndarray:
-    arr = np.asarray(projector, dtype=np.complex128)
-    if arr.ndim < 2 or arr.shape[0] != arr.shape[1]:
-        raise ValueError(f"Expected projector with square leading matrix axes, got {arr.shape}")
-    return np.swapaxes(arr, 0, 1).copy()
+    return ket_projector_to_stored_orientation(projector)
 
 
 def stored_projector_to_conventional(stored: np.ndarray) -> np.ndarray:
-    return conventional_projector_to_stored(stored)
+    return stored_orientation_to_ket_projector(stored)
 
 
 def random_unitary_from_hermitian(dim: int, rng: np.random.Generator) -> np.ndarray:

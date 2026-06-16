@@ -7,6 +7,10 @@ from typing import Literal
 import numpy as np
 
 from ..io.artifacts import NpzArtifactSummary, read_npz_scalar, summarize_npz_artifact
+from .density import (
+    average_reference_density as _average_reference_density,
+    stored_density_to_projector as _stored_density_to_projector,
+)
 
 HF_ARCHIVE_READER_VERSION = "hf_state_archive_reader_v1"
 ReferencePolicy = Literal["require", "average", "none"]
@@ -134,11 +138,7 @@ def validate_hf_archive_shapes(summary: HFArchiveSummary) -> None:
 
 
 def average_reference_density(nt: int, nk: int, *, value: float = 0.5) -> np.ndarray:
-    if int(nt) <= 0 or int(nk) <= 0:
-        raise ValueError(f"nt and nk must be positive, got nt={nt}, nk={nk}")
-    return float(value) * np.eye(int(nt), dtype=np.complex128)[:, :, None] * np.ones(
-        (1, 1, int(nk)), dtype=np.complex128
-    )
+    return _average_reference_density(nt, nk, value=value)
 
 
 def stored_density_to_projector(
@@ -156,28 +156,12 @@ def stored_density_to_projector(
     ``convention='stored'`` to keep the archive orientation.
     """
 
-    stored = np.asarray(density, dtype=np.complex128)
-    if stored.ndim != 3 or stored.shape[0] != stored.shape[1]:
-        raise ValueError(f"Expected density shape (nt, nt, nk), got {stored.shape}")
-    if reference_density is None:
-        if reference_policy == "require":
-            raise ValueError("reference_density is required by reference_policy='require'")
-        if reference_policy == "average":
-            reference = average_reference_density(stored.shape[0], stored.shape[2])
-        elif reference_policy == "none":
-            reference = np.zeros_like(stored)
-        else:
-            raise ValueError(f"Unsupported reference_policy={reference_policy!r}")
-    else:
-        reference = np.asarray(reference_density, dtype=np.complex128)
-        if reference.shape != stored.shape:
-            raise ValueError(f"reference_density shape {reference.shape} does not match density {stored.shape}")
-    projector_stored_orientation = stored + reference
-    if convention == "stored":
-        return projector_stored_orientation
-    if convention == "ket":
-        return np.swapaxes(projector_stored_orientation, 0, 1)
-    raise ValueError(f"Unsupported projector convention={convention!r}")
+    return _stored_density_to_projector(
+        density,
+        reference_density,
+        reference_policy=reference_policy,
+        convention=convention,
+    )
 
 
 def load_projector_from_hf_archive(

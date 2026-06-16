@@ -1,0 +1,55 @@
+# Mean Field conventions
+
+This document freezes public conventions used by the stable `mean_field.api` façade and by future workflow artifacts.  It is a contract document: changing it requires an explicit migration note and compatibility bridge.
+
+## Units
+
+- Energies in public metadata are in `meV` unless a field explicitly says `ev`.
+- Lengths are in `nm`.
+- Momenta are in `nm^-1`.
+- Complex momenta use `k = k_x + i k_y` with real part along Cartesian `x` and imaginary part along Cartesian `y`.
+
+## Labels
+
+- Valley labels: `K = +1`, `Kprime = -1`.
+- Spin labels in metadata: `up = 0`, `down = 1`.
+- Systems may keep historical internal flavor orderings, but artifacts must record the ordering in `conventions.json` or result metadata.
+
+## Array axis order
+
+- HF density arrays use `axis_order = "abk"`, shape `(n_state, n_state, n_k)`.
+- HF Hamiltonian arrays use the same `abk` convention.
+- Public path-band eigenvectors use `k_basis_band` when exported through `BandBundle`.
+- System-local arrays with a different order must be converted or explicitly documented before crossing into `mean_field.api` or an artifact manifest.
+
+## Density convention
+
+The canonical definitions live in `mean_field.core.hf.density`.
+
+- `projector`: physical occupied-state projector `P` in stored orientation `P_ab = <c_a^† c_b>`.
+- `stored_delta`: stored HF delta `D = P - P_ref`.
+- `half_shifted`: the special delta `D = P - 1/2 I`.
+
+Use `DensityBundle.as_projector()` or `density_to_projector(...)` instead of open-coded additions/transposes.  For ket-space wavefunction contractions, request `orientation="ket"`, which transposes the stored matrix axes.
+
+## Gauge and reciprocal-cell conventions
+
+- A model owns its plane-wave basis, reciprocal-cell labels, and boundary sewing convention.
+- `analysis.topology` owns link/plaquette/Chern formulas; systems supply wavefunction meshes and optional sewing transforms.
+- Public topology/Berry artifacts must record whether the wavefunctions are periodic, sewn at the boundary, or represented in a physical Cartesian mBZ.
+
+## Artifact metadata
+
+Every workflow result should eventually contain:
+
+```text
+manifest.json
+model.json
+config.yaml
+conventions.json
+environment.json
+validation.json
+observables.json
+```
+
+Large arrays may live in `hf_state.npz`, `bands_path.npz`, or method-specific NPZ files.  The manifest records their relative paths.
