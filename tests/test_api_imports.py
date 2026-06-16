@@ -31,6 +31,14 @@ def test_rlg_hbn_model_declares_layer_component_groups() -> None:
     assert [group.indices.tolist() for group in groups] == [[0, 1], [2, 3], [4, 5]]
 
 
+def test_tmbg_model_declares_layer_component_groups() -> None:
+    model = make_model("tmbg", n_shells=0)
+    groups = component_groups(model)
+
+    assert [group.name for group in groups] == ["layer_bottom", "layer_middle", "layer_top"]
+    assert [group.indices.tolist() for group in groups] == [[0, 1], [2, 3], [4, 5]]
+
+
 def test_public_run_hf_fails_explicitly_until_system_adapter_exists() -> None:
     cfg = HFConfig(filling=0.0, mesh=(2, 2))
     model = make_model("htg", theta_deg=1.5, n_shells=0)

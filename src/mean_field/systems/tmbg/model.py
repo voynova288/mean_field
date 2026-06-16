@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from ...core.hf import ComponentGroup
 from .core_lattice import KPath
 from .bands import GridBandsResult, PathBandsResult, compute_bands_along_path, compute_bands_on_grid
 from .hamiltonian import build_hamiltonian, diagonalize_hamiltonian
@@ -43,6 +44,15 @@ class TMBGModel:
 
     def lattice_summary(self) -> dict[str, object]:
         return self.lattice.to_summary_dict()
+
+    def component_groups(self) -> tuple[ComponentGroup, ...]:
+        """Return layer groups for the local six-orbital TMBG block."""
+
+        return (
+            ComponentGroup("layer_bottom", np.asarray([0, 1], dtype=int)),
+            ComponentGroup("layer_middle", np.asarray([2, 3], dtype=int)),
+            ComponentGroup("layer_top", np.asarray([4, 5], dtype=int)),
+        )
 
     def build_hamiltonian(self, k_tilde: complex, *, valley: int = 1) -> np.ndarray:
         return build_hamiltonian(complex(k_tilde), self.lattice, self.params, valley=valley)
