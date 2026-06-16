@@ -41,6 +41,14 @@ class ContinuumModel(Protocol):
 
 `component_groups()` is how systems expose physical labels such as layers, sublattices, valleys, or orbital subsets.  Core HF/analysis code should not infer those meanings from array dimensions.
 
+Current component-group status:
+
+- `rlg_hbn`: declares `layer_0`, `layer_1`, ... over the two-sublattice local layer blocks.
+- `tmbg`: declares `layer_bottom`, `layer_middle`, and `layer_top` for the local six-orbital block `(A_b, B_b, A_m, B_m, A_t, B_t)`.
+- `atmg`: declares `layer_0`, `layer_1`, ... over the two-sublattice local layer blocks.
+- `htg`: intentionally left unset while HTG work is owned elsewhere.
+- `tdbg`: intentionally left unset until a dedicated adapter labels q-site/sector/layer indices without guessing from array dimensions.
+
 ## ModelRecord
 
 `model_record(model)` creates a serializable record for artifacts.  It is intentionally lossy: it captures public summary metadata, not enough data to reconstruct all caches.  Reconstructable workflow inputs belong in `config.yaml` and system-specific result metadata.
