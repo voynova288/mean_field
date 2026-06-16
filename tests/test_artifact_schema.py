@@ -242,3 +242,41 @@ def test_rlg_hbn_parallel_merge_contract_sidecars_are_metadata_only(tmp_path) ->
     assert loaded.observables is not None
     assert loaded.observables["selected"][0]["panel"] == "xi1_V040meV"
     assert loaded.manifest["files"]["parallel_selection_summary"] == "parallel_selection_summary.json"
+
+
+def test_rlg_hbn_hf_archive_records_density_convention_metadata(tmp_path) -> None:
+    from types import SimpleNamespace
+
+    from mean_field.devtools.run_rlg_hbn_paper_hf import _save_state_archive
+
+    state = SimpleNamespace(
+        density=np.zeros((2, 2, 1), dtype=np.complex128),
+        hamiltonian=np.zeros((2, 2, 1), dtype=np.complex128),
+        h0=np.zeros((2, 2, 1), dtype=np.complex128),
+        energies=np.zeros((2, 1), dtype=float),
+        reference_density=np.eye(2, dtype=np.complex128)[:, :, None] * 0.5,
+        nu=1.0,
+        active_valence_bands=1,
+        scheme="average",
+        n_spin=1,
+        n_eta=1,
+        n_band=2,
+        occupation_counts=None,
+        mu=0.0,
+    )
+    basis_data = SimpleNamespace(
+        kvec=np.asarray([0.0 + 0.0j]),
+        k_grid_frac=np.zeros((1, 2), dtype=float),
+        band_energies=np.zeros((2, 1), dtype=float),
+        active_band_indices=np.asarray([0, 1], dtype=int),
+        flat_band_indices=np.asarray([0, 1], dtype=int),
+    )
+    archive = tmp_path / "hf_run_state.npz"
+    _save_state_archive(archive, SimpleNamespace(state=state, basis_data=basis_data), {"energy_mev": [], "err": [], "oda": []})
+
+    with np.load(archive, allow_pickle=False) as payload:
+        assert payload["density_convention"].item() == "stored_delta"
+        assert payload["density_axis_order"].item() == "abk"
+        assert payload["reference_density_convention"].item() == "average"
+        assert payload["basis_periodic_gauge"].item()
+        assert payload["form_factor_convention"].item()
