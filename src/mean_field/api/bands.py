@@ -8,6 +8,7 @@ import numpy as np
 from mean_field.core.bands import GridBandsResult, PathBandsResult
 
 from .artifacts import ConventionBundle
+from .models import component_group_records
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,21 @@ def band_bundle_from_result(result: PathBandsResult | GridBandsResult) -> BandBu
     raise TypeError(f"Unsupported band result type: {type(result)!r}")
 
 
+def _with_model_metadata(bundle: BandBundle, model: object) -> BandBundle:
+    metadata = dict(bundle.basis_metadata)
+    records = component_group_records(model)
+    if records:
+        metadata.setdefault("component_groups", [dict(record) for record in records])
+    return BandBundle(
+        k=bundle.k,
+        energies=bundle.energies,
+        eigenvectors=bundle.eigenvectors,
+        basis_metadata=metadata,
+        convention=bundle.convention,
+        source=bundle.source,
+    )
+
+
 def compute_bands(
     model: object,
     *,
@@ -97,10 +113,10 @@ def compute_bands(
         else:
             mesh_size = int(grid_mesh)
         try:
-            return band_bundle_from_result(model.bands_on_grid(mesh_size, **call_kwargs))
+            return _with_model_metadata(band_bundle_from_result(model.bands_on_grid(mesh_size, **call_kwargs)), model)
         except TypeError:
             fallback_kwargs = _central_band_count_kwargs(call_kwargs)
-            return band_bundle_from_result(model.bands_on_grid(mesh_size, **fallback_kwargs))
+            return _with_model_metadata(band_bundle_from_result(model.bands_on_grid(mesh_size, **fallback_kwargs)), model)
     if path is None:
         if not hasattr(model, "standard_kpath"):
             raise TypeError(f"Model {model!r} does not expose standard_kpath")
@@ -111,10 +127,10 @@ def compute_bands(
     if not hasattr(model, "bands_along_path"):
         raise TypeError(f"Model {model!r} does not expose bands_along_path")
     try:
-        return band_bundle_from_result(model.bands_along_path(path, **call_kwargs))
+        return _with_model_metadata(band_bundle_from_result(model.bands_along_path(path, **call_kwargs)), model)
     except TypeError:
         fallback_kwargs = _central_band_count_kwargs(call_kwargs)
-        return band_bundle_from_result(model.bands_along_path(path, **fallback_kwargs))
+        return _with_model_metadata(band_bundle_from_result(model.bands_along_path(path, **fallback_kwargs)), model)
 
 
 def _central_band_count_kwargs(call_kwargs: dict[str, Any]) -> dict[str, Any]:

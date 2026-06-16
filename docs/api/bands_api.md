@@ -18,7 +18,7 @@ bands = compute_bands(model, n_bands=4, points_per_segment=80)
 - `k`: path or grid k-points;
 - `energies`: sampled band energies;
 - `eigenvectors`: optional eigenvectors;
-- `basis_metadata`: labels, node indices, band indices, and system metadata;
+- `basis_metadata`: labels, node indices, band indices, system metadata, and `component_groups` records when the model declares them;
 - `convention`: public units/axis/gauge metadata;
 - `source`: `path`, `grid`, or `raw`.
 

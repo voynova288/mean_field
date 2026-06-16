@@ -52,6 +52,17 @@ def test_atmg_model_declares_layer_component_groups() -> None:
     assert [group.indices.tolist() for group in groups] == [[0, 1], [2, 3], [4, 5], [6, 7]]
 
 
+def test_compute_bands_includes_declared_component_group_metadata() -> None:
+    model = make_model("atmg", n_layers=3, n_shells=0)
+    bundle = compute_bands(model, n_bands=2, points_per_segment=1)
+
+    assert bundle.basis_metadata["component_groups"] == [
+        {"name": "layer_0", "indices": [0, 1]},
+        {"name": "layer_1", "indices": [2, 3]},
+        {"name": "layer_2", "indices": [4, 5]},
+    ]
+
+
 def test_public_run_hf_fails_explicitly_until_system_adapter_exists() -> None:
     cfg = HFConfig(filling=0.0, mesh=(2, 2))
     model = make_model("htg", theta_deg=1.5, n_shells=0)
