@@ -199,3 +199,46 @@ def test_rlg_hbn_paper_hf_contract_sidecars_are_metadata_only(tmp_path) -> None:
     assert loaded.observables is not None
     assert loaded.observables["panels"][0]["panel"] == "xi1_V040meV"
     assert loaded.manifest["files"]["paper_hf_summary"] == "paper_hf_summary.json"
+
+
+def test_rlg_hbn_parallel_merge_contract_sidecars_are_metadata_only(tmp_path) -> None:
+    from mean_field.devtools.merge_rlg_hbn_parallel_hf import _write_contract_sidecars
+
+    config = {
+        "paper_target": "fig5",
+        "layer_count": 5,
+        "theta_deg": 0.77,
+        "shell_count": 1,
+        "xi_values": (1,),
+        "v_values_mev": (40.0,),
+        "hbn_moire_scale": 1.0,
+        "init_modes": ("flavor",),
+        "seeds": (1,),
+    }
+    selected = [
+        {
+            "panel": "xi1_V040meV",
+            "selected_from": "/tmp/task/xi1_V040meV",
+            "candidate_count": 1,
+            "selected_final_energy_mev": -10.0,
+            "selected_init_mode": "flavor",
+            "selected_seed": 1,
+        }
+    ]
+
+    paths = _write_contract_sidecars(
+        tmp_path,
+        paper_target="fig5",
+        merged_config=config,
+        selected_rows=selected,
+        ignored_panel_dirs=[],
+        tasks_root=tmp_path / "tasks",
+    )
+
+    assert set(paths) == set(required_artifact_files())
+    loaded = load_result(tmp_path)
+    assert loaded.manifest["metadata"]["workflow"] == "rlg_hbn.parallel_hf_merge"
+    assert loaded.validation is not None and loaded.validation["status"] == "pass"
+    assert loaded.observables is not None
+    assert loaded.observables["selected"][0]["panel"] == "xi1_V040meV"
+    assert loaded.manifest["files"]["parallel_selection_summary"] == "parallel_selection_summary.json"
