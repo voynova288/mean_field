@@ -13,6 +13,7 @@ from mean_field.api import (
     ModelRecord,
     load_result,
     required_artifact_files,
+    update_artifact_manifest,
     write_contract_artifacts,
 )
 
@@ -93,6 +94,37 @@ def test_write_contract_artifacts_writes_schema_sidecars_and_npz_summary(tmp_pat
     assert manifest["files"]["state"] == "hf_state.npz"
     assert manifest["metadata"]["array_summaries"][0]["keys"] == ["density"]
     assert manifest["metadata"]["array_summaries"][0]["arrays"][0]["shape"] == [2, 2, 3]
+
+
+def test_update_artifact_manifest_preserves_contract_sidecars(tmp_path) -> None:
+    write_contract_artifacts(
+        tmp_path,
+        workflow="toy.workflow",
+        system_name="toy",
+        model=ModelRecord(system_name="toy"),
+        config={"mesh": (1, 1)},
+        validation={"status": "pass"},
+        observables={"gap": 1.0},
+    )
+    original_config = (tmp_path / "config.yaml").read_text(encoding="utf-8")
+    derived_path = tmp_path / "derived.npz"
+    np.savez(derived_path, values=np.arange(3))
+
+    manifest_path = update_artifact_manifest(
+        tmp_path,
+        files={"derived": "derived.npz"},
+        metadata={"derived_workflow": "toy.derived"},
+        array_files=(derived_path,),
+    )
+
+    assert manifest_path == tmp_path / "manifest.json"
+    assert (tmp_path / "config.yaml").read_text(encoding="utf-8") == original_config
+    loaded = load_result(tmp_path)
+    assert loaded.manifest["metadata"]["workflow"] == "toy.workflow"
+    assert loaded.manifest["metadata"]["derived_workflow"] == "toy.derived"
+    assert loaded.manifest["files"]["derived"] == "derived.npz"
+    assert loaded.manifest["metadata"]["array_summaries"][-1]["keys"] == ["values"]
+    assert loaded.observables == {"gap": 1.0}
 
 
 def test_rlg_hbn_tdhf_contract_sidecars_are_metadata_only(tmp_path) -> None:
@@ -287,3 +319,32 @@ def test_rlg_hbn_hf_archive_records_density_convention_metadata(tmp_path) -> Non
     assert summary.metadata["density_axis_order"] == "abk"
     assert summary.metadata["reference_density_convention"] == "average"
     assert summary.metadata["form_factor_convention"]
+
+
+def test_rlg_hbn_band_plot_updates_manifest_without_overwriting_contract(tmp_path) -> None:
+    from mean_field.devtools.plot_rlg_hbn_paper_hf_bands import _update_band_plot_manifest
+
+    write_contract_artifacts(
+        tmp_path,
+        workflow="rlg_hbn.paper_hf",
+        system_name="rlg_hbn",
+        model=ModelRecord(system_name="rlg_hbn"),
+        config={"paper_target": "fig5"},
+        observables={"hf_energy_mev": -1.0},
+    )
+    original_observables = (tmp_path / "observables.json").read_text(encoding="utf-8")
+
+    _update_band_plot_manifest(
+        tmp_path,
+        paper_target="fig5",
+        panel_names=["xi1_V040meV"],
+        status="complete",
+    )
+
+    assert (tmp_path / "observables.json").read_text(encoding="utf-8") == original_observables
+    loaded = load_result(tmp_path)
+    assert loaded.manifest["metadata"]["workflow"] == "rlg_hbn.paper_hf"
+    assert loaded.manifest["metadata"]["band_plot"]["workflow"] == "rlg_hbn.paper_hf_bands"
+    assert loaded.manifest["metadata"]["band_plot"]["status"] == "complete"
+    assert loaded.manifest["files"]["hf_band_plot_summary"] == "hf_band_plot_summary.json"
+    assert loaded.observables == {"hf_energy_mev": -1.0}

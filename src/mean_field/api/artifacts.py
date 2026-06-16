@@ -222,6 +222,51 @@ def write_contract_artifacts(
     return output_paths
 
 
+def update_artifact_manifest(
+    root: str | Path,
+    *,
+    files: Mapping[str, object] | None = None,
+    metadata: Mapping[str, object] | None = None,
+    array_files: tuple[str | Path, ...] = (),
+) -> Path:
+    """Update only ``manifest.json`` with additional files/metadata.
+
+    This is for derived postprocessing products that share an existing result
+    root.  It preserves the existing contract sidecars and does not rewrite
+    ``model.json``, ``config.yaml``, ``conventions.json``, ``environment.json``,
+    ``validation.json``, or ``observables.json``.
+    """
+
+    result_root = Path(root)
+    result_root.mkdir(parents=True, exist_ok=True)
+    manifest_path = result_root / "manifest.json"
+    existing = _read_json_if_present(manifest_path) or {}
+
+    manifest_files = dict(existing.get("files", {})) if isinstance(existing.get("files", {}), Mapping) else {}
+    manifest_files.update(dict(files or {}))
+
+    manifest_metadata = dict(existing.get("metadata", {})) if isinstance(existing.get("metadata", {}), Mapping) else {}
+    manifest_metadata.update(dict(metadata or {}))
+
+    if array_files:
+        array_summaries = list(manifest_metadata.get("array_summaries", []))
+        for array_file in array_files:
+            relative_path = _relative_artifact_path(result_root, array_file)
+            manifest_files.setdefault(Path(relative_path).stem, relative_path)
+            summary_path = result_root / relative_path if not Path(relative_path).is_absolute() else Path(relative_path)
+            array_summaries.append(summarize_npz_artifact(summary_path).to_dict())
+        manifest_metadata["array_summaries"] = array_summaries
+
+    updated = {
+        "root": str(existing.get("root", str(result_root))),
+        "model": existing.get("model"),
+        "conventions": existing.get("conventions", ConventionBundle().to_dict()),
+        "files": manifest_files,
+        "metadata": manifest_metadata,
+    }
+    return write_json_artifact(updated, manifest_path, default=_json_default)
+
+
 def _read_json_if_present(path: Path) -> dict[str, Any] | None:
     import json
 
@@ -263,5 +308,6 @@ __all__ = [
     "ResultDirectory",
     "load_result",
     "required_artifact_files",
+    "update_artifact_manifest",
     "write_contract_artifacts",
 ]

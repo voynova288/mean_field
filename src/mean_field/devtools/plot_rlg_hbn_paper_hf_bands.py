@@ -9,6 +9,7 @@ from time import perf_counter
 
 import numpy as np
 
+from mean_field.api.artifacts import update_artifact_manifest
 from mean_field.core.lattice import KPath
 from mean_field.devtools._runtime import (
     complex_from_pairs as _complex_from_pairs,
@@ -42,6 +43,39 @@ PANEL_RE = re.compile(r"^xi(?P<xi>-?\d+)_V(?P<v_mev>-?\d+)meV$")
 
 def _read_json(path: Path) -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _update_band_plot_manifest(
+    source_dir: Path,
+    *,
+    paper_target: str,
+    panel_names: list[str],
+    status: str,
+) -> Path:
+    files: dict[str, object] = {
+        "hf_band_plot_config": "hf_band_plot_config.json",
+        "hf_band_plot_panels": panel_names,
+    }
+    if status != "dry_run":
+        files.update(
+            {
+                "hf_band_plot_summary": "hf_band_plot_summary.json",
+                "hf_band_plot_combined_png": f"paper_{paper_target}_hf_bands.png",
+                "hf_band_plot_combined_pdf": f"paper_{paper_target}_hf_bands.pdf",
+            }
+        )
+    return update_artifact_manifest(
+        source_dir,
+        files=files,
+        metadata={
+            "band_plot": {
+                "workflow": "rlg_hbn.paper_hf_bands",
+                "status": str(status),
+                "paper_target": str(paper_target),
+                "panel_count": int(len(panel_names)),
+            }
+        },
+    )
 
 
 def _parse_args() -> argparse.Namespace:
@@ -507,6 +541,12 @@ def main() -> None:
         },
     )
     if args.dry_run:
+        _update_band_plot_manifest(
+            source_dir,
+            paper_target=paper_target,
+            panel_names=[path.name for path in panel_dirs],
+            status="dry_run",
+        )
         print(f"[dry-run] source_dir={source_dir}")
         print(f"[dry-run] panels={[path.name for path in panel_dirs]}")
         return
@@ -665,28 +705,32 @@ def main() -> None:
 
     _write_combined_figure(source_dir, paper_target, panel_results, dpi=int(args.dpi), ylim_mev=ylim_mev)
     elapsed = perf_counter() - start
-    write_json(
-        source_dir / "hf_band_plot_summary.json",
-        {
-            "source_dir": str(source_dir),
-            "paper_target": paper_target,
-            "elapsed_sec": float(elapsed),
-            "combined_png": str(source_dir / f"paper_{paper_target}_hf_bands.png"),
-            "combined_pdf": str(source_dir / f"paper_{paper_target}_hf_bands.pdf"),
-            "panels": [
-                {
-                    "panel": str(result["panel"]),
-                    "elapsed_sec": float(result["elapsed_sec"]),
-                    "energy_zero_mev": float(result["mu_mev"]),
-                    "path_cache_key": str(result["path_cache_key"]),
-                    "path_cache_hit": bool(result["path_cache_hit"]),
-                    "requested_spectrum_mode": str(result["requested_spectrum_mode"]),
-                    "resolved_spectrum_mode": str(result["resolved_spectrum_mode"]),
-                    "flavor_block_offdiag": result["flavor_block_offdiag"],
-                }
-                for result in panel_results
-            ],
-        },
+    summary_payload = {
+        "source_dir": str(source_dir),
+        "paper_target": paper_target,
+        "elapsed_sec": float(elapsed),
+        "combined_png": str(source_dir / f"paper_{paper_target}_hf_bands.png"),
+        "combined_pdf": str(source_dir / f"paper_{paper_target}_hf_bands.pdf"),
+        "panels": [
+            {
+                "panel": str(result["panel"]),
+                "elapsed_sec": float(result["elapsed_sec"]),
+                "energy_zero_mev": float(result["mu_mev"]),
+                "path_cache_key": str(result["path_cache_key"]),
+                "path_cache_hit": bool(result["path_cache_hit"]),
+                "requested_spectrum_mode": str(result["requested_spectrum_mode"]),
+                "resolved_spectrum_mode": str(result["resolved_spectrum_mode"]),
+                "flavor_block_offdiag": result["flavor_block_offdiag"],
+            }
+            for result in panel_results
+        ],
+    }
+    write_json(source_dir / "hf_band_plot_summary.json", summary_payload)
+    _update_band_plot_manifest(
+        source_dir,
+        paper_target=paper_target,
+        panel_names=[str(result["panel"]) for result in panel_results],
+        status="complete",
     )
     print(f"[done] combined_png={source_dir / f'paper_{paper_target}_hf_bands.png'}", flush=True)
 
