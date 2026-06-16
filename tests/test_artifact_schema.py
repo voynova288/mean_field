@@ -93,3 +93,49 @@ def test_write_contract_artifacts_writes_schema_sidecars_and_npz_summary(tmp_pat
     assert manifest["files"]["state"] == "hf_state.npz"
     assert manifest["metadata"]["array_summaries"][0]["keys"] == ["density"]
     assert manifest["metadata"]["array_summaries"][0]["arrays"][0]["shape"] == [2, 2, 3]
+
+
+def test_rlg_hbn_tdhf_contract_sidecars_are_metadata_only(tmp_path) -> None:
+    from mean_field.devtools.run_rlg_hbn_tdhf_q0 import _write_contract_sidecars
+
+    spectrum_path = tmp_path / "tdhf_q0_spectrum.npz"
+    np.savez(spectrum_path, energies_mev=np.asarray([1.0, 2.0]), A=np.eye(2), B=np.zeros((2, 2)))
+    config = {
+        "hf_archive": "/tmp/source_hf.npz",
+        "channel": "intraflavor",
+        "max_dense_memory_gb": 1.0,
+        "max_pairs": 2,
+        "summary_converged": True,
+        "runtime": {"hostname": "test001"},
+    }
+    summary = {
+        "channel": "intraflavor",
+        "channel_counts": {"intraflavor": 2},
+        "n_pairs": 2,
+        "liouvillian_dim": 4,
+        "estimated_dense_memory_gib": 0.01,
+        "single_flavor_shortcut_used": False,
+        "single_flavor_shortcut_reason": "test",
+        "structure": {"ok": True, "A_hermitian": 0.0, "B_symmetric": 0.0, "particle_hole_symmetry": 0.0},
+        "spectrum": {
+            "selected_count": 2,
+            "first_positive_energies_mev": [1.0, 2.0],
+            "max_residual": 0.0,
+            "pairing_residual": 0.0,
+        },
+        "hf_summary": {"final_energy_mev": -1.0},
+    }
+
+    paths = _write_contract_sidecars(tmp_path, config_payload=config, summary_payload=summary, spectrum_path=spectrum_path)
+    assert set(paths) == set(required_artifact_files())
+
+    loaded = load_result(tmp_path)
+    assert loaded.manifest["metadata"]["workflow"] == "rlg_hbn.tdhf_q0"
+    assert loaded.conventions is not None
+    assert loaded.conventions["q_sector"] == "q0"
+    assert loaded.conventions["density_convention"] == "stored_delta"
+    assert loaded.validation is not None and loaded.validation["status"] == "pass"
+    assert loaded.observables is not None
+    assert loaded.observables["first_positive_energies_mev"] == [1.0, 2.0]
+    assert loaded.manifest["files"]["tdhf_spectrum"] == "tdhf_q0_spectrum.npz"
+    assert loaded.manifest["metadata"]["array_summaries"][0]["keys"] == ["energies_mev", "A", "B"]
