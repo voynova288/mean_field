@@ -44,7 +44,7 @@ A lightweight syntax check can be run from the repository root:
 python -m compileall -q src scripts
 ```
 
-Core conventions are documented in `docs/conventions.md`. The generic TDHF/RPA core contract is documented in `docs/tdhf_core_contract.md`.
+Core conventions are documented in `docs/conventions.md`. Public API contracts live under `docs/api/`. The generic TDHF/RPA core contract is documented in `docs/tdhf_core_contract.md`.
 
 The unified topology framework has its durable design note in `docs/topology_framework.md`.  Existing saved topology artifacts can be checked without rerunning Hamiltonian solves via:
 

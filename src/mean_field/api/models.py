@@ -25,6 +25,8 @@ class ContinuumModel(Protocol):
 
     def lattice_summary(self) -> dict[str, object]: ...
 
+    def component_groups(self) -> tuple[object, ...]: ...
+
 
 def _pop_alias(kwargs: dict[str, Any], canonical: str, *aliases: str, default: Any = None) -> Any:
     if canonical in kwargs:
@@ -123,4 +125,12 @@ def model_record(model: object, *, system_name: str | None = None) -> ModelRecor
     return ModelRecord(system_name=name, params=params, lattice=dict(lattice))
 
 
-__all__ = ["BandEigenResult", "ContinuumModel", "make_model", "model_record"]
+def component_groups(model: object) -> tuple[object, ...]:
+    """Return system-declared component groups, or an empty tuple if absent."""
+
+    if hasattr(model, "component_groups"):
+        return tuple(model.component_groups())  # type: ignore[attr-defined]
+    return ()
+
+
+__all__ = ["BandEigenResult", "ContinuumModel", "component_groups", "make_model", "model_record"]

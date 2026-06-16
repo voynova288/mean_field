@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from mean_field.api import HFConfig, compute_bands, make_model, run_hf
+from mean_field.api import HFConfig, component_groups, compute_bands, make_model, model_record, run_hf
 
 
 def test_public_api_imports_and_htg_band_smoke() -> None:
@@ -12,6 +12,15 @@ def test_public_api_imports_and_htg_band_smoke() -> None:
     assert bundle.energies.shape[1] == 2
     assert np.asarray(bundle.k).ndim == 1
     assert bundle.convention.energy_unit == "meV"
+
+
+def test_public_model_record_and_component_group_contract() -> None:
+    model = make_model("htg", theta_deg=1.5, n_shells=0)
+    record = model_record(model, system_name="htg")
+
+    assert record.system_name == "htg"
+    assert "theta_deg" in record.lattice
+    assert component_groups(model) == ()
 
 
 def test_public_run_hf_fails_explicitly_until_system_adapter_exists() -> None:
