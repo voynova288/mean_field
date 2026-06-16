@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from ...core.hf import ComponentGroup
 from ...core.lattice import KPath
 from .bands import GridBandsResult, PathBandsResult, compute_bands_along_path, compute_bands_on_grid
 from .charge_background import ChargeBackgroundResult, compute_valence_charge_background
@@ -54,6 +55,14 @@ class RLGhBNModel:
     @property
     def layer_count(self) -> int:
         return int(self.params.layer_count)
+
+    def component_groups(self) -> tuple[ComponentGroup, ...]:
+        """Return layer groups in the local sublattice-resolved basis."""
+
+        return tuple(
+            ComponentGroup(f"layer_{layer}", np.asarray([2 * layer, 2 * layer + 1], dtype=int))
+            for layer in range(self.layer_count)
+        )
 
     @property
     def flat_band_indices(self) -> tuple[int, int]:
