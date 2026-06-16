@@ -52,8 +52,13 @@ def test_hf_result_save_writes_public_manifest_files(tmp_path) -> None:
     loaded = load_result(tmp_path)
 
     assert manifest_path == tmp_path / "manifest.json"
+    assert {path.name for path in tmp_path.iterdir()} >= set(required_artifact_files())
     assert json.loads((tmp_path / "model.json").read_text(encoding="utf-8"))["system_name"] == "toy"
     assert json.loads((tmp_path / "config.yaml").read_text(encoding="utf-8"))["mesh"] == [1, 1]
+    assert loaded.config is not None and loaded.config["mesh"] == [1, 1]
+    assert loaded.conventions is not None and loaded.conventions["density_convention"] == "stored_delta"
+    assert loaded.validation == {}
+    assert loaded.observables == {"gap_mev": 1.0}
     assert loaded.manifest["root"] == str(tmp_path)
 
 

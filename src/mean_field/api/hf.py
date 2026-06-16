@@ -6,9 +6,7 @@ from typing import Any, Literal
 
 import numpy as np
 
-from mean_field.core.io import write_json_artifact
-
-from .artifacts import ArtifactManifest, ConventionBundle, ModelRecord
+from .artifacts import ArtifactManifest, ConventionBundle, ModelRecord, write_contract_artifacts
 
 
 DensityConventionName = Literal["projector", "stored_delta", "half_shifted"]
@@ -99,12 +97,28 @@ class HFResult:
 
     def save(self, output_dir: str | Path) -> Path:
         root = Path(output_dir)
-        root.mkdir(parents=True, exist_ok=True)
-        write_json_artifact(self.model.to_dict(), root / "model.json")
-        write_json_artifact(self.config.to_dict(), root / "config.yaml")
-        write_json_artifact(dict(self.observables), root / "observables.json")
-        manifest = self.artifacts or ArtifactManifest(root=root, model=self.model)
-        return manifest.save(root / "manifest.json")
+        manifest_files: dict[str, object] = {}
+        manifest_metadata: dict[str, object] = {}
+        conventions: ConventionBundle | dict[str, object] = ConventionBundle(
+            density_convention=str(self.config.density_convention)
+        )
+        if self.artifacts is not None:
+            manifest_files.update(dict(self.artifacts.files))
+            manifest_metadata.update(dict(self.artifacts.metadata))
+            conventions = self.artifacts.conventions
+        paths = write_contract_artifacts(
+            root,
+            workflow="hf.result",
+            system_name=self.model.system_name,
+            model=self.model,
+            config=self.config.to_dict(),
+            conventions=conventions,
+            validation={},
+            observables=dict(self.observables),
+            files=manifest_files,
+            metadata=manifest_metadata,
+        )
+        return paths["manifest.json"]
 
 
 def run_hf(model: object, config: HFConfig, **kwargs: Any) -> HFResult:
