@@ -139,3 +139,63 @@ def test_rlg_hbn_tdhf_contract_sidecars_are_metadata_only(tmp_path) -> None:
     assert loaded.observables["first_positive_energies_mev"] == [1.0, 2.0]
     assert loaded.manifest["files"]["tdhf_spectrum"] == "tdhf_q0_spectrum.npz"
     assert loaded.manifest["metadata"]["array_summaries"][0]["keys"] == ["energies_mev", "A", "B"]
+
+
+def test_rlg_hbn_paper_hf_contract_sidecars_are_metadata_only(tmp_path) -> None:
+    from mean_field.devtools.run_rlg_hbn_paper_hf import _write_contract_sidecars
+
+    config = {
+        "paper_target": "fig5",
+        "layer_count": 5,
+        "theta_deg": 0.77,
+        "shell_count": 1,
+        "xi_values": (1,),
+        "v_values_mev": (40.0,),
+        "hbn_moire_scale": 1.0,
+        "epsilon_r": 6.25,
+        "gate_distance_nm": 10.0,
+        "scheme": "average",
+        "active_valence_bands": 4,
+        "active_conduction_bands": 4,
+        "k_mesh_size": 3,
+        "interaction_cutoff_q1": 3.0,
+        "nu": 1.0,
+        "init_modes": ("flavor",),
+        "seeds": (1,),
+        "candidate_count": 1,
+        "max_iter": 1,
+        "precision": 1.0e-6,
+        "beta": 1.0,
+        "cache_policy": "off",
+        "screening_solver": "grid",
+    }
+    run_preflight = {"status": "ok", "run_specs": [{"init_mode": "flavor", "seed": 1}]}
+    summary = {
+        "output_dir": str(tmp_path),
+        "paper_target": "fig5",
+        "elapsed_sec": 0.25,
+        "panels": [{"panel": "xi1_V040meV", "best": {"final_energy_mev": -1.0}}],
+    }
+
+    paths = _write_contract_sidecars(
+        tmp_path,
+        paper_target="fig5",
+        config=config,
+        run_preflight=run_preflight,
+        cache_dir=tmp_path / "cache",
+        runtime_metadata={"hostname": "test001", "dry_run": False},
+        workflow_statuses={"preflight": "succeeded", "panel_xi1_V040meV": "succeeded", "summary": "succeeded"},
+        workflow_messages={"summary": "paper_hf_summary.json written"},
+        summary_payload=summary,
+    )
+
+    assert set(paths) == set(required_artifact_files())
+    loaded = load_result(tmp_path)
+    assert loaded.manifest["metadata"]["workflow"] == "rlg_hbn.paper_hf"
+    assert loaded.conventions is not None
+    assert loaded.conventions["density_convention"] == "stored_delta"
+    assert loaded.conventions["form_factor_convention"]
+    assert loaded.validation is not None and loaded.validation["status"] == "pass"
+    assert loaded.observables is not None
+    assert loaded.observables["panels"][0]["panel"] == "xi1_V040meV"
+    assert loaded.manifest["files"]["paper_hf_summary"] == "paper_hf_summary.json"

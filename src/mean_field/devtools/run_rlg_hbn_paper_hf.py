@@ -12,6 +12,7 @@ from time import perf_counter
 
 import numpy as np
 
+from mean_field.api.artifacts import ModelRecord, write_contract_artifacts
 from mean_field.core.hf import summarize_hf_state_archive, validate_hf_archive_shapes
 from mean_field.core.io import write_text_artifact
 from mean_field.workflows import (
@@ -499,6 +500,80 @@ def _write_rlg_hbn_workflow_artifacts(
     write_workflow_manifest(manifest, output_dir / "workflow_manifest.json")
     write_workflow_run_state(state, output_dir / "workflow_run_state.json")
     write_text_artifact(state.to_markdown() + "\n", output_dir / "workflow_run_state.md")
+
+
+def _write_contract_sidecars(
+    output_dir: Path,
+    *,
+    paper_target: str,
+    config: dict[str, object],
+    run_preflight: dict[str, object],
+    cache_dir: Path,
+    runtime_metadata: dict[str, object],
+    workflow_statuses: dict[str, str],
+    workflow_messages: dict[str, str],
+    summary_payload: dict[str, object] | None,
+) -> dict[str, Path]:
+    """Write public metadata sidecars for an RLG/hBN paper HF result root."""
+
+    dry_run = bool(runtime_metadata.get("dry_run", False))
+    panel_count = len(summary_payload.get("panels", [])) if summary_payload is not None else 0
+    failed_jobs = sorted(name for name, status in workflow_statuses.items() if status == "failed")
+    status = "dry_run" if dry_run else ("pass" if not failed_jobs and summary_payload is not None else "warning")
+    files: dict[str, object] = {
+        "paper_hf_config": "paper_hf_config.json",
+        "workflow_manifest": "workflow_manifest.json",
+        "workflow_run_state": "workflow_run_state.json",
+        "workflow_run_state_markdown": "workflow_run_state.md",
+    }
+    if summary_payload is not None:
+        files["paper_hf_summary"] = "paper_hf_summary.json"
+    return write_contract_artifacts(
+        output_dir,
+        workflow="rlg_hbn.paper_hf",
+        system_name="rlg_hbn",
+        model=ModelRecord(
+            system_name="rlg_hbn",
+            params={
+                "paper_target": str(paper_target),
+                "layer_count": int(config["layer_count"]),
+                "xi_values": [int(value) for value in config["xi_values"]],
+                "v_values_mev": [float(value) for value in config["v_values_mev"]],
+                "hbn_moire_scale": float(config["hbn_moire_scale"]),
+            },
+            lattice={
+                "theta_deg": float(config["theta_deg"]),
+                "shell_count": int(config["shell_count"]),
+            },
+        ),
+        config={**config, "run_preflight": run_preflight, "cache_dir": str(cache_dir)},
+        conventions={
+            "energy_unit": "meV",
+            "density_convention": "stored_delta",
+            "density_axis_order": "abk",
+            "system": "RLG/hBN",
+            "paper_target": str(paper_target),
+            "basis_periodic_gauge": RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
+            "basis_periodic_gauge_padding": int(RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING),
+            "form_factor_convention": RLG_HBN_FORM_FACTOR_CONVENTION_VERSION,
+        },
+        environment=runtime_metadata,
+        validation={
+            "status": status,
+            "run_preflight": run_preflight,
+            "workflow_statuses": dict(workflow_statuses),
+            "workflow_messages": dict(workflow_messages),
+            "failed_jobs": failed_jobs,
+            "panel_count": int(panel_count),
+        },
+        observables={
+            "paper_target": str(paper_target),
+            "elapsed_sec": None if summary_payload is None else summary_payload.get("elapsed_sec"),
+            "panels": [] if summary_payload is None else summary_payload.get("panels", []),
+        },
+        files=files,
+        metadata={"cache_dir": str(cache_dir), "paper_target": str(paper_target)},
+    )
 
 
 def _atomic_write_json(path: Path, payload: object, *, sort_keys: bool = True) -> None:
@@ -1286,6 +1361,17 @@ def main() -> None:
     )
 
     if args.dry_run:
+        _write_contract_sidecars(
+            output_dir,
+            paper_target=str(args.paper_target),
+            config=config,
+            run_preflight=run_preflight,
+            cache_dir=cache_dir,
+            runtime_metadata=runtime_metadata,
+            workflow_statuses=workflow_statuses,
+            workflow_messages=workflow_messages,
+            summary_payload=None,
+        )
         print(f"[dry-run] output_dir={output_dir}")
         print(f"[dry-run] target={args.paper_target} config={config}")
         return
@@ -1431,21 +1517,30 @@ def main() -> None:
             print(f"[panel] done {panel} elapsed_sec={panel_elapsed:.3f}", flush=True)
 
     elapsed = perf_counter() - start
-    write_json(
-        output_dir / "paper_hf_summary.json",
-        {
-            "output_dir": str(output_dir),
-            "paper_target": str(args.paper_target),
-            "elapsed_sec": float(elapsed),
-            "panels": panel_summaries,
-        },
-    )
+    summary_payload = {
+        "output_dir": str(output_dir),
+        "paper_target": str(args.paper_target),
+        "elapsed_sec": float(elapsed),
+        "panels": panel_summaries,
+    }
+    write_json(output_dir / "paper_hf_summary.json", summary_payload)
     workflow_statuses["summary"] = "succeeded"
     workflow_messages["summary"] = "paper_hf_summary.json written"
     _write_rlg_hbn_workflow_artifacts(
         output_dir,
         workflow_manifest,
         _rlg_hbn_workflow_state(workflow_manifest, workflow_statuses, messages=workflow_messages),
+    )
+    _write_contract_sidecars(
+        output_dir,
+        paper_target=str(args.paper_target),
+        config=config,
+        run_preflight=run_preflight,
+        cache_dir=cache_dir,
+        runtime_metadata=runtime_metadata,
+        workflow_statuses=workflow_statuses,
+        workflow_messages=workflow_messages,
+        summary_payload=summary_payload,
     )
     latest_path = DEFAULT_OUTPUT_ROOT / f"LATEST_{str(args.paper_target).upper()}_HF_PAPER.txt"
     write_text_artifact(str(output_dir) + "\n", latest_path)
