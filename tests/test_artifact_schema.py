@@ -4,7 +4,17 @@ import json
 
 import numpy as np
 
-from mean_field.api import ArtifactManifest, ConventionBundle, HFConfig, HFResult, HFState, ModelRecord, load_result, required_artifact_files
+from mean_field.api import (
+    ArtifactManifest,
+    ConventionBundle,
+    HFConfig,
+    HFResult,
+    HFState,
+    ModelRecord,
+    load_result,
+    required_artifact_files,
+    write_contract_artifacts,
+)
 
 
 def test_required_artifact_schema_names_are_stable() -> None:
@@ -44,3 +54,42 @@ def test_hf_result_save_writes_public_manifest_files(tmp_path) -> None:
     assert json.loads((tmp_path / "model.json").read_text(encoding="utf-8"))["system_name"] == "toy"
     assert json.loads((tmp_path / "config.yaml").read_text(encoding="utf-8"))["mesh"] == [1, 1]
     assert loaded.manifest["root"] == str(tmp_path)
+
+
+def test_write_contract_artifacts_writes_schema_sidecars_and_npz_summary(tmp_path) -> None:
+    state_path = tmp_path / "hf_state.npz"
+    np.savez(state_path, density=np.zeros((2, 2, 3), dtype=np.complex128))
+
+    paths = write_contract_artifacts(
+        tmp_path,
+        workflow="toy.workflow",
+        system_name="toy",
+        model=ModelRecord(system_name="toy", params={"theta_deg": 1.0}),
+        config={"mesh": (1, 3)},
+        conventions={"energy_unit": "eV", "density_convention": "projector", "extra_convention": "toy"},
+        environment={"host": "test001"},
+        validation={"status": "pass"},
+        observables={"gap_ev": 0.1},
+        files={"state": "hf_state.npz"},
+        array_files=(state_path,),
+    )
+
+    assert tuple(sorted(path.name for path in paths.values())) == tuple(sorted(required_artifact_files()))
+    loaded = load_result(tmp_path)
+    assert loaded.model is not None and loaded.model["system_name"] == "toy"
+    assert loaded.conventions is not None
+    assert loaded.conventions["energy_unit"] == "eV"
+    assert loaded.conventions["density_convention"] == "projector"
+    assert loaded.conventions["extra_convention"] == "toy"
+    assert loaded.environment == {"host": "test001"}
+    assert loaded.observables == {"gap_ev": 0.1}
+
+    config_payload = json.loads((tmp_path / "config.yaml").read_text(encoding="utf-8"))
+    assert config_payload["mesh"] == [1, 3]
+
+    manifest = loaded.manifest
+    assert manifest["metadata"]["workflow"] == "toy.workflow"
+    assert manifest["metadata"]["system_name"] == "toy"
+    assert manifest["files"]["state"] == "hf_state.npz"
+    assert manifest["metadata"]["array_summaries"][0]["keys"] == ["density"]
+    assert manifest["metadata"]["array_summaries"][0]["arrays"][0]["shape"] == [2, 2, 3]

@@ -7,6 +7,7 @@ from .artifacts import (
     ResultDirectory,
     load_result,
     required_artifact_files,
+    write_contract_artifacts,
 )
 from .bands import BandBundle, KGrid, KPath, band_bundle_from_result, compute_bands
 from .crpa import CRPAConfig, compute_crpa
@@ -40,4 +41,5 @@ __all__ = [
     "required_artifact_files",
     "run_hf",
     "run_tdhf",
+    "write_contract_artifacts",
 ]

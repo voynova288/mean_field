@@ -3,7 +3,7 @@
 The public artifact helper is:
 
 ```python
-from mean_field.api import ArtifactManifest, ConventionBundle, load_result
+from mean_field.api import ArtifactManifest, ConventionBundle, load_result, write_contract_artifacts
 ```
 
 ## Required result files
@@ -19,6 +19,8 @@ environment.json
 validation.json
 observables.json
 ```
+
+Use `write_contract_artifacts(...)` to write these sidecars without rewriting large numerical arrays.  The helper stores JSON-compatible YAML in `config.yaml` to avoid an additional YAML dependency.
 
 Large numerical arrays should be referenced from `manifest.json`, not inlined in JSON.  Recommended names are:
 
