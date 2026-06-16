@@ -247,6 +247,7 @@ def test_rlg_hbn_parallel_merge_contract_sidecars_are_metadata_only(tmp_path) ->
 def test_rlg_hbn_hf_archive_records_density_convention_metadata(tmp_path) -> None:
     from types import SimpleNamespace
 
+    from mean_field.core.hf import summarize_hf_state_archive
     from mean_field.devtools.run_rlg_hbn_paper_hf import _save_state_archive
 
     state = SimpleNamespace(
@@ -280,3 +281,9 @@ def test_rlg_hbn_hf_archive_records_density_convention_metadata(tmp_path) -> Non
         assert payload["reference_density_convention"].item() == "average"
         assert payload["basis_periodic_gauge"].item()
         assert payload["form_factor_convention"].item()
+
+    summary = summarize_hf_state_archive(archive)
+    assert summary.metadata["density_convention"] == "stored_delta"
+    assert summary.metadata["density_axis_order"] == "abk"
+    assert summary.metadata["reference_density_convention"] == "average"
+    assert summary.metadata["form_factor_convention"]

@@ -94,7 +94,12 @@ def summarize_hf_state_archive(path: str | Path) -> HFArchiveSummary:
         metadata = {
             "nu": read_npz_scalar(payload, "nu"),
             "scheme": read_npz_scalar(payload, "scheme"),
+            "density_convention": read_npz_scalar(payload, "density_convention"),
+            "density_axis_order": read_npz_scalar(payload, "density_axis_order"),
+            "reference_density_convention": read_npz_scalar(payload, "reference_density_convention"),
             "basis_periodic_gauge": read_npz_scalar(payload, "basis_periodic_gauge"),
+            "basis_periodic_gauge_padding": read_npz_scalar(payload, "basis_periodic_gauge_padding"),
+            "form_factor_convention": read_npz_scalar(payload, "form_factor_convention"),
             "zero_literal_q0_fock": read_npz_scalar(payload, "zero_literal_q0_fock"),
             "iteration": read_npz_scalar(payload, "iteration"),
         }
