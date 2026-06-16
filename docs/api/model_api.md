@@ -3,7 +3,7 @@
 The stable model entrypoint is:
 
 ```python
-from mean_field.api import make_model, model_record
+from mean_field.api import make_model, model_record, component_group_records
 ```
 
 `make_model(system_name, **kwargs)` normalizes public names and aliases, then delegates to existing system model constructors.  It does not move Hamiltonian logic out of system modules.
@@ -39,7 +39,7 @@ class ContinuumModel(Protocol):
     def component_groups(self) -> tuple[ComponentGroup, ...]: ...
 ```
 
-`component_groups()` is how systems expose physical labels such as layers, sublattices, valleys, or orbital subsets.  Core HF/analysis code should not infer those meanings from array dimensions.
+`component_groups()` is how systems expose physical labels such as layers, sublattices, valleys, or orbital subsets.  `component_group_records(model)` converts those declarations to JSON-serializable `{name, indices}` records for artifact metadata.  Core HF/analysis code should not infer physical component meanings from array dimensions.
 
 Current component-group status:
 

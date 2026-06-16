@@ -12,7 +12,7 @@ from .artifacts import (
 from .bands import BandBundle, KGrid, KPath, band_bundle_from_result, compute_bands
 from .crpa import CRPAConfig, compute_crpa
 from .hf import HFConfig, HFResult, HFState, WavefunctionBundle, run_hf
-from .models import BandEigenResult, ContinuumModel, component_groups, make_model, model_record
+from .models import BandEigenResult, ContinuumModel, component_group_records, component_groups, make_model, model_record
 from .tdhf import TDHFConfig, run_tdhf
 
 __all__ = [
@@ -34,6 +34,7 @@ __all__ = [
     "band_bundle_from_result",
     "compute_bands",
     "compute_crpa",
+    "component_group_records",
     "component_groups",
     "load_result",
     "make_model",

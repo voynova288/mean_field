@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from mean_field.api import HFConfig, component_groups, compute_bands, make_model, model_record, run_hf
+from mean_field.api import HFConfig, component_group_records, component_groups, compute_bands, make_model, model_record, run_hf
 
 
 def test_public_api_imports_and_htg_band_smoke() -> None:
@@ -29,6 +29,11 @@ def test_rlg_hbn_model_declares_layer_component_groups() -> None:
 
     assert [group.name for group in groups] == ["layer_0", "layer_1", "layer_2"]
     assert [group.indices.tolist() for group in groups] == [[0, 1], [2, 3], [4, 5]]
+    assert component_group_records(model) == (
+        {"name": "layer_0", "indices": [0, 1]},
+        {"name": "layer_1", "indices": [2, 3]},
+        {"name": "layer_2", "indices": [4, 5]},
+    )
 
 
 def test_tmbg_model_declares_layer_component_groups() -> None:

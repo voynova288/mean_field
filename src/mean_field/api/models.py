@@ -133,4 +133,26 @@ def component_groups(model: object) -> tuple[object, ...]:
     return ()
 
 
-__all__ = ["BandEigenResult", "ContinuumModel", "component_groups", "make_model", "model_record"]
+def component_group_records(model: object) -> tuple[dict[str, object], ...]:
+    """Return JSON-serializable records for system-declared component groups."""
+
+    records: list[dict[str, object]] = []
+    for group in component_groups(model):
+        name = getattr(group, "name", None)
+        indices = getattr(group, "indices", None)
+        if name is None or indices is None:
+            records.append({"repr": repr(group)})
+            continue
+        tolist = getattr(indices, "tolist", None)
+        records.append({"name": str(name), "indices": list(tolist() if callable(tolist) else indices)})
+    return tuple(records)
+
+
+__all__ = [
+    "BandEigenResult",
+    "ContinuumModel",
+    "component_group_records",
+    "component_groups",
+    "make_model",
+    "model_record",
+]
