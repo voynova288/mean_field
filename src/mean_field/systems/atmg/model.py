@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from ...core.hf import ComponentGroup
 from ...core.lattice import KPath
 from .bands import GridBandsResult, PathBandsResult, compute_bands_along_path, compute_bands_on_grid
 from .bilayer_map import MappedSpectrumResult, build_atmg_via_tbg_sum
@@ -58,6 +59,14 @@ class ATMGModel:
             }
         )
         return summary
+
+    def component_groups(self) -> tuple[ComponentGroup, ...]:
+        """Return layer groups in the local sublattice-resolved ATMG basis."""
+
+        return tuple(
+            ComponentGroup(f"layer_{layer}", np.asarray([2 * layer, 2 * layer + 1], dtype=int))
+            for layer in range(int(self.params.n_layers))
+        )
 
     def build_hamiltonian(self, k_tilde: complex, *, valley: int = 1) -> np.ndarray:
         return build_hamiltonian(complex(k_tilde), self.lattice, self.params, valley=valley)
