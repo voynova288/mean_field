@@ -115,7 +115,11 @@ from .runners import (
     write_b0_hf_suite_summary,
     write_bm_unstrained_benchmark_artifacts,
 )
-from .artifacts import complex_to_pair, write_bm_unstrained_benchmark_contract_sidecars
+from .artifacts import (
+    complex_to_pair,
+    write_b0_hf_benchmark_contract_sidecars,
+    write_bm_unstrained_benchmark_contract_sidecars,
+)
 
 __all__ = [
     "BMSolution",
@@ -213,6 +217,7 @@ __all__ = [
     "summarize_overlap",
     "update_restricted_density",
     "write_b0_hf_benchmark_artifacts",
+    "write_b0_hf_benchmark_contract_sidecars",
     "write_b0_hf_suite_artifacts",
     "write_b0_hf_suite_summary",
     "write_bm_band_plot",

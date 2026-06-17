@@ -6,18 +6,28 @@ import numpy as np
 import pytest
 
 from mean_field.api import load_result, required_artifact_files
-from mean_field.benchmarks import BMUnstrainedReference
+from mean_field.benchmarks import BMUnstrainedReference, BenchmarkCase
+from mean_field.core.hf import FlavorBandData
 from mean_field.core.lattice import KPath
 from mean_field.runtime import RuntimeEnvironment
 from mean_field.systems.tbg.params import TBGParameters
 from mean_field.systems.tbg.zero_field import (
+    B0HFBenchmarkRun,
+    B0HFBenchmarkRuntime,
+    B0HFBenchmarkRuntimeParity,
     BMUnstrainedBenchmarkRun,
     BMUnstrainedParity,
     BMUnstrainedRun,
     BMUnstrainedRuntime,
     BMUnstrainedRuntimeParity,
     BMSolution,
+    HFPathParity,
+    HFPathResult,
+    RestrictedHartreeFockRun,
+    RestrictedHartreeFockState,
     complex_to_pair,
+    empty_overlap_block_set,
+    write_b0_hf_benchmark_contract_sidecars,
     write_bm_unstrained_benchmark_contract_sidecars,
 )
 
@@ -157,3 +167,164 @@ def test_tbg_zero_field_bm_unstrained_contract_sidecars_are_metadata_only(tmp_pa
 
     with pytest.raises(FileExistsError, match="Refusing to overwrite"):
         write_bm_unstrained_benchmark_contract_sidecars(output_dir, result)
+
+
+def _benchmark_case(tmp_path: Path) -> BenchmarkCase:
+    return BenchmarkCase(
+        benchmark_id="unit_b0",
+        theta_deg=1.05,
+        nu=2,
+        state_label="unit",
+        description="unit test",
+        source_group="unit",
+        source_path_tsv="reference.tsv",
+        source_nodes_tsv="nodes.tsv",
+        source_summary_txt="summary.txt",
+        source_hf_jld2="hf.jld2",
+        init_mode="sp",
+        seed=7,
+        lk=1,
+        lg=1,
+        points_per_segment=1,
+        mu_mev=0.12,
+        exit_reason="converged",
+        benchmark_case_dir=str(tmp_path / "case"),
+    )
+
+
+def _restricted_hf_run() -> RestrictedHartreeFockRun:
+    nt = 8
+    nk = 2
+    state = RestrictedHartreeFockState(
+        h0=np.zeros((nt, nt, nk), dtype=np.complex128),
+        sigma_z=np.zeros((nt, nt, nk), dtype=np.complex128),
+        density=np.zeros((nt, nt, nk), dtype=np.complex128),
+        hamiltonian=np.zeros((nt, nt, nk), dtype=np.complex128),
+        energies=np.asarray([[-1.0, -0.9], [-0.5, -0.4], [-0.2, -0.1], [0.0, 0.1], [0.2, 0.3], [0.4, 0.5], [0.8, 0.9], [1.1, 1.2]], dtype=float),
+        sigma_ztauz=np.zeros((nt, nk), dtype=float),
+        nu=2.0,
+        v0=1.0,
+        mu=0.12,
+        precision=1.0e-5,
+        n_spin=2,
+        n_eta=2,
+        n_band=2,
+        diagnostics={"hf_energy": -1.5, "final_raw_norm": 0.0, "overlap_lg": 1.0, "beta": 1.0},
+    )
+    return RestrictedHartreeFockRun(
+        state=state,
+        overlap_blocks=empty_overlap_block_set(),
+        iter_energy=np.asarray([-2.0, -1.5], dtype=float),
+        iter_err=np.asarray([1.0e-2, 1.0e-6], dtype=float),
+        iter_oda=np.asarray([1.0, 0.7], dtype=float),
+        init_mode="spindown",
+        seed=7,
+        converged=True,
+        exit_reason="converged",
+    )
+
+
+def _b0_hf_benchmark_result(tmp_path: Path) -> B0HFBenchmarkRun:
+    params = TBGParameters.from_degrees(1.05)
+    path = KPath(
+        kvec=np.asarray([0.0 + 0.0j, 0.1 + 0.0j], dtype=np.complex128),
+        kdist=np.asarray([0.0, 0.1], dtype=float),
+        labels=("K", "G"),
+        node_indices=(1, 2),
+    )
+    band_data = FlavorBandData(
+        band_labels=tuple(f"b{i}" for i in range(8)),
+        energies=np.zeros((8, 2), dtype=float),
+        mean_weights=np.ones((8, 4), dtype=float),
+    )
+    hf_run = _restricted_hf_run()
+    path_result = HFPathResult(
+        params=params,
+        path=path,
+        hamiltonian=np.zeros((8, 8, 2), dtype=np.complex128),
+        band_data=band_data,
+        mu=0.12,
+        nu=2.0,
+        lk=1,
+        lg=1,
+        points_per_segment=1,
+        init_mode="sp",
+        normalized_init_mode="spindown",
+        seed=7,
+        exit_reason="converged",
+        beta=1.0,
+        overlap_lg=1,
+        relative_permittivity=15.0,
+        screening_lm=None,
+        finite_zero_limit=False,
+        zero_cutoff=1.0e-6,
+        include_interaction=True,
+    )
+    return B0HFBenchmarkRun(
+        case=_benchmark_case(tmp_path),
+        params=params,
+        path=path,
+        grid_solution=_bm_solution(params),
+        hf_run=hf_run,
+        path_result=path_result,
+        parity=HFPathParity(
+            kdist_max_abs_diff=0.0,
+            max_abs_band_diff_mev=0.02,
+            rms_band_diff_mev=0.01,
+            mean_abs_band_diff_mev=0.005,
+            energy_sorting="ascending_per_k",
+        ),
+        runtime=B0HFBenchmarkRuntime(
+            start_time="2026-01-01T00:00:00",
+            end_time="2026-01-01T00:00:02",
+            bm_elapsed_sec=0.1,
+            hf_elapsed_sec=0.2,
+            path_elapsed_sec=0.3,
+            total_elapsed_sec=0.6,
+            environment=_runtime_environment(),
+        ),
+        runtime_reference=None,
+        runtime_parity=B0HFBenchmarkRuntimeParity(
+            bm_elapsed_sec_delta=0.0,
+            bm_elapsed_sec_ratio=1.0,
+            hf_elapsed_sec_delta=0.0,
+            hf_elapsed_sec_ratio=1.0,
+            path_elapsed_sec_delta=0.0,
+            path_elapsed_sec_ratio=1.0,
+            total_elapsed_sec_delta=0.0,
+            total_elapsed_sec_ratio=1.0,
+        ),
+        initial_density_override_path=tmp_path / "initial_density.tsv",
+    )
+
+
+def test_tbg_zero_field_b0_hf_contract_sidecars_are_metadata_only(tmp_path: Path) -> None:
+    result = _b0_hf_benchmark_result(tmp_path)
+    output_dir = tmp_path / "b0_hf"
+    output_dir.mkdir()
+    path_tsv = output_dir / "hf_path.tsv"
+    summary_txt = output_dir / "summary.txt"
+    path_tsv.write_text("k_dist\tb0\n0.0\t0.0\n", encoding="utf-8")
+    summary_txt.write_text("summary\n", encoding="utf-8")
+
+    write_b0_hf_benchmark_contract_sidecars(
+        output_dir,
+        result,
+        artifact_paths={"path_tsv": path_tsv, "summary_txt": summary_txt},
+    )
+
+    loaded = load_result(output_dir)
+    assert loaded.manifest["metadata"]["workflow"] == "tbg.zero_field.b0_hf_benchmark"
+    assert loaded.manifest["metadata"]["benchmark_id"] == "unit_b0"
+    assert "array_summaries" not in loaded.manifest["metadata"]
+    assert loaded.manifest["files"]["path_tsv"] == "hf_path.tsv"
+    assert loaded.conventions is not None and loaded.conventions["density_convention"] == "stored_delta"
+    assert loaded.validation is not None and loaded.validation["status"] == "converged"
+    assert loaded.validation["iterations"] == 2
+    assert loaded.observables is not None and loaded.observables["benchmark_id"] == "unit_b0"
+    assert loaded.observables["mu_mev"] == 0.12
+    assert loaded.observables["state_shapes"]["density"] == [8, 8, 2]
+    assert loaded.config is not None and loaded.config["precision"] == 1.0e-5
+
+    with pytest.raises(FileExistsError, match="Refusing to overwrite"):
+        write_b0_hf_benchmark_contract_sidecars(output_dir, result)

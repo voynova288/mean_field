@@ -90,7 +90,15 @@ def _json_safe(value: object) -> object:
 def _runtime_environment_payload(runtime: object) -> dict[str, object]:
     environment = getattr(runtime, "environment", None)
     payload = {str(key): _json_safe(value) for key, value in _dataclass_payload(environment).items()}
-    for key in ("start_time", "end_time", "path_elapsed_sec", "grid_elapsed_sec", "total_elapsed_sec"):
+    for key in (
+        "start_time",
+        "end_time",
+        "bm_elapsed_sec",
+        "hf_elapsed_sec",
+        "path_elapsed_sec",
+        "grid_elapsed_sec",
+        "total_elapsed_sec",
+    ):
         if hasattr(runtime, key):
             payload[key] = _json_safe(getattr(runtime, key))
     return payload
@@ -187,6 +195,73 @@ def _bm_unstrained_observables(result: object) -> dict[str, object]:
     }
 
 
+def _hf_state_shapes(state: object) -> dict[str, object]:
+    return {
+        "density": [int(value) for value in np.asarray(getattr(state, "density")).shape],
+        "hamiltonian": [int(value) for value in np.asarray(getattr(state, "hamiltonian")).shape],
+        "h0": [int(value) for value in np.asarray(getattr(state, "h0")).shape],
+        "energies": [int(value) for value in np.asarray(getattr(state, "energies")).shape],
+    }
+
+
+def _diagnostics_payload(diagnostics: Mapping[str, object]) -> dict[str, object]:
+    payload: dict[str, object] = {}
+    for key, value in diagnostics.items():
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            payload[str(key)] = _json_safe(value)
+    return payload
+
+
+def _b0_hf_validation_payload(result: object) -> dict[str, object]:
+    parity = getattr(result, "parity")
+    hf_run = getattr(result, "hf_run")
+    runtime_parity = getattr(result, "runtime_parity", None)
+    payload: dict[str, object] = {
+        "status": "converged" if bool(hf_run.converged) else "not_converged",
+        "converged": bool(hf_run.converged),
+        "exit_reason": str(hf_run.exit_reason),
+        "iterations": int(hf_run.iterations),
+        "parity": {
+            "kdist_max_abs_diff": float(parity.kdist_max_abs_diff),
+            "max_abs_band_diff_mev": float(parity.max_abs_band_diff_mev),
+            "rms_band_diff_mev": float(parity.rms_band_diff_mev),
+            "mean_abs_band_diff_mev": float(parity.mean_abs_band_diff_mev),
+            "energy_sorting": str(parity.energy_sorting),
+        },
+    }
+    if runtime_parity is not None:
+        payload["runtime_parity"] = _json_safe(_dataclass_payload(runtime_parity))
+    return payload
+
+
+def _b0_hf_observables(result: object) -> dict[str, object]:
+    case = getattr(result, "case")
+    hf_run = getattr(result, "hf_run")
+    state = hf_run.state
+    path_result = getattr(result, "path_result")
+    band_data = getattr(path_result, "band_data")
+    return {
+        "benchmark_id": str(case.benchmark_id),
+        "theta_deg": float(case.theta_deg),
+        "nu": float(path_result.nu),
+        "mu_mev": float(state.mu),
+        "init_mode": str(path_result.init_mode),
+        "normalized_init_mode": str(path_result.normalized_init_mode),
+        "seed": int(path_result.seed),
+        "iterations": int(hf_run.iterations),
+        "exit_reason": str(hf_run.exit_reason),
+        "converged": bool(hf_run.converged),
+        "diagnostics": _diagnostics_payload(getattr(state, "diagnostics", {})),
+        "path": _kpath_payload(path_result.path),
+        "bands": {
+            "labels": list(getattr(band_data, "band_labels")),
+            "energy_shape": [int(value) for value in np.asarray(getattr(band_data, "energies")).shape],
+            "mean_weights_shape": [int(value) for value in np.asarray(getattr(band_data, "mean_weights")).shape],
+        },
+        "state_shapes": _hf_state_shapes(state),
+    }
+
+
 def write_bm_unstrained_benchmark_contract_sidecars(
     output_dir: str | Path,
     result: object,
@@ -250,7 +325,91 @@ def write_bm_unstrained_benchmark_contract_sidecars(
     )
 
 
+def write_b0_hf_benchmark_contract_sidecars(
+    output_dir: str | Path,
+    result: object,
+    *,
+    artifact_paths: Mapping[str, str | Path] | None = None,
+    overwrite: bool = False,
+) -> dict[str, Path]:
+    """Write public contract sidecars for a zero-field B0 HF benchmark result.
+
+    This is metadata-only and references existing TSV/plot/text outputs.  It
+    does not serialize density/Hamiltonian arrays and does not rerun BM/HF.
+    """
+
+    root = Path(output_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    _ensure_contract_sidecars_absent(root, overwrite=overwrite)
+    case = getattr(result, "case")
+    path_result = getattr(result, "path_result")
+    hf_run = getattr(result, "hf_run")
+    files = _relative_artifact_files(root, artifact_paths)
+    model = _tbg_model_record(
+        result.params,
+        extra={
+            "theta_deg": float(case.theta_deg),
+            "nu": int(case.nu),
+            "lk": int(path_result.lk),
+            "lg": int(path_result.lg),
+            "overlap_lg": None if path_result.overlap_lg is None else int(path_result.overlap_lg),
+            "beta": float(path_result.beta),
+        },
+    )
+    return write_contract_artifacts(
+        root,
+        workflow="tbg.zero_field.b0_hf_benchmark",
+        system_name="tbg",
+        model=model,
+        config={
+            "implementation": "python_b0",
+            "runner_kind": "b0_hf_benchmark",
+            "benchmark_id": str(case.benchmark_id),
+            "theta_deg": float(case.theta_deg),
+            "nu": int(case.nu),
+            "init_mode": str(path_result.init_mode),
+            "normalized_init_mode": str(path_result.normalized_init_mode),
+            "seed": int(path_result.seed),
+            "lk": int(path_result.lk),
+            "lg": int(path_result.lg),
+            "points_per_segment": int(path_result.points_per_segment),
+            "overlap_lg": None if path_result.overlap_lg is None else int(path_result.overlap_lg),
+            "beta": float(path_result.beta),
+            "relative_permittivity": float(path_result.relative_permittivity),
+            "screening_lm": _optional_float(path_result.screening_lm),
+            "finite_zero_limit": bool(path_result.finite_zero_limit),
+            "zero_cutoff": float(path_result.zero_cutoff),
+            "include_interaction": bool(path_result.include_interaction),
+            "precision": float(hf_run.state.precision),
+            "initial_density_override_path": None
+            if getattr(result, "initial_density_override_path", None) is None
+            else str(result.initial_density_override_path),
+        },
+        conventions={
+            "energy_unit": "meV",
+            "momentum_unit": "nm^-1",
+            "length_unit": "nm",
+            "density_convention": "stored_delta",
+            "density_axis_order": "abk",
+            "hamiltonian_axis_order": "abk",
+            "wavefunction_axis_order": "basis_band_valley_k",
+            "gauge": "tbg_zero_field_b0_projected_system_defined",
+        },
+        environment=_runtime_environment_payload(result.runtime),
+        validation=_b0_hf_validation_payload(result),
+        observables=_b0_hf_observables(result),
+        files=files,
+        metadata={
+            "runner_kind": "b0_hf_benchmark",
+            "benchmark_id": str(case.benchmark_id),
+            "adapter": "mean_field.systems.tbg.zero_field.artifacts",
+        },
+        array_files=(),
+    )
+
+
 __all__ = [
     "complex_to_pair",
+    "write_b0_hf_benchmark_contract_sidecars",
     "write_bm_unstrained_benchmark_contract_sidecars",
 ]
