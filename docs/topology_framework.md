@@ -43,6 +43,7 @@ Main public objects:
 - `WavefunctionIndex`: immutable metadata for the selected wavefunction columns.
 - `compute_lattice_topology`: one-stop FHS calculation for Berry connection, Berry flux, and Chern number.
 - `compute_link_variables`: builds normalized U(1) link variables for selected line bundles or subspaces.
+- `split_state_indices_by_direct_gaps` and `compute_lattice_topology_for_state_groups`: common helpers for treating crossing or nearly crossing bands as determinant-link subspaces, splitting only across everywhere-open direct gaps.
 - `berry_curvature_from_links`: computes plaquette flux from links.
 - `chern_number_from_berry_curvature`: integrates saved or freshly computed Berry flux.
 - `matrix_sewing_transform`: convenience helper for matrix-valued boundary transition functions.

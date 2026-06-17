@@ -65,6 +65,26 @@ class LinkVariables:
 
 
 @dataclass(frozen=True)
+class DirectBandGapReport:
+    """Direct gap between two ordered state columns over a momentum mesh."""
+
+    lower_index: int
+    upper_index: int
+    min_gap: float
+    max_gap: float
+    min_gap_location: tuple[int, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "lower_index": int(self.lower_index),
+            "upper_index": int(self.upper_index),
+            "min_gap": float(self.min_gap),
+            "max_gap": float(self.max_gap),
+            "min_gap_location": [int(v) for v in self.min_gap_location],
+        }
+
+
+@dataclass(frozen=True)
 class LatticeTopologyResult:
     """Berry connection, plaquette flux, and Chern number on a 2D mesh."""
 
@@ -112,6 +132,158 @@ def normalize_state_indices(indices: int | Iterable[int]) -> tuple[int, ...]:
     if len(set(normalized)) != len(normalized):
         raise ValueError(f"State indices must be unique, got {normalized}")
     return normalized
+
+
+def _coerce_state_energies(energies: np.ndarray) -> np.ndarray:
+    arr = np.asarray(energies, dtype=float)
+    if arr.ndim < 2:
+        raise ValueError(f"Expected energies with shape (n_states, mesh...), got {arr.shape}")
+    if arr.shape[0] <= 0:
+        raise ValueError("Expected at least one state in the energy array.")
+    return arr
+
+
+def direct_band_gap_report(energies: np.ndarray, lower_index: int, upper_index: int) -> DirectBandGapReport:
+    """Return min/max direct gap between two ordered state columns.
+
+    ``energies`` is interpreted as ``(n_states, mesh...)``.  This helper is
+    intentionally system-independent; systems decide whether the state ordering
+    is energy-sorted, band-labeled, HF-sorted, etc.
+    """
+
+    arr = _coerce_state_energies(energies)
+    lower = int(lower_index)
+    upper = int(upper_index)
+    if lower < 0 or upper < 0 or lower >= arr.shape[0] or upper >= arr.shape[0]:
+        raise ValueError(f"Gap indices {(lower, upper)} exceed energy state axis {arr.shape[0]}")
+    gap = np.asarray(arr[upper] - arr[lower], dtype=float)
+    flat_min = int(np.argmin(gap))
+    return DirectBandGapReport(
+        lower_index=lower,
+        upper_index=upper,
+        min_gap=float(np.min(gap)),
+        max_gap=float(np.max(gap)),
+        min_gap_location=tuple(int(v) for v in np.unravel_index(flat_min, gap.shape)),
+    )
+
+
+def adjacent_direct_gap_reports(
+    energies: np.ndarray,
+    state_indices: int | Iterable[int],
+) -> tuple[DirectBandGapReport, ...]:
+    """Return direct-gap reports for adjacent entries in ``state_indices``."""
+
+    indices = normalize_state_indices(state_indices)
+    return tuple(direct_band_gap_report(energies, left, right) for left, right in zip(indices[:-1], indices[1:]))
+
+
+def split_state_indices_by_direct_gaps(
+    energies: np.ndarray,
+    state_indices: int | Iterable[int],
+    *,
+    min_gap: float,
+) -> tuple[tuple[int, ...], ...]:
+    """Split ordered states into subspace groups using everywhere-open gaps.
+
+    Adjacent states are separated into different groups only if the direct gap
+    ``E[next]-E[current]`` is greater than ``min_gap`` at every mesh point.
+    Otherwise they remain in the same multi-band subspace, which is the safe
+    choice for crossing or nearly-crossing bands.
+    """
+
+    indices = normalize_state_indices(state_indices)
+    if len(indices) == 1:
+        return (indices,)
+    groups: list[tuple[int, ...]] = []
+    current: list[int] = [indices[0]]
+    for gap in adjacent_direct_gap_reports(energies, indices):
+        if float(gap.min_gap) > float(min_gap):
+            groups.append(tuple(current))
+            current = [int(gap.upper_index)]
+        else:
+            current.append(int(gap.upper_index))
+    groups.append(tuple(current))
+    return tuple(groups)
+
+
+def wavefunction_index_for_state_group(
+    base_index: WavefunctionIndex | None,
+    indices: int | Iterable[int],
+    *,
+    role: str = "grouped_subspace",
+    metadata: Mapping[str, object] | None = None,
+) -> WavefunctionIndex:
+    """Build metadata for a selected single-band or multi-band group."""
+
+    normalized = normalize_state_indices(indices)
+    extra_metadata = {} if metadata is None else dict(metadata)
+    if base_index is None:
+        return WavefunctionIndex(
+            indices=normalized,
+            role=role,
+            labels=tuple(f"state_{index}" for index in normalized),
+            metadata=extra_metadata,
+        )
+    labels = tuple(
+        str(base_index.labels[index]) if index < len(base_index.labels) else f"state_{index}" for index in normalized
+    )
+    merged_metadata = dict(base_index.metadata)
+    merged_metadata.update(extra_metadata)
+    merged_metadata.setdefault("parent_indices", [int(index) for index in base_index.indices])
+    merged_metadata.setdefault("parent_role", str(base_index.role))
+    return WavefunctionIndex(
+        indices=normalized,
+        role=role,
+        labels=labels,
+        system=base_index.system,
+        valley=base_index.valley,
+        metadata=merged_metadata,
+    )
+
+
+def compute_lattice_topology_for_state_groups(
+    wavefunctions: np.ndarray,
+    groups: Iterable[int | Iterable[int]],
+    *,
+    base_index: WavefunctionIndex | None = None,
+    role: str = "grouped_subspace",
+    k_grid_frac: np.ndarray | None = None,
+    sewing_transforms: Sequence[SewingTransform | None] | None = None,
+    link_method: LinkMethod = "polar",
+    orientation_sign: float = 1.0,
+    atol: float = 1.0e-14,
+    regularization: float = 1.0e-12,
+    metadata: Mapping[str, object] | None = None,
+) -> tuple[LatticeTopologyResult, ...]:
+    """Compute Chern numbers for one or more explicit state groups.
+
+    This is a thin framework-level wrapper around ``compute_lattice_topology``
+    for the common case where band crossings require treating several columns as
+    a single determinant-link subspace.  Systems provide only wavefunctions,
+    grouping choices, labels, and sewing transforms.
+    """
+
+    results: list[LatticeTopologyResult] = []
+    for group_number, group in enumerate(groups):
+        indices = normalize_state_indices(group)
+        group_metadata = {} if metadata is None else dict(metadata)
+        group_metadata["group_number"] = int(group_number)
+        group_metadata["group_indices"] = [int(index) for index in indices]
+        index = wavefunction_index_for_state_group(base_index, indices, role=role, metadata=group_metadata)
+        results.append(
+            compute_lattice_topology(
+                wavefunctions,
+                state_indices=indices,
+                index=index,
+                k_grid_frac=k_grid_frac,
+                sewing_transforms=sewing_transforms,
+                link_method=link_method,
+                orientation_sign=orientation_sign,
+                atol=atol,
+                regularization=regularization,
+            )
+        )
+    return tuple(results)
 
 
 def default_k_grid_frac(mesh_1: int, mesh_2: int) -> np.ndarray:
