@@ -8,6 +8,7 @@ from typing import Literal
 import numpy as np
 
 from ...core.hf import (
+    DensityConvention,
     DensityUpdateResult,
     HFOverlapBlockSet,
     HartreeFockKernel,
@@ -21,6 +22,7 @@ from ...core.hf import (
     real_space_cell_area_nm2_from_reciprocal,
     run_hartree_fock_problem,
     stored_projector_to_conventional,
+    density_to_stored_delta,
 )
 from .hamiltonian import build_hamiltonian, diagonalize_hamiltonian
 from .lattice import TDBGLattice, build_moire_k_grid
@@ -915,12 +917,21 @@ def graphene_area_over_moire_area(lattice: TDBGLattice) -> float:
     return float(graphene_area / tdbg_moire_area_nm2(lattice))
 
 
+def _reference_subtracted_tdbg_density(data: TDBGProjectedHFData, density: np.ndarray) -> np.ndarray:
+    return density_to_stored_delta(
+        density,
+        DensityConvention.PROJECTOR,
+        reference=data.reference_density,
+        reference_policy="require",
+    )
+
+
 def _hartree_density_for_policy(data: TDBGProjectedHFData, density: np.ndarray) -> np.ndarray:
     settings = data.config.interaction
     if settings.hartree_reference == "none":
         return density
     if settings.hartree_reference == "charge_neutral":
-        return density - data.reference_density
+        return _reference_subtracted_tdbg_density(data, density)
     raise ValueError(f"Unsupported TDBG Hartree reference policy: {settings.hartree_reference!r}")
 
 
@@ -929,7 +940,7 @@ def _fock_density_for_policy(data: TDBGProjectedHFData, density: np.ndarray) -> 
     if settings.fock_density == "absolute":
         return density
     if settings.fock_density == "reference_subtracted":
-        return density - data.reference_density
+        return _reference_subtracted_tdbg_density(data, density)
     raise ValueError(f"Unsupported TDBG Fock density policy: {settings.fock_density!r}")
 
 
@@ -1062,7 +1073,7 @@ def tdbg_energy_components(
     if density.shape != (data.nt, data.nt, data.nk):
         raise ValueError(f"Expected density shape {(data.nt, data.nt, data.nk)}, got {density.shape}")
     onebody = _stored_inner_ev(data.h0, density, data.nk)
-    onebody_excess = _stored_inner_ev(data.h0, density - data.reference_density, data.nk)
+    onebody_excess = _stored_inner_ev(data.h0, _reference_subtracted_tdbg_density(data, density), data.nk)
 
     zero = np.zeros_like(density)
     if interaction_components is None:
