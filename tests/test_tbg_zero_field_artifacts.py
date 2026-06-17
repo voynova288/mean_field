@@ -15,6 +15,7 @@ from mean_field.systems.tbg.zero_field import (
     B0HFBenchmarkRun,
     B0HFBenchmarkRuntime,
     B0HFBenchmarkRuntimeParity,
+    B0HFBenchmarkSuiteResult,
     BMUnstrainedBenchmarkRun,
     BMUnstrainedParity,
     BMUnstrainedRun,
@@ -28,6 +29,7 @@ from mean_field.systems.tbg.zero_field import (
     complex_to_pair,
     empty_overlap_block_set,
     write_b0_hf_benchmark_contract_sidecars,
+    write_b0_hf_suite_contract_sidecars,
     write_bm_unstrained_benchmark_contract_sidecars,
 )
 
@@ -328,3 +330,33 @@ def test_tbg_zero_field_b0_hf_contract_sidecars_are_metadata_only(tmp_path: Path
 
     with pytest.raises(FileExistsError, match="Refusing to overwrite"):
         write_b0_hf_benchmark_contract_sidecars(output_dir, result)
+
+
+def test_tbg_zero_field_b0_hf_suite_contract_sidecars_summarize_cases_without_arrays(tmp_path: Path) -> None:
+    result = _b0_hf_benchmark_result(tmp_path)
+    suite_result = B0HFBenchmarkSuiteResult(case_results=(result,))
+    output_dir = tmp_path / "b0_suite"
+    output_dir.mkdir()
+    suite_summary = output_dir / "suite_summary.tsv"
+    suite_summary.write_text("benchmark_id\tconverged\nunit_b0\ttrue\n", encoding="utf-8")
+
+    write_b0_hf_suite_contract_sidecars(
+        output_dir,
+        suite_result,
+        artifact_paths={"suite_summary_tsv": suite_summary},
+    )
+
+    loaded = load_result(output_dir)
+    assert loaded.manifest["metadata"]["workflow"] == "tbg.zero_field.b0_hf_suite"
+    assert loaded.manifest["metadata"]["runner_kind"] == "b0_hf_suite"
+    assert "array_summaries" not in loaded.manifest["metadata"]
+    assert loaded.manifest["files"]["suite_summary_tsv"] == "suite_summary.tsv"
+    assert loaded.validation is not None and loaded.validation["status"] == "all_converged"
+    assert loaded.validation["case_count"] == 1
+    assert loaded.validation["converged_count"] == 1
+    assert loaded.observables is not None and loaded.observables["case_count"] == 1
+    assert loaded.observables["case_results"][0]["benchmark_id"] == "unit_b0"
+    assert loaded.config is not None and loaded.config["benchmark_ids"] == ["unit_b0"]
+
+    with pytest.raises(FileExistsError, match="Refusing to overwrite"):
+        write_b0_hf_suite_contract_sidecars(output_dir, suite_result)

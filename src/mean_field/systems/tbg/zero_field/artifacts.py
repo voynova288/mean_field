@@ -325,6 +325,55 @@ def write_bm_unstrained_benchmark_contract_sidecars(
     )
 
 
+def _b0_hf_suite_case_summary(result: object) -> dict[str, object]:
+    case = getattr(result, "case")
+    hf_run = getattr(result, "hf_run")
+    parity = getattr(result, "parity")
+    state = hf_run.state
+    return {
+        "benchmark_id": str(case.benchmark_id),
+        "theta_deg": float(case.theta_deg),
+        "nu": int(case.nu),
+        "init_mode": str(getattr(result, "path_result").init_mode),
+        "normalized_init_mode": str(getattr(result, "path_result").normalized_init_mode),
+        "seed": int(getattr(result, "path_result").seed),
+        "lk": int(getattr(result, "path_result").lk),
+        "lg": int(getattr(result, "path_result").lg),
+        "converged": bool(hf_run.converged),
+        "exit_reason": str(hf_run.exit_reason),
+        "iterations": int(hf_run.iterations),
+        "mu_mev": float(state.mu),
+        "max_abs_band_diff_mev": float(parity.max_abs_band_diff_mev),
+        "kdist_max_abs_diff": float(parity.kdist_max_abs_diff),
+        "runtime_total_elapsed_sec": float(getattr(result, "runtime").total_elapsed_sec),
+    }
+
+
+def _b0_hf_suite_validation_payload(suite_result: object) -> dict[str, object]:
+    case_results = tuple(getattr(suite_result, "case_results"))
+    converged_count = sum(1 for result in case_results if bool(getattr(result, "hf_run").converged))
+    return {
+        "status": "all_converged" if converged_count == len(case_results) else "not_all_converged",
+        "case_count": int(len(case_results)),
+        "converged_count": int(converged_count),
+        "max_kdist_max_abs_diff": 0.0
+        if not case_results
+        else float(max(getattr(result, "parity").kdist_max_abs_diff for result in case_results)),
+        "max_abs_band_diff_mev": 0.0
+        if not case_results
+        else float(max(getattr(result, "parity").max_abs_band_diff_mev for result in case_results)),
+    }
+
+
+def _b0_hf_suite_observables(suite_result: object) -> dict[str, object]:
+    case_results = tuple(getattr(suite_result, "case_results"))
+    return {
+        "case_count": int(len(case_results)),
+        "total_elapsed_sec": float(sum(getattr(result, "runtime").total_elapsed_sec for result in case_results)),
+        "case_results": [_b0_hf_suite_case_summary(result) for result in case_results],
+    }
+
+
 def write_b0_hf_benchmark_contract_sidecars(
     output_dir: str | Path,
     result: object,
@@ -408,8 +457,72 @@ def write_b0_hf_benchmark_contract_sidecars(
     )
 
 
+def write_b0_hf_suite_contract_sidecars(
+    output_dir: str | Path,
+    suite_result: object,
+    *,
+    artifact_paths: Mapping[str, str | Path] | None = None,
+    overwrite: bool = False,
+) -> dict[str, Path]:
+    """Write public contract sidecars for a zero-field B0 HF benchmark suite.
+
+    The suite sidecar is metadata-only. It summarizes case-level scalar metrics
+    and references existing suite/case artifacts without writing numerical
+    arrays or rerunning BM/HF.
+    """
+
+    root = Path(output_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    _ensure_contract_sidecars_absent(root, overwrite=overwrite)
+    case_results = tuple(getattr(suite_result, "case_results"))
+    config_cases = [
+        {
+            "benchmark_id": str(getattr(result, "case").benchmark_id),
+            "theta_deg": float(getattr(result, "case").theta_deg),
+            "nu": int(getattr(result, "case").nu),
+            "init_mode": str(getattr(result, "path_result").init_mode),
+            "seed": int(getattr(result, "path_result").seed),
+            "lk": int(getattr(result, "path_result").lk),
+            "lg": int(getattr(result, "path_result").lg),
+        }
+        for result in case_results
+    ]
+    return write_contract_artifacts(
+        root,
+        workflow="tbg.zero_field.b0_hf_suite",
+        system_name="tbg",
+        model=ModelRecord(system_name="tbg", params={"case_count": int(len(case_results))}),
+        config={
+            "implementation": "python_b0",
+            "runner_kind": "b0_hf_suite",
+            "benchmark_ids": [item["benchmark_id"] for item in config_cases],
+            "cases": config_cases,
+        },
+        conventions={
+            "energy_unit": "meV",
+            "momentum_unit": "nm^-1",
+            "length_unit": "nm",
+            "density_convention": "stored_delta",
+            "density_axis_order": "abk",
+            "hamiltonian_axis_order": "abk",
+            "wavefunction_axis_order": "basis_band_valley_k",
+            "gauge": "tbg_zero_field_b0_projected_system_defined",
+        },
+        environment={},
+        validation=_b0_hf_suite_validation_payload(suite_result),
+        observables=_b0_hf_suite_observables(suite_result),
+        files=_relative_artifact_files(root, artifact_paths),
+        metadata={
+            "runner_kind": "b0_hf_suite",
+            "adapter": "mean_field.systems.tbg.zero_field.artifacts",
+        },
+        array_files=(),
+    )
+
+
 __all__ = [
     "complex_to_pair",
     "write_b0_hf_benchmark_contract_sidecars",
+    "write_b0_hf_suite_contract_sidecars",
     "write_bm_unstrained_benchmark_contract_sidecars",
 ]

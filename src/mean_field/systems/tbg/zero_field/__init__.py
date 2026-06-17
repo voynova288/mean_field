@@ -118,6 +118,7 @@ from .runners import (
 from .artifacts import (
     complex_to_pair,
     write_b0_hf_benchmark_contract_sidecars,
+    write_b0_hf_suite_contract_sidecars,
     write_bm_unstrained_benchmark_contract_sidecars,
 )
 
@@ -219,6 +220,7 @@ __all__ = [
     "write_b0_hf_benchmark_artifacts",
     "write_b0_hf_benchmark_contract_sidecars",
     "write_b0_hf_suite_artifacts",
+    "write_b0_hf_suite_contract_sidecars",
     "write_b0_hf_suite_summary",
     "write_bm_band_plot",
     "write_bm_unstrained_benchmark_artifacts",
