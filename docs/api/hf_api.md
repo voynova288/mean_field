@@ -37,7 +37,14 @@ Not every system adapter implements every option yet.  A system must fail explic
 
 ## run_hf
 
-`run_hf(model, cfg)` is intentionally strict.  It requires a system adapter exposing a `run_hf(config, **kwargs)` hook.  Until each system has that hook, existing paper runners remain valid internal workflows, but new public code should target this API.
+`run_hf(model, cfg)` is intentionally strict.  It requires a system adapter exposing a `run_hf(config, **kwargs)` hook, or an explicitly documented façade adapter.
+
+Current adapter coverage:
+
+- TDBG projected HF can be dispatched with `run_hf(model, cfg, tdbg_config=TDBGProjectedHFConfig(...), init_mode=...)`.  The public `HFConfig` must match the explicit TDBG config for mesh, filling, iteration limit, and precision, and must set `density_convention="projector"`.  Generic `HFConfig -> TDBGProjectedHFConfig` inference is intentionally not implemented.
+- Other systems still fail explicitly until a system-owned adapter is added.
+
+Existing paper runners remain valid internal workflows, but new public code should target this API.
 
 ## HFResult
 
