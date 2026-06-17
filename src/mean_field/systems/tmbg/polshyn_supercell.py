@@ -30,6 +30,13 @@ from ...core.hf import (
     unflatten_sector_blocks as _core_unflatten_sector_blocks,
     unflatten_sector_energies as _core_unflatten_sector_energies,
 )
+from ...core.supercell import (
+    IntegerSupercell,
+    fixed_sector_occupation_counts,
+    folded_indices_for_primitive_band,
+    folded_reference_diagonal_by_primitive_index,
+    primitive_filling_from_occupation_counts,
+)
 from .core_lattice import KPath, cumulative_distance
 from .hamiltonian import build_diagonal_block, build_hamiltonian, dirac_block
 from .lattice import TMBGLattice
@@ -38,7 +45,7 @@ from .params import TMBGParameters
 
 
 @dataclass(frozen=True)
-class PolshynDoubledCell:
+class PolshynDoubledCell(IntegerSupercell):
     """Area-2 rectangular cell used for the Polshyn tMBG SBCI.
 
     In the primitive tMBG convention ``b1=G_M1`` and ``b2=G_M2``.  The doubled
@@ -54,26 +61,12 @@ class PolshynDoubledCell:
     n21: int = 0
     n22: int = 1
 
-    @property
-    def area_ratio(self) -> int:
-        return int(self.n11 * self.n22 - self.n12 * self.n21)
-
     def reciprocal_vectors(self, lattice: TMBGLattice) -> tuple[complex, complex]:
-        b1 = complex(lattice.g_m1)
-        b2 = complex(lattice.g_m2)
-        return b1 / 2.0, b2 - b1 / 2.0
+        return super().reciprocal_vectors(lattice.g_m1, lattice.g_m2)
 
     def primitive_to_supercell_coords(self, n1: int, n2: int, fold: int = 0) -> tuple[int, int]:
-        return (int(2 * n1 + n2 + fold), int(n2))
-
-    def as_dict(self) -> dict[str, int]:
-        return {
-            "n11": int(self.n11),
-            "n12": int(self.n12),
-            "n21": int(self.n21),
-            "n22": int(self.n22),
-            "area_ratio": int(self.area_ratio),
-        }
+        sx, sy = self.primitive_shift_to_supercell(int(n1), int(n2))
+        return (int(sx + int(fold)), int(sy))
 
 
 def polshyn_doubled_cell() -> PolshynDoubledCell:
@@ -335,32 +328,44 @@ def reference_diagonal_for_projected_indices(projected_indices: tuple[int, ...],
     in the reference; remote bands above the target are empty.
     """
 
-    values: list[float] = []
-    for index in projected_indices:
-        if int(index) < int(target_band_index):
-            ref = 1.0
-        else:
-            ref = 0.0
-        values.extend([ref, ref])
-    return np.asarray(values, dtype=float)
+    return folded_reference_diagonal_by_primitive_index(
+        tuple(int(index) for index in projected_indices),
+        target_band_index=int(target_band_index),
+        folds_per_primitive=2,
+        lower_reference=1.0,
+        target_reference=0.0,
+        upper_reference=0.0,
+    )
 
 
 def occupation_counts_nu_7over2(projected_indices: tuple[int, ...], target_band_index: int) -> np.ndarray:
-    lower_count = sum(1 for index in projected_indices if int(index) < int(target_band_index))
-    target_slots = sum(1 for index in projected_indices if int(index) == int(target_band_index)) * 2
-    if target_slots != 2:
+    indices = tuple(int(index) for index in projected_indices)
+    target_fold_indices = folded_indices_for_primitive_band(
+        indices,
+        target_band_index=int(target_band_index),
+        folds_per_primitive=2,
+    )
+    if len(target_fold_indices) != 2:
         raise ValueError("Expected exactly one primitive target band, folded into two supercell bands")
-    full = 2 * int(lower_count) + 2
+    lower_count = sum(1 for index in indices if int(index) < int(target_band_index))
+    full = 2 * int(lower_count) + len(target_fold_indices)
     partial = 2 * int(lower_count) + 1
-    occ = np.full((2, 2), int(full), dtype=int)
-    occ[0, 0] = int(partial)  # spin up, valley K+
-    return occ
+    return fixed_sector_occupation_counts(
+        n_spin=2,
+        n_eta=2,
+        default_count=full,
+        overrides={(0, 0): partial},
+        n_band=2 * len(indices),
+    )
 
 
 def primitive_nu_from_counts(occupation_counts: np.ndarray, reference_diagonal: np.ndarray, *, area_ratio: int) -> float:
-    reference_total = 2 * 2 * float(np.sum(reference_diagonal))
-    occupied_total = float(np.sum(np.asarray(occupation_counts, dtype=int)))
-    return (occupied_total - reference_total) / float(area_ratio)
+    return primitive_filling_from_occupation_counts(
+        occupation_counts,
+        reference_diagonal=reference_diagonal,
+        area_ratio=int(area_ratio),
+        n_band=int(np.asarray(reference_diagonal, dtype=float).size),
+    )
 
 
 
@@ -375,7 +380,11 @@ def polshyn_nu_7over2_filling_summary(
     if target not in indices:
         raise ValueError(f"target_band_index={target} is not present in projected_indices={indices}")
     target_position = indices.index(target)
-    target_fold_indices = (2 * target_position, 2 * target_position + 1)
+    target_fold_indices = folded_indices_for_primitive_band(
+        indices,
+        target_band_index=target,
+        folds_per_primitive=2,
+    )
     reference = reference_diagonal_for_projected_indices(indices, target)
     counts = occupation_counts_nu_7over2(indices, target)
     primitive_nu = primitive_nu_from_counts(counts, reference, area_ratio=int(area_ratio))

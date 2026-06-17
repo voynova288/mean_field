@@ -8,6 +8,12 @@ import numpy as np
 from scipy.linalg import eigh
 
 from ....core.lattice import KPath, LatticeGrid
+from ....core.supercell import (
+    IntegerSupercell,
+    fixed_sector_occupation_counts,
+    folded_band_count,
+    primitive_filling_from_occupation_counts,
+)
 from ....core.hf import (
     density_from_fixed_sector_occupations as _core_density_from_fixed_sector_occupations,
     sector_block_energies,
@@ -23,52 +29,11 @@ GRAPHENE_LATTICE_A_ANGSTROM = 2.46
 
 
 @dataclass(frozen=True)
-class MoireSupercell:
-    """Integer supercell convention used by Zhang et al. SM Eqs. (7)-(8).
-
-    Real-space vectors are ``Rs1 = n11 R1 + n12 R2`` and
-    ``Rs2 = n21 R1 + n22 R2``.  If primitive reciprocal vectors are ``b1,b2``,
-    the supercell reciprocal vectors are
-
-    ``G1 = (n22 b1 - n21 b2) / Nc`` and
-    ``G2 = (n11 b2 - n12 b1) / Nc``.
-    """
-
-    n11: int
-    n12: int
-    n21: int
-    n22: int
-
-    @property
-    def area_ratio(self) -> int:
-        det = int(self.n11 * self.n22 - self.n12 * self.n21)
-        if det <= 0:
-            raise ValueError(f"Expected positive supercell determinant, got {det} for {self}")
-        return det
+class MoireSupercell(IntegerSupercell):
+    """TBG-facing wrapper around the generic integer supercell convention."""
 
     def reciprocal_vectors(self, params: TBGParameters) -> tuple[complex, complex]:
-        nc = float(self.area_ratio)
-        g1 = (self.n22 * params.g1 - self.n21 * params.g2) / nc
-        g2 = (self.n11 * params.g2 - self.n12 * params.g1) / nc
-        return complex(g1), complex(g2)
-
-    def primitive_shift_to_supercell(self, dm: int, dn: int) -> tuple[int, int]:
-        """Return supercell coordinates of ``dm*b1 + dn*b2``.
-
-        The inverse relation from Zhang SM Eq. (8) is
-        ``b1 = n11 G1 + n21 G2`` and ``b2 = n12 G1 + n22 G2``.
-        """
-
-        return (int(dm * self.n11 + dn * self.n12), int(dm * self.n21 + dn * self.n22))
-
-    def as_dict(self) -> dict[str, int]:
-        return {
-            "n11": int(self.n11),
-            "n12": int(self.n12),
-            "n21": int(self.n21),
-            "n22": int(self.n22),
-            "area_ratio": int(self.area_ratio),
-        }
+        return super().reciprocal_vectors(params.g1, params.g2)
 
 
 def zhang_sqrt3_tripled_supercell() -> MoireSupercell:
@@ -352,7 +317,7 @@ def solve_supercell_bm_model(
 
     supercell = zhang_sqrt3_tripled_supercell() if supercell is None else supercell
     n_eta, n_spin, nlocal = 2, 2, 4
-    nb = 2 * int(supercell.area_ratio)
+    nb = folded_band_count(2, supercell.area_ratio)
     nk = int(np.asarray(lattice_kvec).size)
     dim = nlocal * int(lg) * int(lg)
     if nb <= 0 or nb > dim:
@@ -677,17 +642,28 @@ def occupation_counts_svp_8over3(nb: int) -> np.ndarray:
     out of six tripled-cell bands; the other three sectors are full.
     """
 
-    if int(nb) < 2:
-        raise ValueError(f"Expected at least two folded bands, got nb={nb}")
-    occ = np.full((2, 2), int(nb), dtype=int)
-    occ[0, 1] = 2
-    return occ
+    nb = int(nb)
+    if nb != 6:
+        raise ValueError(
+            "occupation_counts_svp_8over3 is specific to Zhang's sqrt(3) x sqrt(3) tripled cell, "
+            f"which folds two primitive flat bands into nb=6; got nb={nb}"
+        )
+    return fixed_sector_occupation_counts(
+        n_spin=2,
+        n_eta=2,
+        default_count=nb,
+        overrides={(0, 1): 2},
+        n_band=nb,
+    )
 
 
 def filling_from_occupation_counts(occupation_counts: np.ndarray, *, nb: int, area_ratio: int) -> float:
-    total_occupied = int(np.sum(np.asarray(occupation_counts, dtype=int)))
-    neutral_occupied = 2 * 2 * int(nb) // 2
-    return float(total_occupied - neutral_occupied) / float(area_ratio)
+    return primitive_filling_from_occupation_counts(
+        occupation_counts,
+        reference_diagonal=0.5,
+        n_band=int(nb),
+        area_ratio=int(area_ratio),
+    )
 
 
 def density_from_fixed_sector_occupations(

@@ -28,6 +28,16 @@ from .magnetic_field import (
     magnetic_reciprocal_vector,
     magnetic_shell_shifts,
 )
+from .supercell import (
+    IntegerSupercell,
+    fixed_sector_occupation_counts,
+    folded_band_count,
+    folded_indices_for_primitive_band,
+    folded_reference_diagonal_by_primitive_index,
+    occupied_count_from_primitive_filling,
+    primitive_filling_from_occupation_counts,
+    reference_diagonal_array,
+)
 
 __all__ = [
     "GridBandsResult",
@@ -52,4 +62,12 @@ __all__ = [
     "magnetic_r_orbit_positions",
     "magnetic_reciprocal_vector",
     "magnetic_shell_shifts",
+    "IntegerSupercell",
+    "fixed_sector_occupation_counts",
+    "folded_band_count",
+    "folded_indices_for_primitive_band",
+    "folded_reference_diagonal_by_primitive_index",
+    "occupied_count_from_primitive_filling",
+    "primitive_filling_from_occupation_counts",
+    "reference_diagonal_array",
 ]
