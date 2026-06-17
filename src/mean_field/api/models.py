@@ -64,6 +64,30 @@ def make_model(system_name: str, **kwargs: Any) -> object:
             options["params"] = params
         _reject_unknown_options(system_name, options, allowed={"params"})
         return HTGModel.from_config(theta_deg, n_shells=n_shells, params=options.get("params"))
+    if key in {"htqg", "helical_twisted_quadrilayer_graphene"}:
+        from mean_field.systems.htqg import HTQGModel, HTQGParams
+
+        theta_deg = float(_pop_alias(options, "theta_deg", default=2.25))
+        n_shells = int(_pop_alias(options, "n_shells", "shell_count", default=4))
+        domain = _pop_alias(options, "domain", default="alpha_beta_alpha")
+        valley = int(_pop_alias(options, "valley", default=1))
+        if "params" not in options:
+            params_kwargs: dict[str, Any] = {}
+            if "kappa" in options:
+                params_kwargs["kappa"] = options.pop("kappa")
+            if "lambda_mdt_nm" in options:
+                params_kwargs["lambda_mdt_nm"] = options.pop("lambda_mdt_nm")
+            if "include_dirac_rotation" in options:
+                params_kwargs["include_dirac_rotation"] = options.pop("include_dirac_rotation")
+            options["params"] = HTQGParams.default(**params_kwargs)
+        _reject_unknown_options(system_name, options, allowed={"params"})
+        return HTQGModel.default(
+            theta_deg=theta_deg,
+            n_shells=n_shells,
+            domain=domain,
+            params=options.get("params"),
+            valley=valley,
+        )
     if key in {"rlg_hbn", "rng_hbn", "rnghbn", "rlg-hbn"}:
         from mean_field.systems.RnG_hBN import RLGhBNModel
 
@@ -129,7 +153,7 @@ def make_model(system_name: str, **kwargs: Any) -> object:
         params = options.pop("params", None)
         _reject_unknown_options(system_name, options, allowed=set())
         return ATMGModel.from_config(n_layers, theta_deg, n_shells=n_shells, params=params)
-    raise ValueError(f"Unsupported system_name={system_name!r}; supported: htg, rlg_hbn, tbg, tdbg, tmbg, atmg")
+    raise ValueError(f"Unsupported system_name={system_name!r}; supported: htg, htqg, rlg_hbn, tbg, tdbg, tmbg, atmg")
 
 
 def _reject_unknown_options(system_name: str, options: dict[str, Any], *, allowed: set[str]) -> None:

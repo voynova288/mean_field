@@ -4,7 +4,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .bands import compute_bands_along_path, compute_bands_on_grid
+from ...core.hf import ComponentGroup
+from ...core.lattice import KPath
+from .bands import GridBandsResult, PathBandsResult, compute_bands_along_path, compute_bands_on_grid
 from .domains import HTQGDomain, domain_displacements
 from .hamiltonian import build_hamiltonian, diagonalize_hamiltonian
 from .lattice import HTQGLattice, build_htqg_lattice, build_standard_kpath
@@ -38,34 +40,129 @@ class HTQGModel:
         )
         return cls(lattice=lattice, params=resolved_params, domain=domain_displacements(lattice, domain), valley=int(valley))
 
+    @property
+    def theta_deg(self) -> float:
+        return float(self.lattice.theta_deg)
+
+    @property
+    def n_shells(self) -> int:
+        return int(self.lattice.n_shells)
+
+    @property
+    def matrix_dim(self) -> int:
+        return int(self.lattice.matrix_dim)
+
+    def lattice_summary(self) -> dict[str, object]:
+        summary = self.lattice.to_summary_dict()
+        summary.update(
+            {
+                "domain": self.domain.key,
+                "domain_label": self.domain.label,
+                "valley": int(self.valley),
+                "kappa": float(self.params.kappa),
+                "w_ev": float(self.params.w_ev),
+                "vf_ev_nm": float(self.params.vf_ev_nm),
+                "alpha": float(self.params.alpha(self.lattice.k_theta)),
+                "model_name": self.params.model_name,
+            }
+        )
+        return summary
+
+    def component_groups(self) -> tuple[ComponentGroup, ...]:
+        """Return layer and sublattice groups in the local HTQG basis cell."""
+
+        return (
+            ComponentGroup("layer_0", np.asarray([0, 1], dtype=int)),
+            ComponentGroup("layer_1", np.asarray([2, 3], dtype=int)),
+            ComponentGroup("layer_2", np.asarray([4, 5], dtype=int)),
+            ComponentGroup("layer_3", np.asarray([6, 7], dtype=int)),
+            ComponentGroup("sublattice_A", np.asarray([0, 2, 4, 6], dtype=int)),
+            ComponentGroup("sublattice_B", np.asarray([1, 3, 5, 7], dtype=int)),
+        )
+
+    def build_hamiltonian(self, k_tilde: complex, *, valley: int | None = None) -> np.ndarray:
+        resolved_valley = self.valley if valley is None else int(valley)
+        return build_hamiltonian(k_tilde, self.lattice, self.params, domain=self.domain, valley=resolved_valley)
+
     def hamiltonian(self, k_tilde: complex) -> np.ndarray:
-        return build_hamiltonian(k_tilde, self.lattice, self.params, domain=self.domain, valley=self.valley)
+        return self.build_hamiltonian(k_tilde)
 
-    def diagonalize(self, k_tilde: complex, **kwargs):
-        return diagonalize_hamiltonian(k_tilde, self.lattice, self.params, domain=self.domain, valley=self.valley, **kwargs)
+    def diagonalize(self, k_tilde: complex, *, valley: int | None = None, **kwargs):
+        resolved_valley = self.valley if valley is None else int(valley)
+        return diagonalize_hamiltonian(k_tilde, self.lattice, self.params, domain=self.domain, valley=resolved_valley, **kwargs)
 
-    def standard_path(self, points_per_segment: int = 120):
+    def standard_kpath(self, *, points_per_segment: int = 120) -> KPath:
         return build_standard_kpath(self.lattice, points_per_segment=points_per_segment)
 
-    def path_bands(self, *, points_per_segment: int = 120, **kwargs):
+    def standard_path(self, *, points_per_segment: int = 120) -> KPath:
+        return self.standard_kpath(points_per_segment=points_per_segment)
+
+    def bands_along_path(
+        self,
+        path: KPath,
+        *,
+        valley: int | None = None,
+        band_indices: tuple[int, ...] | None = None,
+        central_band_count: int | None = None,
+        return_eigenvectors: bool = False,
+    ) -> PathBandsResult:
+        resolved_valley = self.valley if valley is None else int(valley)
         return compute_bands_along_path(
-            self.standard_path(points_per_segment=points_per_segment),
+            path,
             self.lattice,
             self.params,
             domain=self.domain,
-            valley=self.valley,
-            **kwargs,
+            valley=resolved_valley,
+            band_indices=band_indices,
+            central_band_count=central_band_count,
+            return_eigenvectors=return_eigenvectors,
         )
 
-    def grid_bands(self, mesh_size: int, **kwargs):
+    def bands_along_standard_path(
+        self,
+        *,
+        valley: int | None = None,
+        central_band_count: int | None = None,
+        points_per_segment: int = 120,
+        return_eigenvectors: bool = False,
+    ) -> PathBandsResult:
+        return self.bands_along_path(
+            self.standard_path(points_per_segment=points_per_segment),
+            valley=valley,
+            central_band_count=central_band_count,
+            return_eigenvectors=return_eigenvectors,
+        )
+
+    def bands_on_grid(
+        self,
+        mesh_size: int,
+        *,
+        valley: int | None = None,
+        band_indices: tuple[int, ...] | None = None,
+        central_band_count: int | None = None,
+        return_eigenvectors: bool = False,
+        endpoint: bool = False,
+        frac_shift: tuple[float, float] = (0.0, 0.0),
+    ) -> GridBandsResult:
+        resolved_valley = self.valley if valley is None else int(valley)
         return compute_bands_on_grid(
             mesh_size,
             self.lattice,
             self.params,
             domain=self.domain,
-            valley=self.valley,
-            **kwargs,
+            valley=resolved_valley,
+            band_indices=band_indices,
+            central_band_count=central_band_count,
+            return_eigenvectors=return_eigenvectors,
+            endpoint=endpoint,
+            frac_shift=frac_shift,
         )
+
+    def path_bands(self, *, points_per_segment: int = 120, **kwargs) -> PathBandsResult:
+        return self.bands_along_standard_path(points_per_segment=points_per_segment, **kwargs)
+
+    def grid_bands(self, mesh_size: int, **kwargs) -> GridBandsResult:
+        return self.bands_on_grid(mesh_size, **kwargs)
 
 
 __all__ = ["HTQGModel"]
