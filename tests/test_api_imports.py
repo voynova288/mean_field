@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from mean_field.api import HFConfig, component_group_records, component_groups, compute_bands, make_model, model_record, run_hf
 
@@ -21,6 +22,28 @@ def test_public_model_record_and_component_group_contract() -> None:
     assert record.system_name == "htg"
     assert "theta_deg" in record.lattice
     assert component_groups(model) == ()
+
+
+def test_public_make_model_tbg_zero_field_bm_band_contract() -> None:
+    model = make_model("tbg", variant="zero_field_bm", theta_deg=1.2, lg=1)
+    record = model_record(model, system_name="tbg")
+
+    assert record.system_name == "tbg"
+    assert record.lattice["model_name"] == "zero_field_bm"
+    assert model.matrix_dim == 4
+    assert [group.name for group in component_groups(model)] == ["layer_bottom", "layer_top"]
+    path_bundle = compute_bands(model, n_bands=2, points_per_segment=1)
+    assert path_bundle.energies.shape == (4, 2)
+    assert path_bundle.basis_metadata["component_groups"] == [
+        {"name": "layer_bottom", "indices": [0, 1]},
+        {"name": "layer_top", "indices": [2, 3]},
+    ]
+    grid_bundle = compute_bands(model, grid_mesh=2, n_bands=2)
+    assert grid_bundle.energies.shape == (2, 2, 2)
+    with pytest.raises(NotImplementedError, match="central two bands"):
+        compute_bands(model, n_bands=4, points_per_segment=1)
+    with pytest.raises(NotImplementedError, match="zero_field_bm"):
+        make_model("tbg", variant="finite_field")
 
 
 def test_rlg_hbn_model_declares_layer_component_groups() -> None:

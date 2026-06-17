@@ -52,7 +52,7 @@ from .hf import (
     screened_coulomb,
     update_restricted_density,
 )
-from .model import BMSolution, build_b0_uniform_lattice, build_sigma_z_from_uk, solve_bm_model
+from .model import BMSolution, TBGZeroFieldBMModel, build_b0_uniform_lattice, build_sigma_z_from_uk, solve_bm_model
 from .overlap import (
     OverlapDiagnostics,
     calculate_overlap,
@@ -124,6 +124,7 @@ from .artifacts import (
 
 __all__ = [
     "BMSolution",
+    "TBGZeroFieldBMModel",
     "B0HFBenchmarkRun",
     "B0HFBenchmarkRuntime",
     "B0HFBenchmarkRuntimeParity",

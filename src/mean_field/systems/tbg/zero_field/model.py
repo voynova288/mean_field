@@ -6,8 +6,11 @@ import math
 import numpy as np
 from scipy.linalg import eigh
 
-from ....core.lattice import LatticeGrid
+from ....core.bands import GridBandsResult, PathBandsResult
+from ....core.hf import ComponentGroup
+from ....core.lattice import KPath, LatticeGrid
 from ..params import TBGParameters
+from .path import build_b0_benchmark_kpath, build_fig6_kpath, build_gamma_m_k_gamma_kprime_kpath
 
 
 @dataclass(frozen=True)
@@ -50,6 +53,187 @@ class BMSolution:
             raise ValueError(f"Expected uk shape {self.uk.shape}, got {uk.shape}")
         sigma_z = build_sigma_z_from_uk(uk, lg=self.lg, n_spin=self.n_spin)
         return replace(self, uk=uk.copy(), sigma_z=sigma_z)
+
+
+def _complex_pair(value: complex) -> list[float]:
+    z = complex(value)
+    return [float(z.real), float(z.imag)]
+
+
+def _resolve_bm_valley_index(valley: int) -> int:
+    value = int(valley)
+    if value == 1:
+        return 0
+    if value == -1:
+        return 1
+    raise ValueError(f"TBG zero-field BM valley must be +1 or -1, got {valley}")
+
+
+def _resolve_bm_band_count(n_bands: int | None) -> int:
+    if n_bands is None:
+        return 2
+    count = int(n_bands)
+    if count != 2:
+        raise NotImplementedError("TBG zero-field BM public adapter currently exposes only the central two bands")
+    return count
+
+
+@dataclass(frozen=True)
+class TBGZeroFieldBMModel:
+    """Narrow public adapter for zero-field BM single-particle bands."""
+
+    params: TBGParameters
+    theta_deg: float
+    lg: int = 9
+    sigma_rotation: bool = True
+    periodic_g_grid: bool = True
+
+    @classmethod
+    def from_config(
+        cls,
+        theta_deg: float,
+        *,
+        lg: int = 9,
+        params: TBGParameters | None = None,
+        sigma_rotation: bool = True,
+        periodic_g_grid: bool = True,
+    ) -> "TBGZeroFieldBMModel":
+        resolved_params = params if params is not None else TBGParameters.from_degrees(theta_deg)
+        return cls(
+            params=resolved_params,
+            theta_deg=float(theta_deg),
+            lg=int(lg),
+            sigma_rotation=bool(sigma_rotation),
+            periodic_g_grid=bool(periodic_g_grid),
+        )
+
+    @property
+    def matrix_dim(self) -> int:
+        return int(4 * self.lg * self.lg)
+
+    def lattice_summary(self) -> dict[str, object]:
+        return {
+            "theta_deg": float(self.theta_deg),
+            "lg": int(self.lg),
+            "g1_nm_inv": _complex_pair(self.params.g1),
+            "g2_nm_inv": _complex_pair(self.params.g2),
+            "a1_nm": _complex_pair(self.params.a1),
+            "a2_nm": _complex_pair(self.params.a2),
+            "kt_nm_inv": _complex_pair(self.params.kt),
+            "kb_nm_inv": _complex_pair(self.params.kb_point),
+            "model_name": "zero_field_bm",
+            "sigma_rotation": bool(self.sigma_rotation),
+            "periodic_g_grid": bool(self.periodic_g_grid),
+        }
+
+    def component_groups(self) -> tuple[ComponentGroup, ...]:
+        return (
+            ComponentGroup("layer_bottom", np.asarray([0, 1], dtype=int)),
+            ComponentGroup("layer_top", np.asarray([2, 3], dtype=int)),
+        )
+
+    def standard_kpath(self, *, points_per_segment: int = 120, path_kind: str = "fig6") -> KPath:
+        kind = str(path_kind).strip().lower().replace("-", "_")
+        if kind in {"fig6", "m_k_gamma_m"}:
+            return build_fig6_kpath(self.params, int(points_per_segment))
+        if kind in {"b0_benchmark", "benchmark"}:
+            return build_b0_benchmark_kpath(self.params, int(points_per_segment))
+        if kind in {"gamma_m_k_gamma_kprime", "gamma_m_k_gamma_kp"}:
+            return build_gamma_m_k_gamma_kprime_kpath(self.params, int(points_per_segment))
+        raise ValueError(f"Unsupported TBG zero-field BM path_kind={path_kind!r}")
+
+    def _solve(self, kvec: np.ndarray) -> BMSolution:
+        return solve_bm_model(
+            self.params,
+            np.asarray(kvec, dtype=np.complex128).reshape(-1),
+            lg=int(self.lg),
+            sigma_rotation=bool(self.sigma_rotation),
+            calculate_chern_operator=False,
+            periodic_g_grid=bool(self.periodic_g_grid),
+        )
+
+    def build_hamiltonian(self, k_tilde: complex, *, valley: int = 1) -> np.ndarray:
+        solution = self._solve(np.asarray([complex(k_tilde)], dtype=np.complex128))
+        return np.asarray(solution.hamiltonian[:, :, _resolve_bm_valley_index(valley), 0], dtype=np.complex128)
+
+    def diagonalize(
+        self,
+        k_tilde: complex,
+        *,
+        valley: int = 1,
+        n_bands: int | None = None,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        _resolve_bm_band_count(n_bands)
+        solution = self._solve(np.asarray([complex(k_tilde)], dtype=np.complex128))
+        valley_index = _resolve_bm_valley_index(valley)
+        return (
+            np.asarray(solution.spectrum[:, valley_index, 0], dtype=float),
+            np.asarray(solution.uk[:, :, valley_index, 0], dtype=np.complex128),
+        )
+
+    def bands_along_path(
+        self,
+        path: KPath,
+        *,
+        valley: int = 1,
+        n_bands: int | None = None,
+        return_eigenvectors: bool = False,
+    ) -> PathBandsResult:
+        _resolve_bm_band_count(n_bands)
+        solution = self._solve(np.asarray(path.kvec, dtype=np.complex128))
+        valley_index = _resolve_bm_valley_index(valley)
+        energies = np.asarray(solution.spectrum[:, valley_index, :], dtype=float).T
+        eigenvectors = None
+        if return_eigenvectors:
+            eigenvectors = np.transpose(np.asarray(solution.uk[:, :, valley_index, :], dtype=np.complex128), (2, 0, 1))
+        return PathBandsResult(
+            path=path,
+            energies=energies,
+            eigenvectors=eigenvectors,
+            band_indices=(self.matrix_dim // 2 - 1, self.matrix_dim // 2),
+            metadata={"system": "tbg", "model": "zero_field_bm", "valley": int(valley), "lg": int(self.lg)},
+        )
+
+    def bands_on_grid(
+        self,
+        mesh_size: int,
+        *,
+        valley: int = 1,
+        n_bands: int | None = None,
+        return_eigenvectors: bool = False,
+        endpoint: bool = False,
+        frac_shift: tuple[float, float] = (0.0, 0.0),
+    ) -> GridBandsResult:
+        _resolve_bm_band_count(n_bands)
+        mesh = int(mesh_size)
+        if mesh <= 0:
+            raise ValueError(f"mesh_size must be positive, got {mesh_size}")
+        if endpoint:
+            frac_1d = np.linspace(0.0, 1.0, mesh, dtype=float)
+        else:
+            frac_1d = (np.arange(mesh, dtype=float) + np.asarray(frac_shift, dtype=float)[0]) / float(mesh)
+        frac_y = frac_1d if endpoint else (np.arange(mesh, dtype=float) + np.asarray(frac_shift, dtype=float)[1]) / float(mesh)
+        f1, f2 = np.meshgrid(frac_1d, frac_y, indexing="ij")
+        kvec = f1 * self.params.g1 + f2 * self.params.g2
+        solution = self._solve(np.asarray(kvec, dtype=np.complex128).reshape(-1))
+        valley_index = _resolve_bm_valley_index(valley)
+        energies = np.asarray(solution.spectrum[:, valley_index, :], dtype=float).T.reshape(mesh, mesh, 2)
+        eigenvectors = None
+        if return_eigenvectors:
+            eigenvectors = np.transpose(np.asarray(solution.uk[:, :, valley_index, :], dtype=np.complex128), (2, 0, 1)).reshape(
+                mesh,
+                mesh,
+                self.matrix_dim,
+                2,
+            )
+        return GridBandsResult(
+            k_grid_frac=np.stack([f1, f2], axis=-1),
+            kvec=np.asarray(kvec, dtype=np.complex128),
+            energies=energies,
+            eigenvectors=eigenvectors,
+            band_indices=(self.matrix_dim // 2 - 1, self.matrix_dim // 2),
+            metadata={"system": "tbg", "model": "zero_field_bm", "valley": int(valley), "lg": int(self.lg)},
+        )
 
 
 def dirac(k: complex, zeta: int, theta0: float = 0.0) -> np.ndarray:

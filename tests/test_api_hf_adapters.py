@@ -24,6 +24,14 @@ def _tiny_tdbg_config() -> TDBGProjectedHFConfig:
     )
 
 
+def test_public_run_hf_tbg_bm_requires_explicit_system_workflow() -> None:
+    model = make_model("tbg", variant="zero_field_bm", theta_deg=1.2, lg=1)
+    cfg = HFConfig(filling=0, mesh=(1, 1), max_iter=1)
+
+    with pytest.raises(NotImplementedError, match=r"no run_hf\(config\) adapter"):
+        run_hf(model, cfg)
+
+
 def test_public_run_hf_tdbg_requires_explicit_projected_config() -> None:
     model = make_model("tdbg", theta_deg=1.38, cut=1.0)
     cfg = HFConfig(filling=2, mesh=(1, 1), max_iter=1, precision=1.0e-7, density_convention="projector")

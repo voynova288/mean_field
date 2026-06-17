@@ -14,6 +14,7 @@ Current façade names:
 
 - `htg`
 - `rlg_hbn`
+- `tbg` (`variant="zero_field_bm"` only; BM single-particle bands)
 - `tdbg`
 - `tmbg`
 - `atmg`

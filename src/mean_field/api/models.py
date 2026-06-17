@@ -82,6 +82,28 @@ def make_model(system_name: str, **kwargs: Any) -> object:
             shell_count=shell_count,
             params=params,
         )
+    if key in {"tbg", "twisted_bilayer_graphene"}:
+        from mean_field.systems.tbg import TBGZeroFieldBMModel
+
+        variant = str(_pop_alias(options, "variant", "model", default="zero_field_bm")).lower().replace("-", "_")
+        if variant not in {"zero_field_bm", "bm", "b0_bm"}:
+            raise NotImplementedError(
+                "The public TBG model adapter currently supports only variant='zero_field_bm' BM bands; "
+                "TBG HF requires an explicit system workflow."
+            )
+        theta_deg = float(_pop_alias(options, "theta_deg", default=1.05))
+        lg = int(_pop_alias(options, "lg", default=9))
+        params = options.pop("params", None)
+        sigma_rotation = bool(_pop_alias(options, "sigma_rotation", default=True))
+        periodic_g_grid = bool(_pop_alias(options, "periodic_g_grid", default=True))
+        _reject_unknown_options(system_name, options, allowed=set())
+        return TBGZeroFieldBMModel.from_config(
+            theta_deg,
+            lg=lg,
+            params=params,
+            sigma_rotation=sigma_rotation,
+            periodic_g_grid=periodic_g_grid,
+        )
     if key == "tdbg":
         from mean_field.systems.tdbg import TDBGModel
 
@@ -107,7 +129,7 @@ def make_model(system_name: str, **kwargs: Any) -> object:
         params = options.pop("params", None)
         _reject_unknown_options(system_name, options, allowed=set())
         return ATMGModel.from_config(n_layers, theta_deg, n_shells=n_shells, params=params)
-    raise ValueError(f"Unsupported system_name={system_name!r}; supported: htg, rlg_hbn, tdbg, tmbg, atmg")
+    raise ValueError(f"Unsupported system_name={system_name!r}; supported: htg, rlg_hbn, tbg, tdbg, tmbg, atmg")
 
 
 def _reject_unknown_options(system_name: str, options: dict[str, Any], *, allowed: set[str]) -> None:
