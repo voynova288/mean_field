@@ -427,6 +427,53 @@ def _tdbg_output_dir_from_payload(payload: dict[str, Any], output_dir: Path | No
     return None if value is None else Path(str(value))
 
 
+def _validate_tdbg_cli_hf_config(hf_config: HFConfig, tdbg_config: Any) -> None:
+    if int(hf_config.mesh[0]) != int(hf_config.mesh[1]) or int(hf_config.mesh[0]) != int(tdbg_config.mesh_size):
+        raise ValueError(
+            "TDBG projected-HF CLI requires hf.mesh=(mesh_size, mesh_size) matching "
+            f"tdbg_projected_hf.mesh_size={tdbg_config.mesh_size}, got {hf_config.mesh}"
+        )
+    if float(hf_config.filling) != float(int(tdbg_config.filling)):
+        raise ValueError(f"TDBG projected-HF CLI requires hf.filling={tdbg_config.filling}, got {hf_config.filling}")
+    if int(hf_config.max_iter) != int(tdbg_config.max_iter):
+        raise ValueError(
+            f"TDBG projected-HF CLI requires hf.max_iter={tdbg_config.max_iter}, got {hf_config.max_iter}"
+        )
+    if not np.isclose(float(hf_config.precision), float(tdbg_config.precision)):
+        raise ValueError(
+            f"TDBG projected-HF CLI requires hf.precision={tdbg_config.precision}, got {hf_config.precision}"
+        )
+    if hf_config.density_convention != "projector":
+        raise ValueError("TDBG projected-HF CLI requires hf.density_convention='projector'")
+    if hf_config.active_window is not None or hf_config.active_band_indices is not None:
+        raise NotImplementedError(
+            "TDBG projected-HF CLI takes the projected window from tdbg_projected_hf.window; "
+            "leave hf.active_window/active_band_indices unset"
+        )
+
+
+def _validate_tdbg_output_root_is_fresh(output_dir: Path) -> None:
+    if output_dir.exists() and any(output_dir.iterdir()):
+        raise FileExistsError(
+            f"Refusing to run TDBG projected HF into non-empty output directory {output_dir}. "
+            "Use a fresh directory."
+        )
+
+
+def _save_tdbg_projected_hf_result(result: Any, output_dir: Path) -> Path:
+    from .systems.tdbg.artifacts import write_tdbg_projected_hf_artifacts
+    from .systems.tdbg.projected_hf import TDBGProjectedHFResult
+
+    raw_state = getattr(result, "state", None)
+    if not isinstance(raw_state, TDBGProjectedHFResult):
+        raise TypeError(
+            "TDBG projected-HF CLI expected mean_field.api.run_hf to return an HFResult wrapping "
+            f"TDBGProjectedHFResult, got {type(raw_state).__name__}"
+        )
+    paths = write_tdbg_projected_hf_artifacts(output_dir, raw_state)
+    return paths["manifest.json"]
+
+
 def _validate_tdbg_workflow_payload(payload: dict[str, Any]) -> None:
     _reject_unknown_keys(
         str(payload.get("workflow", "workflow")),
@@ -452,6 +499,7 @@ def cmd_tdbg_projected_hf(config_path: Path, *, output_dir: Path | None = None, 
     tdbg_config = _tdbg_projected_hf_config_from_payload(payload)
     validate_tdbg_projected_hf_config(tdbg_config)
     hf_config = _tdbg_hf_config_from_payload(payload, tdbg_config)
+    _validate_tdbg_cli_hf_config(hf_config, tdbg_config)
     init_mode, seed = _tdbg_run_config_from_payload(payload)
     resolved_output_dir = _tdbg_output_dir_from_payload(payload, output_dir)
 
@@ -470,6 +518,7 @@ def cmd_tdbg_projected_hf(config_path: Path, *, output_dir: Path | None = None, 
 
     if resolved_output_dir is None:
         raise ValueError("TDBG projected-HF run requires --output-dir or result.output_dir in the config")
+    _validate_tdbg_output_root_is_fresh(resolved_output_dir)
     _ensure_not_running_compute_on_login_node("TDBG projected HF")
     params = tdbg_parameters_from_paper_ud_for_valley(
         tdbg_config.paper_ud_ev,
@@ -479,7 +528,7 @@ def cmd_tdbg_projected_hf(config_path: Path, *, output_dir: Path | None = None, 
     )
     model = make_model("tdbg", theta_deg=tdbg_config.theta_deg, cut=tdbg_config.cut, params=params)
     result = run_hf(model, hf_config, tdbg_config=tdbg_config, init_mode=init_mode, seed=seed)
-    manifest_path = result.save(resolved_output_dir)
+    manifest_path = _save_tdbg_projected_hf_result(result, resolved_output_dir)
     print(f"manifest={manifest_path}\toutput_dir={resolved_output_dir}")
     return 0
 

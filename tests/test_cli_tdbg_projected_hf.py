@@ -4,9 +4,13 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
+import pytest
+
 from mean_field import cli
-from mean_field.api import HFConfig
-from mean_field.systems.tdbg import TDBGProjectedHFConfig
+from mean_field.api import HFConfig, load_result, required_artifact_files
+from mean_field.systems.tdbg import TDBGInteractionSettings, TDBGProjectedHFConfig, TDBGProjectedHFResult
+from mean_field.systems.tdbg.projected_hf import TDBGStateLabel
 
 
 def _tdbg_cli_config(output_dir: Path | None = None) -> dict[str, object]:
@@ -49,6 +53,56 @@ def _tdbg_cli_config(output_dir: Path | None = None) -> dict[str, object]:
     return payload
 
 
+def _fake_tdbg_projected_hf_result() -> TDBGProjectedHFResult:
+    nt = 4
+    nk = 2
+    h0 = np.zeros((nt, nt, nk), dtype=np.complex128)
+    energies = np.asarray(
+        [[-1.0, -0.9], [-0.4, -0.3], [0.2, 0.3], [0.8, 0.9]],
+        dtype=float,
+    )
+    state = SimpleNamespace(
+        density=np.zeros_like(h0),
+        hamiltonian=np.zeros_like(h0),
+        h0=h0,
+        energies=energies,
+        diagnostics={"final_raw_norm": 0.0, "hf_energy": -0.25},
+    )
+    config = TDBGProjectedHFConfig(
+        theta_deg=1.38,
+        cut=1.0,
+        mesh_size=1,
+        paper_ud_ev=0.09,
+        paper_ud_convention="minus_xi_ud_over3",
+        interaction=TDBGInteractionSettings(include_intersite=False, include_onsite=False),
+        max_iter=1,
+        precision=1.0e-7,
+    )
+    labels = tuple(
+        TDBGStateLabel(index=i, spin="up" if i % 2 == 0 else "down", valley=1 if i < 2 else -1, band_position=i - 2, band_index=10 + i)
+        for i in range(nt)
+    )
+    data = SimpleNamespace(
+        config=config,
+        k_grid_frac=np.zeros((1, nk, 2), dtype=float),
+        kvec=np.asarray([0.0 + 0.0j, 0.1 + 0.2j], dtype=np.complex128),
+        band_indices=(10, 11),
+        labels=labels,
+        h0=h0,
+        reference_density=np.zeros_like(h0),
+        n_occupied_per_k=2,
+        moire_area_nm2=100.0,
+    )
+    return TDBGProjectedHFResult(
+        run=SimpleNamespace(state=state, converged=True, exit_reason="converged", iterations=1),
+        data=data,  # type: ignore[arg-type]
+        init_mode="sp",
+        seed=11,
+        order_parameters={"classification": "SP_up"},
+        energy_components={"total_ev": -0.25},
+    )
+
+
 def test_cli_tdbg_projected_hf_dry_run_validates_config_without_compute(
     monkeypatch,
     capsys,
@@ -74,6 +128,35 @@ def test_cli_tdbg_projected_hf_dry_run_validates_config_without_compute(
     assert f"output_dir={tmp_path / 'out'}" in out
 
 
+def test_cli_tdbg_projected_hf_dry_run_rejects_public_adapter_mismatch(tmp_path: Path) -> None:
+    payload = _tdbg_cli_config(tmp_path / "out")
+    payload["hf"] = {"mesh": [2, 2]}
+    config_path = tmp_path / "mismatch.json"
+    config_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="hf.mesh"):
+        cli.main(["tdbg", "projected-hf", str(config_path), "--dry-run"])
+
+
+def test_cli_tdbg_projected_hf_rejects_nonempty_output_before_compute(monkeypatch, tmp_path: Path) -> None:
+    config_path = tmp_path / "tdbg_projected_hf.json"
+    output_dir = tmp_path / "run"
+    output_dir.mkdir()
+    (output_dir / "existing.txt").write_text("keep", encoding="utf-8")
+    config_path.write_text(json.dumps(_tdbg_cli_config()), encoding="utf-8")
+    monkeypatch.setattr(
+        cli,
+        "_ensure_not_running_compute_on_login_node",
+        lambda workload_name: (_ for _ in ()).throw(AssertionError("compute guard called")),
+    )
+    monkeypatch.setattr(cli, "make_model", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("make_model called")))
+    monkeypatch.setattr(cli, "run_hf", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("run_hf called")))
+
+    with pytest.raises(FileExistsError, match="non-empty output directory"):
+        cli.main(["tdbg", "projected-hf", str(config_path), "--output-dir", str(output_dir)])
+
+
+
 def test_cli_tdbg_projected_hf_dispatches_public_adapter_and_saves_result(
     monkeypatch,
     capsys,
@@ -91,19 +174,11 @@ def test_cli_tdbg_projected_hf_dispatches_public_adapter_and_saves_result(
         called["model_kwargs"] = kwargs
         return SimpleNamespace(system_name=system_name)
 
-    class FakeResult:
-        def save(self, root: Path) -> Path:
-            called["save_root"] = root
-            root.mkdir(parents=True, exist_ok=True)
-            manifest = root / "manifest.json"
-            manifest.write_text("{}", encoding="utf-8")
-            return manifest
-
-    def fake_run_hf(model: object, hf_config: HFConfig, **kwargs: object) -> FakeResult:
+    def fake_run_hf(model: object, hf_config: HFConfig, **kwargs: object) -> SimpleNamespace:
         called["model"] = model
         called["hf_config"] = hf_config
         called["run_kwargs"] = kwargs
-        return FakeResult()
+        return SimpleNamespace(state=_fake_tdbg_projected_hf_result())
 
     monkeypatch.setattr(cli, "make_model", fake_make_model)
     monkeypatch.setattr(cli, "run_hf", fake_run_hf)
@@ -123,7 +198,15 @@ def test_cli_tdbg_projected_hf_dispatches_public_adapter_and_saves_result(
     assert isinstance(run_kwargs["tdbg_config"], TDBGProjectedHFConfig)  # type: ignore[index]
     assert run_kwargs["init_mode"] == "sp"  # type: ignore[index]
     assert run_kwargs["seed"] == 11  # type: ignore[index]
-    assert called["save_root"] == output_dir
+    assert {path.name for path in output_dir.iterdir()} >= set(required_artifact_files()) | {
+        "hf_state.npz",
+        "projected_hf_summary.json",
+        "state_labels.json",
+    }
+    loaded = load_result(output_dir)
+    assert loaded.manifest["metadata"]["workflow"] == "tdbg.projected_hf"
+    assert loaded.manifest["files"]["hf_state"] == "hf_state.npz"
+    assert loaded.conventions is not None and loaded.conventions["density_convention"] == "projector"
     assert f"manifest={output_dir / 'manifest.json'}" in capsys.readouterr().out
 
 
