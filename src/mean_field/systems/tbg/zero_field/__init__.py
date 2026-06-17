@@ -115,6 +115,7 @@ from .runners import (
     write_b0_hf_suite_summary,
     write_bm_unstrained_benchmark_artifacts,
 )
+from .artifacts import complex_to_pair, write_bm_unstrained_benchmark_contract_sidecars
 
 __all__ = [
     "BMSolution",
@@ -167,6 +168,7 @@ __all__ = [
     "canonical_fig6_state_sequence",
     "canonical_fig6_flavor_sequence",
     "compute_density_overlap_trace",
+    "complex_to_pair",
     "compute_hf_energy",
     "compare_hf_path_to_reference",
     "coulomb_unit",
@@ -215,6 +217,7 @@ __all__ = [
     "write_b0_hf_suite_summary",
     "write_bm_band_plot",
     "write_bm_unstrained_benchmark_artifacts",
+    "write_bm_unstrained_benchmark_contract_sidecars",
     "write_hf_band_plot",
     "write_hf_path_nodes_tsv",
     "write_path_band_plot",
