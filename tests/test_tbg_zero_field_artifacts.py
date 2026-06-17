@@ -28,8 +28,11 @@ from mean_field.systems.tbg.zero_field import (
     RestrictedHartreeFockState,
     complex_to_pair,
     empty_overlap_block_set,
+    write_b0_hf_benchmark_artifacts,
     write_b0_hf_benchmark_contract_sidecars,
+    write_b0_hf_suite_artifacts,
     write_b0_hf_suite_contract_sidecars,
+    write_bm_unstrained_benchmark_artifacts,
     write_bm_unstrained_benchmark_contract_sidecars,
 )
 
@@ -360,3 +363,73 @@ def test_tbg_zero_field_b0_hf_suite_contract_sidecars_summarize_cases_without_ar
 
     with pytest.raises(FileExistsError, match="Refusing to overwrite"):
         write_b0_hf_suite_contract_sidecars(output_dir, suite_result)
+
+
+def _fake_plot_paths(output_dir: Path | str, *, stem: str = "band_plot") -> dict[str, Path]:
+    root = Path(output_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    png = root / f"{stem}.png"
+    pdf = root / f"{stem}.pdf"
+    png.write_text("png", encoding="utf-8")
+    pdf.write_text("pdf", encoding="utf-8")
+    return {"band_plot_png": png, "band_plot_pdf": pdf}
+
+
+def test_tbg_zero_field_bm_runner_writer_adds_contract_sidecars(monkeypatch, tmp_path: Path) -> None:
+    import mean_field.systems.tbg.zero_field.runners as runner_module
+
+    monkeypatch.setattr(
+        runner_module,
+        "write_bm_band_plot",
+        lambda output_dir, **kwargs: _fake_plot_paths(output_dir, stem=str(kwargs.get("stem", "band_plot"))),
+    )
+    result = _bm_benchmark_result(tmp_path)
+    output_dir = tmp_path / "bm_runner"
+
+    artifact_paths = write_bm_unstrained_benchmark_artifacts(output_dir, result)
+
+    loaded = load_result(output_dir)
+    assert loaded.manifest["metadata"]["workflow"] == "tbg.zero_field.bm_unstrained_benchmark"
+    assert loaded.manifest["files"]["path_tsv"] == "computed_bm_path.tsv"
+    assert "array_summaries" not in loaded.manifest["metadata"]
+    assert artifact_paths["path_tsv"].is_file()
+    with pytest.raises(FileExistsError, match="Refusing to overwrite"):
+        write_bm_unstrained_benchmark_artifacts(output_dir, result)
+    write_bm_unstrained_benchmark_artifacts(output_dir, result, overwrite_contract_sidecars=True)
+
+
+def test_tbg_zero_field_b0_runner_writers_add_contract_sidecars(monkeypatch, tmp_path: Path) -> None:
+    import mean_field.systems.tbg.zero_field.runners as runner_module
+
+    monkeypatch.setattr(
+        runner_module,
+        "write_hf_band_plot",
+        lambda output_dir, result, stem="band_plot": _fake_plot_paths(output_dir, stem=stem),
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "write_hf_scf_band_plot",
+        lambda output_dir, result, stem="band_plot_scf_grid": _fake_plot_paths(output_dir, stem=stem),
+    )
+    result = _b0_hf_benchmark_result(tmp_path)
+    output_dir = tmp_path / "b0_runner"
+
+    artifact_paths = write_b0_hf_benchmark_artifacts(output_dir, result)
+
+    loaded = load_result(output_dir)
+    assert loaded.manifest["metadata"]["workflow"] == "tbg.zero_field.b0_hf_benchmark"
+    assert loaded.manifest["files"]["path_tsv"] == "computed_hf_path.tsv"
+    assert loaded.validation is not None and loaded.validation["iterations"] == result.hf_run.iterations
+    assert "array_summaries" not in loaded.manifest["metadata"]
+    assert artifact_paths["path_tsv"].is_file()
+    with pytest.raises(FileExistsError, match="Refusing to overwrite"):
+        write_b0_hf_benchmark_artifacts(output_dir, result)
+
+    suite_output_dir = tmp_path / "b0_suite_runner"
+    suite_artifacts = write_b0_hf_suite_artifacts(suite_output_dir, B0HFBenchmarkSuiteResult(case_results=(result,)))
+    loaded_suite = load_result(suite_output_dir)
+    assert loaded_suite.manifest["metadata"]["workflow"] == "tbg.zero_field.b0_hf_suite"
+    assert loaded_suite.manifest["files"]["suite_summary_tsv"] == "suite_summary.tsv"
+    assert loaded_suite.validation is not None and loaded_suite.validation["case_count"] == 1
+    assert suite_artifacts["suite_summary_tsv"].is_file()
+    assert load_result(suite_output_dir / result.case.benchmark_id).manifest["metadata"]["workflow"] == "tbg.zero_field.b0_hf_benchmark"

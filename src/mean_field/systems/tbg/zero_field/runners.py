@@ -7,6 +7,7 @@ from time import perf_counter
 
 import numpy as np
 
+from ....api.artifacts import required_artifact_files
 from ....benchmarks import (
     BMRuntimeBenchmarkRecord,
     BMUnstrainedReference,
@@ -31,6 +32,11 @@ from .hf import (
     normalize_full_init_mode,
     run_full_hartree_fock,
     run_restricted_hartree_fock,
+)
+from .artifacts import (
+    write_b0_hf_benchmark_contract_sidecars,
+    write_b0_hf_suite_contract_sidecars,
+    write_bm_unstrained_benchmark_contract_sidecars,
 )
 from .hf_runners import (
     HFPathParity,
@@ -180,6 +186,22 @@ def _b0_parameter_reference_map() -> dict[float, ParameterReference]:
 @lru_cache(maxsize=1)
 def _b0_hf_runtime_reference_map() -> dict[str, RuntimeBenchmarkRecord]:
     return {row.benchmark_id: row for row in load_b0_runtime_benchmarks()}
+
+
+def _ensure_tbg_zero_field_contract_sidecars_writable(
+    root: Path | str,
+    *,
+    overwrite_contract_sidecars: bool,
+) -> None:
+    if overwrite_contract_sidecars:
+        return
+    result_root = Path(root)
+    existing = [name for name in required_artifact_files() if (result_root / name).exists()]
+    if existing:
+        raise FileExistsError(
+            f"Refusing to overwrite existing TBG zero-field contract sidecars in {result_root}: {existing}. "
+            "Pass overwrite_contract_sidecars=True only when intentionally replacing these sidecars."
+        )
 
 
 def _full_init_density_override_paths(case: BenchmarkCase, init_mode: str, seed: int, *, lk: int | None = None) -> tuple[Path, ...]:
@@ -884,8 +906,19 @@ def run_b0_hf_benchmark_case(
     )
 
 
-def write_bm_unstrained_benchmark_artifacts(output_dir: Path | str, result: BMUnstrainedBenchmarkRun) -> dict[str, Path]:
+def write_bm_unstrained_benchmark_artifacts(
+    output_dir: Path | str,
+    result: BMUnstrainedBenchmarkRun,
+    *,
+    write_contract_sidecars: bool = True,
+    overwrite_contract_sidecars: bool = False,
+) -> dict[str, Path]:
     output_dir = Path(output_dir)
+    if write_contract_sidecars:
+        _ensure_tbg_zero_field_contract_sidecars_writable(
+            output_dir,
+            overwrite_contract_sidecars=overwrite_contract_sidecars,
+        )
     output_dir.mkdir(parents=True, exist_ok=True)
 
     path_tsv_path = _write_bm_path_tsv(output_dir / "computed_bm_path.tsv", result.run)
@@ -934,11 +967,29 @@ def write_bm_unstrained_benchmark_artifacts(output_dir: Path | str, result: BMUn
     }
     if runtime_parity_path is not None:
         artifacts["runtime_parity_summary_txt"] = runtime_parity_path
+    if write_contract_sidecars:
+        write_bm_unstrained_benchmark_contract_sidecars(
+            output_dir,
+            result,
+            artifact_paths=artifacts,
+            overwrite=overwrite_contract_sidecars,
+        )
     return artifacts
 
 
-def write_b0_hf_benchmark_artifacts(output_dir: Path | str, result: B0HFBenchmarkRun) -> dict[str, Path]:
+def write_b0_hf_benchmark_artifacts(
+    output_dir: Path | str,
+    result: B0HFBenchmarkRun,
+    *,
+    write_contract_sidecars: bool = True,
+    overwrite_contract_sidecars: bool = False,
+) -> dict[str, Path]:
     output_dir = Path(output_dir)
+    if write_contract_sidecars:
+        _ensure_tbg_zero_field_contract_sidecars_writable(
+            output_dir,
+            overwrite_contract_sidecars=overwrite_contract_sidecars,
+        )
     output_dir.mkdir(parents=True, exist_ok=True)
 
     path_tsv_path = output_dir / "computed_hf_path.tsv"
@@ -1040,6 +1091,13 @@ def write_b0_hf_benchmark_artifacts(output_dir: Path | str, result: B0HFBenchmar
     }
     if runtime_parity_written is not None:
         artifacts["runtime_parity_summary_txt"] = runtime_parity_path
+    if write_contract_sidecars:
+        write_b0_hf_benchmark_contract_sidecars(
+            output_dir,
+            result,
+            artifact_paths=artifacts,
+            overwrite=overwrite_contract_sidecars,
+        )
     return artifacts
 
 
@@ -1235,15 +1293,47 @@ def write_b0_hf_suite_summary(path: Path | str, suite_result: B0HFBenchmarkSuite
     return path
 
 
-def write_b0_hf_suite_artifacts(output_dir: Path | str, suite_result: B0HFBenchmarkSuiteResult) -> dict[str, Path]:
+def write_b0_hf_suite_artifacts(
+    output_dir: Path | str,
+    suite_result: B0HFBenchmarkSuiteResult,
+    *,
+    write_contract_sidecars: bool = True,
+    overwrite_contract_sidecars: bool = False,
+) -> dict[str, Path]:
     output_dir = Path(output_dir)
+    if write_contract_sidecars:
+        _ensure_tbg_zero_field_contract_sidecars_writable(
+            output_dir,
+            overwrite_contract_sidecars=overwrite_contract_sidecars,
+        )
+        for result in suite_result.case_results:
+            _ensure_tbg_zero_field_contract_sidecars_writable(
+                output_dir / result.case.benchmark_id,
+                overwrite_contract_sidecars=overwrite_contract_sidecars,
+            )
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    case_roots: dict[str, Path] = {}
     for result in suite_result.case_results:
-        write_b0_hf_benchmark_artifacts(output_dir / result.case.benchmark_id, result)
+        case_root = output_dir / result.case.benchmark_id
+        write_b0_hf_benchmark_artifacts(
+            case_root,
+            result,
+            write_contract_sidecars=write_contract_sidecars,
+            overwrite_contract_sidecars=overwrite_contract_sidecars,
+        )
+        case_roots[f"case_{result.case.benchmark_id}_root"] = case_root
 
     suite_summary_path = write_b0_hf_suite_summary(output_dir / "suite_summary.tsv", suite_result)
-    return {"suite_summary_tsv": suite_summary_path}
+    artifacts = {"suite_summary_tsv": suite_summary_path, **case_roots}
+    if write_contract_sidecars:
+        write_b0_hf_suite_contract_sidecars(
+            output_dir,
+            suite_result,
+            artifact_paths=artifacts,
+            overwrite=overwrite_contract_sidecars,
+        )
+    return artifacts
 
 
 def export_overlap_diagnostics(theta_deg: float, *, lattice_kind: str, m: int, n: int, points_per_segment: int = 120, lg: int = 9, grid_lk: int = 33) -> OverlapDiagnostics:

@@ -55,6 +55,11 @@ def build_parser() -> argparse.ArgumentParser:
     bm_benchmark = bm_subparsers.add_parser("benchmark-unstrained", help="Run the bundled BM unstrained benchmark with runtime and path-band outputs.")
     bm_benchmark.add_argument("theta_deg", type=float, help="Twist angle in degrees.")
     bm_benchmark.add_argument("--output-dir", type=Path, default=None, help="If set, write computed BM path outputs, runtime summaries, and band plots here.")
+    bm_benchmark.add_argument(
+        "--overwrite-contract-sidecars",
+        action="store_true",
+        help="Allow replacing existing public contract sidecars in --output-dir.",
+    )
     bm_overlap = bm_subparsers.add_parser("compare-overlap", help="Compare compact BM overlap diagnostics with the Julia benchmark.")
     bm_overlap.add_argument("theta_deg", type=float, help="Twist angle in degrees.")
     bm_overlap.add_argument("lattice_kind", choices=("path", "grid"))
@@ -80,6 +85,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Explicit full-HF initial density TSV. Used for branch-continuation checks.",
     )
     hf_compare.add_argument("--output-dir", type=Path, default=None, help="If set, write computed HF path outputs and parity summaries here.")
+    hf_compare.add_argument(
+        "--overwrite-contract-sidecars",
+        action="store_true",
+        help="Allow replacing existing public contract sidecars in --output-dir.",
+    )
     hf_suite = hf_subparsers.add_parser("compare-suite", help="Run the bundled B0 HF benchmark suite and summarize parity across cases.")
     hf_suite.add_argument("benchmark_ids", nargs="*", help="Optional benchmark ids. If omitted, run the full bundled suite.")
     hf_suite.add_argument("--lk", type=int, default=None, help="Override the BM/HF k-grid size.")
@@ -91,6 +101,11 @@ def build_parser() -> argparse.ArgumentParser:
     hf_suite.add_argument("--seed", type=int, default=None, help="Override the benchmark seed.")
     hf_suite.add_argument("--overlap-lg", type=int, default=None, help="Override the overlap cutoff used inside HF.")
     hf_suite.add_argument("--output-dir", type=Path, default=None, help="If set, write per-case outputs and a suite summary here.")
+    hf_suite.add_argument(
+        "--overwrite-contract-sidecars",
+        action="store_true",
+        help="Allow replacing existing public contract sidecars in --output-dir.",
+    )
 
     tmbg_parser = subparsers.add_parser("tmbg", help="Run the tMBG noninteracting workflow.")
     tmbg_subparsers = tmbg_parser.add_subparsers(dest="tmbg_command", required=True)
@@ -650,11 +665,17 @@ def cmd_bm_compare_unstrained(theta_deg: float) -> int:
     return 0
 
 
-def cmd_bm_benchmark_unstrained(theta_deg: float, *, output_dir: Path | None = None) -> int:
+def cmd_bm_benchmark_unstrained(
+    theta_deg: float,
+    *,
+    output_dir: Path | None = None,
+    overwrite_contract_sidecars: bool = False,
+) -> int:
     result = run_bm_unstrained_benchmark(theta_deg)
     output_suffix = ""
     if output_dir is not None:
-        write_bm_unstrained_benchmark_artifacts(output_dir, result)
+        writer_kwargs = {"overwrite_contract_sidecars": True} if overwrite_contract_sidecars else {}
+        write_bm_unstrained_benchmark_artifacts(output_dir, result, **writer_kwargs)
         output_suffix = f"\toutput_dir={output_dir}"
 
     total_ratio = None if result.runtime_parity is None else result.runtime_parity.total_elapsed_sec_ratio
@@ -715,6 +736,7 @@ def cmd_hf_compare_case(
     overlap_lg: int | None = None,
     initial_density_path: Path | None = None,
     output_dir: Path | None = None,
+    overwrite_contract_sidecars: bool = False,
 ) -> int:
     case = load_b0_suite().get(benchmark_id)
     result = run_b0_hf_benchmark_case(
@@ -731,7 +753,8 @@ def cmd_hf_compare_case(
     )
     output_suffix = ""
     if output_dir is not None:
-        write_b0_hf_benchmark_artifacts(output_dir, result)
+        writer_kwargs = {"overwrite_contract_sidecars": True} if overwrite_contract_sidecars else {}
+        write_b0_hf_benchmark_artifacts(output_dir, result, **writer_kwargs)
         output_suffix = f"\toutput_dir={output_dir}"
     total_ratio = None if result.runtime_parity is None else result.runtime_parity.total_elapsed_sec_ratio
     total_ratio_text = "n/a" if total_ratio is None else f"{total_ratio:.6e}"
@@ -768,6 +791,7 @@ def cmd_hf_compare_suite(
     seed: int | None = None,
     overlap_lg: int | None = None,
     output_dir: Path | None = None,
+    overwrite_contract_sidecars: bool = False,
 ) -> int:
     suite_result = run_b0_hf_benchmark_suite(
         benchmark_ids=benchmark_ids,
@@ -782,7 +806,8 @@ def cmd_hf_compare_suite(
     )
     output_suffix = ""
     if output_dir is not None:
-        write_b0_hf_suite_artifacts(output_dir, suite_result)
+        writer_kwargs = {"overwrite_contract_sidecars": True} if overwrite_contract_sidecars else {}
+        write_b0_hf_suite_artifacts(output_dir, suite_result, **writer_kwargs)
         output_suffix = f"\toutput_dir={output_dir}"
     print(
         f"cases={len(suite_result.case_results)}\t"
@@ -1105,7 +1130,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "bm" and args.bm_command == "compare-unstrained":
         return cmd_bm_compare_unstrained(args.theta_deg)
     if args.command == "bm" and args.bm_command == "benchmark-unstrained":
-        return cmd_bm_benchmark_unstrained(args.theta_deg, output_dir=args.output_dir)
+        return cmd_bm_benchmark_unstrained(
+            args.theta_deg,
+            output_dir=args.output_dir,
+            overwrite_contract_sidecars=args.overwrite_contract_sidecars,
+        )
     if args.command == "bm" and args.bm_command == "compare-overlap":
         return cmd_bm_compare_overlap(args.theta_deg, args.lattice_kind, args.m, args.n)
     if args.command == "hf" and args.hf_command == "compare-case":
@@ -1121,6 +1150,7 @@ def main(argv: list[str] | None = None) -> int:
             overlap_lg=args.overlap_lg,
             initial_density_path=args.initial_density_path,
             output_dir=args.output_dir,
+            overwrite_contract_sidecars=args.overwrite_contract_sidecars,
         )
     if args.command == "hf" and args.hf_command == "compare-suite":
         return cmd_hf_compare_suite(
@@ -1134,6 +1164,7 @@ def main(argv: list[str] | None = None) -> int:
             seed=args.seed,
             overlap_lg=args.overlap_lg,
             output_dir=args.output_dir,
+            overwrite_contract_sidecars=args.overwrite_contract_sidecars,
         )
     if args.command == "tmbg" and args.tmbg_command == "reproduce-checkpoints":
         return cmd_tmbg_reproduce_checkpoints(
