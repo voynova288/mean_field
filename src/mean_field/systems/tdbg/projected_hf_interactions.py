@@ -5,7 +5,7 @@ import math
 
 import numpy as np
 
-from ...core.hf import HFOverlapBlockSet
+from ...core.hf import HFOverlapBlockSet, diagonal_overlap_blocks
 from .lattice import TDBGLattice
 from .projected_hf_config import SPIN_LABELS, TDBG_LOCAL_LABELS, validate_tdbg_interaction_settings
 from .projected_hf_geometry import _tdbg_projected_wavefunction_basis, _tdbg_total_overlap_from_bases, tdbg_moire_area_nm2

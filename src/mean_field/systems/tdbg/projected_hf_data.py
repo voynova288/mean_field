@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from .hamiltonian import build_hamiltonian, diagonalize_hamiltonian
+from .lattice import TDBGLattice, build_moire_k_grid
 from .model import TDBGModel
 from .params import TDBGParameters
 from .projected_hf_config import (
