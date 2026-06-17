@@ -120,13 +120,18 @@ from .topology import (
 )
 from .tdhf import (
     RLGhBNTDHFInteraction,
+    RLGhBNTDHFMomentumShift,
     RLGhBNTDHFOrbitals,
+    build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs,
     build_rlg_hbn_tdhf_interaction,
     build_rlg_hbn_tdhf_orbitals,
+    build_rlg_hbn_tdhf_q_matrices,
+    build_rlg_hbn_tdhf_q_pairs,
     build_rlg_hbn_tdhf_q0_matrices,
     build_rlg_hbn_tdhf_q0_matrices_from_pairs,
     build_rlg_hbn_tdhf_q0_pairs,
     load_rlg_hbn_tdhf_run_from_archive,
+    required_rlg_hbn_tdhf_finite_q_overlap_shifts,
 )
 from .validation import ValidationCheck, ValidationReport, reproduce_paper_checkpoints, validate_physics
 
@@ -154,6 +159,7 @@ __all__ = [
     "RLGhBNPathPlotTrace",
     "RLGhBNProjectedBasisData",
     "RLGhBNTDHFInteraction",
+    "RLGhBNTDHFMomentumShift",
     "RLGhBNTDHFOrbitals",
     "RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING",
     "RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION",
@@ -182,11 +188,15 @@ __all__ = [
     "build_rlg_hbn_projected_basis_for_kvec",
     "build_rlg_hbn_remote_average_hamiltonian",
     "build_rlg_hbn_target_hamiltonian",
+    "build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs",
     "build_rlg_hbn_tdhf_interaction",
     "build_rlg_hbn_tdhf_orbitals",
+    "build_rlg_hbn_tdhf_q_matrices",
+    "build_rlg_hbn_tdhf_q_pairs",
     "build_rlg_hbn_tdhf_q0_matrices",
     "build_rlg_hbn_tdhf_q0_matrices_from_pairs",
     "build_rlg_hbn_tdhf_q0_pairs",
+    "required_rlg_hbn_tdhf_finite_q_overlap_shifts",
     "build_standard_kpath",
     "calculate_layer_projected_overlap_between",
     "compute_rlg_hbn_oda_parameter",

@@ -51,7 +51,7 @@ else:
 VALLEY_SEQUENCE = (1, -1)
 RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION = "centered_cell_reciprocal_relabel_pad1_v2"
 RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING = 1
-RLG_HBN_FORM_FACTOR_CONVENTION_VERSION = "physical_q_valley_signed_raw_shift_v1"
+RLG_HBN_FORM_FACTOR_CONVENTION_VERSION = "physical_q_plus_g_valley_signed_raw_shift_v2"
 
 
 def rlg_hbn_layer_component_groups(layer_count: int) -> tuple[ComponentGroup, ...]:
@@ -1358,7 +1358,7 @@ def build_rlg_hbn_layer_overlap_blocks(
             basis_data.interaction,
             layer_spacing_nm=layer_spacing,
         )
-        qvals = basis_data.kvec[None, :] - basis_data.kvec[:, None] + complex(gvec)
+        qvals = basis_data.kvec[:, None] - basis_data.kvec[None, :] + complex(gvec)
         fock_layer_coulomb[shift] = _layer_coulomb_tensor_for_qvals(
             qvals,
             layer_count=layer_count,
@@ -1437,7 +1437,7 @@ def build_rlg_hbn_layer_overlap_blocks_between(
             source_basis_data.interaction,
             layer_spacing_nm=layer_spacing,
         )
-        qvals = source_basis_data.kvec[None, :] - target_basis_data.kvec[:, None] + complex(gvec)
+        qvals = target_basis_data.kvec[:, None] - source_basis_data.kvec[None, :] + complex(gvec)
         fock_layer_coulomb[shift] = _layer_coulomb_tensor_for_qvals(
             qvals,
             layer_count=layer_count,

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Sequence
 
 import numpy as np
 
@@ -35,6 +35,7 @@ from .hf import (
 )
 
 MomentumPolicy = Literal["strict", "mod_integer"]
+FiniteQShortcutChannel = Literal["intervalley", "interspin", "inter_spin_valley"]
 
 
 def _env_flag_enabled(name: str, *, default: bool = False) -> bool:
@@ -50,6 +51,18 @@ def _reject_zero_literal_q0_fock_env() -> None:
             "RLG/hBN TDHF does not support MEAN_FIELD_RLG_HBN_ZERO_LITERAL_Q0_FOCK=1; "
             "rerun/load HF with the physical q=0 Fock convention before TDHF."
         )
+
+
+@dataclass(frozen=True)
+class RLGhBNTDHFMomentumShift:
+    """Discrete TDHF momentum transfer on the saved mBZ mesh."""
+
+    shift: tuple[int, int]
+    mesh_shape: tuple[int, int]
+
+    @property
+    def frac(self) -> tuple[float, float]:
+        return (float(self.shift[0]) / float(self.mesh_shape[0]), float(self.shift[1]) / float(self.mesh_shape[1]))
 
 
 @dataclass(frozen=True)
@@ -214,6 +227,33 @@ class RLGhBNTDHFInteraction:
         return bool(np.max(np.abs(residual)) <= float(self.momentum_tolerance))
 
 
+def _flavor_block_offdiag_residual(
+    hamiltonian: np.ndarray,
+    *,
+    n_spin: int,
+    n_eta: int,
+    n_band: int,
+) -> float:
+    indices = np.arange(int(n_spin) * int(n_eta) * int(n_band), dtype=int).reshape(
+        (int(n_spin), int(n_eta), int(n_band)),
+        order="F",
+    )
+    max_residual = 0.0
+    for ik in range(hamiltonian.shape[2]):
+        for spin_a in range(int(n_spin)):
+            for eta_a in range(int(n_eta)):
+                rows = np.asarray(indices[spin_a, eta_a, :], dtype=int)
+                for spin_b in range(int(n_spin)):
+                    for eta_b in range(int(n_eta)):
+                        if spin_a == spin_b and eta_a == eta_b:
+                            continue
+                        cols = np.asarray(indices[spin_b, eta_b, :], dtype=int)
+                        block = hamiltonian[:, :, ik][np.ix_(rows, cols)]
+                        if block.size:
+                            max_residual = max(max_residual, float(np.max(np.abs(block))))
+    return max_residual
+
+
 def build_rlg_hbn_tdhf_orbitals(state: RLGhBNHartreeFockState) -> RLGhBNTDHFOrbitals:
     """Diagonalize the converged HF Hamiltonian in the same ordering as HF."""
 
@@ -232,6 +272,18 @@ def build_rlg_hbn_tdhf_orbitals(state: RLGhBNHartreeFockState) -> RLGhBNTDHFOrbi
     occ_mask = np.zeros((nt, nk), dtype=bool)
 
     if state.occupation_counts is not None:
+        offdiag_residual = _flavor_block_offdiag_residual(
+            hamiltonian,
+            n_spin=n_spin,
+            n_eta=n_eta,
+            n_band=n_band,
+        )
+        if offdiag_residual > 1.0e-8:
+            raise ValueError(
+                "occupation_counts TDHF orbital shortcut requires a spin-valley block-diagonal HF Hamiltonian; "
+                f"max off-block element is {offdiag_residual:.6e}. Use full diagonalization/occupation logic for "
+                "flavor-mixed, IVC, or translation-breaking states."
+            )
         counts = np.asarray(state.occupation_counts, dtype=int).reshape((n_spin, n_eta), order="C")
         indices = np.arange(nt, dtype=int).reshape((n_spin, n_eta, n_band), order="F")
         for ik in range(nk):
@@ -273,6 +325,154 @@ def build_rlg_hbn_tdhf_orbitals(state: RLGhBNHartreeFockState) -> RLGhBNTDHFOrbi
         n_eta=n_eta,
         n_band=n_band,
     )
+
+
+def _mesh_shape_from_k_grid_frac(k_grid_frac: np.ndarray) -> tuple[int, int]:
+    frac = np.asarray(k_grid_frac, dtype=float)
+    if frac.ndim != 2 or frac.shape[1] != 2:
+        raise ValueError(f"Expected k_grid_frac shape (nk, 2), got {frac.shape}")
+    nx = int(np.unique(np.round(frac[:, 0], decimals=12)).size)
+    ny = int(np.unique(np.round(frac[:, 1], decimals=12)).size)
+    if nx <= 0 or ny <= 0 or nx * ny != frac.shape[0]:
+        raise ValueError(f"Cannot infer rectangular mesh from k_grid_frac shape {frac.shape}")
+    expected = np.asarray(
+        [(ix / nx, iy / ny) for ix in range(nx) for iy in range(ny)],
+        dtype=float,
+    )
+    if not np.allclose(frac, expected, atol=1.0e-10, rtol=0.0):
+        raise ValueError("RLG/hBN finite-q TDHF currently requires row-major uniform fractional k_grid_frac")
+    return nx, ny
+
+
+def _shift_k_index_with_wrap(k_index: int, q_shift: tuple[int, int], mesh_shape: tuple[int, int]) -> tuple[int, tuple[int, int]]:
+    nx, ny = int(mesh_shape[0]), int(mesh_shape[1])
+    index = int(k_index)
+    ix = index // ny
+    iy = index % ny
+    raw_x = ix + int(q_shift[0])
+    raw_y = iy + int(q_shift[1])
+    target_x = raw_x % nx
+    target_y = raw_y % ny
+    wrap_x = (raw_x - target_x) // nx
+    wrap_y = (raw_y - target_y) // ny
+    return int(target_x * ny + target_y), (int(wrap_x), int(wrap_y))
+
+
+def _add_shift(left: tuple[int, int], right: tuple[int, int]) -> tuple[int, int]:
+    return (int(left[0]) + int(right[0]), int(left[1]) + int(right[1]))
+
+
+def _sub_shift(left: tuple[int, int], right: tuple[int, int]) -> tuple[int, int]:
+    return (int(left[0]) - int(right[0]), int(left[1]) - int(right[1]))
+
+
+def build_rlg_hbn_tdhf_q_pairs(
+    orbitals: RLGhBNTDHFOrbitals,
+    basis_data: RLGhBNProjectedBasisData,
+    q_shift: tuple[int, int] | RLGhBNTDHFMomentumShift,
+    *,
+    require_y_partner: bool = True,
+) -> tuple[ParticleHolePair, ...]:
+    """Build finite-q X-sector ph pairs ``d†_{k+q,p} d_{k,h}``.
+
+    The returned :class:`ParticleHolePair` stores the X particle momentum
+    ``k+q`` and hole momentum ``k``.  For finite-q RPA the Y component in the
+    paper convention uses the partner particle at ``k-q``; when
+    ``require_y_partner`` is true we keep only pairs for which that partner is
+    also an unoccupied HF orbital.  This is automatic for the insulating
+    conduction-only Fig. 9/S45 checkpoints but catches accidental metallic or
+    nonuniform occupations.
+    """
+
+    mesh_shape = _mesh_shape_from_k_grid_frac(basis_data.k_grid_frac)
+    if isinstance(q_shift, RLGhBNTDHFMomentumShift):
+        if tuple(q_shift.mesh_shape) != tuple(mesh_shape):
+            raise ValueError(f"q_shift mesh {q_shift.mesh_shape} does not match basis mesh {mesh_shape}")
+        shift = tuple(int(v) for v in q_shift.shift)
+    else:
+        shift = (int(q_shift[0]), int(q_shift[1]))
+    if basis_data.nk != orbitals.nk:
+        raise ValueError(f"basis nk={basis_data.nk} does not match orbital nk={orbitals.nk}")
+
+    pairs: list[ParticleHolePair] = []
+    minus_shift = (-shift[0], -shift[1])
+    for hole_k in range(orbitals.nk):
+        particle_k, _wrap_plus = _shift_k_index_with_wrap(hole_k, shift, mesh_shape)
+        particle_k_minus, _wrap_minus = _shift_k_index_with_wrap(hole_k, minus_shift, mesh_shape)
+        occupied = np.flatnonzero(orbitals.occupied_mask[:, hole_k])
+        unoccupied_plus = np.flatnonzero(~orbitals.occupied_mask[:, particle_k])
+        if require_y_partner:
+            unoccupied_minus = set(int(value) for value in np.flatnonzero(~orbitals.occupied_mask[:, particle_k_minus]))
+            unoccupied = [int(value) for value in unoccupied_plus if int(value) in unoccupied_minus]
+        else:
+            unoccupied = [int(value) for value in unoccupied_plus]
+        for hole in occupied:
+            for particle in unoccupied:
+                pairs.append(
+                    ParticleHolePair(
+                        particle=orbitals.global_index(int(particle), particle_k),
+                        hole=orbitals.global_index(int(hole), hole_k),
+                        particle_momentum=particle_k,
+                        hole_momentum=hole_k,
+                        particle_flavor=orbitals.flavor_tag(int(particle)),
+                        hole_flavor=orbitals.flavor_tag(int(hole)),
+                    )
+                )
+    return tuple(pairs)
+
+
+def required_rlg_hbn_tdhf_finite_q_overlap_shifts(
+    orbitals: RLGhBNTDHFOrbitals,
+    basis_data: RLGhBNProjectedBasisData,
+    pairs: Sequence[ParticleHolePair],
+    q_shift: tuple[int, int] | RLGhBNTDHFMomentumShift,
+    *,
+    physical_shifts: Sequence[tuple[int, int]],
+) -> tuple[tuple[int, int], ...]:
+    """Return all cached overlap-shift keys needed for finite-q exchange.
+
+    ``physical_shifts`` are the paper Umklapp vectors G included in the
+    Coulomb sum.  If a particle leg ``k+q`` wraps back into the stored mBZ,
+    the stored form-factor key is not necessarily G but
+    ``G + W_target - W_source``.  This helper computes the closure needed by
+    the finite-q flavor-flip shortcut without changing the physical G cutoff.
+    """
+
+    mesh_shape = _mesh_shape_from_k_grid_frac(basis_data.k_grid_frac)
+    if isinstance(q_shift, RLGhBNTDHFMomentumShift):
+        if tuple(q_shift.mesh_shape) != tuple(mesh_shape):
+            raise ValueError(f"q_shift mesh {q_shift.mesh_shape} does not match basis mesh {mesh_shape}")
+        shift = tuple(int(v) for v in q_shift.shift)
+    else:
+        shift = (int(q_shift[0]), int(q_shift[1]))
+
+    ph_pairs = tuple(pairs)
+    hole_k_values: list[int] = []
+    wrap_by_hole_k: dict[int, tuple[int, int]] = {}
+    for pair in ph_pairs:
+        _p_local, particle_k = orbitals.decode_global_index(pair.particle)
+        _h_local, hole_k = orbitals.decode_global_index(pair.hole)
+        expected_particle_k, wrap = _shift_k_index_with_wrap(hole_k, shift, mesh_shape)
+        if int(particle_k) != int(expected_particle_k):
+            raise ValueError(
+                "finite-q pair does not have particle momentum k+q: "
+                f"pair particle_k={particle_k}, expected {expected_particle_k}, q_shift={shift}"
+            )
+        if int(hole_k) not in wrap_by_hole_k:
+            hole_k_values.append(int(hole_k))
+            wrap_by_hole_k[int(hole_k)] = tuple(int(v) for v in wrap)
+
+    required: set[tuple[int, int]] = set()
+    resolved_physical_shifts = tuple((int(g[0]), int(g[1])) for g in physical_shifts)
+    for physical_shift in resolved_physical_shifts:
+        g0 = (int(physical_shift[0]), int(physical_shift[1]))
+        required.add(g0)
+        for target_k in hole_k_values:
+            wrap_t = wrap_by_hole_k[int(target_k)]
+            for source_k in hole_k_values:
+                wrap_s = wrap_by_hole_k[int(source_k)]
+                required.add(_add_shift(g0, _sub_shift(wrap_t, wrap_s)))
+    return tuple(sorted(required))
 
 
 def build_rlg_hbn_tdhf_q0_pairs(
@@ -613,6 +813,212 @@ def _build_rlg_hbn_tdhf_q0_matrices_vectorized(
     return TDHFMatrices(pairs=ph_pairs, A=A, B=B, L=L, structure=structure)
 
 
+def _assert_finite_q_shortcut_is_safe(
+    run: RLGhBNHartreeFockRun,
+    pairs: tuple[ParticleHolePair, ...],
+) -> None:
+    if int(run.state.active_valence_bands) != 0:
+        raise ValueError("finite-q exchange shortcut requires conduction-only active space")
+    if run.state.occupation_counts is None:
+        raise ValueError("finite-q exchange shortcut requires saved occupation_counts metadata")
+    counts = np.asarray(run.state.occupation_counts, dtype=int).reshape((int(run.state.n_spin), int(run.state.n_eta)), order="C")
+    occupied_flavors = [(int(s), int(e)) for s in range(counts.shape[0]) for e in range(counts.shape[1]) if int(counts[s, e]) > 0]
+    if len(occupied_flavors) != 1:
+        raise ValueError(f"finite-q exchange shortcut requires exactly one occupied flavor, got {occupied_flavors}")
+    for pair in pairs:
+        particle = pair.particle_flavor
+        hole = pair.hole_flavor
+        if not isinstance(particle, SpinValleyFlavor) or not isinstance(hole, SpinValleyFlavor):
+            raise ValueError("finite-q exchange shortcut pairs must carry SpinValleyFlavor metadata")
+        if particle.spin == hole.spin and particle.valley == hole.valley:
+            raise ValueError("finite-q exchange shortcut is not valid for intraflavor pairs")
+
+
+def build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs(
+    run: RLGhBNHartreeFockRun,
+    orbitals: RLGhBNTDHFOrbitals,
+    pairs: tuple[ParticleHolePair, ...],
+    q_shift: tuple[int, int] | RLGhBNTDHFMomentumShift,
+    *,
+    beta: float = 1.0,
+    structure_tolerance: float = 1.0e-6,
+    require_complete_umklapp: bool = True,
+    physical_shifts: Sequence[tuple[int, int]] | None = None,
+) -> TDHFMatrices:
+    """Build finite-q TDHF matrices for flavor-flip shortcut channels.
+
+    This is the first finite-q production path needed for Fig. S45 spin and
+    valley dispersions.  It intentionally implements only the conduction-only,
+    fully polarized shortcut case where direct and B terms vanish and the A
+    block contains the one-body term plus exchange.  Intra-flavor finite-q RPA
+    requires the full Eq. D19 X/Y q/-q bookkeeping and is deliberately not
+    hidden behind this shortcut helper.
+
+    Periodic wrapping is handled by treating the loop variable as the *physical*
+    Umklapp ``G``.  For a form factor whose target/source momenta have integer
+    reciprocal wraps ``W_target`` and ``W_source``, the cached overlap shift is
+    ``G + W_target - W_source``.  If the overlap block set has been augmented
+    with extra closure keys, pass the original Coulomb-cutoff keys through
+    ``physical_shifts`` so they are used only as cached form factors, not as
+    extra physical G terms in the sum.
+    """
+
+    _reject_zero_literal_q0_fock_env()
+    _assert_finite_q_shortcut_is_safe(run, tuple(pairs))
+    mesh_shape = _mesh_shape_from_k_grid_frac(run.basis_data.k_grid_frac)
+    if isinstance(q_shift, RLGhBNTDHFMomentumShift):
+        if tuple(q_shift.mesh_shape) != tuple(mesh_shape):
+            raise ValueError(f"q_shift mesh {q_shift.mesh_shape} does not match basis mesh {mesh_shape}")
+        shift = tuple(int(v) for v in q_shift.shift)
+    else:
+        shift = (int(q_shift[0]), int(q_shift[1]))
+    ph_pairs = tuple(pairs)
+    n_pairs = len(ph_pairs)
+    A = np.zeros((n_pairs, n_pairs), dtype=np.complex128)
+    B = np.zeros((n_pairs, n_pairs), dtype=np.complex128)
+    if n_pairs == 0:
+        L = assemble_tdhf_liouvillian(A, B)
+        structure = validate_tdhf_structures(A, B, L, tolerance=structure_tolerance)
+        return TDHFMatrices(pairs=ph_pairs, A=A, B=B, L=L, structure=structure)
+
+    p_local = np.empty(n_pairs, dtype=int)
+    h_local = np.empty(n_pairs, dtype=int)
+    h_k = np.empty(n_pairs, dtype=int)
+    p_plus_k = np.empty(n_pairs, dtype=int)
+    wrap_plus = np.empty((n_pairs, 2), dtype=int)
+    for index, pair in enumerate(ph_pairs):
+        p_local[index], particle_k = orbitals.decode_global_index(pair.particle)
+        h_local[index], hole_k = orbitals.decode_global_index(pair.hole)
+        expected_particle_k, wrap = _shift_k_index_with_wrap(hole_k, shift, mesh_shape)
+        if particle_k != expected_particle_k:
+            raise ValueError(
+                "finite-q pair does not have particle momentum k+q: "
+                f"pair particle_k={particle_k}, expected {expected_particle_k}, q_shift={shift}"
+            )
+        h_k[index] = hole_k
+        p_plus_k[index] = particle_k
+        wrap_plus[index] = wrap
+        A[index, index] = orbitals.energies[p_local[index], particle_k] - orbitals.energies[h_local[index], hole_k]
+
+    indices_by_hole_k = tuple(np.nonzero(h_k == ik)[0] for ik in range(orbitals.nk))
+    scale = float(beta) * float(run.basis_data.v0) / float(run.basis_data.nk)
+    U = np.asarray(orbitals.eigenvectors, dtype=np.complex128)
+    overlap_by_shift = {tuple(int(v) for v in shift_key): value for shift_key, value in run.overlap_blocks.layer_overlaps.items()}
+    kernel_by_shift = {tuple(int(v) for v in shift_key): value for shift_key, value in run.overlap_blocks.fock_layer_coulomb.items()}
+    missing_shifts: set[tuple[int, int]] = set()
+    resolved_physical_shifts = (
+        tuple((int(g[0]), int(g[1])) for g in physical_shifts)
+        if physical_shifts is not None
+        else tuple((int(g[0]), int(g[1])) for g in run.overlap_blocks.shifts)
+    )
+
+    for physical_shift in resolved_physical_shifts:
+        g0 = (int(physical_shift[0]), int(physical_shift[1]))
+        hh_overlap = overlap_by_shift.get(g0)
+        if hh_overlap is None:
+            missing_shifts.add(g0)
+            continue
+        for kt, target_indices in enumerate(indices_by_hole_k):
+            if target_indices.size == 0:
+                continue
+            u_h_target = U[:, :, kt]
+            p_t = p_local[target_indices]
+            h_t = h_local[target_indices]
+            p_t_k = int(p_plus_k[target_indices[0]])
+            wrap_t = tuple(int(v) for v in wrap_plus[target_indices[0]])
+            u_p_target = U[:, :, p_t_k]
+            for ks, source_indices in enumerate(indices_by_hole_k):
+                if source_indices.size == 0:
+                    continue
+                p_s = p_local[source_indices]
+                h_s = h_local[source_indices]
+                p_s_k = int(p_plus_k[source_indices[0]])
+                wrap_s = tuple(int(v) for v in wrap_plus[source_indices[0]])
+                pp_shift = _add_shift(g0, _sub_shift(wrap_t, wrap_s))
+                pp_overlap = overlap_by_shift.get(pp_shift)
+                pp_kernel = kernel_by_shift.get(pp_shift)
+                if pp_overlap is None or pp_kernel is None:
+                    missing_shifts.add(pp_shift)
+                    continue
+                u_p_source = U[:, :, p_s_k]
+                u_h_source = U[:, :, ks]
+                kernel = np.asarray(pp_kernel[p_t_k, p_s_k], dtype=float)
+                n_layer = int(pp_overlap.shape[0])
+                pp = np.empty((n_layer, target_indices.size, source_indices.size), dtype=np.complex128)
+                hh = np.empty_like(pp)
+                for layer in range(n_layer):
+                    pp_full = u_p_target.conj().T @ pp_overlap[layer, :, p_t_k, :, p_s_k] @ u_p_source
+                    hh_full = u_h_target.conj().T @ hh_overlap[layer, :, kt, :, ks] @ u_h_source
+                    pp[layer] = pp_full[np.ix_(p_t, p_s)]
+                    hh[layer] = hh_full[np.ix_(h_t, h_s)]
+                A[np.ix_(target_indices, source_indices)] -= scale * np.einsum(
+                    "lm,lij,mij->ij",
+                    kernel,
+                    pp,
+                    np.conj(hh),
+                    optimize=True,
+                )
+    if missing_shifts and require_complete_umklapp:
+        preview = sorted(missing_shifts)[:10]
+        raise ValueError(
+            f"Finite-q exchange assembly requires cached overlap shifts not present in this HF run: {preview}"
+        )
+    L = assemble_tdhf_liouvillian(A, B)
+    structure = validate_tdhf_structures(A, B, L, tolerance=structure_tolerance)
+    return TDHFMatrices(pairs=ph_pairs, A=A, B=B, L=L, structure=structure)
+
+
+def build_rlg_hbn_tdhf_q_matrices(
+    run: RLGhBNHartreeFockRun,
+    q_shift: tuple[int, int] | RLGhBNTDHFMomentumShift,
+    *,
+    channel: FiniteQShortcutChannel,
+    beta: float = 1.0,
+    max_pairs: int = 4096,
+    structure_tolerance: float = 1.0e-6,
+    shortcut_exchange_only: bool = True,
+) -> TDHFMatrices:
+    """Build a dense finite-q TDHF matrix for the implemented shortcut path."""
+
+    if not shortcut_exchange_only:
+        raise NotImplementedError(
+            "Full finite-q RLG/hBN A/B assembly is not implemented yet; use shortcut_exchange_only=True "
+            "for intervalley/interspin S45 development."
+        )
+    if channel not in {"intervalley", "interspin", "inter_spin_valley"}:
+        raise ValueError(f"finite-q shortcut channel must be a flavor-flip channel, got {channel!r}")
+    orbitals = build_rlg_hbn_tdhf_orbitals(run.state)
+    all_pairs = build_rlg_hbn_tdhf_q_pairs(orbitals, run.basis_data, q_shift)
+    groups: dict[str, list[int]] = {"intervalley": [], "interspin": [], "inter_spin_valley": []}
+    for index, pair in enumerate(all_pairs):
+        particle = pair.particle_flavor
+        hole = pair.hole_flavor
+        if not isinstance(particle, SpinValleyFlavor) or not isinstance(hole, SpinValleyFlavor):
+            raise ValueError("finite-q pairs must carry SpinValleyFlavor metadata")
+        same_spin = particle.spin == hole.spin
+        same_valley = particle.valley == hole.valley
+        if same_spin and not same_valley:
+            groups["intervalley"].append(index)
+        elif not same_spin and same_valley:
+            groups["interspin"].append(index)
+        elif not same_spin and not same_valley:
+            groups["inter_spin_valley"].append(index)
+    pairs = tuple(all_pairs[index] for index in groups[str(channel)])
+    if len(pairs) > int(max_pairs):
+        raise ValueError(
+            f"finite-q TDHF sector has {len(pairs)} ph pairs, exceeding max_pairs={max_pairs}; "
+            "use channel filtering or raise the explicit Slurm-side limit."
+        )
+    return build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs(
+        run,
+        orbitals,
+        pairs,
+        q_shift,
+        beta=beta,
+        structure_tolerance=structure_tolerance,
+    )
+
+
 def build_rlg_hbn_tdhf_q0_matrices(
     run: RLGhBNHartreeFockRun,
     *,
@@ -647,9 +1053,13 @@ def build_rlg_hbn_tdhf_q0_matrices(
 
 __all__ = [
     "RLGhBNTDHFInteraction",
+    "RLGhBNTDHFMomentumShift",
     "RLGhBNTDHFOrbitals",
+    "build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs",
     "build_rlg_hbn_tdhf_interaction",
     "build_rlg_hbn_tdhf_orbitals",
+    "build_rlg_hbn_tdhf_q_matrices",
+    "build_rlg_hbn_tdhf_q_pairs",
     "build_rlg_hbn_tdhf_q0_matrices",
     "build_rlg_hbn_tdhf_q0_matrices_from_pairs",
     "build_rlg_hbn_tdhf_q0_pairs",
