@@ -64,7 +64,12 @@ def _parse_args() -> argparse.Namespace:
         help="Use layer-rotated Dirac matrices sigma_{+theta,0,-theta}. Kwan Fig. 7 Eq. (1) omits this by default.",
     )
     parser.add_argument("--n-shells", type=int, default=3)
-    parser.add_argument("--nu", type=float, default=2.0)
+    parser.add_argument(
+        "--nu",
+        type=float,
+        default=2.0,
+        help="Integer filling per primitive moire cell. Fractional fillings require an HTG supercell/folded-BZ adapter.",
+    )
     parser.add_argument("--epsilon-r", type=float, default=8.0)
     parser.add_argument("--d-sc-nm", type=float, default=25.0)
     parser.add_argument("--u-ev", type=float, default=0.0)
@@ -296,7 +301,7 @@ def main() -> None:
             output_dir,
             path_result,
             stem="fig7_spin_resolved_bands",
-            title=rf"$\nu={args.nu:+.0f}$",
+            title=rf"$\nu={args.nu:+.6g}$",
             ylim=(-abs(args.hf_band_window_mev), abs(args.hf_band_window_mev)),
         )
         path_artifacts = {
@@ -307,8 +312,15 @@ def main() -> None:
             "fig7_spin_resolved_pdf": str(fig7_plot_paths["fig7_plot_pdf"]),
         }
         sorted_path_energies = np.sort(path_result.energies, axis=None)
-        path_occupied = htg_occupied_state_count(path_result.nu, path_result.energies.shape[1], path_result.energies.shape[0])
-        if 0 < path_occupied < sorted_path_energies.size:
+        try:
+            path_occupied = htg_occupied_state_count(
+                path_result.nu,
+                path_result.energies.shape[1],
+                path_result.energies.shape[0],
+            )
+        except ValueError:
+            path_occupied = None
+        if path_occupied is not None and 0 < path_occupied < sorted_path_energies.size:
             path_band_gap_ev = float(sorted_path_energies[path_occupied] - sorted_path_energies[path_occupied - 1])
 
     potential_artifact = ""

@@ -355,6 +355,24 @@ def htg_projector_from_density(
     return density + _htg_reference_density_blocks(nt, nk, n_spin=n_spin, n_eta=n_eta)
 
 
+def _validate_primitive_cell_integer_filling(nu: float, *, atol: float = 1.0e-9) -> int:
+    """Return integer primitive-cell filling or reject fractional fillings.
+
+    Primitive-cell HTG HF cannot represent a translation-breaking rational
+    filling by spreading a fractional electron over the finite k mesh. Such
+    fillings require a folded-BZ/supercell adapter with an integer number of
+    occupied states per supercell k point.
+    """
+
+    raw = float(nu)
+    rounded = int(round(raw))
+    if abs(raw - rounded) > float(atol):
+        raise ValueError(
+            f"Primitive-cell HTG HF requires integer filling nu per primitive moire cell; got nu={nu}. "
+            "Fractional fillings require a supercell/folded-BZ calculation."
+        )
+    return rounded
+
 def htg_occupied_state_count(
     nu: float,
     nt: int,
@@ -363,16 +381,14 @@ def htg_occupied_state_count(
     n_spin: int = 2,
     n_eta: int = 2,
 ) -> int:
+    integer_nu = _validate_primitive_cell_integer_filling(nu)
     n_flavor = int(n_spin) * int(n_eta)
     n_band = _infer_htg_band_count(nt, n_spin=n_spin, n_eta=n_eta)
     lower_remote_per_flavor = _remote_band_count_per_side(n_band)
-    raw = (float(lower_remote_per_flavor) * n_flavor + float(nu) + float(n_flavor)) * int(nk)
-    rounded = int(round(raw))
-    if abs(raw - rounded) > 1.0e-9:
-        raise ValueError(f"Filling nu={nu} gives non-integer occupied-state count {raw}")
-    if rounded < 0 or rounded > int(nt) * int(nk):
-        raise ValueError(f"Filling nu={nu} gives occupied-state count {rounded} outside [0, {int(nt) * int(nk)}]")
-    return rounded
+    occupied = (int(lower_remote_per_flavor) * n_flavor + int(integer_nu) + n_flavor) * int(nk)
+    if occupied < 0 or occupied > int(nt) * int(nk):
+        raise ValueError(f"Filling nu={nu} gives occupied-state count {occupied} outside [0, {int(nt) * int(nk)}]")
+    return int(occupied)
 
 
 def htg_occupied_bands_per_k(
@@ -382,16 +398,14 @@ def htg_occupied_bands_per_k(
     n_spin: int = 2,
     n_eta: int = 2,
 ) -> int:
+    integer_nu = _validate_primitive_cell_integer_filling(nu)
     n_flavor = int(n_spin) * int(n_eta)
     n_band = _infer_htg_band_count(nt, n_spin=n_spin, n_eta=n_eta)
     lower_remote_per_flavor = _remote_band_count_per_side(n_band)
-    raw = float(lower_remote_per_flavor) * n_flavor + float(nu) + float(n_flavor)
-    rounded = int(round(raw))
-    if abs(raw - rounded) > 1.0e-9:
-        raise ValueError(f"Filling nu={nu} gives non-integer per-k occupation {raw}")
-    if rounded < 0 or rounded > int(nt):
-        raise ValueError(f"Filling nu={nu} gives per-k occupation {rounded} outside [0, {int(nt)}]")
-    return rounded
+    occupied = int(lower_remote_per_flavor) * n_flavor + int(integer_nu) + n_flavor
+    if occupied < 0 or occupied > int(nt):
+        raise ValueError(f"Filling nu={nu} gives per-k occupation {occupied} outside [0, {int(nt)}]")
+    return int(occupied)
 
 
 def htg_filling_from_density(
@@ -686,6 +700,7 @@ def initialize_htg_density(
     nt, _, nk = h0.shape
     if nt != n_spin * n_eta * n_band:
         raise ValueError(f"H0 dimension {nt} is incompatible with n_spin={n_spin}, n_eta={n_eta}, n_band={n_band}")
+    _validate_primitive_cell_integer_filling(nu)
 
     if init_mode == "bm":
         return build_htg_density_from_hamiltonian(
@@ -752,6 +767,7 @@ def build_htg_density_from_hamiltonian(
         raise ValueError(f"Expected square Hamiltonian blocks, got {hamiltonian.shape}")
     if sigma_z is not None and np.asarray(sigma_z).shape != hamiltonian.shape:
         raise ValueError(f"Expected sigma_z shape {hamiltonian.shape}, got {np.asarray(sigma_z).shape}")
+    _validate_primitive_cell_integer_filling(nu)
 
     energies = np.zeros((nt, nk), dtype=float)
     sigma_z_expectation = np.zeros((nt, nk), dtype=float)
@@ -1569,6 +1585,7 @@ def run_htg_hf(
     use_numba: bool | None = None,
 ) -> HTGHartreeFockRun:
     normalized_init_mode = normalize_htg_init_mode(init_mode)
+    _validate_primitive_cell_integer_filling(nu)
     basis_data = build_htg_projected_basis(
         model,
         interaction,
@@ -1635,6 +1652,7 @@ def scan_htg_ground_state(
     projected_band_count: int = 2,
     use_numba: bool | None = None,
 ) -> HTGGroundStateScan:
+    _validate_primitive_cell_integer_filling(nu)
     basis_data = build_htg_projected_basis(
         model,
         interaction,
