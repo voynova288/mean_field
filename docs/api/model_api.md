@@ -39,7 +39,7 @@ class ContinuumModel(Protocol):
     def component_groups(self) -> tuple[ComponentGroup, ...]: ...
 ```
 
-`component_groups()` is how systems expose physical labels such as layers, sublattices, valleys, or orbital subsets.  `component_group_records(model)` converts those declarations to JSON-serializable `{name, indices}` records for artifact metadata.  Core HF/analysis code should not infer physical component meanings from array dimensions.
+`component_groups()` is how systems expose physical labels such as layers, sublattices, valleys, or orbital subsets.  `component_group_records(model)` converts those declarations to JSON-serializable `{name, indices}` records for artifact metadata, preserving optional `index_space` and `description` fields when a system needs to document a non-local basis convention.  Core HF/analysis code should not infer physical component meanings from array dimensions.
 
 Current component-group status:
 
@@ -47,7 +47,7 @@ Current component-group status:
 - `tmbg`: declares `layer_bottom`, `layer_middle`, and `layer_top` for the local six-orbital block `(A_b, B_b, A_m, B_m, A_t, B_t)`.
 - `atmg`: declares `layer_0`, `layer_1`, ... over the two-sublattice local layer blocks.
 - `htg`: intentionally left unset while HTG work is owned elsewhere.
-- `tdbg`: intentionally left unset until a dedicated adapter labels q-site/sector/layer indices without guessing from array dimensions.
+- `tdbg`: declares sector/layer/sublattice groups through a dedicated adapter. Public model records use the full q-site-major Hamiltonian-basis index `4*q_site + alpha` with `alpha=(A1,B1,A2,B2)` and carry `index_space="tdbg_full_hamiltonian_basis"`; projected-HF overlap helpers use a separate embedded eight-component local basis `4*sector + alpha`.
 
 ## ModelRecord
 

@@ -32,6 +32,7 @@ from .projected_hf_geometry import (
     _tdbg_total_overlap_between,
     _tdbg_total_overlap_from_bases,
     tdbg_band_window_indices,
+    tdbg_embedded_component_groups,
     tdbg_moire_area_nm2,
 )
 from .projected_hf_interactions import (

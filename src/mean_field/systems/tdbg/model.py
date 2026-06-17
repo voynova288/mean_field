@@ -13,6 +13,100 @@ from .topology import TopologyResult, compute_topology_on_grid
 
 
 @dataclass(frozen=True)
+class TDBGBasisComponentGroup:
+    """Named subset of the q-site-major TDBG Hamiltonian basis.
+
+    The public model basis is the full continuum Hamiltonian basis with index
+    ``4 * q_site + alpha``.  This is distinct from the embedded local-index
+    basis used by projected-HF overlap helpers.
+    """
+
+    name: str
+    indices: np.ndarray
+    index_space: str = "tdbg_full_hamiltonian_basis"
+    description: str = ""
+
+    def __post_init__(self) -> None:
+        name = str(self.name)
+        if not name:
+            raise ValueError("TDBG component group name must be non-empty")
+        indices = np.asarray(self.indices, dtype=int).reshape(-1)
+        if indices.size == 0:
+            raise ValueError(f"TDBG component group {name!r} must contain at least one basis index")
+        if np.unique(indices).size != indices.size:
+            raise ValueError(f"TDBG component group {name!r} contains duplicate indices")
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "indices", indices)
+        object.__setattr__(self, "index_space", str(self.index_space))
+        object.__setattr__(self, "description", str(self.description))
+
+
+def _tdbg_group_indices(lattice: TDBGLattice, *, sector: int | None = None, alphas: tuple[int, ...]) -> np.ndarray:
+    indices: list[int] = []
+    for iq, site in enumerate(np.asarray(lattice.q_sites, dtype=float)):
+        site_sector = int(round(float(site[2])))
+        if sector is not None and site_sector != int(sector):
+            continue
+        for alpha in alphas:
+            indices.append(4 * int(iq) + int(alpha))
+    return np.asarray(indices, dtype=int)
+
+
+def tdbg_full_basis_component_groups(lattice: TDBGLattice) -> tuple[TDBGBasisComponentGroup, ...]:
+    """Return q-site-major TDBG Hamiltonian-basis component groups.
+
+    The basis index is ``4 * q_site + alpha`` with ``alpha=(A1, B1, A2, B2)``.
+    Layer names are deliberately code-stable (`layer_0` ... `layer_3`), with
+    descriptions carrying the sector/local-layer/potential convention instead
+    of silently guessing a paper's top/bottom naming convention.
+    """
+
+    groups: list[TDBGBasisComponentGroup] = [
+        TDBGBasisComponentGroup(
+            "sector_0",
+            _tdbg_group_indices(lattice, sector=0, alphas=(0, 1, 2, 3)),
+            description="TDBG q-sites in sector 0; local alpha=(A1,B1,A2,B2).",
+        ),
+        TDBGBasisComponentGroup(
+            "sector_1",
+            _tdbg_group_indices(lattice, sector=1, alphas=(0, 1, 2, 3)),
+            description="TDBG q-sites in sector 1; local alpha=(A1,B1,A2,B2).",
+        ),
+        TDBGBasisComponentGroup(
+            "layer_0",
+            _tdbg_group_indices(lattice, sector=0, alphas=(0, 1)),
+            description="Sector 0, BLG-local upper layer (A1,B1), potential +3*Delta/2.",
+        ),
+        TDBGBasisComponentGroup(
+            "layer_1",
+            _tdbg_group_indices(lattice, sector=0, alphas=(2, 3)),
+            description="Sector 0, BLG-local lower/interface layer (A2,B2), potential +Delta/2.",
+        ),
+        TDBGBasisComponentGroup(
+            "layer_2",
+            _tdbg_group_indices(lattice, sector=1, alphas=(0, 1)),
+            description="Sector 1, BLG-local upper/interface layer (A1,B1), potential -Delta/2.",
+        ),
+        TDBGBasisComponentGroup(
+            "layer_3",
+            _tdbg_group_indices(lattice, sector=1, alphas=(2, 3)),
+            description="Sector 1, BLG-local lower layer (A2,B2), potential -3*Delta/2.",
+        ),
+        TDBGBasisComponentGroup(
+            "sublattice_A",
+            _tdbg_group_indices(lattice, sector=None, alphas=(0, 2)),
+            description="A-sublattice local components A1 and A2 across all q-sites and sectors.",
+        ),
+        TDBGBasisComponentGroup(
+            "sublattice_B",
+            _tdbg_group_indices(lattice, sector=None, alphas=(1, 3)),
+            description="B-sublattice local components B1 and B2 across all q-sites and sectors.",
+        ),
+    ]
+    return tuple(group for group in groups if group.indices.size)
+
+
+@dataclass(frozen=True)
 class TDBGModel:
     lattice: TDBGLattice
     params: TDBGParameters
@@ -60,6 +154,11 @@ class TDBGModel:
             }
         )
         return summary
+
+    def component_groups(self) -> tuple[TDBGBasisComponentGroup, ...]:
+        """Return sector/layer/sublattice groups in the full TDBG basis."""
+
+        return tdbg_full_basis_component_groups(self.lattice)
 
     def build_hamiltonian(self, k_tilde: complex, *, valley: int | None = None) -> np.ndarray:
         resolved_valley = self.params.valley if valley is None else int(valley)

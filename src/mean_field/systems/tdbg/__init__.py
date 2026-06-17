@@ -11,7 +11,7 @@ from .hamiltonian import (
     moire_coupling_matrix,
 )
 from .lattice import TDBGLattice, build_kpath_from_nodes, build_moire_k_grid, build_standard_kpath, build_tdbg_lattice
-from .model import TDBGModel
+from .model import TDBGBasisComponentGroup, TDBGModel, tdbg_full_basis_component_groups
 from .params import TDBGParameters, delta_from_paper_ud, layer_potentials_from_delta, paper_ud_layer_potentials
 from .hf import (
     TDBGActiveBandFlavorData,
@@ -66,6 +66,7 @@ __all__ = [
     "GridBandsResult",
     "PathBandsResult",
     "ReferenceComparisonResult",
+    "TDBGBasisComponentGroup",
     "TDBGModel",
     "TDBGLattice",
     "TDBGParameters",
@@ -124,6 +125,7 @@ __all__ = [
     "valley_mirror_x_tensor_component_sign",
     "tdbg_density_from_hamiltonian",
     "tdbg_delta_from_paper_ud_for_valley",
+    "tdbg_full_basis_component_groups",
     "tdbg_order_parameters",
     "validate_physics",
     "validate_tdbg_interaction_settings",

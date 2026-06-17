@@ -6,6 +6,7 @@ import math
 import numpy as np
 
 from ...core.hf import (
+    ComponentGroup,
     ProjectedWavefunctionBasis,
     calculate_projected_overlap_between,
     real_space_cell_area_nm2_from_reciprocal,
@@ -66,6 +67,26 @@ class _TDBGQSiteEmbedding:
     grid_shape: tuple[int, int]
     local_basis_size: int
     basis_indices: np.ndarray  # (n_q, 4) indices into ProjectedWavefunctionBasis basis axis.
+
+def tdbg_embedded_component_groups() -> tuple[ComponentGroup, ...]:
+    """Return groups for the 8-component embedded projected-HF local basis.
+
+    The embedded core/HF basis uses local index ``4 * sector + alpha`` with
+    ``alpha=(A1, B1, A2, B2)``.  This is distinct from the full Hamiltonian
+    basis index ``4 * q_site + alpha`` exposed by :class:`TDBGModel`.
+    """
+
+    return (
+        ComponentGroup("sector_0", np.asarray([0, 1, 2, 3], dtype=int)),
+        ComponentGroup("sector_1", np.asarray([4, 5, 6, 7], dtype=int)),
+        ComponentGroup("layer_0", np.asarray([0, 1], dtype=int)),
+        ComponentGroup("layer_1", np.asarray([2, 3], dtype=int)),
+        ComponentGroup("layer_2", np.asarray([4, 5], dtype=int)),
+        ComponentGroup("layer_3", np.asarray([6, 7], dtype=int)),
+        ComponentGroup("sublattice_A", np.asarray([0, 2, 4, 6], dtype=int)),
+        ComponentGroup("sublattice_B", np.asarray([1, 3, 5, 7], dtype=int)),
+    )
+
 
 def _tdbg_q_site_embedding(lattice: TDBGLattice) -> _TDBGQSiteEmbedding:
     """Embed TDBG's finite q-site disk into a rectangular core/hf basis grid.
@@ -152,6 +173,7 @@ def _tdbg_projected_wavefunction_basis(data: TDBGProjectedHFData, wavefunctions:
         local_basis_size=embedding.local_basis_size,
         name=name,
         boundary_mode="zero_fill",
+        component_groups=tdbg_embedded_component_groups(),
     )
 
 def _tdbg_total_overlap_from_bases(
@@ -186,5 +208,6 @@ __all__ = [
     "_tdbg_total_overlap_between",
     "_tdbg_total_overlap_from_bases",
     "tdbg_band_window_indices",
+    "tdbg_embedded_component_groups",
     "tdbg_moire_area_nm2",
 ]

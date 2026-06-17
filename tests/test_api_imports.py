@@ -44,6 +44,33 @@ def test_tmbg_model_declares_layer_component_groups() -> None:
     assert [group.indices.tolist() for group in groups] == [[0, 1], [2, 3], [4, 5]]
 
 
+def test_tdbg_model_declares_q_site_sector_layer_component_groups() -> None:
+    model = make_model("tdbg", cut=1.0)
+    groups = component_groups(model)
+
+    assert [group.name for group in groups] == [
+        "sector_0",
+        "sector_1",
+        "layer_0",
+        "layer_1",
+        "layer_2",
+        "layer_3",
+        "sublattice_A",
+        "sublattice_B",
+    ]
+    sector_0 = groups[0].indices.tolist()
+    sector_1 = groups[1].indices.tolist()
+    assert sector_0 and sector_1
+    assert sorted(sector_0 + sector_1) == list(range(model.matrix_dim))
+    assert groups[2].indices.tolist() == [idx for idx in sector_0 if idx % 4 in (0, 1)]
+    assert groups[3].indices.tolist() == [idx for idx in sector_0 if idx % 4 in (2, 3)]
+    assert groups[4].indices.tolist() == [idx for idx in sector_1 if idx % 4 in (0, 1)]
+    assert groups[5].indices.tolist() == [idx for idx in sector_1 if idx % 4 in (2, 3)]
+    records = component_group_records(model)
+    assert records[0]["index_space"] == "tdbg_full_hamiltonian_basis"
+    assert "q-sites" in records[0]["description"]
+
+
 def test_atmg_model_declares_layer_component_groups() -> None:
     model = make_model("atmg", n_layers=4, n_shells=0)
     groups = component_groups(model)

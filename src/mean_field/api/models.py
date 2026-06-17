@@ -144,7 +144,12 @@ def component_group_records(model: object) -> tuple[dict[str, object], ...]:
             records.append({"repr": repr(group)})
             continue
         tolist = getattr(indices, "tolist", None)
-        records.append({"name": str(name), "indices": list(tolist() if callable(tolist) else indices)})
+        record: dict[str, object] = {"name": str(name), "indices": list(tolist() if callable(tolist) else indices)}
+        for optional_key in ("index_space", "description"):
+            value = getattr(group, optional_key, None)
+            if value is not None:
+                record[optional_key] = str(value)
+        records.append(record)
     return tuple(records)
 
 
