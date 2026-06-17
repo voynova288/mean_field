@@ -4,10 +4,13 @@ import argparse
 import json
 from pathlib import Path
 from time import perf_counter
+from typing import Any
 
 import numpy as np
 
 from .api.artifacts import ModelRecord, write_contract_artifacts
+from .api.hf import HFConfig, run_hf
+from .api.models import make_model
 from .benchmarks import (
     load_b0_parameter_references,
     load_b0_runtime_benchmarks,
@@ -177,6 +180,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=1,
         help="Valley label used by the Ktilde diagnostics.",
     )
+
+    tdbg_parser = subparsers.add_parser("tdbg", help="Run TDBG public API workflows.")
+    tdbg_subparsers = tdbg_parser.add_subparsers(dest="tdbg_command", required=True)
+    tdbg_hf = tdbg_subparsers.add_parser(
+        "projected-hf",
+        help="Run explicit-config TDBG projected HF through mean_field.api.run_hf.",
+    )
+    tdbg_hf.add_argument("config_path", type=Path, help="JSON config for the explicit TDBG projected-HF run.")
+    tdbg_hf.add_argument("--output-dir", type=Path, default=None, help="Override the result output directory in the config.")
+    tdbg_hf.add_argument("--dry-run", action="store_true", help="Validate and print the normalized plan without running HF.")
     return parser
 
 
@@ -258,6 +271,217 @@ def _write_tmbg_contract_sidecars(
         files=files,
         metadata={"runner_kind": runner_kind},
     )
+
+
+
+def _read_json_object(path: Path) -> dict[str, Any]:
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected JSON object in {path}")
+    return payload
+
+
+def _mapping_payload(payload: dict[str, Any], key: str, *, required: bool = True) -> dict[str, Any]:
+    value = payload.get(key)
+    if value is None:
+        if required:
+            raise ValueError(f"Missing required config section {key!r}")
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"Config section {key!r} must be an object")
+    return dict(value)
+
+
+def _reject_unknown_keys(section: str, payload: dict[str, Any], allowed: set[str]) -> None:
+    unknown = sorted(set(payload) - allowed)
+    if unknown:
+        raise ValueError(f"Unsupported keys in {section}: {unknown}")
+
+
+def _tdbg_projected_hf_config_from_payload(payload: dict[str, Any]):
+    from .systems.tdbg import TDBGInteractionSettings, TDBGProjectedHFConfig, TDBGProjectedWindow
+
+    projected = _mapping_payload(payload, "tdbg_projected_hf")
+    _reject_unknown_keys(
+        "tdbg_projected_hf",
+        projected,
+        {
+            "theta_deg",
+            "cut",
+            "mesh_size",
+            "paper_ud_ev",
+            "paper_ud_convention",
+            "stacking",
+            "window",
+            "filling",
+            "interaction",
+            "precision",
+            "max_iter",
+            "mix_fallback",
+            "frac_shift",
+            "orbital_zeeman_b_t",
+            "orbital_zeeman_delta_k_nm_inv",
+        },
+    )
+    window_payload = projected.get("window", {})
+    if isinstance(window_payload, str):
+        window = TDBGProjectedWindow(name=window_payload)
+    elif isinstance(window_payload, dict):
+        _reject_unknown_keys("tdbg_projected_hf.window", dict(window_payload), {"name", "band_indices"})
+        band_indices = window_payload.get("band_indices")
+        window = TDBGProjectedWindow(
+            name=str(window_payload.get("name", "two_flat")),
+            band_indices=None if band_indices is None else tuple(int(value) for value in band_indices),
+        )
+    else:
+        raise ValueError("tdbg_projected_hf.window must be a string or object")
+
+    interaction_payload = dict(projected.get("interaction") or {})
+    _reject_unknown_keys(
+        "tdbg_projected_hf.interaction",
+        interaction_payload,
+        {
+            "include_intersite",
+            "include_onsite",
+            "hubbard_u_ev",
+            "epsilon_r",
+            "kappa_nm_inv",
+            "g_shells",
+            "hartree_reference",
+            "fock_density",
+            "onsite_valley_policy",
+            "drop_g0_hartree",
+        },
+    )
+    interaction = TDBGInteractionSettings(**interaction_payload)
+    return TDBGProjectedHFConfig(
+        theta_deg=float(projected.get("theta_deg", 1.38)),
+        cut=float(projected.get("cut", 5.0)),
+        mesh_size=int(projected.get("mesh_size", 9)),
+        paper_ud_ev=float(projected.get("paper_ud_ev", 0.09)),
+        paper_ud_convention=projected.get("paper_ud_convention", "same_delta_minus_ud_over3"),
+        stacking=str(projected.get("stacking", "AB-BA")),
+        window=window,
+        filling=int(projected.get("filling", 2)),
+        interaction=interaction,
+        precision=float(projected.get("precision", 1.0e-7)),
+        max_iter=int(projected.get("max_iter", 300)),
+        mix_fallback=None if projected.get("mix_fallback") is None else float(projected["mix_fallback"]),
+        frac_shift=None if projected.get("frac_shift") is None else tuple(float(value) for value in projected["frac_shift"]),
+        orbital_zeeman_b_t=float(projected.get("orbital_zeeman_b_t", 0.0)),
+        orbital_zeeman_delta_k_nm_inv=float(projected.get("orbital_zeeman_delta_k_nm_inv", 1.0e-5)),
+    )
+
+
+def _tdbg_hf_config_from_payload(payload: dict[str, Any], tdbg_config: Any) -> HFConfig:
+    hf_payload = _mapping_payload(payload, "hf", required=False)
+    _reject_unknown_keys(
+        "hf",
+        hf_payload,
+        {
+            "filling",
+            "mesh",
+            "density_convention",
+            "max_iter",
+            "precision",
+            "interaction_scheme",
+            "epsilon_r",
+            "dsc_nm",
+            "coulomb_kernel",
+            "seeds",
+            "metadata",
+        },
+    )
+    mesh_raw = hf_payload.get("mesh", [int(tdbg_config.mesh_size), int(tdbg_config.mesh_size)])
+    if len(mesh_raw) != 2:
+        raise ValueError(f"hf.mesh must have two entries, got {mesh_raw!r}")
+    return HFConfig(
+        filling=float(hf_payload.get("filling", tdbg_config.filling)),
+        mesh=(int(mesh_raw[0]), int(mesh_raw[1])),
+        density_convention=hf_payload.get("density_convention", "projector"),
+        max_iter=int(hf_payload.get("max_iter", tdbg_config.max_iter)),
+        precision=float(hf_payload.get("precision", tdbg_config.precision)),
+        interaction_scheme=hf_payload.get("interaction_scheme", "average"),
+        epsilon_r=float(hf_payload.get("epsilon_r", tdbg_config.interaction.epsilon_r)),
+        dsc_nm=float(hf_payload.get("dsc_nm", 10.0)),
+        coulomb_kernel=hf_payload.get("coulomb_kernel", "2d_gate"),
+        seeds=tuple(str(value) for value in hf_payload.get("seeds", ("random",))),
+        metadata=dict(hf_payload.get("metadata", {})),
+    )
+
+
+def _tdbg_run_config_from_payload(payload: dict[str, Any]) -> tuple[str, int]:
+    run_payload = _mapping_payload(payload, "run")
+    _reject_unknown_keys("run", run_payload, {"init_mode", "seed"})
+    if "init_mode" not in run_payload:
+        raise ValueError("run.init_mode is required for TDBG projected HF")
+    return str(run_payload["init_mode"]), int(run_payload.get("seed", 1))
+
+
+def _tdbg_output_dir_from_payload(payload: dict[str, Any], output_dir: Path | None) -> Path | None:
+    if output_dir is not None:
+        return Path(output_dir)
+    result_payload = _mapping_payload(payload, "result", required=False)
+    _reject_unknown_keys("result", result_payload, {"output_dir"})
+    value = result_payload.get("output_dir")
+    return None if value is None else Path(str(value))
+
+
+def _validate_tdbg_workflow_payload(payload: dict[str, Any]) -> None:
+    _reject_unknown_keys(
+        str(payload.get("workflow", "workflow")),
+        payload,
+        {"schema_version", "workflow", "system", "tdbg_projected_hf", "hf", "run", "result"},
+    )
+    if int(payload.get("schema_version", 1)) != 1:
+        raise ValueError(f"Unsupported TDBG workflow schema_version={payload.get('schema_version')!r}")
+    if payload.get("workflow") != "tdbg.projected_hf.explicit_config":
+        raise ValueError("TDBG projected-HF CLI requires workflow='tdbg.projected_hf.explicit_config'")
+    if str(payload.get("system", "tdbg")).lower().replace("-", "_") != "tdbg":
+        raise ValueError("TDBG projected-HF CLI only supports system='tdbg'")
+
+
+def cmd_tdbg_projected_hf(config_path: Path, *, output_dir: Path | None = None, dry_run: bool = False) -> int:
+    from .systems.tdbg.projected_hf_config import (
+        tdbg_parameters_from_paper_ud_for_valley,
+        validate_tdbg_projected_hf_config,
+    )
+
+    payload = _read_json_object(config_path)
+    _validate_tdbg_workflow_payload(payload)
+    tdbg_config = _tdbg_projected_hf_config_from_payload(payload)
+    validate_tdbg_projected_hf_config(tdbg_config)
+    hf_config = _tdbg_hf_config_from_payload(payload, tdbg_config)
+    init_mode, seed = _tdbg_run_config_from_payload(payload)
+    resolved_output_dir = _tdbg_output_dir_from_payload(payload, output_dir)
+
+    if dry_run:
+        print(
+            "workflow=tdbg.projected_hf.explicit_config\t"
+            f"theta_deg={tdbg_config.theta_deg:.12g}\t"
+            f"cut={tdbg_config.cut:.12g}\t"
+            f"mesh_size={tdbg_config.mesh_size}\t"
+            f"filling={tdbg_config.filling}\t"
+            f"init_mode={init_mode}\t"
+            f"seed={seed}\t"
+            f"output_dir={'' if resolved_output_dir is None else resolved_output_dir}"
+        )
+        return 0
+
+    if resolved_output_dir is None:
+        raise ValueError("TDBG projected-HF run requires --output-dir or result.output_dir in the config")
+    _ensure_not_running_compute_on_login_node("TDBG projected HF")
+    params = tdbg_parameters_from_paper_ud_for_valley(
+        tdbg_config.paper_ud_ev,
+        stacking=tdbg_config.stacking,
+        valley=1,
+        convention=tdbg_config.paper_ud_convention,
+    )
+    model = make_model("tdbg", theta_deg=tdbg_config.theta_deg, cut=tdbg_config.cut, params=params)
+    result = run_hf(model, hf_config, tdbg_config=tdbg_config, init_mode=init_mode, seed=seed)
+    manifest_path = result.save(resolved_output_dir)
+    print(f"manifest={manifest_path}\toutput_dir={resolved_output_dir}")
+    return 0
 
 
 def cmd_benchmarks_list() -> int:
@@ -887,6 +1111,8 @@ def main(argv: list[str] | None = None) -> int:
             n_shells=args.n_shells,
             valley=args.valley,
         )
+    if args.command == "tdbg" and args.tdbg_command == "projected-hf":
+        return cmd_tdbg_projected_hf(args.config_path, output_dir=args.output_dir, dry_run=args.dry_run)
 
     parser.error("Unsupported command")
     return 2
