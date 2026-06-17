@@ -7,6 +7,7 @@ from time import perf_counter
 
 import numpy as np
 
+from .api.artifacts import ModelRecord, write_contract_artifacts
 from .benchmarks import (
     load_b0_parameter_references,
     load_b0_runtime_benchmarks,
@@ -193,6 +194,70 @@ def _ensure_not_running_compute_on_login_node(workload_name: str) -> None:
 
 def _tmbg_report_payload(report) -> dict[str, object]:
     return report.to_dict()
+
+
+def _tmbg_report_status(report) -> str:
+    return "fail" if report.has_failures else ("pass_with_skips" if report.has_skips else "pass")
+
+
+def _relative_existing_file(root: Path, path: Path) -> str | None:
+    if not path.exists():
+        return None
+    try:
+        return path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def _write_tmbg_contract_sidecars(
+    output_dir: Path,
+    *,
+    workflow: str,
+    runner_kind: str,
+    parameters: dict[str, object],
+    runtime: dict[str, object],
+    artifacts: dict[str, object],
+    report,
+) -> dict[str, Path]:
+    report_payload = _tmbg_report_payload(report)
+    files = {
+        key: _relative_existing_file(output_dir, Path(value)) if isinstance(value, str) else value
+        for key, value in artifacts.items()
+        if value is not None
+    }
+    files["run_metadata"] = "run_metadata.json"
+    validation_payload = {
+        "status": _tmbg_report_status(report),
+        "failure_count": int(report.failure_count),
+        "skipped_count": int(report.skipped_count),
+        "checks": report_payload.get("checks", []),
+    }
+    environment = dict(runtime.get("environment", {})) if isinstance(runtime.get("environment"), dict) else {}
+    environment.update(
+        {
+            "start_time": runtime.get("start_time"),
+            "end_time": runtime.get("end_time"),
+            "total_elapsed_sec": runtime.get("total_elapsed_sec"),
+        }
+    )
+    return write_contract_artifacts(
+        output_dir,
+        workflow=workflow,
+        system_name="tmbg",
+        model=ModelRecord(system_name="tmbg", params={"runner_kind": runner_kind, **parameters}),
+        config={"implementation": "python_tmbg", "runner_kind": runner_kind, "parameters": parameters},
+        conventions={
+            "energy_unit": "eV",
+            "momentum_unit": "nm^-1",
+            "gauge": "tmbg_system_defined",
+            "topology_convention": "analysis.topology plaquette Chern",
+        },
+        environment=environment,
+        validation=validation_payload,
+        observables={"report": report_payload},
+        files=files,
+        metadata={"runner_kind": runner_kind},
+    )
 
 
 def cmd_benchmarks_list() -> int:
@@ -598,9 +663,18 @@ def cmd_tmbg_reproduce_checkpoints(
         }
         with metadata_path.open("w", encoding="utf-8") as handle:
             json.dump(metadata, handle, indent=2)
+        _write_tmbg_contract_sidecars(
+            resolved_output_dir,
+            workflow="tmbg.checkpoints",
+            runner_kind="tmbg_paper_checkpoints",
+            parameters=dict(metadata["parameters"]),
+            runtime=dict(metadata["runtime"]),
+            artifacts=dict(metadata["artifacts"]),
+            report=report,
+        )
         output_suffix = f"\toutput_dir={resolved_output_dir}"
 
-    status = "fail" if report.has_failures else ("pass_with_skips" if report.has_skips else "pass")
+    status = _tmbg_report_status(report)
     print(
         f"status={status}\t"
         f"checks={len(report.checks)}\t"
@@ -711,9 +785,18 @@ def cmd_tmbg_diagnose_ktilde_symmetry(
         }
         with metadata_path.open("w", encoding="utf-8") as handle:
             json.dump(metadata, handle, indent=2)
+        _write_tmbg_contract_sidecars(
+            resolved_output_dir,
+            workflow="tmbg.ktilde_diagnostics",
+            runner_kind="tmbg_ktilde_symmetry_diagnostics",
+            parameters=dict(metadata["parameters"]),
+            runtime=dict(metadata["runtime"]),
+            artifacts=dict(metadata["artifacts"]),
+            report=report,
+        )
         output_suffix = f"\toutput_dir={resolved_output_dir}"
 
-    status = "fail" if report.has_failures else ("pass_with_skips" if report.has_skips else "pass")
+    status = _tmbg_report_status(report)
     print(
         f"status={status}\t"
         f"checks={len(report.checks)}\t"
