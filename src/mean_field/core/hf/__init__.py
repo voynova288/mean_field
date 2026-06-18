@@ -178,6 +178,12 @@ from .tdhf import (
     two_body_matrix_element,
     validate_tdhf_structures,
 )
+from .tdhf_boundary import (
+    TDHFCanonicalOrbitals,
+    TDHFOccupationPolicy,
+    canonical_tdhf_orbitals_from_hf_run_result,
+    canonical_tdhf_orbitals_from_hf_state,
+)
 
 __all__ = [
     "DensityBundle",
@@ -220,6 +226,8 @@ __all__ = [
     "ScreenedCoulombParams",
     "SingleFlavorSimplificationStatus",
     "SpinValleyFlavor",
+    "TDHFCanonicalOrbitals",
+    "TDHFOccupationPolicy",
     "TDHFMatrices",
     "TDHFSpectrum",
     "TDHFStructureResiduals",
@@ -247,6 +255,8 @@ __all__ = [
     "calculate_norm_convergence",
     "calculate_valley_spin_order_parameters",
     "calculate_projected_overlap",
+    "canonical_tdhf_orbitals_from_hf_run_result",
+    "canonical_tdhf_orbitals_from_hf_state",
     "calculate_projected_overlap_between",
     "calculate_projected_overlap_compact",
     "check_single_flavor_simplification",
