@@ -155,8 +155,9 @@ def compute_chern_basis_on_grid(
     sigma_z is then diagonalized; its positive and negative eigenvectors are
     labelled A and B respectively.
 
-    The Berry flux is evaluated with the Fukui-Hatsugai-Suzuki lattice formula.
-    The important implementation detail is the reciprocal-lattice transition
+    The selected wavefunction columns are passed to the common topology
+    framework for Berry links, plaquette flux, and Chern integration.  The
+    system-specific implementation detail is the reciprocal-lattice transition
     function at the BZ boundary, because H(k + b_i) is only equal to H(k) after
     relabelling the plane-wave momenta G -> G + b_i.
     """
