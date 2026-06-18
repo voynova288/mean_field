@@ -6,6 +6,12 @@ import numpy as np
 import pytest
 
 from mean_field.api import load_result, required_artifact_files
+from mean_field.core.contracts import (
+    HFRunResult as ContractHFRunResult,
+    assert_density_state_consistent,
+    assert_hamiltonian_parts_consistent,
+    assert_projected_basis_consistent,
+)
 from mean_field.benchmarks import BMUnstrainedReference, BenchmarkCase
 from mean_field.core.hf import FlavorBandData
 from mean_field.core.lattice import KPath
@@ -26,8 +32,12 @@ from mean_field.systems.tbg.zero_field import (
     HFPathResult,
     RestrictedHartreeFockRun,
     RestrictedHartreeFockState,
+    b0_hf_benchmark_run_to_hf_run_result,
+    build_b0_uniform_lattice,
     complex_to_pair,
     empty_overlap_block_set,
+    initialize_restricted_density,
+    tbg_zero_field_hf_run_to_hf_run_result,
     write_b0_hf_benchmark_artifacts,
     write_b0_hf_benchmark_contract_sidecars,
     write_b0_hf_suite_artifacts,
@@ -174,11 +184,11 @@ def test_tbg_zero_field_bm_unstrained_contract_sidecars_are_metadata_only(tmp_pa
         write_bm_unstrained_benchmark_contract_sidecars(output_dir, result)
 
 
-def _benchmark_case(tmp_path: Path) -> BenchmarkCase:
+def _benchmark_case(tmp_path: Path, *, nu: int = 2) -> BenchmarkCase:
     return BenchmarkCase(
         benchmark_id="unit_b0",
         theta_deg=1.05,
-        nu=2,
+        nu=int(nu),
         state_label="unit",
         description="unit test",
         source_group="unit",
@@ -433,3 +443,146 @@ def test_tbg_zero_field_b0_runner_writers_add_contract_sidecars(monkeypatch, tmp
     assert loaded_suite.validation is not None and loaded_suite.validation["case_count"] == 1
     assert suite_artifacts["suite_summary_tsv"].is_file()
     assert load_result(suite_output_dir / result.case.benchmark_id).manifest["metadata"]["workflow"] == "tbg.zero_field.b0_hf_benchmark"
+
+def _bm_solution_on_grid(params: TBGParameters, *, lk: int = 1, lg: int = 1) -> BMSolution:
+    grid = build_b0_uniform_lattice(params, lk)
+    nk = int(grid.nk)
+    nlocal = 4
+    n_eta = 2
+    n_spin = 2
+    nb = 2
+    dim = nlocal * lg * lg
+    spectrum = np.zeros((nb, n_eta, nk), dtype=float)
+    for ik in range(nk):
+        spectrum[0, :, ik] = [-1.0 - 0.01 * ik, -0.8 - 0.01 * ik]
+        spectrum[1, :, ik] = [0.8 + 0.01 * ik, 1.0 + 0.01 * ik]
+    return BMSolution(
+        params=params,
+        lattice_kvec=np.asarray(grid.kvec, dtype=np.complex128),
+        lg=lg,
+        nlocal=nlocal,
+        n_eta=n_eta,
+        n_spin=n_spin,
+        nb=nb,
+        hamiltonian=np.zeros((dim, dim, n_eta, nk), dtype=np.complex128),
+        sigma_z=np.zeros((n_spin * n_eta * nb, n_spin * n_eta * nb, nk), dtype=np.complex128),
+        uk=np.zeros((dim, nb, n_eta, nk), dtype=np.complex128),
+        spectrum=spectrum,
+        gvec=np.asarray([0.0 + 0.0j], dtype=np.complex128),
+        periodic_g_grid=True,
+    )
+
+def _canonical_b0_hf_benchmark_result(tmp_path: Path) -> B0HFBenchmarkRun:
+    params = TBGParameters.from_degrees(1.05)
+    grid_solution = _bm_solution_on_grid(params, lk=1, lg=1)
+    state = RestrictedHartreeFockState.from_bm_solution(grid_solution, nu=0.0, precision=1.0e-6)
+    state.density[:, :, :] = initialize_restricted_density(state.h0, nu=0.0, init_mode="bm")
+    state.hamiltonian[:, :, :] = state.h0
+    state.energies[:, :] = grid_solution.flattened_energies()
+    state.mu = 0.0
+    state.diagnostics.update({"hf_energy": -1.0, "final_raw_norm": 0.0, "overlap_lg": 1.0, "beta": 1.0})
+    hf_run = RestrictedHartreeFockRun(
+        state=state,
+        overlap_blocks=empty_overlap_block_set(),
+        iter_energy=np.asarray([-1.2, -1.0], dtype=float),
+        iter_err=np.asarray([1.0e-2, 1.0e-7], dtype=float),
+        iter_oda=np.asarray([1.0, 0.8], dtype=float),
+        init_mode="bm",
+        seed=11,
+        converged=True,
+        exit_reason="converged",
+    )
+    path = KPath(
+        kvec=np.asarray([0.0 + 0.0j, params.g1], dtype=np.complex128),
+        kdist=np.asarray([0.0, abs(params.g1)], dtype=float),
+        labels=("G", "G1"),
+        node_indices=(1, 2),
+    )
+    band_data = FlavorBandData(
+        band_labels=tuple(f"b{i}" for i in range(state.nt)),
+        energies=np.zeros((state.nt, 2), dtype=float),
+        mean_weights=np.ones((state.nt, 4), dtype=float),
+    )
+    path_result = HFPathResult(
+        params=params,
+        path=path,
+        hamiltonian=np.zeros((state.nt, state.nt, 2), dtype=np.complex128),
+        band_data=band_data,
+        mu=0.0,
+        nu=0.0,
+        lk=1,
+        lg=1,
+        points_per_segment=1,
+        init_mode="bm",
+        normalized_init_mode="bm",
+        seed=11,
+        exit_reason="converged",
+        beta=1.0,
+        overlap_lg=1,
+    )
+    return B0HFBenchmarkRun(
+        case=_benchmark_case(tmp_path, nu=0),
+        params=params,
+        path=path,
+        grid_solution=grid_solution,
+        hf_run=hf_run,
+        path_result=path_result,
+        parity=HFPathParity(
+            kdist_max_abs_diff=0.0,
+            max_abs_band_diff_mev=0.0,
+            rms_band_diff_mev=0.0,
+            mean_abs_band_diff_mev=0.0,
+        ),
+        runtime=B0HFBenchmarkRuntime(
+            start_time="2026-01-01T00:00:00",
+            end_time="2026-01-01T00:00:01",
+            bm_elapsed_sec=0.1,
+            hf_elapsed_sec=0.2,
+            path_elapsed_sec=0.3,
+            total_elapsed_sec=0.6,
+            environment=_runtime_environment(),
+        ),
+        runtime_reference=None,
+        runtime_parity=None,
+    )
+
+def test_tbg_zero_field_b0_hf_benchmark_run_wraps_canonical_hf_run_result(tmp_path: Path) -> None:
+    result = _canonical_b0_hf_benchmark_result(tmp_path)
+
+    canonical = b0_hf_benchmark_run_to_hf_run_result(result, archive_manifest={"state": "b0_hf_state.npz"})
+
+    assert isinstance(canonical, ContractHFRunResult)
+    assert canonical.archive_manifest == {"state": "b0_hf_state.npz"}
+    assert canonical.best_seed == 11
+    assert canonical.init_mode == "bm"
+    assert canonical.converged is True
+    assert canonical.exit_reason == "converged"
+    assert canonical.iteration_history[-1] == {"iteration": 2, "energy": -1.0, "error": 1.0e-7, "oda_lambda": 0.8}
+
+    final = canonical.final_state
+    assert_projected_basis_consistent(final.basis)
+    assert_density_state_consistent(final.density)
+    assert_hamiltonian_parts_consistent(final.hamiltonian)
+    np.testing.assert_allclose(final.basis.k_grid_frac, np.asarray([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]]))
+    assert final.basis.active_band_indices == (1, 1, 1, 1, 2, 2, 2, 2)
+    assert final.basis.metadata["spin_degeneracy_implicit_in_micro_wavefunctions"] is True
+    assert final.basis.metadata["supports_crpa"] is False
+    np.testing.assert_allclose(final.density.density_delta, result.hf_run.state.density)
+    assert final.density.reference.scheme == "average"
+    assert final.density.reference.metadata["reference_diagonal"] == 0.5
+    assert final.density.metadata["raw_density_convention"] == "stored_delta"
+    assert final.density.n_occupied_total == 16
+    np.testing.assert_allclose(final.hamiltonian.fixed, np.zeros_like(result.hf_run.state.h0))
+    np.testing.assert_allclose(final.hamiltonian.hartree, np.zeros_like(result.hf_run.state.h0))
+    np.testing.assert_allclose(final.hamiltonian.fock, np.zeros_like(result.hf_run.state.h0))
+    assert final.hamiltonian.metadata["component_resolution"] == "collapsed_total_minus_h0"
+    assert final.hamiltonian.metadata["supports_crpa"] is False
+    assert final.eigenvectors_active.size == 0
+    assert final.observables["eigenvectors_active_available"] is False
+    assert final.observables["grid_lk"] == 1
+
+def test_tbg_zero_field_bare_restricted_hf_run_requires_grid_solution(tmp_path: Path) -> None:
+    result = _canonical_b0_hf_benchmark_result(tmp_path)
+
+    with pytest.raises(ValueError, match="requires the matching BMSolution grid_solution"):
+        tbg_zero_field_hf_run_to_hf_run_result(result.hf_run)
