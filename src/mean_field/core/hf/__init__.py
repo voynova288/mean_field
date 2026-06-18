@@ -10,6 +10,12 @@ from .density import (
     resolve_reference_density,
     stored_orientation_to_ket_projector,
 )
+from .contracts_bridge import (
+    density_state_from_delta,
+    density_state_from_projector,
+    make_contract_reference_density,
+    normalize_contract_reference_scheme,
+)
 from .archive import (
     HF_ARCHIVE_READER_VERSION,
     HFArchiveSummary,
@@ -178,8 +184,12 @@ __all__ = [
     "DensityConvention",
     "ReferenceDensity",
     "density_to_projector",
+    "density_state_from_delta",
+    "density_state_from_projector",
     "density_to_stored_delta",
     "ket_projector_to_stored_orientation",
+    "make_contract_reference_density",
+    "normalize_contract_reference_scheme",
     "resolve_reference_density",
     "stored_orientation_to_ket_projector",
     "DensityUpdateResult",
