@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-"""Fukui-Hatsugai-Suzuki Chern calculation with moire-BZ boundary sewing.
+"""tMBG topology adapter with moire-BZ boundary sewing.
 
 The plane-wave basis used by the continuum model is not literally periodic at
 k -> k + G_Mi.  At the torus boundary one must compare the eigenvector at the
 neighboring k point after shifting the plane-wave index G -> G + G_Mi.  This
-module implements that sewing operation explicitly.
+module owns only that system-specific sewing operation and wavefunction-window
+selection; FHS links, plaquette flux, and Chern integration are delegated to
+:mod:`analysis.topology`.
 
 The returned Chern number is in the "raw" fractional-coordinate orientation
 by default, i.e. the orientation of (G_M1, G_M2).  Use orientation="physical"
@@ -80,23 +82,6 @@ def transform_vec_by_g_shift(vec: np.ndarray, srcmap: np.ndarray) -> np.ndarray:
     else:
         raise ValueError(f"Expected vector/subspace with ndim 1 or 2, got shape {vec.shape}")
     return out
-
-
-def _unit_complex(z: complex, *, atol: float = 1.0e-14) -> complex:
-    z = complex(z)
-    magnitude = abs(z)
-    if magnitude <= atol:
-        raise ValueError("near-zero overlap link; the selected band/subspace is not isolated on this mesh")
-    return z / magnitude
-
-
-def _link(left: np.ndarray, right: np.ndarray, *, atol: float = 1.0e-14) -> tuple[complex, float]:
-    overlap = left.conjugate().T @ right
-    if overlap.shape == (1, 1):
-        z = complex(overlap[0, 0])
-        return _unit_complex(z, atol=atol), abs(z)
-    z = complex(np.linalg.det(overlap))
-    return _unit_complex(z, atol=atol), abs(z)
 
 
 def compute_sewn_grid(
