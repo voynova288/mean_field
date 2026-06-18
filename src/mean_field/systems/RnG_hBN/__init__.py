@@ -65,6 +65,7 @@ from .hf import (
     run_rlg_hbn_hartree_fock,
     scan_rlg_hbn_ground_state,
 )
+from .hf_contracts import rlg_hbn_hf_run_to_hf_run_result
 from .cache import (
     CACHE_POLICY_CHOICES,
     RLGhBNCacheMiss,
@@ -234,6 +235,7 @@ __all__ = [
     "rlg_hbn_flavor_occupation_counts_for_init_mode",
     "rlg_hbn_gap_estimate",
     "rlg_hbn_hermitian_residual",
+    "rlg_hbn_hf_run_to_hf_run_result",
     "rlg_hbn_layer_component_groups",
     "rlg_hbn_occupied_bands_per_k",
     "rlg_hbn_occupied_state_count",
