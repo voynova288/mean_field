@@ -62,6 +62,7 @@ from .supercell import (
     HTGSupercellGroundStateScan,
     HTGSupercellHartreeFockRun,
     HTGSupercellHartreeFockState,
+    HTGSupercellHFWavefunctionGrid,
     HTGSupercellPathResult,
     HTGSupercellProjectedBasisData,
     HTGSupercellSCFGridPathSamples,
@@ -70,6 +71,7 @@ from .supercell import (
     build_htg_supercell_overlap_blocks,
     build_htg_supercell_projected_basis,
     build_htg_supercell_uniform_grid,
+    build_htg_supercell_hf_wavefunction_grid,
     evaluate_htg_supercell_hf_path,
     extract_htg_supercell_inspection_scf_grid_path,
     extract_htg_supercell_scf_grid_path,
@@ -80,6 +82,8 @@ from .supercell import (
     htg_supercell_filling_from_density,
     htg_supercell_occupied_count_per_k,
     htg_supercell_reference_diagonal,
+    htg_supercell_full_boundary_sewing_transform,
+    htg_supercell_full_boundary_sewing_transforms,
     htg_tripled_fractional_supercell,
     run_htg_supercell_hf,
     scan_htg_supercell_ground_state,
@@ -110,7 +114,13 @@ from .strong_coupling import (
     flavor_band_occupations,
     flavor_occupations,
 )
-from .topology import ChernBasisResult, compute_chern_basis_on_grid, sublattice_sigma_z
+from .topology import (
+    ChernBasisResult,
+    compute_chern_basis_on_grid,
+    compute_htg_supercell_hf_band_topologies,
+    compute_htg_supercell_hf_subspace_topology,
+    sublattice_sigma_z,
+)
 from .validation import ValidationCheck, ValidationReport, htg_validation_report, validate_hf_state, validate_lattice, validate_static_hamiltonian
 
 __all__ = [
@@ -133,6 +143,7 @@ __all__ = [
     "HTGSupercellGroundStateScan",
     "HTGSupercellHartreeFockRun",
     "HTGSupercellHartreeFockState",
+    "HTGSupercellHFWavefunctionGrid",
     "HTGSupercellPathResult",
     "HTGSupercellProjectedBasisData",
     "HTGSupercellSCFGridPathSamples",
@@ -161,6 +172,7 @@ __all__ = [
     "build_htg_projected_basis_for_kvec",
     "build_htg_supercell_gamma_path",
     "build_htg_supercell_hf_problem",
+    "build_htg_supercell_hf_wavefunction_grid",
     "build_htg_supercell_overlap_blocks",
     "build_htg_supercell_projected_basis",
     "build_htg_supercell_uniform_grid",
@@ -175,6 +187,8 @@ __all__ = [
     "classify_htg_strong_coupling_state",
     "compute_bands_along_path",
     "compute_bands_on_grid",
+    "compute_htg_supercell_hf_band_topologies",
+    "compute_htg_supercell_hf_subspace_topology",
     "compute_background_densities",
     "compute_background_density",
     "compute_chern_basis_on_grid",
@@ -208,6 +222,8 @@ __all__ = [
     "htg_seed_occupation_summary",
     "htg_minimal_fractional_supercell",
     "htg_supercell_filling_from_density",
+    "htg_supercell_full_boundary_sewing_transform",
+    "htg_supercell_full_boundary_sewing_transforms",
     "htg_supercell_occupied_count_per_k",
     "htg_supercell_reference_diagonal",
     "htg_tripled_fractional_supercell",

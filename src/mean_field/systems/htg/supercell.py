@@ -192,6 +192,16 @@ class HTGSupercellSCFGridPathSamples:
         counts = np.bincount(self.segment_indices.astype(int), minlength=n_segments)
         return tuple(int(value) for value in counts[:n_segments])
 
+@dataclass(frozen=True)
+class HTGSupercellHFWavefunctionGrid:
+    """Full physical wavefunction mesh reconstructed from a supercell HF Hamiltonian."""
+
+    wavefunctions: np.ndarray
+    energies: np.ndarray
+    k_grid_frac: np.ndarray
+    band_indices: tuple[int, ...]
+    basis_data: HTGSupercellProjectedBasisData
+
 def htg_tripled_fractional_supercell() -> HTGSupercell:
     """Area-3 sqrt(3) x sqrt(3) cell for one-third/two-third fillings."""
 
@@ -394,6 +404,115 @@ def extract_htg_supercell_inspection_scf_grid_path(
         node_frac=node_frac,
         labels=labels,
         exact_tolerance=exact_tolerance,
+    )
+
+def htg_supercell_full_boundary_sewing_transform(basis_data: HTGSupercellProjectedBasisData, dm: int, dn: int):
+    """Boundary sewing for reconstructed full HTG supercell wavefunctions.
+
+    This is a system adapter: it expresses how the plane-wave embedding grid is
+    relabelled when the supercell crystal momentum crosses a reciprocal-periodic
+    boundary.  The Berry-link and Chern formulas are delegated to
+    :mod:`analysis.topology`.
+    """
+
+    n_spin = int(basis_data.basis.n_spin)
+    n_eta = int(basis_data.basis.n_flavor)
+    local_size = int(basis_data.basis.local_basis_size)
+    nx, ny = (int(value) for value in basis_data.basis.grid_shape)
+    shift_x = int(dm)
+    shift_y = int(dn)
+
+    def apply(vector: np.ndarray) -> np.ndarray:
+        array = np.asarray(vector, dtype=np.complex128)
+        has_columns = array.ndim == 2
+        if has_columns:
+            n_column = int(array.shape[1])
+            reshaped = array.reshape((n_spin, n_eta, local_size, nx, ny, n_column))
+            out = np.zeros_like(reshaped)
+        else:
+            reshaped = array.reshape((n_spin, n_eta, local_size, nx, ny))
+            out = np.zeros_like(reshaped)
+        for ix in range(nx):
+            source_x = ix + shift_x
+            if source_x < 0 or source_x >= nx:
+                continue
+            for iy in range(ny):
+                source_y = iy + shift_y
+                if source_y < 0 or source_y >= ny:
+                    continue
+                if has_columns:
+                    out[:, :, :, ix, iy, :] = reshaped[:, :, :, source_x, source_y, :]
+                else:
+                    out[:, :, :, ix, iy] = reshaped[:, :, :, source_x, source_y]
+        return out.reshape(array.shape)
+
+    return apply
+
+def htg_supercell_full_boundary_sewing_transforms(basis_data: HTGSupercellProjectedBasisData):
+    return (
+        htg_supercell_full_boundary_sewing_transform(basis_data, 1, 0),
+        htg_supercell_full_boundary_sewing_transform(basis_data, 0, 1),
+    )
+
+def _htg_supercell_full_wavefunction_from_coefficients(
+    basis_data: HTGSupercellProjectedBasisData,
+    coefficients: np.ndarray,
+    ik: int,
+) -> np.ndarray:
+    n_spin = int(basis_data.basis.n_spin)
+    n_eta = int(basis_data.basis.n_flavor)
+    n_band = int(basis_data.basis.n_band)
+    basis_dimension = int(basis_data.basis.basis_dimension)
+    local_size = int(basis_data.basis.local_basis_size)
+    nx, ny = basis_data.basis.grid_shape
+    coeff = np.asarray(coefficients, dtype=np.complex128).reshape((n_spin, n_eta, n_band), order="F")
+    out = np.zeros((n_spin, n_eta, basis_dimension), dtype=np.complex128)
+    for ispin in range(n_spin):
+        for ieta in range(n_eta):
+            out[ispin, ieta, :] = basis_data.basis.wavefunctions[:, :, ieta, int(ik)] @ coeff[ispin, ieta, :]
+    return out.reshape((n_spin, n_eta, local_size, int(nx), int(ny))).reshape(-1)
+
+def build_htg_supercell_hf_wavefunction_grid(
+    hamiltonian: np.ndarray,
+    basis_data: HTGSupercellProjectedBasisData,
+    *,
+    band_indices: Iterable[int],
+) -> HTGSupercellHFWavefunctionGrid:
+    """Reconstruct full wavefunction columns for selected HF bands on the SCF grid."""
+
+    if basis_data.k_grid_frac is None:
+        raise ValueError("basis_data must contain a tensor-product SCF k-grid for topology")
+    hamiltonian = np.asarray(hamiltonian, dtype=np.complex128)
+    nt, nt_rhs, nk = hamiltonian.shape
+    if nt != nt_rhs or nt != basis_data.nt or nk != basis_data.nk:
+        raise ValueError(f"Hamiltonian shape {hamiltonian.shape} is incompatible with basis_data nt/nk {(basis_data.nt, basis_data.nk)}")
+    bands = tuple(int(index) for index in band_indices)
+    if not bands:
+        raise ValueError("At least one HF band index is required")
+    if min(bands) < 0 or max(bands) >= nt:
+        raise ValueError(f"HF band indices {bands} outside [0, {nt})")
+    k_grid = np.asarray(basis_data.k_grid_frac, dtype=float)
+    mesh1, mesh2 = int(k_grid.shape[0]), int(k_grid.shape[1])
+    if int(mesh1 * mesh2) != nk:
+        raise ValueError(f"SCF k-grid shape {k_grid.shape} is incompatible with nk={nk}")
+    full_dim = int(basis_data.basis.n_spin * basis_data.basis.n_flavor * basis_data.basis.basis_dimension)
+    wavefunctions = np.zeros((mesh1, mesh2, full_dim, len(bands)), dtype=np.complex128)
+    energies = np.zeros((len(bands), mesh1, mesh2), dtype=float)
+    for ix in range(mesh1):
+        for iy in range(mesh2):
+            ik = int(ix * mesh2 + iy)
+            evals, evecs = np.linalg.eigh(hamiltonian[:, :, ik])
+            for out_index, band_index in enumerate(bands):
+                vector = _htg_supercell_full_wavefunction_from_coefficients(basis_data, evecs[:, band_index], ik)
+                norm = float(np.vdot(vector, vector).real)
+                wavefunctions[ix, iy, :, out_index] = vector / np.sqrt(max(norm, 1.0e-300))
+                energies[out_index, ix, iy] = float(evals[band_index])
+    return HTGSupercellHFWavefunctionGrid(
+        wavefunctions=wavefunctions,
+        energies=energies,
+        k_grid_frac=k_grid,
+        band_indices=bands,
+        basis_data=basis_data,
     )
 
 def _primitive_fractional_coords(lattice: HTGLattice, k_tilde: complex) -> tuple[float, float]:

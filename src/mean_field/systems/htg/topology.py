@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Iterable
 
 import numpy as np
 
-from analysis.topology import berry_curvature_from_links, chern_number_from_berry_curvature, compute_link_variables
+from analysis.topology import LatticeTopologyResult, WavefunctionIndex, compute_lattice_topology
 
 from .hamiltonian import centered_band_indices, diagonalize_hamiltonian, build_hamiltonian
 from .lattice import HTGLattice, build_moire_k_grid
@@ -95,21 +95,6 @@ def _reciprocal_translation(lattice: HTGLattice, dn1: int, dn2: int) -> Callable
 
     return apply
 
-
-def _compute_link_arrays(vectors: np.ndarray, lattice: HTGLattice) -> tuple[np.ndarray, np.ndarray]:
-    links = compute_link_variables(
-        vectors,
-        sewing_transforms=(
-            _reciprocal_translation(lattice, 1, 0),
-            _reciprocal_translation(lattice, 0, 1),
-        ),
-        link_method="determinant",
-    )
-    return links.link_1, links.link_2
-
-def _chern_from_link_vectors(vectors: np.ndarray, lattice: HTGLattice) -> float:
-    link_1, link_2 = _compute_link_arrays(vectors, lattice)
-    return chern_number_from_berry_curvature(berry_curvature_from_links(link_1, link_2))
 
 def _central_eigensystem(
     k_tilde: complex,
@@ -210,9 +195,51 @@ def compute_chern_basis_on_grid(
             vectors_b[i, j, :] = evecs @ eigvecs[:, 0]
             vectors_a[i, j, :] = evecs @ eigvecs[:, -1]
 
-    raw_chern_a = _chern_from_link_vectors(vectors_a, lattice)
-    raw_chern_b = _chern_from_link_vectors(vectors_b, lattice)
-    total_chern = _chern_from_link_vectors(subspace_vectors, lattice)
+    sewing = (_reciprocal_translation(lattice, 1, 0), _reciprocal_translation(lattice, 0, 1))
+    result_a = compute_lattice_topology(
+        vectors_a,
+        index=WavefunctionIndex(
+            indices=(0,),
+            role="chern_sublattice_band",
+            labels=("A",),
+            system="HTG",
+            valley=valley,
+            metadata={"central_pair_band_indices": [int(value) for value in central_pair]},
+        ),
+        sewing_transforms=sewing,
+        link_method="determinant",
+        metadata={"basis": "projected_sublattice_positive"},
+    )
+    result_b = compute_lattice_topology(
+        vectors_b,
+        index=WavefunctionIndex(
+            indices=(1,),
+            role="chern_sublattice_band",
+            labels=("B",),
+            system="HTG",
+            valley=valley,
+            metadata={"central_pair_band_indices": [int(value) for value in central_pair]},
+        ),
+        sewing_transforms=sewing,
+        link_method="determinant",
+        metadata={"basis": "projected_sublattice_negative"},
+    )
+    total_result = compute_lattice_topology(
+        subspace_vectors,
+        index=WavefunctionIndex(
+            indices=central_pair,
+            role="central_two_band_subspace",
+            labels=("central_lower", "central_upper"),
+            system="HTG",
+            valley=valley,
+        ),
+        sewing_transforms=sewing,
+        link_method="determinant",
+        metadata={"basis": "central_two_band_subspace"},
+    )
+    raw_chern_a = float(result_a.chern_number)
+    raw_chern_b = float(result_b.chern_number)
+    total_chern = float(total_result.chern_number)
 
     return ChernBasisResult(
         mesh_size=int(mesh_size),
@@ -228,4 +255,83 @@ def compute_chern_basis_on_grid(
         rounded_total_chern=int(round(total_chern)),
         sigma_z_eigenvalue_min=float(min(sigma_eigs)),
         sigma_z_eigenvalue_max=float(max(sigma_eigs)),
+    )
+
+
+def compute_htg_supercell_hf_band_topologies(
+    hamiltonian: np.ndarray,
+    basis_data,
+    *,
+    band_indices: Iterable[int],
+    link_method: str = "polar",
+    metadata: dict[str, object] | None = None,
+) -> tuple[LatticeTopologyResult, ...]:
+    """Compute single-band supercell-HF topology via the common framework.
+
+    The HTG system adapter reconstructs microscopic wavefunction columns and
+    supplies boundary sewing.  Berry links, plaquette flux, and Chern
+    integration remain in :mod:`analysis.topology`.
+    """
+
+    from .supercell import build_htg_supercell_hf_wavefunction_grid, htg_supercell_full_boundary_sewing_transforms
+
+    grid = build_htg_supercell_hf_wavefunction_grid(hamiltonian, basis_data, band_indices=band_indices)
+    sewing = htg_supercell_full_boundary_sewing_transforms(basis_data)
+    results: list[LatticeTopologyResult] = []
+    for local_index, band_index in enumerate(grid.band_indices):
+        results.append(
+            compute_lattice_topology(
+                grid.wavefunctions[:, :, :, local_index],
+                index=WavefunctionIndex(
+                    indices=(int(band_index),),
+                    role="hf_supercell_band",
+                    labels=(f"hf_band_{int(band_index)}",),
+                    system="HTG_supercell_HF",
+                    metadata={
+                        "supercell": basis_data.supercell.as_dict(),
+                        "mesh_size": int(basis_data.mesh_size),
+                        "band_index_0based": int(band_index),
+                        **({} if metadata is None else dict(metadata)),
+                    },
+                ),
+                k_grid_frac=grid.k_grid_frac,
+                sewing_transforms=sewing,
+                link_method=link_method,  # type: ignore[arg-type]
+                metadata={"adapter": "mean_field.systems.htg.topology", **({} if metadata is None else dict(metadata))},
+            )
+        )
+    return tuple(results)
+
+
+def compute_htg_supercell_hf_subspace_topology(
+    hamiltonian: np.ndarray,
+    basis_data,
+    *,
+    band_indices: Iterable[int],
+    link_method: str = "polar",
+    metadata: dict[str, object] | None = None,
+) -> LatticeTopologyResult:
+    """Compute a multi-band supercell-HF subspace Chern via the common framework."""
+
+    from .supercell import build_htg_supercell_hf_wavefunction_grid, htg_supercell_full_boundary_sewing_transforms
+
+    grid = build_htg_supercell_hf_wavefunction_grid(hamiltonian, basis_data, band_indices=band_indices)
+    return compute_lattice_topology(
+        grid.wavefunctions,
+        index=WavefunctionIndex(
+            indices=grid.band_indices,
+            role="hf_supercell_subspace",
+            labels=tuple(f"hf_band_{int(index)}" for index in grid.band_indices),
+            system="HTG_supercell_HF",
+            metadata={
+                "supercell": basis_data.supercell.as_dict(),
+                "mesh_size": int(basis_data.mesh_size),
+                "band_indices_0based": [int(index) for index in grid.band_indices],
+                **({} if metadata is None else dict(metadata)),
+            },
+        ),
+        k_grid_frac=grid.k_grid_frac,
+        sewing_transforms=htg_supercell_full_boundary_sewing_transforms(basis_data),
+        link_method=link_method,  # type: ignore[arg-type]
+        metadata={"adapter": "mean_field.systems.htg.topology", **({} if metadata is None else dict(metadata))},
     )

@@ -4,6 +4,7 @@ import numpy as np
 
 from mean_field.systems.htg import HTGModel, HTGParams, InteractionParams
 from mean_field.systems.htg.supercell import (
+    build_htg_supercell_hf_wavefunction_grid,
     build_htg_supercell_projected_basis,
     extract_htg_supercell_inspection_scf_grid_path,
     htg_doubled_fractional_supercell,
@@ -91,6 +92,33 @@ def test_htg_supercell_scf_grid_path_uses_saved_grid_indices() -> None:
     assert samples.exact_node_hit_mask.tolist() == [True, True, True, True]
     assert np.all(samples.grid_indices >= 0)
     assert np.all(samples.grid_indices < basis.nk)
+
+
+def test_htg_supercell_hf_wavefunction_grid_reconstructs_micro_basis_columns() -> None:
+    model = HTGModel.from_config(1.8, n_shells=0, params=HTGParams.kwan2023())
+    run = run_htg_supercell_hf(
+        model,
+        InteractionParams(n_k=1, g_shells=0),
+        primitive_nu=3.5,
+        mesh_size=1,
+        g_shells=0,
+        max_iter=1,
+        init_mode="bm",
+        seed=1,
+        use_numba=False,
+    )
+
+    grid = build_htg_supercell_hf_wavefunction_grid(run.state.hamiltonian, run.basis_data, band_indices=(0, 1))
+
+    expected_micro_dim = int(
+        run.basis_data.basis.n_spin * run.basis_data.basis.n_flavor * run.basis_data.basis.basis_dimension
+    )
+    assert grid.wavefunctions.shape == (1, 1, expected_micro_dim, 2)
+    assert grid.energies.shape == (2, 1, 1)
+    assert grid.k_grid_frac.shape == (1, 1, 2)
+    assert grid.band_indices == (0, 1)
+    norms = np.einsum("ijbs,ijbs->s", grid.wavefunctions.conj(), grid.wavefunctions).real
+    np.testing.assert_allclose(norms, np.ones(2), atol=1.0e-12)
 
 
 def test_htg_supercell_tiny_hf_run_preserves_fractional_filling() -> None:
