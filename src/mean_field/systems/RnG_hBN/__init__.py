@@ -126,13 +126,16 @@ from .tdhf import (
     build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs,
     build_rlg_hbn_tdhf_interaction,
     build_rlg_hbn_tdhf_orbitals,
+    build_rlg_hbn_tdhf_orbitals_from_canonical_hf,
     build_rlg_hbn_tdhf_q_matrices,
     build_rlg_hbn_tdhf_q_pairs,
     build_rlg_hbn_tdhf_q0_matrices,
+    build_rlg_hbn_tdhf_q0_matrices_from_canonical_hf,
     build_rlg_hbn_tdhf_q0_matrices_from_pairs,
     build_rlg_hbn_tdhf_q0_pairs,
     load_rlg_hbn_tdhf_run_from_archive,
     required_rlg_hbn_tdhf_finite_q_overlap_shifts,
+    validate_rlg_hbn_tdhf_canonical_orbital_parity,
 )
 from .validation import ValidationCheck, ValidationReport, reproduce_paper_checkpoints, validate_physics
 
@@ -192,9 +195,11 @@ __all__ = [
     "build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs",
     "build_rlg_hbn_tdhf_interaction",
     "build_rlg_hbn_tdhf_orbitals",
+    "build_rlg_hbn_tdhf_orbitals_from_canonical_hf",
     "build_rlg_hbn_tdhf_q_matrices",
     "build_rlg_hbn_tdhf_q_pairs",
     "build_rlg_hbn_tdhf_q0_matrices",
+    "build_rlg_hbn_tdhf_q0_matrices_from_canonical_hf",
     "build_rlg_hbn_tdhf_q0_matrices_from_pairs",
     "build_rlg_hbn_tdhf_q0_pairs",
     "required_rlg_hbn_tdhf_finite_q_overlap_shifts",
@@ -253,6 +258,7 @@ __all__ = [
     "solve_screened_interlayer_potential",
     "table_ii_moire_parameters",
     "validate_physics",
+    "validate_rlg_hbn_tdhf_canonical_orbital_parity",
     "valence_band_count",
     "write_rlg_hbn_path_band_plot",
 ]

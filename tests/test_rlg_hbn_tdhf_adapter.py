@@ -21,13 +21,17 @@ from mean_field.systems.RnG_hBN import (
     build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs,
     build_rlg_hbn_tdhf_interaction,
     build_rlg_hbn_tdhf_orbitals,
+    build_rlg_hbn_tdhf_orbitals_from_canonical_hf,
     build_rlg_hbn_tdhf_q_matrices,
     build_rlg_hbn_tdhf_q_pairs,
     build_rlg_hbn_tdhf_q0_matrices,
+    build_rlg_hbn_tdhf_q0_matrices_from_canonical_hf,
     build_rlg_hbn_tdhf_q0_matrices_from_pairs,
     build_rlg_hbn_tdhf_q0_pairs,
     required_rlg_hbn_tdhf_finite_q_overlap_shifts,
     rlg_hbn_flavor_occupation_counts_for_init_mode,
+    rlg_hbn_hf_run_to_hf_run_result,
+    validate_rlg_hbn_tdhf_canonical_orbital_parity,
 )
 
 
@@ -82,6 +86,29 @@ def _tiny_flavor_polarized_run(*, k_mesh_size: int = 1, mesh_size: int = 1) -> R
     )
 
 
+
+def _canonical_ready_tiny_run() -> RLGhBNHartreeFockRun:
+    """Tiny RLG/hBN run with nondegenerate flavor blocks for canonical TDHF parity tests."""
+
+    run = _tiny_flavor_polarized_run()
+    nt, nk = run.state.nt, run.state.nk
+    hamiltonian = np.zeros((nt, nt, nk), dtype=np.complex128)
+    energies = np.zeros((nt, nk), dtype=float)
+    for ik in range(nk):
+        diagonal = np.arange(nt, dtype=float) + 0.125 * float(ik)
+        hamiltonian[:, :, ik] = np.diag(diagonal)
+        energies[:, ik] = diagonal
+    projector = np.zeros_like(hamiltonian)
+    projector[0, 0, :] = 1.0
+    run.state.h0[:, :, :] = hamiltonian
+    run.state.hamiltonian[:, :, :] = hamiltonian
+    run.state.energies[:, :] = energies
+    run.state.density[:, :, :] = projector - run.state.reference_density
+    run.state.mu = 0.5
+    run.state.occupation_counts = (1, 0, 0, 0)
+    return run
+
+
 def test_rlg_hbn_tdhf_orbitals_and_q0_pairs_keep_fixed_momentum_sector() -> None:
     run = _tiny_flavor_polarized_run()
     orbitals = build_rlg_hbn_tdhf_orbitals(run.state)
@@ -93,6 +120,46 @@ def test_rlg_hbn_tdhf_orbitals_and_q0_pairs_keep_fixed_momentum_sector() -> None
     for pair in pairs:
         assert pair.particle_momentum == pair.hole_momentum == 0
         assert orbitals.decode_global_index(pair.particle)[1] == orbitals.decode_global_index(pair.hole)[1]
+
+
+def test_rlg_hbn_tdhf_canonical_orbitals_match_legacy_for_flavor_resolved_state() -> None:
+    run = _canonical_ready_tiny_run()
+    canonical = rlg_hbn_hf_run_to_hf_run_result(run)
+
+    legacy = build_rlg_hbn_tdhf_orbitals(run.state)
+    from_result = build_rlg_hbn_tdhf_orbitals_from_canonical_hf(canonical)
+    from_state = build_rlg_hbn_tdhf_orbitals_from_canonical_hf(canonical.final_state)
+    metrics = validate_rlg_hbn_tdhf_canonical_orbital_parity(run.state, canonical)
+
+    np.testing.assert_allclose(from_result.energies, legacy.energies, rtol=0.0, atol=1.0e-12)
+    np.testing.assert_allclose(from_result.eigenvectors, legacy.eigenvectors, rtol=0.0, atol=1.0e-12)
+    np.testing.assert_array_equal(from_result.occupied_mask, legacy.occupied_mask)
+    np.testing.assert_allclose(from_state.energies, legacy.energies, rtol=0.0, atol=1.0e-12)
+    assert metrics["energy_residual"] <= 1.0e-12
+    assert metrics["occupied_mask_mismatches"] == 0.0
+
+
+def test_rlg_hbn_tdhf_q0_matrices_from_canonical_hf_matches_legacy_path() -> None:
+    run = _canonical_ready_tiny_run()
+    canonical = rlg_hbn_hf_run_to_hf_run_result(run)
+
+    legacy = build_rlg_hbn_tdhf_q0_matrices(run, max_pairs=8)
+    bridged = build_rlg_hbn_tdhf_q0_matrices_from_canonical_hf(run, canonical, max_pairs=8)
+
+    np.testing.assert_allclose(bridged.A, legacy.A, rtol=1.0e-12, atol=1.0e-12)
+    np.testing.assert_allclose(bridged.B, legacy.B, rtol=1.0e-12, atol=1.0e-12)
+    np.testing.assert_allclose(bridged.L, legacy.L, rtol=1.0e-12, atol=1.0e-12)
+    assert bridged.structure.ok
+
+
+def test_rlg_hbn_tdhf_canonical_adapter_rejects_flavor_mixed_hamiltonian() -> None:
+    run = _canonical_ready_tiny_run()
+    run.state.hamiltonian[0, 1, 0] = 1.0e-4
+    run.state.hamiltonian[1, 0, 0] = 1.0e-4
+    canonical = rlg_hbn_hf_run_to_hf_run_result(run)
+
+    with pytest.raises(ValueError, match="block-diagonal"):
+        build_rlg_hbn_tdhf_orbitals_from_canonical_hf(canonical, occupation_policy="energy_sort")
 
 
 def test_rlg_hbn_tdhf_orbitals_reject_occupation_counts_for_flavor_mixed_hamiltonian() -> None:
