@@ -6,6 +6,8 @@ from typing import Any, Literal
 
 import numpy as np
 
+from mean_field.core.io import write_json_artifact
+
 from .artifacts import ArtifactManifest, ConventionBundle, ModelRecord, write_contract_artifacts
 
 
@@ -75,6 +77,94 @@ class WavefunctionBundle:
     convention: ConventionBundle = field(default_factory=ConventionBundle)
 
 
+def _json_default(value: object) -> object:
+    if isinstance(value, Path):
+        return str(value)
+    item = getattr(value, "item", None)
+    if callable(item):
+        return item()
+    tolist = getattr(value, "tolist", None)
+    if callable(tolist):
+        return tolist()
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
+def _array_shape(value: object) -> list[int]:
+    return [int(axis) for axis in np.asarray(value).shape]
+
+
+def _mapping_keys(value: object) -> list[str]:
+    if isinstance(value, dict):
+        return sorted(str(key) for key in value)
+    return []
+
+
+def _canonical_hf_run_result_sidecar(canonical_run_result: Any) -> dict[str, object]:
+    final_state = canonical_run_result.final_state
+    basis = final_state.basis
+    density = final_state.density
+    reference = density.reference
+    hamiltonian = final_state.hamiltonian
+    iteration_history = list(canonical_run_result.iteration_history)
+    last_iteration = dict(iteration_history[-1]) if iteration_history else None
+    return {
+        "schema_version": 1,
+        "contract_type": "mean_field.core.contracts.HFRunResult",
+        "converged": bool(canonical_run_result.converged),
+        "exit_reason": str(canonical_run_result.exit_reason),
+        "best_seed": int(canonical_run_result.best_seed),
+        "init_mode": str(canonical_run_result.init_mode),
+        "iteration_history": {
+            "count": len(iteration_history),
+            "fields": sorted(str(key) for row in iteration_history for key in row),
+            "last": last_iteration,
+        },
+        "final_state": {
+            "contract_type": "mean_field.core.contracts.HFState",
+            "mu": float(final_state.mu),
+            "energies_shape": _array_shape(final_state.energies),
+            "eigenvectors_active_shape": _array_shape(final_state.eigenvectors_active),
+            "observables_keys": _mapping_keys(final_state.observables),
+            "diagnostics_keys": _mapping_keys(final_state.diagnostics),
+            "basis": {
+                "contract_type": "mean_field.core.contracts.ProjectedBasis",
+                "system": str(basis.physical_model.system),
+                "k_count": int(np.asarray(basis.kvec).size),
+                "k_grid_frac_shape": _array_shape(basis.k_grid_frac),
+                "h0_shape": _array_shape(basis.h0),
+                "basis_energies_shape": _array_shape(basis.basis_energies),
+                "micro_wavefunctions_shape": _array_shape(basis.micro_wavefunctions),
+                "active_state_count": len(tuple(basis.active_band_indices)),
+                "active_valence_bands": int(basis.active_valence_bands),
+                "active_conduction_bands": int(basis.active_conduction_bands),
+                "metadata": dict(basis.metadata),
+            },
+            "density": {
+                "contract_type": "mean_field.core.contracts.DensityState",
+                "convention": str(density.convention),
+                "density_delta_shape": _array_shape(density.density_delta),
+                "reference_shape": _array_shape(reference.reference),
+                "reference_scheme": str(reference.scheme),
+                "filling": float(density.filling),
+                "n_occupied_total": int(density.n_occupied_total),
+                "metadata": dict(density.metadata),
+                "reference_metadata": dict(reference.metadata),
+            },
+            "hamiltonian": {
+                "contract_type": "mean_field.core.contracts.HamiltonianParts",
+                "h0_shape": _array_shape(hamiltonian.h0),
+                "fixed_shape": _array_shape(hamiltonian.fixed),
+                "hartree_shape": _array_shape(hamiltonian.hartree),
+                "fock_shape": _array_shape(hamiltonian.fock),
+                "total_shape": _array_shape(hamiltonian.total),
+                "density_input_convention": str(hamiltonian.density_input_convention),
+                "metadata": dict(hamiltonian.metadata),
+            },
+        },
+        "archive_manifest_keys": sorted(str(key) for key in dict(canonical_run_result.archive_manifest)),
+    }
+
+
 @dataclass(frozen=True)
 class HFResult:
     model: ModelRecord
@@ -98,6 +188,7 @@ class HFResult:
 
     def save(self, output_dir: str | Path) -> Path:
         root = Path(output_dir)
+        root.mkdir(parents=True, exist_ok=True)
         manifest_files: dict[str, object] = {}
         manifest_metadata: dict[str, object] = {}
         conventions: ConventionBundle | dict[str, object] = ConventionBundle(
@@ -107,6 +198,15 @@ class HFResult:
             manifest_files.update(dict(self.artifacts.files))
             manifest_metadata.update(dict(self.artifacts.metadata))
             conventions = self.artifacts.conventions
+        if self.canonical_run_result is not None:
+            sidecar = _canonical_hf_run_result_sidecar(self.canonical_run_result)
+            write_json_artifact(sidecar, root / "canonical_hf_run_result.json", default=_json_default)
+            manifest_files["canonical_hf_run_result"] = "canonical_hf_run_result.json"
+            manifest_metadata["canonical_hf_run_result"] = {
+                "schema_version": sidecar["schema_version"],
+                "contract_type": sidecar["contract_type"],
+                "state_contract_type": sidecar["final_state"]["contract_type"],
+            }
         paths = write_contract_artifacts(
             root,
             workflow="hf.result",

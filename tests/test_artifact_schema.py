@@ -16,6 +16,15 @@ from mean_field.api import (
     update_artifact_manifest,
     write_contract_artifacts,
 )
+from mean_field.core.contracts import (
+    DensityState as ContractDensityState,
+    HFRunResult as ContractHFRunResult,
+    HFState as ContractHFState,
+    HamiltonianParts as ContractHamiltonianParts,
+    ProjectedBasis as ContractProjectedBasis,
+    ReferenceDensity as ContractReferenceDensity,
+    SingleParticleModel as ContractSingleParticleModel,
+)
 
 
 def test_required_artifact_schema_names_are_stable() -> None:
@@ -60,6 +69,90 @@ def test_hf_result_save_writes_public_manifest_files(tmp_path) -> None:
     assert loaded.validation == {}
     assert loaded.observables == {"gap_mev": 1.0}
     assert loaded.manifest["root"] == str(tmp_path)
+
+
+def test_hf_result_save_writes_canonical_hf_run_result_sidecar(tmp_path) -> None:
+    def h_builder(kvec: np.ndarray) -> np.ndarray:
+        return np.zeros((1, 1, np.asarray(kvec).size), dtype=np.complex128)
+
+    def diagonalizer(kvec: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        size = np.asarray(kvec).size
+        return np.zeros((1, size), dtype=float), np.ones((1, 1, size), dtype=np.complex128)
+
+    model_contract = ContractSingleParticleModel(
+        system="toy",
+        lattice=None,
+        params={},
+        hamiltonian_builder=h_builder,
+        diagonalizer=diagonalizer,
+    )
+    h0 = np.zeros((1, 1, 1), dtype=np.complex128)
+    basis = ContractProjectedBasis(
+        physical_model=model_contract,
+        basis_model=model_contract,
+        kvec=np.asarray([0.0 + 0.0j]),
+        k_grid_frac=np.asarray([[0.0, 0.0]], dtype=float),
+        h0=h0,
+        basis_energies=np.zeros((1, 1), dtype=float),
+        active_band_indices=(0,),
+        active_valence_bands=0,
+        active_conduction_bands=1,
+        micro_wavefunctions=np.ones((1, 1, 1), dtype=np.complex128),
+        metadata={"source": "unit_test"},
+    )
+    reference = ContractReferenceDensity(scheme="custom", reference=np.zeros_like(h0))
+    density = ContractDensityState(
+        density_delta=np.ones_like(h0),
+        reference=reference,
+        filling=1.0,
+        n_occupied_total=1,
+    )
+    hamiltonian = ContractHamiltonianParts(
+        h0=h0,
+        fixed=np.zeros_like(h0),
+        hartree=np.zeros_like(h0),
+        fock=np.zeros_like(h0),
+        total=h0,
+        density_input_convention="delta",
+        metadata={"supports_crpa": False},
+    )
+    final_state = ContractHFState(
+        basis=basis,
+        density=density,
+        hamiltonian=hamiltonian,
+        energies=np.zeros((1, 1), dtype=float),
+        eigenvectors_active=np.empty((0,), dtype=np.complex128),
+        mu=0.0,
+        observables={"eigenvectors_active_available": False},
+        diagnostics={"final_raw_norm": 0.0},
+    )
+    canonical = ContractHFRunResult(
+        final_state=final_state,
+        iteration_history=[{"iteration": 1, "energy": 0.0, "error": 0.0, "oda_lambda": 1.0}],
+        converged=True,
+        exit_reason="converged",
+        best_seed=1,
+        init_mode="toy",
+    )
+    result = HFResult(
+        model=ModelRecord(system_name="toy"),
+        config=HFConfig(filling=1.0, mesh=(1, 1)),
+        state=HFState(density=np.ones_like(h0)),
+        canonical_run_result=canonical,
+    )
+
+    result.save(tmp_path)
+
+    sidecar = json.loads((tmp_path / "canonical_hf_run_result.json").read_text(encoding="utf-8"))
+    loaded = load_result(tmp_path)
+    assert loaded.manifest["files"]["canonical_hf_run_result"] == "canonical_hf_run_result.json"
+    assert loaded.manifest["metadata"]["canonical_hf_run_result"]["contract_type"] == "mean_field.core.contracts.HFRunResult"
+    assert sidecar["contract_type"] == "mean_field.core.contracts.HFRunResult"
+    assert sidecar["iteration_history"]["count"] == 1
+    assert sidecar["final_state"]["density"]["reference_scheme"] == "custom"
+    assert sidecar["final_state"]["density"]["density_delta_shape"] == [1, 1, 1]
+    assert sidecar["final_state"]["basis"]["h0_shape"] == [1, 1, 1]
+    assert sidecar["final_state"]["hamiltonian"]["metadata"]["supports_crpa"] is False
 
 
 def test_write_contract_artifacts_writes_schema_sidecars_and_npz_summary(tmp_path) -> None:
