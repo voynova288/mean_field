@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import numpy as np
+import pytest
 
 from mean_field.api import (
     ArtifactManifest,
@@ -25,6 +27,106 @@ from mean_field.core.contracts import (
     ReferenceDensity as ContractReferenceDensity,
     SingleParticleModel as ContractSingleParticleModel,
 )
+
+
+def _strict_json_loads(text: str) -> dict[str, object]:
+    def reject_constant(token: str) -> None:
+        raise ValueError(token)
+
+    payload = json.loads(text, parse_constant=reject_constant)
+    assert isinstance(payload, dict)
+    return payload
+
+
+def _toy_contract_hf_run_result(
+    *,
+    basis_metadata: dict[str, object] | None = None,
+    density_metadata: dict[str, object] | None = None,
+    reference_metadata: dict[str, object] | None = None,
+    hamiltonian_metadata: dict[str, object] | None = None,
+    iteration_history: list[dict[str, object]] | None = None,
+) -> ContractHFRunResult:
+    def h_builder(kvec: np.ndarray) -> np.ndarray:
+        return np.zeros((1, 1, np.asarray(kvec).size), dtype=np.complex128)
+
+    def diagonalizer(kvec: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        size = np.asarray(kvec).size
+        return np.zeros((1, size), dtype=float), np.ones((1, 1, size), dtype=np.complex128)
+
+    model_contract = ContractSingleParticleModel(
+        system="toy",
+        lattice=None,
+        params={},
+        hamiltonian_builder=h_builder,
+        diagonalizer=diagonalizer,
+    )
+    h0 = np.zeros((1, 1, 1), dtype=np.complex128)
+    basis = ContractProjectedBasis(
+        physical_model=model_contract,
+        basis_model=model_contract,
+        kvec=np.asarray([0.0 + 0.0j]),
+        k_grid_frac=np.asarray([[0.0, 0.0]], dtype=float),
+        h0=h0,
+        basis_energies=np.zeros((1, 1), dtype=float),
+        active_band_indices=(0,),
+        active_valence_bands=0,
+        active_conduction_bands=1,
+        micro_wavefunctions=np.ones((1, 1, 1), dtype=np.complex128),
+        metadata={} if basis_metadata is None else dict(basis_metadata),
+    )
+    reference = ContractReferenceDensity(
+        scheme="custom",
+        reference=np.zeros_like(h0),
+        metadata={} if reference_metadata is None else dict(reference_metadata),
+    )
+    density = ContractDensityState(
+        density_delta=np.ones_like(h0),
+        reference=reference,
+        filling=1.0,
+        n_occupied_total=1,
+        metadata={} if density_metadata is None else dict(density_metadata),
+    )
+    hamiltonian = ContractHamiltonianParts(
+        h0=h0,
+        fixed=np.zeros_like(h0),
+        hartree=np.zeros_like(h0),
+        fock=np.zeros_like(h0),
+        total=h0,
+        density_input_convention="delta",
+        metadata={} if hamiltonian_metadata is None else dict(hamiltonian_metadata),
+    )
+    final_state = ContractHFState(
+        basis=basis,
+        density=density,
+        hamiltonian=hamiltonian,
+        energies=np.zeros((1, 1), dtype=float),
+        eigenvectors_active=np.empty((0,), dtype=np.complex128),
+        mu=0.0,
+        observables={"eigenvectors_active_available": False},
+        diagnostics={"final_raw_norm": 0.0},
+    )
+    return ContractHFRunResult(
+        final_state=final_state,
+        iteration_history=(
+            [{"iteration": 1, "energy": 0.0, "error": 0.0, "oda_lambda": 1.0}]
+            if iteration_history is None
+            else list(iteration_history)
+        ),
+        converged=True,
+        exit_reason="converged",
+        best_seed=1,
+        init_mode="toy",
+    )
+
+
+def _toy_hf_result(canonical: ContractHFRunResult) -> HFResult:
+    h0 = canonical.final_state.hamiltonian.total
+    return HFResult(
+        model=ModelRecord(system_name="toy"),
+        config=HFConfig(filling=1.0, mesh=(1, 1)),
+        state=HFState(density=np.ones_like(h0)),
+        canonical_run_result=canonical,
+    )
 
 
 def test_required_artifact_schema_names_are_stable() -> None:
@@ -143,7 +245,10 @@ def test_hf_result_save_writes_canonical_hf_run_result_sidecar(tmp_path) -> None
 
     result.save(tmp_path)
 
-    sidecar = json.loads((tmp_path / "canonical_hf_run_result.json").read_text(encoding="utf-8"))
+    sidecar_text = (tmp_path / "canonical_hf_run_result.json").read_text(encoding="utf-8")
+    assert "NaN" not in sidecar_text
+    assert "Infinity" not in sidecar_text
+    sidecar = _strict_json_loads(sidecar_text)
     loaded = load_result(tmp_path)
     assert loaded.manifest["files"]["canonical_hf_run_result"] == "canonical_hf_run_result.json"
     assert loaded.manifest["metadata"]["canonical_hf_run_result"]["contract_type"] == "mean_field.core.contracts.HFRunResult"
@@ -152,9 +257,105 @@ def test_hf_result_save_writes_canonical_hf_run_result_sidecar(tmp_path) -> None
     assert sidecar["contract_type"] == "mean_field.core.contracts.HFRunResult"
     assert sidecar["iteration_history"]["count"] == 1
     assert sidecar["final_state"]["density"]["reference_scheme"] == "custom"
+    assert sidecar["final_state"]["density"]["density_delta_definition"] == "P-R"
     assert sidecar["final_state"]["density"]["density_delta_shape"] == [1, 1, 1]
     assert sidecar["final_state"]["basis"]["h0_shape"] == [1, 1, 1]
     assert sidecar["final_state"]["hamiltonian"]["metadata"]["supports_crpa"] is False
+
+
+def test_canonical_hf_sidecar_summarizes_array_metadata_and_last_iteration(tmp_path) -> None:
+    canonical = _toy_contract_hf_run_result(
+        basis_metadata={"small": [1, 2], "array": np.arange(6).reshape(2, 3)},
+        density_metadata={"long_list": list(range(20))},
+        reference_metadata={"array": np.ones((2, 2), dtype=float)},
+        hamiltonian_metadata={"supports_crpa": False, "array": np.zeros((1, 1, 1), dtype=np.complex128)},
+        iteration_history=[{"iteration": 1, "vector": np.arange(5), "long": list(range(32))}],
+    )
+
+    _toy_hf_result(canonical).save(tmp_path)
+
+    sidecar = _strict_json_loads((tmp_path / "canonical_hf_run_result.json").read_text(encoding="utf-8"))
+    last = sidecar["iteration_history"]["last"]
+    assert last["vector"] == {"kind": "array_summary", "shape": [5], "dtype": "int64", "nbytes": 40}
+    assert last["long"] == {"kind": "sequence_summary", "length": 32, "python_type": "list"}
+    assert sidecar["final_state"]["basis"]["metadata"]["array"]["kind"] == "array_summary"
+    assert sidecar["final_state"]["density"]["metadata"]["long_list"] == {
+        "kind": "sequence_summary",
+        "length": 20,
+        "python_type": "list",
+    }
+    assert sidecar["final_state"]["density"]["reference_metadata"]["array"]["shape"] == [2, 2]
+    assert sidecar["final_state"]["hamiltonian"]["metadata"]["array"]["dtype"] == "complex128"
+
+
+def test_canonical_hf_sidecar_rejects_nonfinite_values(tmp_path) -> None:
+    canonical = _toy_contract_hf_run_result(iteration_history=[{"iteration": 1, "energy": float("nan")}])
+
+    with pytest.raises(ValueError, match="iteration_history.last.energy"):
+        _toy_hf_result(canonical).save(tmp_path)
+
+    assert not (tmp_path / "canonical_hf_run_result.json").exists()
+
+
+def test_canonical_hf_sidecar_rejects_complex_scalar_metadata(tmp_path) -> None:
+    canonical = _toy_contract_hf_run_result(basis_metadata={"complex": 1.0 + 2.0j})
+
+    with pytest.raises(TypeError, match="Complex scalar"):
+        _toy_hf_result(canonical).save(tmp_path)
+
+
+def test_load_result_legacy_no_canonical_sidecar_is_tolerated(tmp_path) -> None:
+    write_contract_artifacts(
+        tmp_path,
+        workflow="toy.workflow",
+        system_name="toy",
+        model=ModelRecord(system_name="toy"),
+        config={"mesh": (1, 1)},
+    )
+
+    assert load_result(tmp_path).canonical_hf_run_result is None
+
+
+def test_load_result_requires_referenced_canonical_sidecar(tmp_path) -> None:
+    write_contract_artifacts(
+        tmp_path,
+        workflow="toy.workflow",
+        system_name="toy",
+        files={"canonical_hf_run_result": "canonical_hf_run_result.json"},
+    )
+
+    with pytest.raises(FileNotFoundError, match="canonical_hf_run_result"):
+        load_result(tmp_path)
+
+
+def test_load_result_rejects_canonical_sidecar_path_escape(tmp_path) -> None:
+    for bad_path in ("../canonical_hf_run_result.json", str(Path("/") / "tmp" / "canonical_hf_run_result.json")):
+        case_dir = tmp_path / bad_path.replace("/", "_").replace(".", "dot")
+        write_contract_artifacts(
+            case_dir,
+            workflow="toy.workflow",
+            system_name="toy",
+            files={"canonical_hf_run_result": bad_path},
+        )
+
+        with pytest.raises(ValueError, match="result root"):
+            load_result(case_dir)
+
+
+def test_load_result_rejects_malformed_canonical_sidecar_schema(tmp_path) -> None:
+    write_contract_artifacts(
+        tmp_path,
+        workflow="toy.workflow",
+        system_name="toy",
+        files={"canonical_hf_run_result": "canonical_hf_run_result.json"},
+    )
+    (tmp_path / "canonical_hf_run_result.json").write_text(
+        json.dumps({"schema_version": 1, "contract_type": "wrong", "final_state": {}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="contract_type"):
+        load_result(tmp_path)
 
 
 def test_write_contract_artifacts_writes_schema_sidecars_and_npz_summary(tmp_path) -> None:

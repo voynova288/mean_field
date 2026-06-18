@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+import math
 from pathlib import Path
 from typing import Any, Literal
 
@@ -77,16 +79,75 @@ class WavefunctionBundle:
     convention: ConventionBundle = field(default_factory=ConventionBundle)
 
 
-def _json_default(value: object) -> object:
+_SIDECAR_SEQUENCE_INLINE_LIMIT = 16
+
+
+def _finite_float(value: object, *, path: str) -> float:
+    out = float(value)
+    if not math.isfinite(out):
+        raise ValueError(f"Non-finite value at {path}: {out!r}")
+    return out
+
+
+def _canonical_sidecar_array_summary(value: np.ndarray) -> dict[str, object]:
+    array = np.asarray(value)
+    return {
+        "kind": "array_summary",
+        "shape": [int(axis) for axis in array.shape],
+        "dtype": str(array.dtype),
+        "nbytes": int(array.nbytes),
+    }
+
+
+def _canonical_sidecar_value(value: object, *, path: str) -> object:
+    """Return a strict-JSON-safe, metadata-only representation.
+
+    Dense arrays are summarized rather than serialized.  Non-finite numbers and
+    complex scalars are rejected so public JSON sidecars remain portable and do
+    not hide physics/diagnostic failures behind Python-specific JSON tokens.
+    """
+
+    if value is None or isinstance(value, bool | str):
+        return value
     if isinstance(value, Path):
         return str(value)
-    item = getattr(value, "item", None)
-    if callable(item):
-        return item()
-    tolist = getattr(value, "tolist", None)
-    if callable(tolist):
-        return tolist()
-    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+    if isinstance(value, np.ndarray):
+        return _canonical_sidecar_array_summary(value)
+    if isinstance(value, np.complexfloating) or isinstance(value, complex):
+        raise TypeError(f"Complex scalar is not allowed in canonical HF sidecar metadata at {path}")
+    if isinstance(value, np.bool_):
+        return bool(value)
+    if isinstance(value, np.integer):
+        return int(value)
+    if isinstance(value, np.floating):
+        return _finite_float(value.item(), path=path)
+    if isinstance(value, int):
+        return int(value)
+    if isinstance(value, float):
+        return _finite_float(value, path=path)
+    if isinstance(value, Mapping):
+        return {
+            str(key): _canonical_sidecar_value(item, path=f"{path}.{key}")
+            for key, item in value.items()
+        }
+    if isinstance(value, tuple | list):
+        if len(value) > _SIDECAR_SEQUENCE_INLINE_LIMIT:
+            return {
+                "kind": "sequence_summary",
+                "length": int(len(value)),
+                "python_type": type(value).__name__,
+            }
+        return [
+            _canonical_sidecar_value(item, path=f"{path}[{index}]")
+            for index, item in enumerate(value)
+        ]
+    raise TypeError(f"Object of type {type(value).__name__} is not allowed in canonical HF sidecar at {path}")
+
+
+def _canonical_sidecar_mapping(value: object, *, path: str) -> dict[str, object]:
+    if not isinstance(value, Mapping):
+        return {}
+    return dict(_canonical_sidecar_value(value, path=path))
 
 
 def _array_shape(value: object) -> list[int]:
@@ -106,7 +167,11 @@ def _canonical_hf_run_result_sidecar(canonical_run_result: Any) -> dict[str, obj
     reference = density.reference
     hamiltonian = final_state.hamiltonian
     iteration_history = list(canonical_run_result.iteration_history)
-    last_iteration = dict(iteration_history[-1]) if iteration_history else None
+    last_iteration = (
+        _canonical_sidecar_value(dict(iteration_history[-1]), path="iteration_history.last")
+        if iteration_history
+        else None
+    )
     return {
         "schema_version": 1,
         "contract_type": "mean_field.core.contracts.HFRunResult",
@@ -121,7 +186,7 @@ def _canonical_hf_run_result_sidecar(canonical_run_result: Any) -> dict[str, obj
         },
         "final_state": {
             "contract_type": "mean_field.core.contracts.HFState",
-            "mu": float(final_state.mu),
+            "mu": _finite_float(final_state.mu, path="final_state.mu"),
             "energies_shape": _array_shape(final_state.energies),
             "eigenvectors_active_shape": _array_shape(final_state.eigenvectors_active),
             "observables_keys": _mapping_keys(final_state.observables),
@@ -137,18 +202,22 @@ def _canonical_hf_run_result_sidecar(canonical_run_result: Any) -> dict[str, obj
                 "active_state_count": len(tuple(basis.active_band_indices)),
                 "active_valence_bands": int(basis.active_valence_bands),
                 "active_conduction_bands": int(basis.active_conduction_bands),
-                "metadata": dict(basis.metadata),
+                "metadata": _canonical_sidecar_mapping(basis.metadata, path="final_state.basis.metadata"),
             },
             "density": {
                 "contract_type": "mean_field.core.contracts.DensityState",
                 "convention": str(density.convention),
+                "density_delta_definition": "P-R",
                 "density_delta_shape": _array_shape(density.density_delta),
                 "reference_shape": _array_shape(reference.reference),
                 "reference_scheme": str(reference.scheme),
-                "filling": float(density.filling),
+                "filling": _finite_float(density.filling, path="final_state.density.filling"),
                 "n_occupied_total": int(density.n_occupied_total),
-                "metadata": dict(density.metadata),
-                "reference_metadata": dict(reference.metadata),
+                "metadata": _canonical_sidecar_mapping(density.metadata, path="final_state.density.metadata"),
+                "reference_metadata": _canonical_sidecar_mapping(
+                    reference.metadata,
+                    path="final_state.density.reference_metadata",
+                ),
             },
             "hamiltonian": {
                 "contract_type": "mean_field.core.contracts.HamiltonianParts",
@@ -158,7 +227,10 @@ def _canonical_hf_run_result_sidecar(canonical_run_result: Any) -> dict[str, obj
                 "fock_shape": _array_shape(hamiltonian.fock),
                 "total_shape": _array_shape(hamiltonian.total),
                 "density_input_convention": str(hamiltonian.density_input_convention),
-                "metadata": dict(hamiltonian.metadata),
+                "metadata": _canonical_sidecar_mapping(
+                    hamiltonian.metadata,
+                    path="final_state.hamiltonian.metadata",
+                ),
             },
         },
         "archive_manifest_keys": sorted(str(key) for key in dict(canonical_run_result.archive_manifest)),
@@ -200,7 +272,7 @@ class HFResult:
             conventions = self.artifacts.conventions
         if self.canonical_run_result is not None:
             sidecar = _canonical_hf_run_result_sidecar(self.canonical_run_result)
-            write_json_artifact(sidecar, root / "canonical_hf_run_result.json", default=_json_default)
+            write_json_artifact(sidecar, root / "canonical_hf_run_result.json")
             manifest_files["canonical_hf_run_result"] = "canonical_hf_run_result.json"
             manifest_metadata["canonical_hf_run_result"] = {
                 "schema_version": sidecar["schema_version"],

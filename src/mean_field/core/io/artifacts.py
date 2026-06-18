@@ -65,16 +65,19 @@ def write_json_artifact(
     indent: int | None = 2,
     sort_keys: bool = True,
     default: Callable[[object], object] | None = None,
+    allow_nan: bool = False,
 ) -> Path:
     """Atomically write a JSON artifact with the repository's stable defaults.
 
     ``default`` is forwarded to ``json.dumps`` so system adapters can preserve
     local encoders for paths, NumPy scalars, complex numbers, or other metadata
-    without reimplementing atomic file replacement.
+    without reimplementing atomic file replacement.  Public artifacts use strict
+    JSON by default and therefore reject ``NaN``/``Infinity`` tokens unless a
+    caller explicitly opts in via ``allow_nan=True``.
     """
 
     return write_text_artifact(
-        json.dumps(payload, indent=indent, sort_keys=sort_keys, default=default) + "\n",
+        json.dumps(payload, indent=indent, sort_keys=sort_keys, default=default, allow_nan=allow_nan) + "\n",
         path,
     )
 

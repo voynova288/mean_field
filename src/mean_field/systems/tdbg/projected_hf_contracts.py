@@ -191,9 +191,9 @@ def _iteration_history(result: TDBGProjectedHFResult) -> list[dict[str, Any]]:
         history.append(
             {
                 "iteration": int(idx + 1),
-                "energy": float(run.iter_energy[idx]) if idx < len(run.iter_energy) else float("nan"),
-                "error": float(run.iter_err[idx]) if idx < len(run.iter_err) else float("nan"),
-                "oda_lambda": float(run.iter_oda[idx]) if idx < len(run.iter_oda) else float("nan"),
+                "energy": float(run.iter_energy[idx]) if idx < len(run.iter_energy) else None,
+                "error": float(run.iter_err[idx]) if idx < len(run.iter_err) else None,
+                "oda_lambda": float(run.iter_oda[idx]) if idx < len(run.iter_oda) else None,
             }
         )
     return history

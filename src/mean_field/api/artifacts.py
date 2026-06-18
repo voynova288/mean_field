@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+import json
 from pathlib import Path
 from typing import Any
 
@@ -269,22 +270,61 @@ def update_artifact_manifest(
     return write_json_artifact(updated, manifest_path, default=_json_default)
 
 
-def _read_json_if_present(path: Path) -> dict[str, Any] | None:
-    import json
+def _reject_json_constant(token: str) -> None:
+    raise ValueError(f"Non-standard JSON numeric token is not allowed: {token}")
 
+
+def _read_json_if_present(path: Path) -> dict[str, Any] | None:
     if not path.exists():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    payload = json.loads(path.read_text(encoding="utf-8"), parse_constant=_reject_json_constant)
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected JSON object in {path}")
+    return payload
 
 
-def _read_manifest_json_sidecar(root: Path, manifest: Mapping[str, Any], key: str) -> dict[str, Any] | None:
+def _manifest_sidecar_path(root: Path, manifest: Mapping[str, Any], key: str) -> Path | None:
     files = manifest.get("files", {})
     if not isinstance(files, Mapping) or key not in files:
         return None
-    sidecar = Path(str(files[key]))
-    if not sidecar.is_absolute():
-        sidecar = root / sidecar
-    return _read_json_if_present(sidecar)
+    raw_path = files[key]
+    if not isinstance(raw_path, str):
+        raise ValueError(f"Manifest file entry {key!r} must be a relative path string")
+    sidecar = Path(raw_path)
+    if sidecar.is_absolute() or ".." in sidecar.parts:
+        raise ValueError(f"Manifest file entry {key!r} must stay within the result root: {raw_path!r}")
+    resolved_root = root.resolve()
+    resolved_sidecar = (root / sidecar).resolve()
+    try:
+        resolved_sidecar.relative_to(resolved_root)
+    except ValueError as exc:
+        raise ValueError(f"Manifest file entry {key!r} escapes the result root: {raw_path!r}") from exc
+    return resolved_sidecar
+
+
+def _validate_canonical_hf_run_sidecar(payload: Mapping[str, Any], path: Path) -> None:
+    if payload.get("schema_version") != 1:
+        raise ValueError(f"Invalid canonical HF run sidecar schema_version in {path}")
+    if payload.get("contract_type") != "mean_field.core.contracts.HFRunResult":
+        raise ValueError(f"Invalid canonical HF run sidecar contract_type in {path}")
+    if not isinstance(payload.get("final_state"), Mapping):
+        raise ValueError(f"Invalid canonical HF run sidecar final_state in {path}")
+
+
+def _read_manifest_json_sidecar(root: Path, manifest: Mapping[str, Any], key: str) -> dict[str, Any] | None:
+    sidecar = _manifest_sidecar_path(root, manifest, key)
+    if sidecar is None:
+        return None
+    if not sidecar.exists():
+        raise FileNotFoundError(f"Manifest references missing sidecar for {key!r}: {sidecar}")
+    if not sidecar.is_file():
+        raise ValueError(f"Manifest sidecar for {key!r} is not a file: {sidecar}")
+    payload = _read_json_if_present(sidecar)
+    if payload is None:
+        raise FileNotFoundError(f"Manifest references missing sidecar for {key!r}: {sidecar}")
+    if key == "canonical_hf_run_result":
+        _validate_canonical_hf_run_sidecar(payload, sidecar)
+    return payload
 
 
 def load_result(path: str | Path) -> ResultDirectory:
