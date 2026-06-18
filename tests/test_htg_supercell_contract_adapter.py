@@ -6,14 +6,20 @@ import json
 import numpy as np
 import pytest
 
-from mean_field.api import HFConfig, HFResult, HFState as APIHFState, ModelRecord, load_result
+from mean_field.api import HFResult, load_result
 from mean_field.core.contracts import (
     HFRunResult as ContractHFRunResult,
     assert_density_state_consistent,
     assert_hamiltonian_parts_consistent,
     assert_projected_basis_consistent,
 )
-from mean_field.systems.htg import HTGModel, HTGParams, InteractionParams, htg_supercell_hf_run_to_hf_run_result
+from mean_field.systems.htg import (
+    HTGModel,
+    HTGParams,
+    InteractionParams,
+    htg_supercell_hf_run_to_hf_result,
+    htg_supercell_hf_run_to_hf_run_result,
+)
 from mean_field.systems.htg.supercell import run_htg_supercell_hf
 
 
@@ -61,21 +67,23 @@ def test_htg_supercell_hf_run_to_hf_run_result_preserves_canonical_arrays() -> N
     assert final.density.reference.metadata["raw_density_convention"] == "stored_delta"
 
 
-def test_htg_supercell_hf_result_save_writes_canonical_sidecar(tmp_path) -> None:
+def test_htg_supercell_hf_result_helper_save_writes_canonical_sidecar(tmp_path) -> None:
     run = _tiny_htg_supercell_run()
-    canonical = htg_supercell_hf_run_to_hf_run_result(run)
-    result = HFResult(
-        model=ModelRecord(system_name="htg_supercell"),
-        config=HFConfig(filling=3.5, mesh=(1, 1)),
-        state=APIHFState(density=run.state.density),
-        canonical_run_result=canonical,
-    )
+    result = htg_supercell_hf_run_to_hf_result(run)
+
+    assert isinstance(result, HFResult)
+    assert result.state is run
+    assert isinstance(result.canonical_run_result, ContractHFRunResult)
+    assert result.model.system_name == "htg_supercell"
+    assert result.config.density_convention == "stored_delta"
+    assert result.observables["raw_density_convention"] == "stored_delta"
 
     result.save(tmp_path)
 
     sidecar = json.loads((tmp_path / "canonical_hf_run_result.json").read_text(encoding="utf-8"))
     loaded = load_result(tmp_path)
     assert loaded.canonical_hf_run_result is not None
+    assert loaded.canonical_hf_run_result == sidecar
     assert sidecar["final_state"]["density"]["density_delta_definition"] == "P-R"
     assert sidecar["final_state"]["density"]["convention"] == "delta"
     assert sidecar["final_state"]["density"]["metadata"]["raw_density_convention"] == "stored_delta"

@@ -8,7 +8,7 @@ topology, or cRPA behavior.
 """
 
 from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 import math
 
 import numpy as np
@@ -30,6 +30,9 @@ from .supercell import (
     htg_supercell_filling_from_density,
     htg_supercell_occupied_count_per_k,
 )
+
+if TYPE_CHECKING:
+    from mean_field.api import HFConfig, HFResult
 
 
 def _unavailable_hamiltonian_builder(_kvec: np.ndarray) -> np.ndarray:
@@ -299,6 +302,82 @@ def _iteration_history(run: HTGSupercellHartreeFockRun) -> list[dict[str, Any]]:
         )
     return history
 
+def _iteration_count(run: HTGSupercellHartreeFockRun) -> int:
+    return max(len(run.iter_energy), len(run.iter_err), len(run.iter_oda))
+
+def _supercell_matrix_metadata(data: HTGSupercellProjectedBasisData) -> list[list[int]]:
+    return [
+        [int(data.supercell.n11), int(data.supercell.n12)],
+        [int(data.supercell.n21), int(data.supercell.n22)],
+    ]
+
+def _default_hf_config_from_run(run: HTGSupercellHartreeFockRun) -> "HFConfig":
+    from mean_field.api.hf import HFConfig
+
+    data = run.basis_data
+    state = run.state
+    interaction = data.interaction
+    return HFConfig(
+        filling=float(state.nu),
+        mesh=(int(data.mesh_size), int(data.mesh_size)),
+        interaction_scheme="average",
+        density_convention="stored_delta",
+        epsilon_r=float(interaction.epsilon_r),
+        dsc_nm=float(interaction.d_sc_nm),
+        coulomb_kernel="2d_gate",
+        max_iter=max(_iteration_count(run), 1),
+        precision=float(state.precision),
+        seeds=(str(int(run.seed)),),
+        metadata={
+            "source": "derived_from_HTGSupercellHartreeFockRun",
+            "max_iter_semantics": "observed_iteration_count_when_original_limit_is_unavailable",
+            "init_mode": str(run.init_mode),
+            "supercell_matrix": _supercell_matrix_metadata(data),
+            "area_ratio": int(data.supercell.area_ratio),
+            "primitive_projected_indices": [int(index) for index in data.primitive_projected_indices],
+            "primitive_projected_band_count": int(data.primitive_band_count),
+            "interaction_subtraction": str(interaction.subtraction),
+            "interaction_g_shells": int(interaction.g_shells),
+            "interaction_n_k": int(interaction.n_k),
+        },
+    )
+
+def _validate_hf_config_matches_run(config: "HFConfig", run: HTGSupercellHartreeFockRun) -> None:
+    mesh = (int(run.basis_data.mesh_size), int(run.basis_data.mesh_size))
+    if (int(config.mesh[0]), int(config.mesh[1])) != mesh:
+        raise ValueError(f"HTG supercell HFResult config.mesh must match raw mesh_size {mesh}, got {config.mesh}")
+    if not np.isclose(float(config.filling), float(run.state.nu)):
+        raise ValueError(
+            f"HTG supercell HFResult config.filling={config.filling} does not match raw primitive_nu={run.state.nu}"
+        )
+    if config.density_convention != "stored_delta":
+        raise ValueError(
+            "HTG supercell raw density is stored as P-R; use HFConfig.density_convention='stored_delta'"
+        )
+
+def _result_observables(run: HTGSupercellHartreeFockRun) -> dict[str, object]:
+    state = run.state
+    data = run.basis_data
+    return {
+        "primitive_nu": float(state.nu),
+        "filling_from_density": float(
+            htg_supercell_filling_from_density(
+                state.density,
+                reference_diagonal=state.reference_diagonal,
+                area_ratio=data.supercell.area_ratio,
+                n_spin=state.n_spin,
+                n_eta=state.n_eta,
+            )
+        ),
+        "converged": bool(run.converged),
+        "exit_reason": str(run.exit_reason),
+        "init_mode": str(run.init_mode),
+        "seed": int(run.seed),
+        "iterations": int(_iteration_count(run)),
+        "supercell_area_ratio": int(data.supercell.area_ratio),
+        "raw_density_convention": "stored_delta",
+    }
+
 
 def htg_supercell_hf_run_to_hf_run_result(
     run: HTGSupercellHartreeFockRun,
@@ -347,4 +426,63 @@ def htg_supercell_hf_run_to_hf_run_result(
     )
 
 
-__all__ = ["htg_supercell_hf_run_to_hf_run_result"]
+def htg_supercell_hf_run_to_hf_result(
+    run: HTGSupercellHartreeFockRun,
+    *,
+    config: "HFConfig | None" = None,
+    archive_manifest: Mapping[str, Any] | None = None,
+    observables: Mapping[str, object] | None = None,
+) -> "HFResult":
+    """Return a public :class:`HFResult` view of an existing HTG supercell run.
+
+    The raw :class:`HTGSupercellHartreeFockRun` remains ``HFResult.state`` and
+    the source of truth.  The attached ``canonical_run_result`` is the canonical
+    I/O view produced by :func:`htg_supercell_hf_run_to_hf_run_result`; no SCF,
+    interaction, topology, or cRPA calculation is rerun here.
+    """
+
+    from pathlib import Path
+
+    from mean_field.api.artifacts import ArtifactManifest, ConventionBundle
+    from mean_field.api.hf import HFResult
+    from mean_field.api.models import model_record
+
+    resolved_config = _default_hf_config_from_run(run) if config is None else config
+    _validate_hf_config_matches_run(resolved_config, run)
+    canonical = htg_supercell_hf_run_to_hf_run_result(
+        run,
+        archive_manifest=None if archive_manifest is None else dict(archive_manifest),
+    )
+    result_observables = _result_observables(run)
+    if observables is not None:
+        result_observables.update(dict(observables))
+    record = model_record(run.basis_data.model, system_name="htg_supercell")
+    return HFResult(
+        model=record,
+        config=resolved_config,
+        state=run,
+        observables=result_observables,
+        artifacts=ArtifactManifest(
+            root=Path("."),
+            model=record,
+            conventions=ConventionBundle(
+                energy_unit="eV",
+                density_convention="stored_delta",
+                density_axis_order="abk",
+                hamiltonian_axis_order="abk",
+                wavefunction_axis_order="basis,band,flavor,k",
+                gauge="htg_supercell_projected_basis_system_defined",
+            ),
+            metadata={
+                "schema_version": 1,
+                "workflow": "htg.supercell_hf.raw_run_result",
+                "system_name": "htg_supercell",
+                "adapter": "mean_field.systems.htg.supercell_contracts.htg_supercell_hf_run_to_hf_result",
+                "canonical_adapter": "mean_field.systems.htg.supercell_contracts.htg_supercell_hf_run_to_hf_run_result",
+                "raw_state_type": type(run).__name__,
+            },
+        ),
+        canonical_run_result=canonical,
+    )
+
+__all__ = ["htg_supercell_hf_run_to_hf_result", "htg_supercell_hf_run_to_hf_run_result"]
