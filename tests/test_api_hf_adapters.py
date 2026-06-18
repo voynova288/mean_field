@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 from mean_field.api import HFConfig, HFResult, make_model, run_hf
+from mean_field.core.contracts import HFRunResult as ContractHFRunResult
 from mean_field.systems import tdbg as tdbg_system
 from mean_field.systems.tdbg import TDBGInteractionSettings, TDBGProjectedHFConfig, TDBGProjectedWindow
 
@@ -82,6 +84,23 @@ def test_public_run_hf_tdbg_explicit_config_dispatches_without_guessing(monkeypa
     assert result.artifacts.metadata["workflow"] == "tdbg.projected_hf.explicit_config"
     assert result.artifacts.conventions.to_dict()["energy_unit"] == "eV"  # type: ignore[union-attr]
     assert result.artifacts.conventions.to_dict()["density_convention"] == "projector"  # type: ignore[union-attr]
+    assert result.canonical_run_result is None
+
+
+def test_public_run_hf_tdbg_explicit_config_attaches_canonical_contract_result() -> None:
+    model = make_model("tdbg", theta_deg=1.38, cut=1.0)
+    cfg = HFConfig(filling=2, mesh=(1, 1), max_iter=1, precision=1.0e-7, density_convention="projector")
+
+    result = run_hf(model, cfg, tdbg_config=_tiny_tdbg_config(), init_mode="sp", seed=7)
+
+    assert isinstance(result, HFResult)
+    assert isinstance(result.canonical_run_result, ContractHFRunResult)
+    assert result.canonical_run_result.final_state.density.reference.scheme == "CN"
+    np.testing.assert_allclose(
+        result.canonical_run_result.final_state.density.projector,
+        result.state.run.state.density,
+    )
+    assert result.canonical_run_result.final_state.hamiltonian.metadata["supports_crpa"] is False
 
 
 def test_public_run_hf_tdbg_rejects_mismatched_generic_config() -> None:

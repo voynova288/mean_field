@@ -114,6 +114,7 @@ class TDBGProjectedHFResult:
     seed: int
     order_parameters: dict[str, object]
     energy_components: dict[str, float]
+    hamiltonian_components: Mapping[str, np.ndarray] | None = None
 
     def to_summary_dict(self) -> dict[str, object]:
         return {

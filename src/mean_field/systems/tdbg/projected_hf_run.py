@@ -82,14 +82,23 @@ def run_tdbg_projected_hf(data: TDBGProjectedHFData, *, init_mode: str, seed: in
         max_iter=int(data.config.max_iter),
         oda_stall_threshold=0.0 if data.config.mix_fallback is not None else 1.0e-3,
     )
+    hamiltonian_components = interaction_builder.components(run.state.density)
     components = tdbg_energy_components(
         data,
         run.state.density,
-        interaction_components=interaction_builder.components(run.state.density),
+        interaction_components=hamiltonian_components,
     )
     order = tdbg_order_parameters(data, run.state.density)
     run.state.diagnostics.update({k: float(v) for k, v in components.items()})
-    return TDBGProjectedHFResult(run=run, data=data, init_mode=init_mode, seed=int(seed), order_parameters=order, energy_components=components)
+    return TDBGProjectedHFResult(
+        run=run,
+        data=data,
+        init_mode=init_mode,
+        seed=int(seed),
+        order_parameters=order,
+        energy_components=components,
+        hamiltonian_components={key: np.asarray(value, dtype=np.complex128).copy() for key, value in hamiltonian_components.items()},
+    )
 
 __all__ = [
     "build_tdbg_projected_hf_kernel",

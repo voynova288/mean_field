@@ -23,6 +23,7 @@ from .projected_hf_data import (
     _projected_orbital_g_matrix,
     build_tdbg_projected_hf_data,
 )
+from .projected_hf_contracts import tdbg_projected_hf_result_to_hf_run_result
 from .projected_hf_geometry import (
     _TDBGQSiteEmbedding,
     _shift_table,

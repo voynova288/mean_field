@@ -82,6 +82,7 @@ class HFResult:
     state: HFState | Any
     observables: dict[str, object] = field(default_factory=dict)
     artifacts: ArtifactManifest | None = None
+    canonical_run_result: Any | None = None
 
     def quasiparticle_bands(self, path: Any) -> Any:
         if hasattr(self.state, "quasiparticle_bands"):
@@ -125,8 +126,10 @@ def _run_tdbg_hf_if_explicit(model: object, config: HFConfig, kwargs: dict[str, 
     from mean_field.systems.tdbg import (
         TDBGModel,
         TDBGProjectedHFConfig,
+        TDBGProjectedHFResult,
         build_tdbg_projected_hf_data,
         run_tdbg_projected_hf,
+        tdbg_projected_hf_result_to_hf_run_result,
     )
 
     if not isinstance(model, TDBGModel):
@@ -156,6 +159,11 @@ def _run_tdbg_hf_if_explicit(model: object, config: HFConfig, kwargs: dict[str, 
 
     record = model_record(model, system_name="tdbg")
     summary = raw.to_summary_dict() if hasattr(raw, "to_summary_dict") else {}
+    canonical_run_result = (
+        tdbg_projected_hf_result_to_hf_run_result(raw)
+        if isinstance(raw, TDBGProjectedHFResult)
+        else None
+    )
     return HFResult(
         model=record,
         config=config,
@@ -177,6 +185,7 @@ def _run_tdbg_hf_if_explicit(model: object, config: HFConfig, kwargs: dict[str, 
                 "adapter": "mean_field.api.run_hf",
             },
         ),
+        canonical_run_result=canonical_run_result,
     )
 
 

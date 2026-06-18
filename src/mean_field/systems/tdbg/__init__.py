@@ -34,6 +34,7 @@ from .hf import (
     tdbg_density_from_hamiltonian,
     tdbg_delta_from_paper_ud_for_valley,
     tdbg_order_parameters,
+    tdbg_projected_hf_result_to_hf_run_result,
     validate_tdbg_interaction_settings,
     validate_tdbg_projected_hf_config,
 )
@@ -127,6 +128,7 @@ __all__ = [
     "tdbg_delta_from_paper_ud_for_valley",
     "tdbg_full_basis_component_groups",
     "tdbg_order_parameters",
+    "tdbg_projected_hf_result_to_hf_run_result",
     "validate_physics",
     "validate_tdbg_interaction_settings",
     "validate_tdbg_projected_hf_config",
