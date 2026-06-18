@@ -91,6 +91,7 @@ from .supercell import (
     save_htg_supercell_run_npz,
     supercell_fold_representatives,
 )
+from .supercell_contracts import htg_supercell_hf_run_to_hf_run_result
 from .params import (
     HTGParams,
     InteractionParams,
@@ -224,6 +225,7 @@ __all__ = [
     "htg_supercell_filling_from_density",
     "htg_supercell_full_boundary_sewing_transform",
     "htg_supercell_full_boundary_sewing_transforms",
+    "htg_supercell_hf_run_to_hf_run_result",
     "htg_supercell_occupied_count_per_k",
     "htg_supercell_reference_diagonal",
     "htg_tripled_fractional_supercell",
