@@ -82,6 +82,7 @@ class ResultDirectory:
     validation: dict[str, Any] | None = None
     environment: dict[str, Any] | None = None
     observables: dict[str, Any] | None = None
+    canonical_hf_run_result: dict[str, Any] | None = None
 
 
 def _json_default(value: object) -> object:
@@ -276,6 +277,16 @@ def _read_json_if_present(path: Path) -> dict[str, Any] | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _read_manifest_json_sidecar(root: Path, manifest: Mapping[str, Any], key: str) -> dict[str, Any] | None:
+    files = manifest.get("files", {})
+    if not isinstance(files, Mapping) or key not in files:
+        return None
+    sidecar = Path(str(files[key]))
+    if not sidecar.is_absolute():
+        sidecar = root / sidecar
+    return _read_json_if_present(sidecar)
+
+
 def load_result(path: str | Path) -> ResultDirectory:
     root = Path(path)
     manifest = _read_json_if_present(root / "manifest.json") or {}
@@ -288,6 +299,7 @@ def load_result(path: str | Path) -> ResultDirectory:
         validation=_read_json_if_present(root / "validation.json"),
         environment=_read_json_if_present(root / "environment.json"),
         observables=_read_json_if_present(root / "observables.json"),
+        canonical_hf_run_result=_read_manifest_json_sidecar(root, manifest, "canonical_hf_run_result"),
     )
 
 

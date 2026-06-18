@@ -147,6 +147,8 @@ def test_hf_result_save_writes_canonical_hf_run_result_sidecar(tmp_path) -> None
     loaded = load_result(tmp_path)
     assert loaded.manifest["files"]["canonical_hf_run_result"] == "canonical_hf_run_result.json"
     assert loaded.manifest["metadata"]["canonical_hf_run_result"]["contract_type"] == "mean_field.core.contracts.HFRunResult"
+    assert loaded.canonical_hf_run_result is not None
+    assert loaded.canonical_hf_run_result["contract_type"] == "mean_field.core.contracts.HFRunResult"
     assert sidecar["contract_type"] == "mean_field.core.contracts.HFRunResult"
     assert sidecar["iteration_history"]["count"] == 1
     assert sidecar["final_state"]["density"]["reference_scheme"] == "custom"
