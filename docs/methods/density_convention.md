@@ -40,6 +40,17 @@ A stored delta is not meaningful without its reference density.  Public code mus
 
 Use `reference_policy="require"` when a missing reference would change the physics conclusion.
 
+## Contract bridge
+
+Boundary adapters that need canonical `mean_field.core.contracts.DensityState` should use `mean_field.core.hf.contracts_bridge` rather than open-coding conversions:
+
+- `density_state_from_delta(...)` for existing stored deltas `P - R`;
+- `density_state_from_projector(...)` for existing stored projectors `P`;
+- `make_contract_reference_density(...)` to convert legacy `core.hf.density.ReferenceDensity` or raw arrays to canonical `core.contracts.ReferenceDensity`;
+- `normalize_contract_reference_scheme(...)` for common spellings such as `cn` / `charge_neutral` -> `CN`.
+
+These helpers are boundary-only: they do not participate in SCF iteration, ODA, or system interaction builders.  They preserve stored `abk` orientation and make the legacy-vs-canonical `ReferenceDensity` class distinction explicit.
+
 ## Migration rule
 
-Existing helpers such as `stored_density_to_projector`, `conventional_projector_to_stored`, and `stored_projector_to_conventional` may remain as compatibility names, but their implementation should delegate to `mean_field.core.hf.density`.
+Existing helpers such as `stored_density_to_projector`, `conventional_projector_to_stored`, and `stored_projector_to_conventional` may remain as compatibility names, but their implementation should delegate to `mean_field.core.hf.density`.  New canonical I/O adapters should wrap arrays at module boundaries, leaving existing physics paths unchanged unless a separate parity test proves equivalence.

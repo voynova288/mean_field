@@ -52,8 +52,11 @@ Existing paper runners remain valid internal workflows, but new public code shou
 
 - `model`: serializable `ModelRecord`;
 - `config`: `HFConfig`;
-- `state`: system or core HF state;
+- `state`: the raw system result/state, preserved for backward compatibility;
 - `observables`: scalar/order-parameter metadata;
-- `artifacts`: optional `ArtifactManifest`.
+- `artifacts`: optional `ArtifactManifest`;
+- `canonical_run_result`: optional canonical `mean_field.core.contracts.HFRunResult` I/O view.
+
+For TDBG explicit projected HF, `state` remains the raw `TDBGProjectedHFResult` and `canonical_run_result` is populated by `tdbg_projected_hf_result_to_hf_run_result(...)`.  The canonical view maps the raw projector density to `DensityState(density_delta=P-R)`, records `ProjectedBasis`, `HamiltonianParts`, iteration history, metadata, and marks `supports_crpa=False`.  It does not re-run HF, does not reconstruct final active eigenvectors, and does not claim cRPA compatibility.
 
 `HFResult.reconstruct_micro_wavefunctions()` is part of the public contract because topology, shift current, Fubini-Study metric, and TDHF often need microscopic wavefunctions rather than only active-subspace eigenvectors.  System adapters should implement it before claiming those downstream workflows are fully supported.
