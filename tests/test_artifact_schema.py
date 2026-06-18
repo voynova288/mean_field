@@ -14,6 +14,7 @@ from mean_field.api import (
     HFState,
     ModelRecord,
     load_result,
+    reconstruct_canonical_hf_run_result,
     required_artifact_files,
     update_artifact_manifest,
     write_contract_artifacts,
@@ -45,6 +46,7 @@ def _toy_contract_hf_run_result(
     reference_metadata: dict[str, object] | None = None,
     hamiltonian_metadata: dict[str, object] | None = None,
     iteration_history: list[dict[str, object]] | None = None,
+    archive_manifest: dict[str, object] | None = None,
 ) -> ContractHFRunResult:
     def h_builder(kvec: np.ndarray) -> np.ndarray:
         return np.zeros((1, 1, np.asarray(kvec).size), dtype=np.complex128)
@@ -116,6 +118,7 @@ def _toy_contract_hf_run_result(
         exit_reason="converged",
         best_seed=1,
         init_mode="toy",
+        archive_manifest={} if archive_manifest is None else dict(archive_manifest),
     )
 
 
@@ -261,6 +264,125 @@ def test_hf_result_save_writes_canonical_hf_run_result_sidecar(tmp_path) -> None
     assert sidecar["final_state"]["density"]["density_delta_shape"] == [1, 1, 1]
     assert sidecar["final_state"]["basis"]["h0_shape"] == [1, 1, 1]
     assert sidecar["final_state"]["hamiltonian"]["metadata"]["supports_crpa"] is False
+
+
+
+def test_hf_result_save_metadata_only_remains_default(tmp_path) -> None:
+    canonical = _toy_contract_hf_run_result()
+
+    _toy_hf_result(canonical).save(tmp_path)
+    loaded = load_result(tmp_path)
+
+    assert (tmp_path / "canonical_hf_run_result.json").exists()
+    assert not (tmp_path / "canonical_hf_arrays.npz").exists()
+    assert not (tmp_path / "canonical_hf_arrays.schema.json").exists()
+    assert "canonical_hf_arrays" not in loaded.manifest["files"]
+    assert "canonical_hf_arrays_schema" not in loaded.manifest["files"]
+    assert loaded.canonical_hf_run_result is not None
+    assert loaded.canonical_hf_run_result["final_state"]["density"]["density_delta_shape"] == [1, 1, 1]
+
+
+def test_hf_result_save_canonical_arrays_round_trips_dataclass(tmp_path) -> None:
+    canonical = _toy_contract_hf_run_result(
+        basis_metadata={"source": "round_trip"},
+        density_metadata={"density_note": "toy"},
+        reference_metadata={"reference_note": "zero"},
+        hamiltonian_metadata={"supports_crpa": False},
+        archive_manifest={"producer": "unit_test"},
+    )
+
+    _toy_hf_result(canonical).save(tmp_path, canonical_payload="arrays")
+    loaded_dir = load_result(tmp_path)
+    manifest = loaded_dir.manifest
+
+    assert manifest["files"]["canonical_hf_run_result"] == "canonical_hf_run_result.json"
+    assert manifest["files"]["canonical_hf_arrays_schema"] == "canonical_hf_arrays.schema.json"
+    assert manifest["files"]["canonical_hf_arrays"] == "canonical_hf_arrays.npz"
+    assert manifest["metadata"]["canonical_hf_run_result"]["payload_mode"] == "arrays_npz"
+    assert manifest["metadata"]["canonical_hf_archive"]["loader"] == "mean_field.api.reconstruct_canonical_hf_run_result"
+    expected_npz_keys = {
+        "basis__kvec",
+        "basis__k_grid_frac",
+        "basis__h0",
+        "basis__basis_energies",
+        "basis__micro_wavefunctions",
+        "density__density_delta",
+        "density__reference",
+        "hamiltonian__fixed",
+        "hamiltonian__hartree",
+        "hamiltonian__fock",
+        "hamiltonian__total",
+        "final_state__energies",
+        "final_state__eigenvectors_active",
+    }
+    assert set(manifest["metadata"]["array_summaries"][0]["keys"]) == expected_npz_keys
+
+    sidecar = _strict_json_loads((tmp_path / "canonical_hf_run_result.json").read_text(encoding="utf-8"))
+    assert "density_delta" not in sidecar["final_state"]["density"]
+    assert sidecar["final_state"]["density"]["density_delta_shape"] == [1, 1, 1]
+    schema = _strict_json_loads((tmp_path / "canonical_hf_arrays.schema.json").read_text(encoding="utf-8"))
+    assert schema["arrays"]["final_state.hamiltonian.h0"]["alias_of"] == "final_state.basis.h0"
+    assert "data" not in schema["arrays"]["final_state.basis.h0"]
+
+    restored = reconstruct_canonical_hf_run_result(loaded_dir)
+
+    assert isinstance(restored, ContractHFRunResult)
+    assert restored.converged is canonical.converged
+    assert restored.exit_reason == canonical.exit_reason
+    assert restored.best_seed == canonical.best_seed
+    assert restored.init_mode == canonical.init_mode
+    assert restored.iteration_history == canonical.iteration_history
+    assert restored.archive_manifest == canonical.archive_manifest
+    assert restored.final_state.mu == canonical.final_state.mu
+    assert restored.final_state.observables == canonical.final_state.observables
+    assert restored.final_state.diagnostics == canonical.final_state.diagnostics
+    assert restored.final_state.basis.active_band_indices == canonical.final_state.basis.active_band_indices
+    assert restored.final_state.basis.active_valence_bands == canonical.final_state.basis.active_valence_bands
+    assert restored.final_state.basis.active_conduction_bands == canonical.final_state.basis.active_conduction_bands
+    assert restored.final_state.basis.metadata == canonical.final_state.basis.metadata
+    assert restored.final_state.density.metadata == canonical.final_state.density.metadata
+    assert restored.final_state.density.reference.metadata == canonical.final_state.density.reference.metadata
+    assert restored.final_state.hamiltonian.metadata == canonical.final_state.hamiltonian.metadata
+    np.testing.assert_array_equal(restored.final_state.basis.kvec, canonical.final_state.basis.kvec)
+    np.testing.assert_array_equal(restored.final_state.basis.k_grid_frac, canonical.final_state.basis.k_grid_frac)
+    np.testing.assert_array_equal(restored.final_state.basis.h0, canonical.final_state.basis.h0)
+    np.testing.assert_array_equal(restored.final_state.basis.basis_energies, canonical.final_state.basis.basis_energies)
+    np.testing.assert_array_equal(
+        restored.final_state.basis.micro_wavefunctions,
+        canonical.final_state.basis.micro_wavefunctions,
+    )
+    np.testing.assert_array_equal(restored.final_state.density.density_delta, canonical.final_state.density.density_delta)
+    np.testing.assert_array_equal(
+        restored.final_state.density.reference.reference,
+        canonical.final_state.density.reference.reference,
+    )
+    np.testing.assert_array_equal(restored.final_state.hamiltonian.h0, canonical.final_state.hamiltonian.h0)
+    np.testing.assert_array_equal(restored.final_state.hamiltonian.fixed, canonical.final_state.hamiltonian.fixed)
+    np.testing.assert_array_equal(restored.final_state.hamiltonian.hartree, canonical.final_state.hamiltonian.hartree)
+    np.testing.assert_array_equal(restored.final_state.hamiltonian.fock, canonical.final_state.hamiltonian.fock)
+    np.testing.assert_array_equal(restored.final_state.hamiltonian.total, canonical.final_state.hamiltonian.total)
+    np.testing.assert_array_equal(restored.final_state.energies, canonical.final_state.energies)
+    np.testing.assert_array_equal(restored.final_state.eigenvectors_active, canonical.final_state.eigenvectors_active)
+    with pytest.raises(RuntimeError, match="model_resolver"):
+        restored.final_state.basis.physical_model.hamiltonian_builder(np.asarray([0.0 + 0.0j]))
+
+
+def test_reconstruct_canonical_hf_run_result_requires_array_payload(tmp_path) -> None:
+    _toy_hf_result(_toy_contract_hf_run_result()).save(tmp_path)
+
+    with pytest.raises(ValueError, match="metadata-only archive|canonical_hf_arrays"):
+        reconstruct_canonical_hf_run_result(tmp_path)
+
+
+def test_reconstruct_canonical_hf_run_result_rejects_schema_npz_mismatch(tmp_path) -> None:
+    _toy_hf_result(_toy_contract_hf_run_result()).save(tmp_path, canonical_payload="arrays")
+    schema_path = tmp_path / "canonical_hf_arrays.schema.json"
+    schema = _strict_json_loads(schema_path.read_text(encoding="utf-8"))
+    schema["arrays"]["final_state.energies"]["shape"] = [2, 2]
+    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Schema/NPZ mismatch.*final_state.energies"):
+        reconstruct_canonical_hf_run_result(tmp_path)
 
 
 def test_canonical_hf_sidecar_summarizes_array_metadata_and_last_iteration(tmp_path) -> None:
