@@ -4,6 +4,7 @@ The public artifact helper is:
 
 ```python
 from mean_field.api import ArtifactManifest, ConventionBundle, load_result, update_artifact_manifest, write_contract_artifacts
+from mean_field.core.io import write_npz_artifact
 ```
 
 ## Required result files
@@ -24,7 +25,7 @@ Use `write_contract_artifacts(...)` to write these sidecars without rewriting la
 
 For derived postprocessing outputs that share an existing result root, use `update_artifact_manifest(...)` to add files/metadata to `manifest.json` without overwriting the existing sidecars.
 
-Large numerical arrays should be referenced from `manifest.json`, not inlined in JSON.  Public JSON sidecars are written as strict JSON: `NaN`/`Infinity` tokens are rejected rather than emitted.  Recommended names are:
+Large numerical arrays should be referenced from `manifest.json`, not inlined in JSON.  Public JSON sidecars are written as strict JSON: `NaN`/`Infinity` tokens are rejected rather than emitted.  Use `write_npz_artifact(...)` for new dense-array payloads that need atomic writes; it rejects object-dtype arrays so downstream readers can keep `np.load(..., allow_pickle=False)`.  Recommended names are:
 
 ```text
 hf_state.npz

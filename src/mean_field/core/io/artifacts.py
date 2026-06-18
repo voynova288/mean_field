@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -82,6 +83,42 @@ def write_json_artifact(
     )
 
 
+def write_npz_artifact(
+    arrays: Mapping[str, np.ndarray],
+    path: str | Path,
+    *,
+    compressed: bool = False,
+) -> Path:
+    """Atomically write an NPZ artifact and return its path.
+
+    Object-dtype arrays are rejected so all public NPZ artifacts remain readable
+    with ``np.load(..., allow_pickle=False)``.
+    """
+
+    output = Path(path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    payload: dict[str, np.ndarray] = {}
+    for key, value in arrays.items():
+        if not isinstance(key, str) or not key:
+            raise ValueError(f"NPZ artifact keys must be non-empty strings, got {key!r}")
+        array = np.asarray(value)
+        if array.dtype.hasobject:
+            raise TypeError(f"NPZ artifact array {key!r} has object dtype and would require pickle")
+        payload[key] = array
+    tmp = output.with_name(output.name + ".tmp")
+    try:
+        with tmp.open("wb") as handle:
+            if compressed:
+                np.savez_compressed(handle, **payload)
+            else:
+                np.savez(handle, **payload)
+        tmp.replace(output)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+    return output
+
+
 def summarize_npz_artifact(path: str | Path) -> NpzArtifactSummary:
     artifact_path = Path(path)
     with np.load(artifact_path, allow_pickle=False) as payload:
@@ -121,5 +158,6 @@ __all__ = [
     "read_npz_scalar",
     "summarize_npz_artifact",
     "write_json_artifact",
+    "write_npz_artifact",
     "write_text_artifact",
 ]

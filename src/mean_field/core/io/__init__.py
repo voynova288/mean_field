@@ -6,6 +6,7 @@ from .artifacts import (
     read_npz_scalar,
     summarize_npz_artifact,
     write_json_artifact,
+    write_npz_artifact,
     write_text_artifact,
 )
 
@@ -15,5 +16,6 @@ __all__ = [
     "read_npz_scalar",
     "summarize_npz_artifact",
     "write_json_artifact",
+    "write_npz_artifact",
     "write_text_artifact",
 ]
