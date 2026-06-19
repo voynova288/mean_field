@@ -55,6 +55,7 @@ def run_hartree_fock_problem(
     seed: int,
     max_iter: int = 300,
     oda_stall_threshold: float = 1e-3,
+    max_oda_lambda: float | None = None,
 ) -> HartreeFockRun:
     problem.initializer(state, init_mode=init_mode, seed=seed)
     return run_hartree_fock_iterations(
@@ -73,4 +74,5 @@ def run_hartree_fock_problem(
         convergence_rule=problem.kernel.convergence_rule,
         max_iter=max_iter,
         oda_stall_threshold=oda_stall_threshold,
+        max_oda_lambda=max_oda_lambda,
     )

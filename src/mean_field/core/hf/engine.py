@@ -188,9 +188,12 @@ def run_hartree_fock_iterations(
     convergence_rule: Literal["raw", "mixed"] = "raw",
     max_iter: int = 300,
     oda_stall_threshold: float = 1e-3,
+    max_oda_lambda: float | None = None,
 ) -> HartreeFockRun:
     if convergence_rule not in {"raw", "mixed"}:
         raise ValueError(f"Unsupported convergence_rule={convergence_rule!r}")
+    if max_oda_lambda is not None and not (0.0 < float(max_oda_lambda) <= 1.0):
+        raise ValueError(f"max_oda_lambda must be in (0, 1], got {max_oda_lambda!r}")
 
     iter_energy: list[float] = []
     iter_err: list[float] = []
@@ -230,6 +233,8 @@ def run_hartree_fock_iterations(
             )
         else:
             oda_lambda = 1.0 if oda_parameterizer is None else float(oda_parameterizer(state, delta_density))
+        if max_oda_lambda is not None:
+            oda_lambda = min(float(oda_lambda), float(max_oda_lambda))
         mixed_density = oda_lambda * density_update.density + (1.0 - oda_lambda) * previous_density
 
         norm_raw = float(calculate_norm_convergence(density_update.density, previous_density))
