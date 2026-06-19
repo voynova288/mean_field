@@ -5,7 +5,9 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+import mean_field.api.hf as hf_api
 from mean_field.api import HFConfig, HFResult, make_model, run_hf
+from mean_field.api.hf import get_hf_adapter_info, list_hf_adapters, resolve_hf_adapter
 from mean_field.core.contracts import HFRunResult as ContractHFRunResult
 from mean_field.systems import tdbg as tdbg_system
 from mean_field.systems.tdbg import TDBGInteractionSettings, TDBGProjectedHFConfig, TDBGProjectedWindow
@@ -24,6 +26,50 @@ def _tiny_tdbg_config() -> TDBGProjectedHFConfig:
         precision=1.0e-7,
         max_iter=1,
     )
+
+
+def test_public_hf_adapter_registry_exposes_post_run_converters_without_run_dispatch() -> None:
+    adapters = {info.name: info for info in list_hf_adapters()}
+    expected = {
+        "tdbg_projected_hf_result_to_hf_run_result",
+        "tdbg_explicit_projected_run_hf",
+        "htg_hf_run_to_hf_run_result",
+        "htg_hf_run_to_hf_result",
+        "htg_supercell_hf_run_to_hf_run_result",
+        "htg_supercell_hf_run_to_hf_result",
+        "tbg_zero_field_hf_run_to_hf_run_result",
+        "b0_hf_benchmark_run_to_hf_run_result",
+        "rlg_hbn_hf_run_to_hf_run_result",
+        "polshyn_wang_hf_bundle_to_hf_run_result",
+    }
+
+    assert expected <= set(adapters)
+    assert adapters["tdbg_explicit_projected_run_hf"].supports_run_hf_config is True
+    for name in expected - {"tdbg_explicit_projected_run_hf"}:
+        assert adapters[name].adapter_type in {"canonical_hf_run_result", "hf_result"}
+        assert adapters[name].supports_run_hf_config is False
+        assert ":" in adapters[name].import_path
+        assert adapters[name].requires_explicit_inputs
+
+
+def test_public_hf_adapter_registry_filters_and_resolves_existing_helpers() -> None:
+    htg_supercell = {info.name for info in list_hf_adapters(system_name="htg_supercell")}
+    assert htg_supercell == {
+        "htg_supercell_hf_run_to_hf_run_result",
+        "htg_supercell_hf_run_to_hf_result",
+    }
+    canonical = {info.name for info in list_hf_adapters(adapter_type="canonical_hf_run_result")}
+    assert "tdbg_explicit_projected_run_hf" not in canonical
+    assert "polshyn_wang_hf_bundle_to_hf_run_result" in canonical
+
+    adapter = resolve_hf_adapter("htg_supercell_hf_run_to_hf_run_result")
+    assert adapter.__name__ == "htg_supercell_hf_run_to_hf_run_result"
+    assert adapter.__module__ == "mean_field.systems.htg.supercell_contracts"
+    assert get_hf_adapter_info("tdbg_explicit_projected_run_hf").supports_run_hf_config is True
+    assert "htg_supercell_hf_run_to_hf_result" in hf_api.__all__
+
+    with pytest.raises(KeyError, match="Unknown HF adapter"):
+        get_hf_adapter_info("not_a_registered_hf_adapter")
 
 
 def test_public_run_hf_tbg_bm_requires_explicit_system_workflow() -> None:

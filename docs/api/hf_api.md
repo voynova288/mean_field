@@ -39,12 +39,36 @@ Not every system adapter implements every option yet.  A system must fail explic
 
 `run_hf(model, cfg)` is intentionally strict.  It requires a system adapter exposing a `run_hf(config, **kwargs)` hook, or an explicitly documented façade adapter.
 
-Current adapter coverage:
+Current run coverage:
 
 - TDBG projected HF can be dispatched with `run_hf(model, cfg, tdbg_config=TDBGProjectedHFConfig(...), init_mode=...)`.  The public `HFConfig` must match the explicit TDBG config for mesh, filling, iteration limit, and precision, and must set `density_convention="projector"`.  Generic `HFConfig -> TDBGProjectedHFConfig` inference is intentionally not implemented.
-- Other systems still fail explicitly until a system-owned adapter is added.
+- Other systems still fail explicitly with `Unified run_hf is frozen at the API level, but this model has no run_hf(config) adapter yet` until a system-owned config runner is added.
 
 Existing paper runners remain valid internal workflows, but new public code should target this API.
+
+## Registered post-run HF adapters
+
+Stable post-run canonical adapters are discoverable from `mean_field.api.hf` without implying `run_hf(config)` support:
+
+```python
+from mean_field.api.hf import list_hf_adapters, resolve_hf_adapter
+
+for info in list_hf_adapters(adapter_type="canonical_hf_run_result"):
+    print(info.name, info.system_name, info.supports_run_hf_config)
+
+adapter = resolve_hf_adapter("htg_supercell_hf_run_to_hf_result")
+```
+
+Registered conversion surfaces currently cover:
+
+- TDBG projected HF: `tdbg_projected_hf_result_to_hf_run_result(...)` for an existing `TDBGProjectedHFResult`.
+- HTG primitive HF: `htg_hf_run_to_hf_run_result(...)` and `htg_hf_run_to_hf_result(...)` for an existing primitive-cell run.
+- HTG folded-supercell HF: `htg_supercell_hf_run_to_hf_run_result(...)` and `htg_supercell_hf_run_to_hf_result(...)` for an existing supercell run.
+- TBG zero-field HF: `tbg_zero_field_hf_run_to_hf_run_result(..., grid_solution=...)` or `b0_hf_benchmark_run_to_hf_run_result(...)`; the grid solution is required and is not fabricated.
+- RnG/hBN HF: `rlg_hbn_hf_run_to_hf_run_result(...)` for an existing RnG/hBN run.
+- TMBG Polshyn-Wang bundle: `polshyn_wang_hf_bundle_to_hf_run_result(basis, state, info, ...)` for an explicit saved bundle.
+
+These adapters are I/O/public-surface bridges only: they wrap already-computed system artifacts, preserve system density conventions in the canonical contract, and do not rerun SCF, infer missing configs, touch cRPA, or change physics.
 
 ## HFResult
 
