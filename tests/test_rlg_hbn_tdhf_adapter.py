@@ -33,6 +33,7 @@ from mean_field.systems.RnG_hBN import (
     rlg_hbn_hf_run_to_hf_run_result,
     validate_rlg_hbn_tdhf_canonical_orbital_parity,
 )
+from mean_field.systems.RnG_hBN.tdhf import build_rlg_hbn_tdhf_q_matrices_from_canonical_hf
 
 
 def _tiny_flavor_polarized_run(*, k_mesh_size: int = 1, mesh_size: int = 1) -> RLGhBNHartreeFockRun:
@@ -87,10 +88,10 @@ def _tiny_flavor_polarized_run(*, k_mesh_size: int = 1, mesh_size: int = 1) -> R
 
 
 
-def _canonical_ready_tiny_run() -> RLGhBNHartreeFockRun:
+def _canonical_ready_tiny_run(*, k_mesh_size: int = 1, mesh_size: int = 1) -> RLGhBNHartreeFockRun:
     """Tiny RLG/hBN run with nondegenerate flavor blocks for canonical TDHF parity tests."""
 
-    run = _tiny_flavor_polarized_run()
+    run = _tiny_flavor_polarized_run(k_mesh_size=k_mesh_size, mesh_size=mesh_size)
     nt, nk = run.state.nt, run.state.nk
     hamiltonian = np.zeros((nt, nt, nk), dtype=np.complex128)
     energies = np.zeros((nt, nk), dtype=float)
@@ -250,6 +251,61 @@ def test_rlg_hbn_tdhf_finite_q_exchange_shortcut_reduces_to_q0_shortcut() -> Non
 
     np.testing.assert_allclose(finite_q0.A, q0.A, rtol=1e-12, atol=1e-12)
     np.testing.assert_allclose(finite_q0.B, q0.B, rtol=1e-12, atol=1e-12)
+
+
+def test_rlg_hbn_tdhf_finite_q_matrices_from_canonical_hf_matches_legacy_shortcut() -> None:
+    run = _canonical_ready_tiny_run(k_mesh_size=2, mesh_size=2)
+    canonical = rlg_hbn_hf_run_to_hf_run_result(run)
+    q_shift = (1, 0)
+    physical_shifts = ((0, 0),)
+
+    legacy_orbitals = build_rlg_hbn_tdhf_orbitals(run.state)
+    all_pairs = build_rlg_hbn_tdhf_q_pairs(legacy_orbitals, run.basis_data, q_shift)
+    indices = split_pair_indices_by_flavor_channel(all_pairs)["interspin"]
+    legacy_pairs = tuple(all_pairs[int(index)] for index in indices)
+    legacy = build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs(
+        run,
+        legacy_orbitals,
+        legacy_pairs,
+        q_shift,
+        require_complete_umklapp=True,
+        physical_shifts=physical_shifts,
+    )
+
+    bridged = build_rlg_hbn_tdhf_q_matrices_from_canonical_hf(
+        run,
+        canonical,
+        q_shift,
+        channel="interspin",
+        max_pairs=8,
+        require_complete_umklapp=True,
+        physical_shifts=physical_shifts,
+    )
+
+    assert [(pair.particle, pair.hole) for pair in bridged.pairs] == [
+        (pair.particle, pair.hole) for pair in legacy.pairs
+    ]
+    np.testing.assert_allclose(bridged.A, legacy.A, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(bridged.B, legacy.B, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(bridged.L, legacy.L, rtol=1e-12, atol=1e-12)
+    assert bridged.structure.ok
+
+
+def test_rlg_hbn_tdhf_finite_q_canonical_bridge_rejects_flavor_mixed_hamiltonian() -> None:
+    run = _canonical_ready_tiny_run(k_mesh_size=2, mesh_size=2)
+    run.state.hamiltonian[0, 1, 0] = 1.0e-4
+    run.state.hamiltonian[1, 0, 0] = 1.0e-4
+    canonical = rlg_hbn_hf_run_to_hf_run_result(run)
+
+    with pytest.raises(ValueError, match="block-diagonal"):
+        build_rlg_hbn_tdhf_q_matrices_from_canonical_hf(
+            run,
+            canonical,
+            (1, 0),
+            channel="interspin",
+            max_pairs=8,
+            physical_shifts=((0, 0),),
+        )
 
 
 def test_rlg_hbn_tdhf_q_matrices_requires_flavor_flip_shortcut_channel() -> None:

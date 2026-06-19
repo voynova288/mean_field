@@ -1267,6 +1267,29 @@ def build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs(
     return TDHFMatrices(pairs=ph_pairs, A=A, B=B, L=L, structure=structure)
 
 
+def _filter_rlg_hbn_tdhf_finite_q_shortcut_pairs(
+    all_pairs: Sequence[ParticleHolePair],
+    channel: str,
+) -> tuple[ParticleHolePair, ...]:
+    ph_pairs = tuple(all_pairs)
+    if channel not in {"intervalley", "interspin", "inter_spin_valley"}:
+        raise ValueError(f"finite-q shortcut channel must be a flavor-flip channel, got {channel!r}")
+    groups: dict[str, list[int]] = {"intervalley": [], "interspin": [], "inter_spin_valley": []}
+    for index, pair in enumerate(ph_pairs):
+        particle = pair.particle_flavor
+        hole = pair.hole_flavor
+        if not isinstance(particle, SpinValleyFlavor) or not isinstance(hole, SpinValleyFlavor):
+            raise ValueError("finite-q pairs must carry SpinValleyFlavor metadata")
+        same_spin = particle.spin == hole.spin
+        same_valley = particle.valley == hole.valley
+        if same_spin and not same_valley:
+            groups["intervalley"].append(index)
+        elif not same_spin and same_valley:
+            groups["interspin"].append(index)
+        elif not same_spin and not same_valley:
+            groups["inter_spin_valley"].append(index)
+    return tuple(ph_pairs[index] for index in groups[str(channel)])
+
 def build_rlg_hbn_tdhf_q_matrices(
     run: RLGhBNHartreeFockRun,
     q_shift: tuple[int, int] | RLGhBNTDHFMomentumShift,
@@ -1284,25 +1307,12 @@ def build_rlg_hbn_tdhf_q_matrices(
             "Full finite-q RLG/hBN A/B assembly is not implemented yet; use shortcut_exchange_only=True "
             "for intervalley/interspin S45 development."
         )
-    if channel not in {"intervalley", "interspin", "inter_spin_valley"}:
+    channel_key = str(channel)
+    if channel_key not in {"intervalley", "interspin", "inter_spin_valley"}:
         raise ValueError(f"finite-q shortcut channel must be a flavor-flip channel, got {channel!r}")
     orbitals = build_rlg_hbn_tdhf_orbitals(run.state)
     all_pairs = build_rlg_hbn_tdhf_q_pairs(orbitals, run.basis_data, q_shift)
-    groups: dict[str, list[int]] = {"intervalley": [], "interspin": [], "inter_spin_valley": []}
-    for index, pair in enumerate(all_pairs):
-        particle = pair.particle_flavor
-        hole = pair.hole_flavor
-        if not isinstance(particle, SpinValleyFlavor) or not isinstance(hole, SpinValleyFlavor):
-            raise ValueError("finite-q pairs must carry SpinValleyFlavor metadata")
-        same_spin = particle.spin == hole.spin
-        same_valley = particle.valley == hole.valley
-        if same_spin and not same_valley:
-            groups["intervalley"].append(index)
-        elif not same_spin and same_valley:
-            groups["interspin"].append(index)
-        elif not same_spin and not same_valley:
-            groups["inter_spin_valley"].append(index)
-    pairs = tuple(all_pairs[index] for index in groups[str(channel)])
+    pairs = _filter_rlg_hbn_tdhf_finite_q_shortcut_pairs(all_pairs, channel_key)
     if len(pairs) > int(max_pairs):
         raise ValueError(
             f"finite-q TDHF sector has {len(pairs)} ph pairs, exceeding max_pairs={max_pairs}; "
@@ -1315,6 +1325,73 @@ def build_rlg_hbn_tdhf_q_matrices(
         q_shift,
         beta=beta,
         structure_tolerance=structure_tolerance,
+    )
+
+def build_rlg_hbn_tdhf_q_matrices_from_canonical_hf(
+    run: RLGhBNHartreeFockRun,
+    canonical_hf: ContractHFState | ContractHFRunResult,
+    q_shift: tuple[int, int] | RLGhBNTDHFMomentumShift,
+    *,
+    channel: FiniteQShortcutChannel,
+    beta: float = 1.0,
+    max_pairs: int = 4096,
+    structure_tolerance: float = 1.0e-6,
+    shortcut_exchange_only: bool = True,
+    validate_legacy_parity: bool = True,
+    parity_tolerance: float = 1.0e-8,
+    occupation_policy: TDHFOccupationPolicy = "projector",
+    projector_tolerance: float = 1.0e-7,
+    degeneracy_tolerance: float = 1.0e-10,
+    flavor_resolution_tolerance: float = 1.0e-8,
+    require_complete_umklapp: bool = True,
+    physical_shifts: Sequence[tuple[int, int]] | None = None,
+) -> TDHFMatrices:
+    """Finite-q shortcut TDHF matrices using canonical HFState/HFRunResult orbitals.
+
+    This opt-in bridge covers only the already-implemented RLG/hBN
+    conduction-only, fully polarized, flavor-flip exchange shortcut. It reuses
+    the system-specific finite-q wrapping, pair filtering, and layer-overlap
+    exchange assembly; full finite-q intraflavor/direct/B-term RPA remains
+    deliberately unimplemented here.
+    """
+
+    if not shortcut_exchange_only:
+        raise NotImplementedError(
+            "Full finite-q RLG/hBN A/B assembly is not implemented yet; use shortcut_exchange_only=True "
+            "for intervalley/interspin S45 development."
+        )
+    channel_key = str(channel)
+    if channel_key not in {"intervalley", "interspin", "inter_spin_valley"}:
+        raise ValueError(f"finite-q shortcut channel must be a flavor-flip channel, got {channel!r}")
+    orbitals = build_rlg_hbn_tdhf_orbitals_from_canonical_hf(
+        canonical_hf,
+        n_spin=run.state.n_spin,
+        n_eta=run.state.n_eta,
+        n_band=run.state.n_band,
+        occupation_policy=occupation_policy,
+        projector_tolerance=projector_tolerance,
+        degeneracy_tolerance=degeneracy_tolerance,
+        flavor_resolution_tolerance=flavor_resolution_tolerance,
+    )
+    if validate_legacy_parity:
+        legacy = build_rlg_hbn_tdhf_orbitals(run.state)
+        _validate_rlg_hbn_tdhf_orbital_parity(legacy, orbitals, tolerance=parity_tolerance)
+    all_pairs = build_rlg_hbn_tdhf_q_pairs(orbitals, run.basis_data, q_shift)
+    pairs = _filter_rlg_hbn_tdhf_finite_q_shortcut_pairs(all_pairs, channel_key)
+    if len(pairs) > int(max_pairs):
+        raise ValueError(
+            f"finite-q TDHF sector has {len(pairs)} ph pairs, exceeding max_pairs={max_pairs}; "
+            "use channel filtering or raise the explicit Slurm-side limit."
+        )
+    return build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs(
+        run,
+        orbitals,
+        pairs,
+        q_shift,
+        beta=beta,
+        structure_tolerance=structure_tolerance,
+        require_complete_umklapp=require_complete_umklapp,
+        physical_shifts=physical_shifts,
     )
 
 
@@ -1412,6 +1489,7 @@ __all__ = [
     "build_rlg_hbn_tdhf_orbitals",
     "build_rlg_hbn_tdhf_orbitals_from_canonical_hf",
     "build_rlg_hbn_tdhf_q_matrices",
+    "build_rlg_hbn_tdhf_q_matrices_from_canonical_hf",
     "build_rlg_hbn_tdhf_q_pairs",
     "build_rlg_hbn_tdhf_q0_matrices",
     "build_rlg_hbn_tdhf_q0_matrices_from_canonical_hf",
