@@ -40,6 +40,148 @@ from .hf import (
 
 MomentumPolicy = Literal["strict", "mod_integer"]
 FiniteQShortcutChannel = Literal["intervalley", "interspin", "inter_spin_valley"]
+FINITE_Q_SHORTCUT_CHANNELS: tuple[str, ...] = ("intervalley", "interspin", "inter_spin_valley")
+FINITE_Q_KNOWN_CHANNELS: tuple[str, ...] = ("all", "intraflavor", *FINITE_Q_SHORTCUT_CHANNELS)
+
+@dataclass(frozen=True)
+class RLGhBNTDHFFiniteQSupport:
+    """Introspection record for the currently implemented RLG/hBN finite-q TDHF modes.
+
+    The canonical TDHF boundary only normalizes HF orbitals.  Whether finite-q
+    direct terms, B terms, q/-q pair sectors, and the system-specific ``V_hf``
+    are valid is decided in this RLG/hBN system layer.
+    """
+
+    supported: bool
+    channel: str
+    canonical_boundary: bool
+    shortcut_exchange_only: bool
+    supported_terms: tuple[str, ...]
+    unsupported_terms: tuple[str, ...]
+    runtime_guards: tuple[str, ...]
+    blockers: tuple[str, ...]
+    evidence: tuple[str, ...]
+    reason: str
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "supported": bool(self.supported),
+            "channel": self.channel,
+            "canonical_boundary": bool(self.canonical_boundary),
+            "shortcut_exchange_only": bool(self.shortcut_exchange_only),
+            "supported_terms": list(self.supported_terms),
+            "unsupported_terms": list(self.unsupported_terms),
+            "runtime_guards": list(self.runtime_guards),
+            "blockers": list(self.blockers),
+            "evidence": list(self.evidence),
+            "reason": self.reason,
+        }
+
+def rlg_hbn_tdhf_finite_q_mode_support(
+    channel: str,
+    *,
+    shortcut_exchange_only: bool = True,
+    canonical_boundary: bool = False,
+) -> RLGhBNTDHFFiniteQSupport:
+    """Describe whether an RLG/hBN finite-q TDHF mode is implemented.
+
+    This helper is intentionally conservative: it reports only the legacy
+    system code paths that actually exist.  In particular, a canonical HF input
+    does not supply finite-q direct/B-term formulas or construct ``V_hf``; it
+    only supplies parity-checked HF orbitals before the system adapter builds
+    the already-implemented flavor-flip exchange shortcut.
+    """
+
+    channel_key = str(channel)
+    blockers: list[str] = []
+    unsupported_terms = (
+        "finite_q_A_direct",
+        "finite_q_B_direct",
+        "finite_q_B_exchange",
+        "finite_q_intraflavor",
+        "finite_q_all_channel",
+    )
+    runtime_guards = (
+        "conduction_only_active_space",
+        "saved_occupation_counts",
+        "exactly_one_occupied_spin_valley_flavor",
+        "flavor_flip_pairs_only",
+        "complete_wrapped_umklapp_overlap_shifts",
+        "canonical_orbital_legacy_parity" if canonical_boundary else "legacy_orbital_builder",
+    )
+    evidence = (
+        "existing finite-q RLG/hBN assembly is build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs",
+        "that assembly sets B=0 and includes only one-body plus A-exchange for flavor-flip shortcut sectors",
+        "q=0 direct/exchange/B assembly exists separately in build_rlg_hbn_tdhf_q0_matrices_from_pairs",
+        "full finite-q direct/B/intraflavor Eq. D19 q/-q X/Y bookkeeping is not implemented in the RLG/hBN system layer",
+        "V_hf construction remains system-specific; the canonical boundary is only an orbital normalizer",
+    )
+
+    if not bool(shortcut_exchange_only):
+        blockers.append(
+            "shortcut_exchange_only=False requests full finite-q direct/B/intraflavor TDHF, but no existing "
+            "RLG/hBN legacy implementation defines the finite-q q/-q pair-sector policy or B-term contractions."
+        )
+    if channel_key == "all":
+        blockers.append(
+            "all-channel finite-q blocks mix flavor-flip and intraflavor sectors; only separated flavor-flip "
+            "exchange-shortcut channels are implemented."
+        )
+    elif channel_key == "intraflavor":
+        blockers.append(
+            "intraflavor finite-q TDHF requires direct terms and B terms with explicit q/-q X/Y bookkeeping; "
+            "the current RLG/hBN finite-q legacy path is deliberately not implemented for those terms."
+        )
+    elif channel_key not in FINITE_Q_SHORTCUT_CHANNELS:
+        blockers.append(
+            f"unknown finite-q channel {channel_key!r}; expected one of {FINITE_Q_KNOWN_CHANNELS}."
+        )
+
+    supported = not blockers
+    boundary = "canonical" if canonical_boundary else "legacy"
+    if supported:
+        supported_terms = ("hf_energy_difference", "finite_q_A_exchange")
+        reason = (
+            f"RLG/hBN {boundary} finite-q TDHF supports channel={channel_key!r} only through the "
+            "conduction-only, fully spin-valley-polarized, flavor-flip exchange shortcut; runtime guards still "
+            "validate the active space, occupation_counts, pair flavors, and wrapped Umklapp cache coverage."
+        )
+    else:
+        supported_terms = ()
+        reason = (
+            f"RLG/hBN {boundary} finite-q TDHF mode is not supported for channel={channel_key!r}, "
+            f"shortcut_exchange_only={bool(shortcut_exchange_only)}. " + " ".join(blockers)
+        )
+
+    return RLGhBNTDHFFiniteQSupport(
+        supported=bool(supported),
+        channel=channel_key,
+        canonical_boundary=bool(canonical_boundary),
+        shortcut_exchange_only=bool(shortcut_exchange_only),
+        supported_terms=supported_terms,
+        unsupported_terms=unsupported_terms,
+        runtime_guards=runtime_guards,
+        blockers=tuple(blockers),
+        evidence=evidence,
+        reason=reason,
+    )
+
+def _require_rlg_hbn_tdhf_finite_q_mode_supported(
+    channel: str,
+    *,
+    shortcut_exchange_only: bool,
+    canonical_boundary: bool,
+) -> RLGhBNTDHFFiniteQSupport:
+    support = rlg_hbn_tdhf_finite_q_mode_support(
+        channel,
+        shortcut_exchange_only=shortcut_exchange_only,
+        canonical_boundary=canonical_boundary,
+    )
+    if support.supported:
+        return support
+    if support.channel not in FINITE_Q_KNOWN_CHANNELS:
+        raise ValueError(support.reason)
+    raise NotImplementedError(support.reason)
 
 
 def _env_flag_enabled(name: str, *, default: bool = False) -> bool:
@@ -1302,14 +1444,12 @@ def build_rlg_hbn_tdhf_q_matrices(
 ) -> TDHFMatrices:
     """Build a dense finite-q TDHF matrix for the implemented shortcut path."""
 
-    if not shortcut_exchange_only:
-        raise NotImplementedError(
-            "Full finite-q RLG/hBN A/B assembly is not implemented yet; use shortcut_exchange_only=True "
-            "for intervalley/interspin S45 development."
-        )
-    channel_key = str(channel)
-    if channel_key not in {"intervalley", "interspin", "inter_spin_valley"}:
-        raise ValueError(f"finite-q shortcut channel must be a flavor-flip channel, got {channel!r}")
+    support = _require_rlg_hbn_tdhf_finite_q_mode_supported(
+        str(channel),
+        shortcut_exchange_only=shortcut_exchange_only,
+        canonical_boundary=False,
+    )
+    channel_key = support.channel
     orbitals = build_rlg_hbn_tdhf_orbitals(run.state)
     all_pairs = build_rlg_hbn_tdhf_q_pairs(orbitals, run.basis_data, q_shift)
     pairs = _filter_rlg_hbn_tdhf_finite_q_shortcut_pairs(all_pairs, channel_key)
@@ -1355,14 +1495,12 @@ def build_rlg_hbn_tdhf_q_matrices_from_canonical_hf(
     deliberately unimplemented here.
     """
 
-    if not shortcut_exchange_only:
-        raise NotImplementedError(
-            "Full finite-q RLG/hBN A/B assembly is not implemented yet; use shortcut_exchange_only=True "
-            "for intervalley/interspin S45 development."
-        )
-    channel_key = str(channel)
-    if channel_key not in {"intervalley", "interspin", "inter_spin_valley"}:
-        raise ValueError(f"finite-q shortcut channel must be a flavor-flip channel, got {channel!r}")
+    support = _require_rlg_hbn_tdhf_finite_q_mode_supported(
+        str(channel),
+        shortcut_exchange_only=shortcut_exchange_only,
+        canonical_boundary=True,
+    )
+    channel_key = support.channel
     orbitals = build_rlg_hbn_tdhf_orbitals_from_canonical_hf(
         canonical_hf,
         n_spin=run.state.n_spin,
@@ -1482,6 +1620,7 @@ def build_rlg_hbn_tdhf_q0_matrices_from_canonical_hf(
 
 __all__ = [
     "RLGhBNTDHFInteraction",
+    "RLGhBNTDHFFiniteQSupport",
     "RLGhBNTDHFMomentumShift",
     "RLGhBNTDHFOrbitals",
     "build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs",
@@ -1496,5 +1635,6 @@ __all__ = [
     "build_rlg_hbn_tdhf_q0_matrices_from_pairs",
     "build_rlg_hbn_tdhf_q0_pairs",
     "load_rlg_hbn_tdhf_run_from_archive",
+    "rlg_hbn_tdhf_finite_q_mode_support",
     "validate_rlg_hbn_tdhf_canonical_orbital_parity",
 ]

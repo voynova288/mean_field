@@ -76,10 +76,12 @@ Implemented in the RLG/hBN system adapter:
 - command-surface access via `python scripts/mean_field_tools.py run_rlg_hbn_tdhf_q0 --hf-archive ...`, with login-node guard for the actual dense TDHF solve and `--dry-run` for configuration validation;
 - vectorized q=0 dense assembly via `build_rlg_hbn_tdhf_q0_matrices_from_pairs(..., assembly="vectorized")`, grouping ph pairs by k and using NumPy/BLAS compiled kernels for layer form-factor contractions instead of calling `V_hf` element-by-element in Python;
 - q=0 runner dense-memory guard (`--max-pairs`, `--max-dense-memory-gb`) and shortcut guard so the fully polarized simplification is not applied to mixed `--channel all` blocks;
-- local lightweight regression coverage for fixed-q pair construction, dense q=0 smoke assembly, vectorized-vs-generic assembly parity (including multi-k synthetic blocks), direct HF-basis form-factor contraction against a manual expression, distinct Umklapp/full-Q kernel contributions, momentum conservation, all-channel shortcut blocking, and q=0 Fock-diagnostic env/archive guard.
+- local lightweight regression coverage for fixed-q pair construction, dense q=0 smoke assembly, vectorized-vs-generic assembly parity (including multi-k synthetic blocks), direct HF-basis form-factor contraction against a manual expression, distinct Umklapp/full-Q kernel contributions, momentum conservation, all-channel shortcut blocking, and q=0 Fock-diagnostic env/archive guard;
+- finite-q support introspection via `rlg_hbn_tdhf_finite_q_mode_support(...)`, which states that the canonical bridge only supplies parity-checked orbitals and that RLG/hBN `V_hf`, finite-q wrapping, direct/B terms, and q/-q pair-sector policy remain system-layer responsibilities.
 
 Not yet implemented:
 
+- full finite-q RLG/hBN direct/B/intraflavor TDHF assembly: the existing legacy system path covers only the conduction-only fully spin-valley-polarized flavor-flip exchange shortcut, and no canonical bridge should fabricate the missing `V_hf`/q/-q pair-sector policy;
 - a finite-difference Fock/Hartree derivative test tying the stored-projector HF Hamiltonian response directly to `V_hf`;
 - iterative block/matvec eigensolver for large 12x12 R5G/hBN sectors beyond dense channel pilots;
 - MA-TBG system adapter and Goldstone-counting workflow;

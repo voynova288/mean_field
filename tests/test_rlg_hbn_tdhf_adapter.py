@@ -23,6 +23,7 @@ from mean_field.systems.RnG_hBN import (
     build_rlg_hbn_tdhf_orbitals,
     build_rlg_hbn_tdhf_orbitals_from_canonical_hf,
     build_rlg_hbn_tdhf_q_matrices,
+    build_rlg_hbn_tdhf_q_matrices_from_canonical_hf,
     build_rlg_hbn_tdhf_q_pairs,
     build_rlg_hbn_tdhf_q0_matrices,
     build_rlg_hbn_tdhf_q0_matrices_from_canonical_hf,
@@ -31,9 +32,9 @@ from mean_field.systems.RnG_hBN import (
     required_rlg_hbn_tdhf_finite_q_overlap_shifts,
     rlg_hbn_flavor_occupation_counts_for_init_mode,
     rlg_hbn_hf_run_to_hf_run_result,
+    rlg_hbn_tdhf_finite_q_mode_support,
     validate_rlg_hbn_tdhf_canonical_orbital_parity,
 )
-from mean_field.systems.RnG_hBN.tdhf import build_rlg_hbn_tdhf_q_matrices_from_canonical_hf
 
 
 def _tiny_flavor_polarized_run(*, k_mesh_size: int = 1, mesh_size: int = 1) -> RLGhBNHartreeFockRun:
@@ -291,6 +292,24 @@ def test_rlg_hbn_tdhf_finite_q_matrices_from_canonical_hf_matches_legacy_shortcu
     assert bridged.structure.ok
 
 
+def test_rlg_hbn_tdhf_finite_q_support_introspection_documents_canonical_scope() -> None:
+    supported = rlg_hbn_tdhf_finite_q_mode_support("interspin", canonical_boundary=True)
+    assert supported.supported
+    assert supported.supported_terms == ("hf_energy_difference", "finite_q_A_exchange")
+    assert supported.blockers == ()
+    assert "V_hf" in " ".join(supported.evidence)
+    assert "canonical boundary" in " ".join(supported.evidence)
+    payload = supported.as_dict()
+    assert payload["supported"] is True
+    assert "finite_q_A_direct" in payload["unsupported_terms"]
+
+    blocked = rlg_hbn_tdhf_finite_q_mode_support("intraflavor", canonical_boundary=True)
+    assert not blocked.supported
+    assert "direct terms and B terms" in " ".join(blocked.blockers)
+    assert "q/-q" in blocked.reason
+    assert "not implemented" in blocked.reason
+
+
 def test_rlg_hbn_tdhf_finite_q_canonical_bridge_rejects_flavor_mixed_hamiltonian() -> None:
     run = _canonical_ready_tiny_run(k_mesh_size=2, mesh_size=2)
     run.state.hamiltonian[0, 1, 0] = 1.0e-4
@@ -308,10 +327,20 @@ def test_rlg_hbn_tdhf_finite_q_canonical_bridge_rejects_flavor_mixed_hamiltonian
         )
 
 
-def test_rlg_hbn_tdhf_q_matrices_requires_flavor_flip_shortcut_channel() -> None:
+def test_rlg_hbn_tdhf_q_matrices_reports_precise_blockers_for_unsupported_finite_q_modes() -> None:
     run = _tiny_flavor_polarized_run(k_mesh_size=2, mesh_size=2)
-    with pytest.raises(ValueError, match="flavor-flip"):
+    with pytest.raises(NotImplementedError, match="intraflavor finite-q TDHF requires direct terms and B terms"):
         build_rlg_hbn_tdhf_q_matrices(run, (1, 0), channel="intraflavor")  # type: ignore[arg-type]
+    with pytest.raises(NotImplementedError, match="shortcut_exchange_only=False requests full finite-q direct/B"):
+        build_rlg_hbn_tdhf_q_matrices_from_canonical_hf(
+            run,
+            object(),  # guard must fire before canonical orbital normalization
+            (1, 0),
+            channel="interspin",
+            shortcut_exchange_only=False,
+        )
+    with pytest.raises(ValueError, match="unknown finite-q channel"):
+        build_rlg_hbn_tdhf_q_matrices(run, (1, 0), channel="bogus")  # type: ignore[arg-type]
 
 
 def test_rlg_hbn_tdhf_interaction_callable_and_dense_q0_smoke() -> None:

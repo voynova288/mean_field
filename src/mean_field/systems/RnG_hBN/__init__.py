@@ -121,6 +121,7 @@ from .topology import (
 )
 from .tdhf import (
     RLGhBNTDHFInteraction,
+    RLGhBNTDHFFiniteQSupport,
     RLGhBNTDHFMomentumShift,
     RLGhBNTDHFOrbitals,
     build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs,
@@ -128,6 +129,7 @@ from .tdhf import (
     build_rlg_hbn_tdhf_orbitals,
     build_rlg_hbn_tdhf_orbitals_from_canonical_hf,
     build_rlg_hbn_tdhf_q_matrices,
+    build_rlg_hbn_tdhf_q_matrices_from_canonical_hf,
     build_rlg_hbn_tdhf_q_pairs,
     build_rlg_hbn_tdhf_q0_matrices,
     build_rlg_hbn_tdhf_q0_matrices_from_canonical_hf,
@@ -135,6 +137,7 @@ from .tdhf import (
     build_rlg_hbn_tdhf_q0_pairs,
     load_rlg_hbn_tdhf_run_from_archive,
     required_rlg_hbn_tdhf_finite_q_overlap_shifts,
+    rlg_hbn_tdhf_finite_q_mode_support,
     validate_rlg_hbn_tdhf_canonical_orbital_parity,
 )
 from .validation import ValidationCheck, ValidationReport, reproduce_paper_checkpoints, validate_physics
@@ -163,6 +166,7 @@ __all__ = [
     "RLGhBNPathPlotTrace",
     "RLGhBNProjectedBasisData",
     "RLGhBNTDHFInteraction",
+    "RLGhBNTDHFFiniteQSupport",
     "RLGhBNTDHFMomentumShift",
     "RLGhBNTDHFOrbitals",
     "RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING",
@@ -197,12 +201,14 @@ __all__ = [
     "build_rlg_hbn_tdhf_orbitals",
     "build_rlg_hbn_tdhf_orbitals_from_canonical_hf",
     "build_rlg_hbn_tdhf_q_matrices",
+    "build_rlg_hbn_tdhf_q_matrices_from_canonical_hf",
     "build_rlg_hbn_tdhf_q_pairs",
     "build_rlg_hbn_tdhf_q0_matrices",
     "build_rlg_hbn_tdhf_q0_matrices_from_canonical_hf",
     "build_rlg_hbn_tdhf_q0_matrices_from_pairs",
     "build_rlg_hbn_tdhf_q0_pairs",
     "required_rlg_hbn_tdhf_finite_q_overlap_shifts",
+    "rlg_hbn_tdhf_finite_q_mode_support",
     "build_standard_kpath",
     "calculate_layer_projected_overlap_between",
     "compute_rlg_hbn_oda_parameter",
