@@ -233,7 +233,10 @@ def test_hf_result_save_writes_canonical_hf_run_result_sidecar(tmp_path) -> None
     )
     canonical = ContractHFRunResult(
         final_state=final_state,
-        iteration_history=[{"iteration": 1, "energy": 0.0, "error": 0.0, "oda_lambda": 1.0}],
+        iteration_history=[
+            {"iteration": 1, "energy": 0.0, "error": 0.0, "oda_lambda": 1.0},
+            {"iteration": 2, "energy": -1.0, "error": 0.0, "oda_lambda": 0.5},
+        ],
         converged=True,
         exit_reason="converged",
         best_seed=1,
@@ -257,8 +260,9 @@ def test_hf_result_save_writes_canonical_hf_run_result_sidecar(tmp_path) -> None
     assert loaded.manifest["metadata"]["canonical_hf_run_result"]["contract_type"] == "mean_field.core.contracts.HFRunResult"
     assert loaded.canonical_hf_run_result is not None
     assert loaded.canonical_hf_run_result["contract_type"] == "mean_field.core.contracts.HFRunResult"
+    assert sidecar["iteration_history"]["fields"] == ["energy", "error", "iteration", "oda_lambda"]
     assert sidecar["contract_type"] == "mean_field.core.contracts.HFRunResult"
-    assert sidecar["iteration_history"]["count"] == 1
+    assert sidecar["iteration_history"]["count"] == 2
     assert sidecar["final_state"]["density"]["reference_scheme"] == "custom"
     assert sidecar["final_state"]["density"]["density_delta_definition"] == "P-R"
     assert sidecar["final_state"]["density"]["density_delta_shape"] == [1, 1, 1]

@@ -35,10 +35,18 @@ def _write_minimal_eligible_rlg_hbn_archive(tmp_path: Path) -> Path:
     cache_dir = tmp_path / "cache"
     basis_key = "basis_key"
     overlap_key = "overlap_key"
+    compatible_cache_manifest = json.dumps(
+        {
+            "extra": {
+                "basis_periodic_gauge": "centered_cell_reciprocal_relabel_pad1_v2",
+                "form_factor_convention": "physical_q_plus_g_valley_signed_raw_shift_v2",
+            }
+        }
+    )
     (cache_dir / "basis" / basis_key).mkdir(parents=True)
-    (cache_dir / "basis" / basis_key / "manifest.json").write_text("{}", encoding="utf-8")
+    (cache_dir / "basis" / basis_key / "manifest.json").write_text(compatible_cache_manifest, encoding="utf-8")
     (cache_dir / "overlap" / overlap_key).mkdir(parents=True)
-    (cache_dir / "overlap" / overlap_key / "manifest.json").write_text("{}", encoding="utf-8")
+    (cache_dir / "overlap" / overlap_key / "manifest.json").write_text(compatible_cache_manifest, encoding="utf-8")
     archive_path = panel_root / "hf_ground_state.npz"
     matrix = np.zeros((1, 1, 1), dtype=np.complex128)
     np.savez(
@@ -124,6 +132,24 @@ def test_scanner_identifies_rlg_hbn_archive_with_existing_loader_inputs(tmp_path
     assert record.would_write is False
     assert "load_rlg_hbn_tdhf_run_from_archive" in " ".join(record.adapters)
     assert not (panel_root / "canonical_hf_run_result.json").exists()
+
+def test_scanner_rejects_rlg_hbn_archive_with_stale_cache_manifest(tmp_path: Path) -> None:
+    archive_path = _write_minimal_eligible_rlg_hbn_archive(tmp_path)
+    with np.load(archive_path, allow_pickle=False) as data:
+        cache_dir = Path(str(np.asarray(data["cache_dir"]).reshape(-1)[0]))
+        basis_key = str(np.asarray(data["cache_key_basis"]).reshape(-1)[0])
+    (cache_dir / "basis" / basis_key / "manifest.json").write_text(
+        json.dumps({"extra": {"basis_periodic_gauge": "centered_cell_reciprocal_relabel_pad1_v2"}}),
+        encoding="utf-8",
+    )
+
+    records = scan_backfill_candidates([archive_path])
+
+    assert len(records) == 1
+    record = records[0]
+    assert record.decision == "missing_loader_inputs"
+    assert record.can_backfill_now is False
+    assert any("form_factor_convention" in blocker for blocker in record.blockers)
 
 def test_write_plan_rejects_target_outside_allowlist(tmp_path: Path) -> None:
     archive_path = _write_minimal_eligible_rlg_hbn_archive(tmp_path)

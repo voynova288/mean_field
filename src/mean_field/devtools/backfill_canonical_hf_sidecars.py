@@ -52,6 +52,13 @@ _RLG_HBN_REQUIRED_ARCHIVE_KEYS = frozenset(
         "cache_dir",
     }
 )
+# Mirrors the compatibility checks enforced by
+# mean_field.systems.RnG_hBN.cache.load_projected_basis_cache and
+# load_layer_overlap_blocks_cache.  Keeping the scanner aligned with the loader
+# prevents stale cache manifests from being marked write-eligible only to fail
+# after the explicit staging command starts loading cache payloads.
+_RLG_HBN_EXPECTED_BASIS_PERIODIC_GAUGE = "centered_cell_reciprocal_relabel_pad1_v2"
+_RLG_HBN_EXPECTED_FORM_FACTOR_CONVENTION = "physical_q_plus_g_valley_signed_raw_shift_v2"
 
 
 @dataclass(frozen=True)
@@ -106,6 +113,37 @@ def _json_load(path: Path) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError(f"Expected JSON object in {path}")
     return payload
+
+
+def _rlg_hbn_cache_manifest_blockers(cache_path: Path, *, cache_kind: str) -> tuple[str, ...]:
+    """Return loader-compatibility blockers from a RLG/hBN cache manifest."""
+
+    manifest_path = cache_path / "manifest.json"
+    try:
+        manifest = _json_load(manifest_path)
+    except Exception as exc:  # pragma: no cover - exact filesystem failures vary.
+        return (
+            f"{cache_kind} cache manifest could not be read: {manifest_path}: "
+            f"{type(exc).__name__}: {exc}",
+        )
+    extra = manifest.get("extra")
+    if not isinstance(extra, Mapping):
+        return (f"{cache_kind} cache manifest has invalid/missing extra metadata: {manifest_path}",)
+
+    blockers: list[str] = []
+    basis_periodic_gauge = extra.get("basis_periodic_gauge")
+    if basis_periodic_gauge != _RLG_HBN_EXPECTED_BASIS_PERIODIC_GAUGE:
+        blockers.append(
+            f"{cache_kind} cache {cache_path} uses incompatible basis_periodic_gauge "
+            f"{basis_periodic_gauge!r}; expected {_RLG_HBN_EXPECTED_BASIS_PERIODIC_GAUGE!r}"
+        )
+    form_factor_convention = extra.get("form_factor_convention")
+    if form_factor_convention != _RLG_HBN_EXPECTED_FORM_FACTOR_CONVENTION:
+        blockers.append(
+            f"{cache_kind} cache {cache_path} uses incompatible form_factor_convention "
+            f"{form_factor_convention!r}; expected {_RLG_HBN_EXPECTED_FORM_FACTOR_CONVENTION!r}"
+        )
+    return tuple(blockers)
 
 
 def _mapping(value: object) -> Mapping[str, Any]:
@@ -454,11 +492,15 @@ def _classify_rlg_hbn_archive(archive_path: Path) -> BackfillCandidate:
         cache_metadata["basis_cache"] = str(basis_cache)
         if not (basis_cache / "manifest.json").is_file():
             blockers.append(f"basis cache manifest not found: {basis_cache / 'manifest.json'}")
+        else:
+            blockers.extend(_rlg_hbn_cache_manifest_blockers(basis_cache, cache_kind="basis"))
     if cache_dir_text and overlap_key:
         overlap_cache = Path(cache_dir_text).expanduser() / "overlap" / overlap_key
         cache_metadata["overlap_cache"] = str(overlap_cache)
         if not (overlap_cache / "manifest.json").is_file():
             blockers.append(f"overlap cache manifest not found: {overlap_cache / 'manifest.json'}")
+        else:
+            blockers.extend(_rlg_hbn_cache_manifest_blockers(overlap_cache, cache_kind="overlap"))
 
     if blockers:
         return BackfillCandidate(

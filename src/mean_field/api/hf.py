@@ -383,7 +383,7 @@ def _canonical_hf_run_result_sidecar(canonical_run_result: Any) -> dict[str, obj
         "init_mode": str(canonical_run_result.init_mode),
         "iteration_history": {
             "count": len(iteration_history),
-            "fields": sorted(str(key) for row in iteration_history for key in row),
+            "fields": sorted({str(key) for row in iteration_history for key in row}),
             "last": last_iteration,
         },
         "final_state": {
