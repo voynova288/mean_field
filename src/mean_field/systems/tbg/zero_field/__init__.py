@@ -61,7 +61,13 @@ from .overlap import (
     compute_density_overlap_trace,
     summarize_overlap,
 )
-from .hf_contracts import b0_hf_benchmark_run_to_hf_run_result, tbg_zero_field_hf_run_to_hf_run_result
+from .hf_contracts import (
+    TBGZeroFieldRunHFConfig,
+    b0_hf_benchmark_run_to_hf_run_result,
+    run_tbg_zero_field_hf_config_adapter,
+    tbg_zero_field_hf_run_to_hf_result,
+    tbg_zero_field_hf_run_to_hf_run_result,
+)
 from .hf_runners import (
     HFPathParity,
     HFPathResult,
@@ -126,6 +132,7 @@ from .artifacts import (
 __all__ = [
     "BMSolution",
     "TBGZeroFieldBMModel",
+    "TBGZeroFieldRunHFConfig",
     "B0HFBenchmarkRun",
     "B0HFBenchmarkRuntime",
     "B0HFBenchmarkRuntimeParity",
@@ -211,6 +218,7 @@ __all__ = [
     "run_full_hf_from_bm_solution",
     "run_restricted_hartree_fock",
     "run_restricted_hf_from_bm_solution",
+    "run_tbg_zero_field_hf_config_adapter",
     "run_b0_hf_benchmark_case",
     "run_b0_hf_benchmark_suite",
     "run_bm_unstrained",
@@ -219,6 +227,7 @@ __all__ = [
     "select_adjacent_m_point",
     "solve_bm_model",
     "summarize_overlap",
+    "tbg_zero_field_hf_run_to_hf_result",
     "tbg_zero_field_hf_run_to_hf_run_result",
     "update_restricted_density",
     "write_b0_hf_benchmark_artifacts",

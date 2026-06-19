@@ -195,7 +195,26 @@ _HF_ADAPTER_REGISTRY: tuple[HFAdapterInfo, ...] = (
         import_path="mean_field.systems.tbg.zero_field.hf_contracts:tbg_zero_field_hf_run_to_hf_run_result",
         description="Post-run canonical HFRunResult view for a TBG zero-field HF run plus matching BMSolution grid.",
         requires_explicit_inputs=("RestrictedHartreeFockRun", "grid_solution=BMSolution"),
-        run_hf_config_reason="Post-run only: the matching BMSolution/grid workflow must be explicit and is not fabricated from HFConfig.",
+        run_hf_config_reason="Post-run converter only; use tbg_zero_field_explicit_run_hf for explicit grid-owning config dispatch.",
+    ),
+    HFAdapterInfo(
+        name="tbg_zero_field_hf_run_to_hf_result",
+        system_name="tbg_zero_field",
+        adapter_type="hf_result",
+        import_path="mean_field.systems.tbg.zero_field.hf_contracts:tbg_zero_field_hf_run_to_hf_result",
+        description="Public HFResult view of an existing TBG zero-field HF run plus matching BMSolution grid.",
+        requires_explicit_inputs=("RestrictedHartreeFockRun", "grid_solution=BMSolution"),
+        run_hf_config_reason="Post-run HFResult converter only; use tbg_zero_field_explicit_run_hf for explicit grid-owning config dispatch.",
+    ),
+    HFAdapterInfo(
+        name="tbg_zero_field_explicit_run_hf",
+        system_name="tbg_zero_field",
+        adapter_type="run_hf",
+        import_path="mean_field.systems.tbg.zero_field.hf_contracts:run_tbg_zero_field_hf_config_adapter",
+        description="Public run_hf dispatch for an explicit TBGZeroFieldRunHFConfig carrying the matching BMSolution.",
+        supports_run_hf_config=True,
+        requires_explicit_inputs=("tbg_zero_field_config=TBGZeroFieldRunHFConfig(grid_solution=...)",),
+        run_hf_config_reason="Requires explicit tbg_zero_field_config=TBGZeroFieldRunHFConfig carrying the matching BMSolution; generic HFConfig to B0 grid inference is not implemented.",
     ),
     HFAdapterInfo(
         name="b0_hf_benchmark_run_to_hf_run_result",
@@ -319,6 +338,10 @@ def htg_supercell_hf_run_to_hf_result(*args: Any, **kwargs: Any) -> Any:
 
 def tbg_zero_field_hf_run_to_hf_run_result(*args: Any, **kwargs: Any) -> ContractHFRunResult:
     return _call_registered_hf_adapter("tbg_zero_field_hf_run_to_hf_run_result", *args, **kwargs)
+
+
+def tbg_zero_field_hf_run_to_hf_result(*args: Any, **kwargs: Any) -> Any:
+    return _call_registered_hf_adapter("tbg_zero_field_hf_run_to_hf_result", *args, **kwargs)
 
 
 def b0_hf_benchmark_run_to_hf_run_result(*args: Any, **kwargs: Any) -> ContractHFRunResult:
@@ -1243,6 +1266,7 @@ def run_hf(model: object, config: HFConfig, **kwargs: Any) -> HFResult:
         "htg_explicit_primitive_run_hf",
         "htg_explicit_supercell_run_hf",
         "rlg_hbn_explicit_run_hf",
+        "tbg_zero_field_explicit_run_hf",
     ):
         explicit_result = _run_registered_hf_config_adapter_if_explicit(adapter_name, model, config, kwargs)
         if explicit_result is not None:
@@ -1276,6 +1300,7 @@ __all__ = [
     "rlg_hbn_hf_run_to_hf_result",
     "rlg_hbn_hf_run_to_hf_run_result",
     "run_hf",
+    "tbg_zero_field_hf_run_to_hf_result",
     "tbg_zero_field_hf_run_to_hf_run_result",
     "tdbg_projected_hf_result_to_hf_run_result",
 ]

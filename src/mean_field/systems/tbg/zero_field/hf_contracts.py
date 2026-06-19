@@ -15,6 +15,8 @@ canonical view.
 """
 
 from collections.abc import Mapping
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 import math
 
@@ -30,8 +32,15 @@ from mean_field.core.contracts import (
 )
 from mean_field.core.hf.contracts_bridge import density_state_from_delta
 
-from .hf import RestrictedHartreeFockRun, restricted_filling, restricted_occupied_state_count
-from .model import BMSolution
+from .hf import (
+    RestrictedHartreeFockRun,
+    RestrictedHartreeFockState,
+    build_overlap_block_set,
+    restricted_filling,
+    restricted_occupied_state_count,
+    run_restricted_hartree_fock,
+)
+from .model import BMSolution, TBGZeroFieldBMModel
 
 
 def _unavailable_hamiltonian_builder(_kvec: np.ndarray) -> np.ndarray:
@@ -344,6 +353,122 @@ def _iteration_history(run: RestrictedHartreeFockRun) -> list[dict[str, Any]]:
     return history
 
 
+@dataclass(frozen=True)
+class TBGZeroFieldRunHFConfig:
+    """Explicit public config for TBG zero-field restricted HF dispatch.
+
+    The matching :class:`BMSolution` is required because the canonical TBG
+    adapter needs the exact B0 k-grid and BM micro-wavefunctions used by the SCF
+    grid.  The public :class:`mean_field.api.hf.HFConfig` is validated as a
+    matching contract; it is not translated into hidden BM-grid construction.
+    """
+
+    grid_solution: BMSolution
+    nu: float
+    init_mode: str = "educated"
+    seed: int = 1
+    beta: float = 1.0
+    max_iter: int = 300
+    overlap_lg: int | None = None
+    precision: float = 1.0e-5
+    oda_stall_threshold: float = 1.0e-3
+    relative_permittivity: float = 15.0
+    screening_lm: float | None = None
+    finite_zero_limit: bool = False
+    zero_cutoff: float = 1.0e-6
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.grid_solution, BMSolution):
+            raise TypeError(f"grid_solution must be BMSolution, got {type(self.grid_solution).__name__}")
+        if int(self.max_iter) <= 0:
+            raise ValueError("max_iter must be positive")
+        if float(self.precision) <= 0.0:
+            raise ValueError("precision must be positive")
+        if float(self.oda_stall_threshold) <= 0.0:
+            raise ValueError("oda_stall_threshold must be positive")
+        if self.overlap_lg is not None and int(self.overlap_lg) <= 0:
+            raise ValueError("overlap_lg must be positive when provided")
+        if float(self.relative_permittivity) <= 0.0:
+            raise ValueError("relative_permittivity must be positive")
+        if self.screening_lm is not None and float(self.screening_lm) <= 0.0:
+            raise ValueError("screening_lm must be positive when provided")
+        if float(self.zero_cutoff) <= 0.0:
+            raise ValueError("zero_cutoff must be positive")
+
+
+def _tbg_zero_field_grid_side(solution: BMSolution) -> int:
+    return int(_infer_b0_lk(solution) + 1)
+
+
+
+
+def _resolved_screening_lm(config: TBGZeroFieldRunHFConfig) -> float:
+    if config.screening_lm is not None:
+        return float(config.screening_lm)
+    params = config.grid_solution.params
+    return float(np.sqrt(abs(params.a1) * abs(params.a2)))
+
+def _validate_tbg_zero_field_public_hf_config(config: "HFConfig", tbg_config: TBGZeroFieldRunHFConfig) -> None:
+    solution = tbg_config.grid_solution
+    side = _tbg_zero_field_grid_side(solution)
+    mesh = (side, side)
+    if (int(config.mesh[0]), int(config.mesh[1])) != mesh:
+        raise ValueError(
+            "TBG zero-field public run_hf requires HFConfig.mesh to match the B0 grid point count "
+            f"{mesh} (lk={side - 1}), got {config.mesh}"
+        )
+    if not np.isclose(float(config.filling), float(tbg_config.nu)):
+        raise ValueError(f"TBG zero-field public run_hf requires HFConfig.filling={tbg_config.nu}, got {config.filling}")
+    if int(config.max_iter) != int(tbg_config.max_iter):
+        raise ValueError(
+            f"TBG zero-field public run_hf requires HFConfig.max_iter={tbg_config.max_iter}, got {config.max_iter}"
+        )
+    if not np.isclose(float(config.precision), float(tbg_config.precision)):
+        raise ValueError(
+            f"TBG zero-field public run_hf requires HFConfig.precision={tbg_config.precision}, got {config.precision}"
+        )
+    if config.density_convention != "stored_delta":
+        raise ValueError(
+            "TBG zero-field restricted HF stores density as P - 0.5 I; "
+            "set HFConfig.density_convention='stored_delta'"
+        )
+    if config.interaction_scheme != "average":
+        raise ValueError("TBG zero-field public run_hf currently requires HFConfig.interaction_scheme='average'")
+    if config.coulomb_kernel != "2d_gate":
+        raise ValueError("TBG zero-field public run_hf currently requires HFConfig.coulomb_kernel='2d_gate'")
+    if not np.isclose(float(config.epsilon_r), float(tbg_config.relative_permittivity)):
+        raise ValueError(
+            "TBG zero-field public run_hf requires HFConfig.epsilon_r to match "
+            f"relative_permittivity={tbg_config.relative_permittivity}, got {config.epsilon_r}"
+        )
+    screening_lm = _resolved_screening_lm(tbg_config)
+    if not np.isclose(float(config.dsc_nm), screening_lm):
+        raise ValueError(
+            "TBG zero-field public run_hf uses HFConfig.dsc_nm as the resolved screening_lm; "
+            f"expected {screening_lm}, got {config.dsc_nm}"
+        )
+    if config.active_window is not None or config.active_band_indices is not None:
+        raise NotImplementedError(
+            "TBG zero-field public run_hf takes the active two-band BM window from grid_solution; "
+            "leave HFConfig.active_window/active_band_indices unset for now"
+        )
+
+
+def _validate_tbg_zero_field_model_matches_grid(model: TBGZeroFieldBMModel, solution: BMSolution) -> None:
+    if int(model.lg) != int(solution.lg):
+        raise ValueError(f"TBG zero-field model lg={model.lg} does not match grid_solution.lg={solution.lg}")
+    if bool(model.periodic_g_grid) != bool(solution.periodic_g_grid):
+        raise ValueError(
+            "TBG zero-field model periodic_g_grid does not match grid_solution.periodic_g_grid: "
+            f"{model.periodic_g_grid} vs {solution.periodic_g_grid}"
+        )
+    solution_theta_deg = float(solution.params.dtheta_rad) * 180.0 / math.pi
+    if not np.isclose(float(model.theta_deg), solution_theta_deg):
+        raise ValueError(
+            f"TBG zero-field model theta_deg={model.theta_deg} does not match grid_solution theta_deg={solution_theta_deg}"
+        )
+
+
 def tbg_zero_field_hf_run_to_hf_run_result(
     run: RestrictedHartreeFockRun,
     *,
@@ -427,7 +552,184 @@ def b0_hf_benchmark_run_to_hf_run_result(
     )
 
 
+
+def _default_hf_config_from_run(run: RestrictedHartreeFockRun, grid_solution: BMSolution) -> "HFConfig":
+    from mean_field.api.hf import HFConfig
+
+    iteration_count = max(1, len(run.iter_err))
+    return HFConfig(
+        filling=float(run.state.nu),
+        mesh=(_tbg_zero_field_grid_side(grid_solution), _tbg_zero_field_grid_side(grid_solution)),
+        interaction_scheme="average",
+        density_convention="stored_delta",
+        epsilon_r=float(run.state.diagnostics.get("relative_permittivity", 15.0)),
+        dsc_nm=float(run.state.diagnostics.get("screening_lm", np.sqrt(abs(grid_solution.params.a1) * abs(grid_solution.params.a2)))),
+        coulomb_kernel="2d_gate",
+        max_iter=iteration_count,
+        precision=float(run.state.precision),
+        seeds=(str(int(run.seed)),),
+        metadata={
+            "source": "derived_from_RestrictedHartreeFockRun_and_BMSolution",
+            "max_iter_semantics": "observed_iteration_count_when_original_limit_is_unavailable",
+            "init_mode": str(run.init_mode),
+            "grid_lk": int(_infer_b0_lk(grid_solution)),
+            "bm_lg": int(grid_solution.lg),
+        },
+    )
+
+
+def _validate_hf_config_matches_run(config: "HFConfig", run: RestrictedHartreeFockRun, grid_solution: BMSolution) -> None:
+    mesh = (_tbg_zero_field_grid_side(grid_solution), _tbg_zero_field_grid_side(grid_solution))
+    if (int(config.mesh[0]), int(config.mesh[1])) != mesh:
+        raise ValueError(f"TBG zero-field HFResult config.mesh must match B0 grid point count {mesh}, got {config.mesh}")
+    if not np.isclose(float(config.filling), float(run.state.nu)):
+        raise ValueError(
+            f"TBG zero-field HFResult config.filling={config.filling} does not match raw nu={run.state.nu}"
+        )
+    if config.density_convention != "stored_delta":
+        raise ValueError(
+            "TBG zero-field raw density is stored as P - 0.5 I; use HFConfig.density_convention='stored_delta'"
+        )
+
+
+def _result_observables(run: RestrictedHartreeFockRun, grid_solution: BMSolution) -> dict[str, object]:
+    state = run.state
+    return {
+        "nu": float(state.nu),
+        "filling_from_density": float(restricted_filling(state.density)),
+        "converged": bool(run.converged),
+        "exit_reason": str(run.exit_reason),
+        "init_mode": str(run.init_mode),
+        "seed": int(run.seed),
+        "iterations": int(max(len(run.iter_energy), len(run.iter_err), len(run.iter_oda))),
+        "raw_density_convention": "stored_delta",
+        "grid_lk": int(_infer_b0_lk(grid_solution)),
+        "bm_lg": int(grid_solution.lg),
+    }
+
+
+def tbg_zero_field_hf_run_to_hf_result(
+    run: RestrictedHartreeFockRun,
+    *,
+    grid_solution: BMSolution,
+    config: "HFConfig | None" = None,
+    archive_manifest: Mapping[str, Any] | None = None,
+    observables: Mapping[str, object] | None = None,
+) -> "HFResult":
+    """Return a public :class:`HFResult` view of an existing TBG zero-field HF run.
+
+    The matching ``grid_solution`` is required for the same reason as the
+    canonical adapter: the raw HF run does not carry BM micro-wavefunctions or
+    fractional k-grid coordinates.
+    """
+
+    from mean_field.api.artifacts import ArtifactManifest, ConventionBundle
+    from mean_field.api.hf import HFResult
+    from mean_field.api.models import model_record
+
+    resolved_config = _default_hf_config_from_run(run, grid_solution) if config is None else config
+    _validate_hf_config_matches_run(resolved_config, run, grid_solution)
+    canonical = tbg_zero_field_hf_run_to_hf_run_result(
+        run,
+        grid_solution=grid_solution,
+        archive_manifest=None if archive_manifest is None else dict(archive_manifest),
+    )
+    result_observables = _result_observables(run, grid_solution)
+    if observables is not None:
+        result_observables.update(dict(observables))
+    record = model_record(TBGZeroFieldBMModel.from_config(grid_solution.params.dtheta_rad * 180.0 / math.pi, lg=grid_solution.lg, params=grid_solution.params), system_name="tbg_zero_field")
+    return HFResult(
+        model=record,
+        config=resolved_config,
+        state=run,
+        observables=result_observables,
+        artifacts=ArtifactManifest(
+            root=Path("."),
+            model=record,
+            conventions=ConventionBundle(
+                energy_unit="meV",
+                density_convention="stored_delta",
+                density_axis_order="abk",
+                hamiltonian_axis_order="abk",
+                wavefunction_axis_order="bm_micro_basis,bm_band,valley,k",
+                gauge="tbg_zero_field_bm_system_defined",
+            ),
+            metadata={
+                "schema_version": 1,
+                "workflow": "tbg.zero_field.restricted_hf.raw_run_result",
+                "system_name": "tbg_zero_field",
+                "adapter": "mean_field.systems.tbg.zero_field.hf_contracts.tbg_zero_field_hf_run_to_hf_result",
+                "canonical_adapter": "mean_field.systems.tbg.zero_field.hf_contracts.tbg_zero_field_hf_run_to_hf_run_result",
+                "raw_state_type": type(run).__name__,
+            },
+        ),
+        canonical_run_result=canonical,
+    )
+
+
+def run_tbg_zero_field_hf_config_adapter(model: object, config: "HFConfig", **kwargs: Any) -> "HFResult | None":
+    """Run TBG zero-field restricted HF from an explicit grid-owning config."""
+
+    if not isinstance(model, TBGZeroFieldBMModel):
+        return None
+    if "tbg_zero_field_config" not in kwargs:
+        raise NotImplementedError(
+            "Unified run_hf has a TBG zero-field adapter only for explicit "
+            "tbg_zero_field_config=TBGZeroFieldRunHFConfig(grid_solution=...); "
+            "generic HFConfig -> BMSolution/grid workflow mapping is not implemented"
+        )
+    tbg_config = kwargs.pop("tbg_zero_field_config")
+    if not isinstance(tbg_config, TBGZeroFieldRunHFConfig):
+        raise TypeError(f"tbg_zero_field_config must be TBGZeroFieldRunHFConfig, got {type(tbg_config).__name__}")
+    if kwargs:
+        raise TypeError(f"Unsupported TBG zero-field run_hf kwargs: {sorted(kwargs)}")
+
+    _validate_tbg_zero_field_model_matches_grid(model, tbg_config.grid_solution)
+    _validate_tbg_zero_field_public_hf_config(config, tbg_config)
+    overlap_lg = int(tbg_config.grid_solution.lg if tbg_config.overlap_lg is None else tbg_config.overlap_lg)
+    state = RestrictedHartreeFockState.from_bm_solution(
+        tbg_config.grid_solution,
+        nu=float(tbg_config.nu),
+        precision=float(tbg_config.precision),
+    )
+    state.diagnostics["relative_permittivity"] = float(tbg_config.relative_permittivity)
+    state.diagnostics["screening_lm"] = float(_resolved_screening_lm(tbg_config))
+    state.diagnostics["finite_zero_limit"] = float(bool(tbg_config.finite_zero_limit))
+    state.diagnostics["zero_cutoff"] = float(tbg_config.zero_cutoff)
+    overlap_blocks = build_overlap_block_set(
+        tbg_config.grid_solution,
+        lg=overlap_lg,
+        relative_permittivity=float(tbg_config.relative_permittivity),
+        screening_lm=tbg_config.screening_lm,
+        finite_zero_limit=bool(tbg_config.finite_zero_limit),
+        zero_cutoff=float(tbg_config.zero_cutoff),
+    )
+    raw = run_restricted_hartree_fock(
+        state,
+        overlap_blocks,
+        tbg_config.grid_solution.lattice_kvec,
+        tbg_config.grid_solution.params,
+        init_mode=str(tbg_config.init_mode),
+        seed=int(tbg_config.seed),
+        beta=float(tbg_config.beta),
+        max_iter=int(tbg_config.max_iter),
+        oda_stall_threshold=float(tbg_config.oda_stall_threshold),
+    )
+    return tbg_zero_field_hf_run_to_hf_result(
+        raw,
+        grid_solution=tbg_config.grid_solution,
+        config=config,
+        observables={
+            "public_run_hf_adapter": "mean_field.systems.tbg.zero_field.hf_contracts.run_tbg_zero_field_hf_config_adapter",
+            "explicit_config_type": "TBGZeroFieldRunHFConfig",
+        },
+    )
+
+
 __all__ = [
+    "TBGZeroFieldRunHFConfig",
     "b0_hf_benchmark_run_to_hf_run_result",
+    "run_tbg_zero_field_hf_config_adapter",
+    "tbg_zero_field_hf_run_to_hf_result",
     "tbg_zero_field_hf_run_to_hf_run_result",
 ]

@@ -12,6 +12,8 @@ from mean_field.core.contracts import HFRunResult as ContractHFRunResult
 from mean_field.systems import tdbg as tdbg_system
 from mean_field.systems.RnG_hBN import RLGhBNInteractionParams, RLGhBNRunHFConfig
 from mean_field.systems.htg import HTGRunHFConfig, HTGSupercellRunHFConfig, InteractionParams
+from mean_field.systems.tbg.params import TBGParameters
+from mean_field.systems.tbg.zero_field import BMSolution, TBGZeroFieldRunHFConfig, build_b0_uniform_lattice
 from mean_field.systems.tdbg import TDBGInteractionSettings, TDBGProjectedHFConfig, TDBGProjectedWindow
 
 
@@ -30,6 +32,37 @@ def _tiny_tdbg_config() -> TDBGProjectedHFConfig:
     )
 
 
+def _tiny_tbg_grid_solution(theta_deg: float = 1.05) -> BMSolution:
+    params = TBGParameters.from_degrees(theta_deg)
+    grid = build_b0_uniform_lattice(params, lk=1)
+    nk = int(grid.nk)
+    lg = 1
+    nlocal = 4
+    n_eta = 2
+    n_spin = 2
+    nb = 2
+    dim = nlocal * lg * lg
+    spectrum = np.zeros((nb, n_eta, nk), dtype=float)
+    for ik in range(nk):
+        spectrum[0, :, ik] = [-1.0 - 0.01 * ik, -0.8 - 0.01 * ik]
+        spectrum[1, :, ik] = [0.8 + 0.01 * ik, 1.0 + 0.01 * ik]
+    return BMSolution(
+        params=params,
+        lattice_kvec=np.asarray(grid.kvec, dtype=np.complex128),
+        lg=lg,
+        nlocal=nlocal,
+        n_eta=n_eta,
+        n_spin=n_spin,
+        nb=nb,
+        hamiltonian=np.zeros((dim, dim, n_eta, nk), dtype=np.complex128),
+        sigma_z=np.zeros((n_spin * n_eta * nb, n_spin * n_eta * nb, nk), dtype=np.complex128),
+        uk=np.zeros((dim, nb, n_eta, nk), dtype=np.complex128),
+        spectrum=spectrum,
+        gvec=np.asarray([0.0 + 0.0j], dtype=np.complex128),
+        periodic_g_grid=True,
+    )
+
+
 def test_public_hf_adapter_registry_exposes_post_run_converters_without_run_dispatch() -> None:
     adapters = {info.name: info for info in list_hf_adapters()}
     expected = {
@@ -42,6 +75,8 @@ def test_public_hf_adapter_registry_exposes_post_run_converters_without_run_disp
         "htg_supercell_hf_run_to_hf_result",
         "htg_explicit_supercell_run_hf",
         "tbg_zero_field_hf_run_to_hf_run_result",
+        "tbg_zero_field_hf_run_to_hf_result",
+        "tbg_zero_field_explicit_run_hf",
         "b0_hf_benchmark_run_to_hf_run_result",
         "rlg_hbn_hf_run_to_hf_run_result",
         "rlg_hbn_hf_run_to_hf_result",
@@ -53,6 +88,7 @@ def test_public_hf_adapter_registry_exposes_post_run_converters_without_run_disp
         "htg_explicit_primitive_run_hf",
         "htg_explicit_supercell_run_hf",
         "rlg_hbn_explicit_run_hf",
+        "tbg_zero_field_explicit_run_hf",
     }
 
     assert expected <= set(adapters)
@@ -87,8 +123,10 @@ def test_public_hf_adapter_registry_filters_and_resolves_existing_helpers() -> N
     assert get_hf_adapter_info("htg_explicit_primitive_run_hf").supports_run_hf_config is True
     assert "HTGRunHFConfig" in get_hf_adapter_info("htg_explicit_primitive_run_hf").run_hf_config_reason
     assert "RLGhBNRunHFConfig" in get_hf_adapter_info("rlg_hbn_explicit_run_hf").run_hf_config_reason
+    assert "TBGZeroFieldRunHFConfig" in get_hf_adapter_info("tbg_zero_field_explicit_run_hf").run_hf_config_reason
     assert "htg_supercell_hf_run_to_hf_result" in hf_api.__all__
     assert "rlg_hbn_hf_run_to_hf_result" in hf_api.__all__
+    assert "tbg_zero_field_hf_run_to_hf_result" in hf_api.__all__
 
     with pytest.raises(KeyError, match="Unknown HF adapter"):
         get_hf_adapter_info("not_a_registered_hf_adapter")
@@ -98,8 +136,64 @@ def test_public_run_hf_tbg_bm_requires_explicit_system_workflow() -> None:
     model = make_model("tbg", variant="zero_field_bm", theta_deg=1.2, lg=1)
     cfg = HFConfig(filling=0, mesh=(1, 1), max_iter=1)
 
-    with pytest.raises(NotImplementedError, match=r"no run_hf\(config\) adapter"):
+    with pytest.raises(NotImplementedError, match="explicit tbg_zero_field_config"):
         run_hf(model, cfg)
+
+
+def test_public_run_hf_tbg_zero_field_explicit_config_attaches_canonical_contract_result() -> None:
+    grid_solution = _tiny_tbg_grid_solution(theta_deg=1.05)
+    model = make_model("tbg", variant="zero_field_bm", theta_deg=1.05, lg=1)
+    screening_lm = float(np.sqrt(abs(grid_solution.params.a1) * abs(grid_solution.params.a2)))
+    cfg = HFConfig(
+        filling=0.0,
+        mesh=(2, 2),
+        max_iter=1,
+        precision=1.0e-6,
+        density_convention="stored_delta",
+        interaction_scheme="average",
+        epsilon_r=15.0,
+        dsc_nm=screening_lm,
+        coulomb_kernel="2d_gate",
+    )
+    tbg_cfg = TBGZeroFieldRunHFConfig(
+        grid_solution=grid_solution,
+        nu=0.0,
+        init_mode="bm",
+        seed=5,
+        max_iter=1,
+        precision=1.0e-6,
+    )
+
+    result = run_hf(model, cfg, tbg_zero_field_config=tbg_cfg)
+
+    assert isinstance(result, HFResult)
+    assert result.model.system_name == "tbg_zero_field"
+    assert isinstance(result.canonical_run_result, ContractHFRunResult)
+    assert result.state.seed == 5
+    assert result.observables["public_run_hf_adapter"].endswith("run_tbg_zero_field_hf_config_adapter")
+    assert result.canonical_run_result.final_state.observables["grid_lk"] == 1
+    assert result.canonical_run_result.final_state.density.reference.metadata["raw_density_convention"] == "stored_delta"
+    assert result.canonical_run_result.final_state.hamiltonian.metadata["supports_crpa"] is False
+
+
+def test_public_run_hf_tbg_zero_field_rejects_missing_grid_contract() -> None:
+    grid_solution = _tiny_tbg_grid_solution(theta_deg=1.05)
+    model = make_model("tbg", variant="zero_field_bm", theta_deg=1.05, lg=1)
+    cfg = HFConfig(
+        filling=0.0,
+        mesh=(1, 1),
+        max_iter=1,
+        precision=1.0e-6,
+        density_convention="stored_delta",
+        interaction_scheme="average",
+        epsilon_r=15.0,
+        dsc_nm=float(np.sqrt(abs(grid_solution.params.a1) * abs(grid_solution.params.a2))),
+        coulomb_kernel="2d_gate",
+    )
+    tbg_cfg = TBGZeroFieldRunHFConfig(grid_solution=grid_solution, nu=0.0, init_mode="bm", max_iter=1, precision=1.0e-6)
+
+    with pytest.raises(ValueError, match="B0 grid point count"):
+        run_hf(model, cfg, tbg_zero_field_config=tbg_cfg)
 
 
 def test_public_run_hf_tdbg_requires_explicit_projected_config() -> None:
