@@ -10,6 +10,7 @@ from mean_field.api import HFConfig, HFResult, make_model, run_hf
 from mean_field.api.hf import get_hf_adapter_info, list_hf_adapters, resolve_hf_adapter
 from mean_field.core.contracts import HFRunResult as ContractHFRunResult
 from mean_field.systems import tdbg as tdbg_system
+from mean_field.systems.RnG_hBN import RLGhBNInteractionParams, RLGhBNRunHFConfig
 from mean_field.systems.htg import HTGRunHFConfig, HTGSupercellRunHFConfig, InteractionParams
 from mean_field.systems.tdbg import TDBGInteractionSettings, TDBGProjectedHFConfig, TDBGProjectedWindow
 
@@ -43,12 +44,15 @@ def test_public_hf_adapter_registry_exposes_post_run_converters_without_run_disp
         "tbg_zero_field_hf_run_to_hf_run_result",
         "b0_hf_benchmark_run_to_hf_run_result",
         "rlg_hbn_hf_run_to_hf_run_result",
+        "rlg_hbn_hf_run_to_hf_result",
+        "rlg_hbn_explicit_run_hf",
         "polshyn_wang_hf_bundle_to_hf_run_result",
     }
     run_adapters = {
         "tdbg_explicit_projected_run_hf",
         "htg_explicit_primitive_run_hf",
         "htg_explicit_supercell_run_hf",
+        "rlg_hbn_explicit_run_hf",
     }
 
     assert expected <= set(adapters)
@@ -82,7 +86,9 @@ def test_public_hf_adapter_registry_filters_and_resolves_existing_helpers() -> N
     assert get_hf_adapter_info("tdbg_explicit_projected_run_hf").supports_run_hf_config is True
     assert get_hf_adapter_info("htg_explicit_primitive_run_hf").supports_run_hf_config is True
     assert "HTGRunHFConfig" in get_hf_adapter_info("htg_explicit_primitive_run_hf").run_hf_config_reason
+    assert "RLGhBNRunHFConfig" in get_hf_adapter_info("rlg_hbn_explicit_run_hf").run_hf_config_reason
     assert "htg_supercell_hf_run_to_hf_result" in hf_api.__all__
+    assert "rlg_hbn_hf_run_to_hf_result" in hf_api.__all__
 
     with pytest.raises(KeyError, match="Unknown HF adapter"):
         get_hf_adapter_info("not_a_registered_hf_adapter")
@@ -117,6 +123,101 @@ def test_public_run_hf_htg_requires_explicit_system_config() -> None:
 
     with pytest.raises(NotImplementedError, match="explicit htg_config"):
         run_hf(model, cfg)
+
+
+def test_public_run_hf_rlg_hbn_requires_explicit_system_config() -> None:
+    model = make_model("rlg_hbn", layer_count=3, xi=1, theta_deg=0.77, displacement_field_mev=24.0, shell_count=1)
+    interaction = RLGhBNInteractionParams(
+        active_valence_bands=1,
+        active_conduction_bands=1,
+        k_mesh_size=1,
+        interaction_cutoff_q1=1.0,
+        interaction_dimension="2d_diagnostic",
+        use_screened_basis=False,
+    )
+    cfg = HFConfig(
+        filling=1.0,
+        mesh=(1, 1),
+        max_iter=1,
+        precision=1.0e-6,
+        density_convention="stored_delta",
+        interaction_scheme=interaction.scheme,  # type: ignore[arg-type]
+        epsilon_r=interaction.epsilon_r,
+        dsc_nm=interaction.gate_distance_nm,
+        coulomb_kernel="2d_gate",
+    )
+
+    with pytest.raises(NotImplementedError, match="explicit rlg_hbn_config"):
+        run_hf(model, cfg)
+
+
+def test_public_run_hf_rlg_hbn_explicit_config_attaches_canonical_contract_result() -> None:
+    model = make_model("rlg_hbn", layer_count=3, xi=1, theta_deg=0.77, displacement_field_mev=24.0, shell_count=1)
+    interaction = RLGhBNInteractionParams(
+        active_valence_bands=1,
+        active_conduction_bands=1,
+        k_mesh_size=1,
+        interaction_cutoff_q1=1.0,
+        interaction_dimension="2d_diagnostic",
+        use_screened_basis=False,
+    )
+    cfg = HFConfig(
+        filling=1.0,
+        mesh=(1, 1),
+        max_iter=1,
+        precision=1.0e-6,
+        density_convention="stored_delta",
+        interaction_scheme=interaction.scheme,  # type: ignore[arg-type]
+        epsilon_r=interaction.epsilon_r,
+        dsc_nm=interaction.gate_distance_nm,
+        coulomb_kernel="2d_gate",
+    )
+    rlg_cfg = RLGhBNRunHFConfig(
+        nu=1.0,
+        interaction=interaction,
+        mesh_size=1,
+        init_mode="flavor",
+        seed=4,
+        max_iter=1,
+        precision=1.0e-6,
+    )
+
+    result = run_hf(model, cfg, rlg_hbn_config=rlg_cfg)
+
+    assert isinstance(result, HFResult)
+    assert result.model.system_name == "rlg_hbn"
+    assert isinstance(result.canonical_run_result, ContractHFRunResult)
+    assert result.state.seed == 4
+    assert result.observables["public_run_hf_adapter"].endswith("run_rlg_hbn_hf_config_adapter")
+    assert result.canonical_run_result.final_state.density.reference.metadata["raw_density_convention"] == "stored_delta"
+    assert result.canonical_run_result.final_state.hamiltonian.metadata["supports_crpa"] is False
+
+
+def test_public_run_hf_rlg_hbn_rejects_mismatched_generic_config() -> None:
+    model = make_model("rlg_hbn", layer_count=3, xi=1, theta_deg=0.77, displacement_field_mev=24.0, shell_count=1)
+    interaction = RLGhBNInteractionParams(
+        active_valence_bands=1,
+        active_conduction_bands=1,
+        k_mesh_size=1,
+        interaction_cutoff_q1=1.0,
+        interaction_dimension="2d_diagnostic",
+        use_screened_basis=False,
+    )
+    cfg = HFConfig(
+        filling=1.0,
+        mesh=(1, 1),
+        max_iter=1,
+        precision=1.0e-6,
+        density_convention="projector",
+        interaction_scheme=interaction.scheme,  # type: ignore[arg-type]
+        epsilon_r=interaction.epsilon_r,
+        dsc_nm=interaction.gate_distance_nm,
+        coulomb_kernel="2d_gate",
+    )
+    rlg_cfg = RLGhBNRunHFConfig(nu=1.0, interaction=interaction, mesh_size=1, max_iter=1, precision=1.0e-6)
+
+    with pytest.raises(ValueError, match="density_convention='stored_delta'"):
+        run_hf(model, cfg, rlg_hbn_config=rlg_cfg)
 
 
 def test_public_run_hf_htg_primitive_explicit_config_attaches_canonical_contract_result() -> None:

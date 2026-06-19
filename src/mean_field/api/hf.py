@@ -213,7 +213,26 @@ _HF_ADAPTER_REGISTRY: tuple[HFAdapterInfo, ...] = (
         import_path="mean_field.systems.RnG_hBN.hf_contracts:rlg_hbn_hf_run_to_hf_run_result",
         description="Post-run canonical HFRunResult view for an existing RnG/hBN HF run.",
         requires_explicit_inputs=("RLGhBNHartreeFockRun",),
-        run_hf_config_reason="Post-run only: RnG/hBN screening/projection runner options are not yet frozen as a public run_hf config adapter.",
+        run_hf_config_reason="Post-run converter only; use rlg_hbn_explicit_run_hf for explicit RnG/hBN config dispatch.",
+    ),
+    HFAdapterInfo(
+        name="rlg_hbn_hf_run_to_hf_result",
+        system_name="rlg_hbn",
+        adapter_type="hf_result",
+        import_path="mean_field.systems.RnG_hBN.hf_contracts:rlg_hbn_hf_run_to_hf_result",
+        description="Public HFResult view of an existing RnG/hBN HF run.",
+        requires_explicit_inputs=("RLGhBNHartreeFockRun",),
+        run_hf_config_reason="Post-run HFResult converter only; use rlg_hbn_explicit_run_hf for explicit RnG/hBN config dispatch.",
+    ),
+    HFAdapterInfo(
+        name="rlg_hbn_explicit_run_hf",
+        system_name="rlg_hbn",
+        adapter_type="run_hf",
+        import_path="mean_field.systems.RnG_hBN.hf_contracts:run_rlg_hbn_hf_config_adapter",
+        description="Public run_hf dispatch for an explicit RLGhBNRunHFConfig.",
+        supports_run_hf_config=True,
+        requires_explicit_inputs=("rlg_hbn_config=RLGhBNRunHFConfig",),
+        run_hf_config_reason="Requires explicit rlg_hbn_config=RLGhBNRunHFConfig; generic HFConfig to RnG/hBN runner inference is not implemented.",
     ),
     HFAdapterInfo(
         name="polshyn_wang_hf_bundle_to_hf_run_result",
@@ -308,6 +327,9 @@ def b0_hf_benchmark_run_to_hf_run_result(*args: Any, **kwargs: Any) -> ContractH
 
 def rlg_hbn_hf_run_to_hf_run_result(*args: Any, **kwargs: Any) -> ContractHFRunResult:
     return _call_registered_hf_adapter("rlg_hbn_hf_run_to_hf_run_result", *args, **kwargs)
+
+def rlg_hbn_hf_run_to_hf_result(*args: Any, **kwargs: Any) -> Any:
+    return _call_registered_hf_adapter("rlg_hbn_hf_run_to_hf_result", *args, **kwargs)
 
 
 def polshyn_wang_hf_bundle_to_hf_run_result(*args: Any, **kwargs: Any) -> ContractHFRunResult:
@@ -1217,7 +1239,11 @@ def run_hf(model: object, config: HFConfig, **kwargs: Any) -> HFResult:
     if explicit_result is not None:
         return explicit_result
 
-    for adapter_name in ("htg_explicit_primitive_run_hf", "htg_explicit_supercell_run_hf"):
+    for adapter_name in (
+        "htg_explicit_primitive_run_hf",
+        "htg_explicit_supercell_run_hf",
+        "rlg_hbn_explicit_run_hf",
+    ):
         explicit_result = _run_registered_hf_config_adapter_if_explicit(adapter_name, model, config, kwargs)
         if explicit_result is not None:
             return explicit_result
@@ -1247,6 +1273,7 @@ __all__ = [
     "polshyn_wang_hf_bundle_to_hf_run_result",
     "reconstruct_canonical_hf_run_result",
     "resolve_hf_adapter",
+    "rlg_hbn_hf_run_to_hf_result",
     "rlg_hbn_hf_run_to_hf_run_result",
     "run_hf",
     "tbg_zero_field_hf_run_to_hf_run_result",

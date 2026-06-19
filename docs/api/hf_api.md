@@ -44,6 +44,7 @@ Current run coverage:
 - TDBG projected HF can be dispatched with `run_hf(model, cfg, tdbg_config=TDBGProjectedHFConfig(...), init_mode=...)`.  The public `HFConfig` must match the explicit TDBG config for mesh, filling, iteration limit, and precision, and must set `density_convention="projector"`.  Generic `HFConfig -> TDBGProjectedHFConfig` inference is intentionally not implemented.
 - HTG primitive-cell HF can be dispatched with `run_hf(model, cfg, htg_config=HTGRunHFConfig(...))`.  The public `HFConfig` must match the explicit HTG config for filling, square mesh, iteration limit, precision, dielectric/gate scalars, `interaction_scheme="average"`, `coulomb_kernel="2d_gate"`, and `density_convention="stored_delta"`.  The projected window comes from `HTGRunHFConfig.projected_band_count`; generic active-window inference is intentionally not implemented.
 - HTG folded-supercell HF can be dispatched with `run_hf(model, cfg, htg_supercell_config=HTGSupercellRunHFConfig(...))`.  Fractional filling and the optional explicit supercell remain system-owned inputs; the adapter uses the existing `run_htg_supercell_hf` runner and attaches the canonical post-run contract view.
+- RnG/hBN HF can be dispatched with `run_hf(model, cfg, rlg_hbn_config=RLGhBNRunHFConfig(...))`.  The public `HFConfig` must match the explicit RnG/hBN config for filling, square mesh, iteration limit, precision, interaction scheme, dielectric/gate scalars, Coulomb-kernel family, and `density_convention="stored_delta"`.  Screening, active-window, valley, and projection options remain explicit system-owned inputs and are not inferred from generic `HFConfig` fields.
 - Systems without a safe config-to-run adapter still fail explicitly with `Unified run_hf is frozen at the API level, but this model has no run_hf(config) adapter yet` until a system-owned config runner is added.
 
 Existing paper runners remain valid internal workflows, but new public code should target this API.
@@ -67,10 +68,10 @@ Registered boundaries currently cover:
 - HTG primitive HF: `htg_hf_run_to_hf_run_result(...)` and `htg_hf_run_to_hf_result(...)` for an existing primitive-cell run; `htg_explicit_primitive_run_hf` records the explicit `HTGRunHFConfig` run adapter.
 - HTG folded-supercell HF: `htg_supercell_hf_run_to_hf_run_result(...)` and `htg_supercell_hf_run_to_hf_result(...)` for an existing supercell run; `htg_explicit_supercell_run_hf` records the explicit `HTGSupercellRunHFConfig` run adapter.
 - TBG zero-field HF: `tbg_zero_field_hf_run_to_hf_run_result(..., grid_solution=...)` or `b0_hf_benchmark_run_to_hf_run_result(...)`; the grid solution is required and is not fabricated.
-- RnG/hBN HF: `rlg_hbn_hf_run_to_hf_run_result(...)` for an existing RnG/hBN run.
+- RnG/hBN HF: `rlg_hbn_hf_run_to_hf_run_result(...)` and `rlg_hbn_hf_run_to_hf_result(...)` for an existing RnG/hBN run; `rlg_hbn_explicit_run_hf` records the explicit `RLGhBNRunHFConfig` run adapter.
 - TMBG Polshyn-Wang bundle: `polshyn_wang_hf_bundle_to_hf_run_result(basis, state, info, ...)` for an explicit saved bundle.
 
-These adapters are I/O/public-surface bridges only: they wrap already-computed system artifacts, preserve system density conventions in the canonical contract, and do not rerun SCF, infer missing configs, touch cRPA, or change physics.
+Post-run adapters are I/O/public-surface bridges only: they wrap already-computed system artifacts and preserve system density conventions in the canonical contract.  Registered `run_hf` adapters call existing system-owned runners from explicit system configs.  Neither adapter class infers missing configs, touches cRPA, or changes physics.
 
 ## HFResult
 
@@ -86,6 +87,8 @@ These adapters are I/O/public-surface bridges only: they wrap already-computed s
 For TDBG explicit projected HF, `state` remains the raw `TDBGProjectedHFResult` and `canonical_run_result` is populated by `tdbg_projected_hf_result_to_hf_run_result(...)`.  The canonical view maps the raw projector density to `DensityState(density_delta=P-R)`, records `ProjectedBasis`, `HamiltonianParts`, iteration history, metadata, and marks `supports_crpa=False`.  It does not re-run HF, does not reconstruct final active eigenvectors, and does not claim cRPA compatibility.
 
 For HTG primitive and folded-supercell public `run_hf` calls, `HFResult.state` remains the raw HTG run object and `canonical_run_result` is populated by the existing HTG post-run adapters.  These adapters do not infer missing physics: the caller must pass `HTGRunHFConfig` or `HTGSupercellRunHFConfig`, and the public `HFConfig` is validated as a matching contract rather than translated into hidden runner options.
+
+For RnG/hBN public `run_hf` calls, `HFResult.state` remains the raw `RLGhBNHartreeFockRun` and `canonical_run_result` is populated by `rlg_hbn_hf_run_to_hf_run_result(...)`.  The adapter requires explicit `RLGhBNRunHFConfig` because screening/projection/valley choices are system-owned physics inputs.  It preserves stored `P-R` density semantics, records collapsed Hamiltonian parts, and marks `supports_crpa=False`.
 
 For HTG folded-supercell HF, `htg_supercell_hf_run_to_hf_run_result(...)` wraps an existing `HTGSupercellHartreeFockRun` as a canonical `HFRunResult`.  HTG supercell densities are already stored as `P-R`, so the adapter uses `density_state_from_delta(...)`, preserves `(n_state,n_state,n_k)` arrays, records folded-basis metadata, and uses collapsed Hamiltonian parts (`fixed=total-h0`, `hartree=fock=0`) unless a future run surface exposes component splits.
 
