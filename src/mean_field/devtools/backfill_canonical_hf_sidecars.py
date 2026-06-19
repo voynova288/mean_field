@@ -36,6 +36,7 @@ _BACKFILL_AUDIT_FILE = "canonical_hf_backfill_audit.json"
 _MANIFEST_PATCH_FILE = "canonical_hf_manifest_patch.json"
 
 _TDBG_ADAPTER = "mean_field.systems.tdbg.projected_hf_contracts.tdbg_projected_hf_result_to_hf_run_result"
+_HTG_PRIMITIVE_ADAPTER = "mean_field.systems.htg.mean_field_adapter.htg_hf_run_to_hf_run_result"
 _HTG_ADAPTER = "mean_field.systems.htg.supercell_contracts.htg_supercell_hf_run_to_hf_run_result"
 _RLG_HBN_ARCHIVE_LOADER = "mean_field.systems.RnG_hBN.tdhf.load_rlg_hbn_tdhf_run_from_archive"
 _RLG_HBN_ADAPTER = "mean_field.systems.RnG_hBN.hf_contracts.rlg_hbn_hf_run_to_hf_run_result"
@@ -59,6 +60,107 @@ _RLG_HBN_REQUIRED_ARCHIVE_KEYS = frozenset(
 # after the explicit staging command starts loading cache payloads.
 _RLG_HBN_EXPECTED_BASIS_PERIODIC_GAUGE = "centered_cell_reciprocal_relabel_pad1_v2"
 _RLG_HBN_EXPECTED_FORM_FACTOR_CONVENTION = "physical_q_plus_g_valley_signed_raw_shift_v2"
+
+_TDBG_HF_STATE_CONTRACT_KEYS = frozenset(
+    {
+        "density",
+        "hamiltonian",
+        "h0",
+        "energies",
+        "k_grid_frac",
+        "kvec_nm_inv",
+        "band_indices",
+        "reference_density",
+        "mu",
+        "iter_energy",
+        "iter_err",
+        "iter_oda",
+        "n_occupied_per_k",
+        "lower_band_count",
+    }
+)
+_TDBG_PROJECTED_BASIS_CONTRACT_KEYS = frozenset(
+    {
+        "wavefunctions",
+        "moire_area_nm2",
+        "shifts",
+        "shift_gvecs",
+        "shift_srcmaps",
+        "valley_params",
+    }
+)
+_HTG_PRIMITIVE_STATE_CONTRACT_KEYS = frozenset(
+    {
+        "density",
+        "hamiltonian",
+        "h0",
+        "energies_ev",
+        "kvec_nm_inv",
+        "k_grid_frac",
+        "iter_energy_ev",
+        "iter_err",
+        "iter_oda",
+        "mu",
+        "nu",
+        "precision",
+        "v0",
+        "sigma_z",
+        "converged",
+        "exit_reason",
+        "init_mode",
+        "seed",
+    }
+)
+_HTG_PRIMITIVE_BASIS_CONTRACT_KEYS = frozenset(
+    {
+        "wavefunctions",
+        "projected_band_indices",
+        "central_band_indices",
+        "band_sigma_z",
+        "reciprocal_grid_shape",
+        "reciprocal_grid_origin",
+        "moire_cell_area_nm2",
+        "model_params",
+        "interaction_params",
+    }
+)
+_HTG_SUPERCELL_STATE_CONTRACT_KEYS = frozenset(
+    {
+        "density",
+        "hamiltonian",
+        "h0",
+        "energies",
+        "kvec",
+        "k_grid_frac",
+        "iter_energy",
+        "iter_err",
+        "iter_oda",
+        "reference_diagonal",
+        "fold_representatives",
+        "supercell_matrix",
+        "primitive_nu",
+        "mu",
+        "precision",
+        "converged",
+        "exit_reason",
+        "init_mode",
+        "seed",
+    }
+)
+_HTG_SUPERCELL_BASIS_CONTRACT_KEYS = frozenset(
+    {
+        "wavefunctions",
+        "primitive_projected_indices",
+        "primitive_band_count",
+        "super_g1",
+        "super_g2",
+        "reciprocal_grid_shape",
+        "reciprocal_grid_origin",
+        "moire_supercell_area_nm2",
+        "model_params",
+        "interaction_params",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -175,6 +277,185 @@ def _manifest_sidecar_path(root: Path, files: Mapping[str, Any], key: str) -> Pa
     return root / relative
 
 
+def _artifact_path(root: Path, files: Mapping[str, Any], key: str, default_name: str) -> Path:
+    return _manifest_sidecar_path(root, files, key) or (root / default_name)
+
+
+def _npz_key_set(path: Path) -> tuple[frozenset[str] | None, str | None]:
+    try:
+        with np.load(path, allow_pickle=False) as payload:
+            return frozenset(str(key) for key in payload.files), None
+    except Exception as exc:  # pragma: no cover - depends on malformed local artifacts.
+        return None, f"{type(exc).__name__}: {exc}"
+
+
+def _missing_file_blocker(path: Path, *, role: str) -> str:
+    return f"missing raw file for {role}: {path}"
+
+
+def _missing_key_blockers(path: Path, missing_keys: Iterable[str], *, role: str) -> tuple[str, ...]:
+    return tuple(f"{path} missing key `{key}` required for {role}" for key in sorted(missing_keys))
+
+
+def _path_text_mentions(path: Path, token: str) -> bool:
+    return token.lower() in str(path).lower().replace("-", "_")
+
+
+def _contract_metadata(*, raw_object: str, state_keys: Iterable[str], basis_keys: Iterable[str]) -> dict[str, object]:
+    return {
+        "raw_object": raw_object,
+        "state_npz_required_keys": sorted(str(key) for key in state_keys),
+        "projected_basis_npz_required_keys": sorted(str(key) for key in basis_keys),
+        "loader_policy": "metadata-only/raw-archive loader must materialize these fields without SCF, diagonalization, topology, cRPA, or fabricated wavefunctions",
+    }
+
+
+def _tdbg_contract_blockers(root: Path, files: Mapping[str, Any]) -> tuple[tuple[str, ...], dict[str, object]]:
+    state_path = _artifact_path(root, files, "hf_state", "hf_state.npz")
+    labels_path = _artifact_path(root, files, "state_labels", "state_labels.json")
+    summary_path = _artifact_path(root, files, "projected_hf_summary", "projected_hf_summary.json")
+    basis_path = _artifact_path(root, files, "projected_basis", "projected_basis.npz")
+    metadata: dict[str, object] = {
+        "archive_format_contract": _contract_metadata(
+            raw_object="mean_field.systems.tdbg.projected_hf_state.TDBGProjectedHFResult",
+            state_keys=_TDBG_HF_STATE_CONTRACT_KEYS,
+            basis_keys=_TDBG_PROJECTED_BASIS_CONTRACT_KEYS,
+        ),
+        "expected_files": {
+            "hf_state": str(state_path),
+            "state_labels": str(labels_path),
+            "projected_hf_summary": str(summary_path),
+            "projected_basis": str(basis_path),
+        },
+    }
+    blockers: list[str] = []
+    if not state_path.is_file():
+        blockers.append(_missing_file_blocker(state_path, role="TDBGProjectedHFState arrays and run history"))
+    else:
+        keys, error = _npz_key_set(state_path)
+        if keys is None:
+            blockers.append(f"could not inspect TDBG hf_state archive {state_path}: {error}")
+        else:
+            metadata["hf_state_keys"] = sorted(keys)
+            blockers.extend(_missing_key_blockers(state_path, _TDBG_HF_STATE_CONTRACT_KEYS.difference(keys), role="TDBGProjectedHFResult canonical adapter"))
+    if not labels_path.is_file():
+        blockers.append(_missing_file_blocker(labels_path, role="TDBGProjectedHFData.labels / TDBGStateLabel records"))
+    if not summary_path.is_file():
+        blockers.append(_missing_file_blocker(summary_path, role="TDBG run metadata, order parameters, energy components"))
+    if not basis_path.is_file():
+        blockers.append(
+            _missing_file_blocker(
+                basis_path,
+                role="TDBGProjectedHFData projected-basis micro_wavefunctions, shifts, moire area, and valley parameters",
+            )
+        )
+    else:
+        keys, error = _npz_key_set(basis_path)
+        if keys is None:
+            blockers.append(f"could not inspect TDBG projected-basis archive {basis_path}: {error}")
+        else:
+            metadata["projected_basis_keys"] = sorted(keys)
+            blockers.extend(_missing_key_blockers(basis_path, _TDBG_PROJECTED_BASIS_CONTRACT_KEYS.difference(keys), role="TDBGProjectedHFData exact projected basis"))
+    if not (root / "model.json").is_file() and not _mapping(files).get("model"):
+        blockers.append("missing raw field: TDBGProjectedHFData.model / model.json with exact TDBGModel parameters")
+    if not (root / "config.yaml").is_file() and not _mapping(files).get("config"):
+        blockers.append("missing raw field: TDBGProjectedHFData.config / config.yaml with exact TDBGProjectedHFConfig")
+    blockers.append("no repository archive loader currently materializes TDBGProjectedHFResult from historical files without recomputing physics")
+    return tuple(blockers), metadata
+
+
+def _htg_primitive_contract_blockers(root: Path, files: Mapping[str, Any], *, archive_name: str = "hf_ground_state.npz") -> tuple[tuple[str, ...], dict[str, object]]:
+    state_path = _artifact_path(root, files, "hf_ground_state", archive_name)
+    basis_path = _artifact_path(root, files, "projected_basis", "hf_projected_basis.npz")
+    params_path = _artifact_path(root, files, "hf_params", "hf_params.json")
+    metadata: dict[str, object] = {
+        "archive_format_contract": _contract_metadata(
+            raw_object="mean_field.systems.htg.mean_field_adapter.HTGHartreeFockRun",
+            state_keys=_HTG_PRIMITIVE_STATE_CONTRACT_KEYS,
+            basis_keys=_HTG_PRIMITIVE_BASIS_CONTRACT_KEYS,
+        ),
+        "expected_files": {
+            "hf_ground_state": str(state_path),
+            "hf_projected_basis": str(basis_path),
+            "hf_params": str(params_path),
+        },
+    }
+    blockers: list[str] = []
+    if not state_path.is_file():
+        blockers.append(_missing_file_blocker(state_path, role="HTGHartreeFockState arrays and run history"))
+    else:
+        keys, error = _npz_key_set(state_path)
+        if keys is None:
+            blockers.append(f"could not inspect HTG primitive state archive {state_path}: {error}")
+        else:
+            metadata["hf_ground_state_keys"] = sorted(keys)
+            blockers.extend(_missing_key_blockers(state_path, _HTG_PRIMITIVE_STATE_CONTRACT_KEYS.difference(keys), role="HTGHartreeFockRun canonical adapter"))
+    if not basis_path.is_file():
+        blockers.append(
+            _missing_file_blocker(
+                basis_path,
+                role="HTGProjectedBasisData.basis.wavefunctions, band labels, sigma_z, lattice metadata, and interaction metadata",
+            )
+        )
+    else:
+        keys, error = _npz_key_set(basis_path)
+        if keys is None:
+            blockers.append(f"could not inspect HTG primitive projected-basis archive {basis_path}: {error}")
+        else:
+            metadata["projected_basis_keys"] = sorted(keys)
+            blockers.extend(_missing_key_blockers(basis_path, _HTG_PRIMITIVE_BASIS_CONTRACT_KEYS.difference(keys), role="HTGProjectedBasisData exact projected basis"))
+    if not params_path.is_file():
+        blockers.append(_missing_file_blocker(params_path, role="HTG model/interaction/config metadata"))
+    blockers.append("no repository archive loader currently materializes HTGHartreeFockRun from historical files without recomputing physics")
+    return tuple(blockers), metadata
+
+
+def _htg_supercell_contract_blockers(root: Path, files: Mapping[str, Any], *, archive_name: str = "hf_supercell_ground_state.npz") -> tuple[tuple[str, ...], dict[str, object]]:
+    state_path = _artifact_path(root, files, "hf_supercell_ground_state", archive_name)
+    basis_path = _artifact_path(root, files, "projected_basis", "hf_supercell_projected_basis.npz")
+    summary_path = _artifact_path(root, files, "summary", "summary.json")
+    metadata: dict[str, object] = {
+        "archive_format_contract": _contract_metadata(
+            raw_object="mean_field.systems.htg.supercell.HTGSupercellHartreeFockRun",
+            state_keys=_HTG_SUPERCELL_STATE_CONTRACT_KEYS,
+            basis_keys=_HTG_SUPERCELL_BASIS_CONTRACT_KEYS,
+        ),
+        "expected_files": {
+            "hf_supercell_ground_state": str(state_path),
+            "hf_supercell_projected_basis": str(basis_path),
+            "summary": str(summary_path),
+        },
+    }
+    blockers: list[str] = []
+    if not state_path.is_file():
+        blockers.append(_missing_file_blocker(state_path, role="HTGSupercellHartreeFockState arrays and run history"))
+    else:
+        keys, error = _npz_key_set(state_path)
+        if keys is None:
+            blockers.append(f"could not inspect HTG supercell state archive {state_path}: {error}")
+        else:
+            metadata["hf_supercell_ground_state_keys"] = sorted(keys)
+            blockers.extend(_missing_key_blockers(state_path, _HTG_SUPERCELL_STATE_CONTRACT_KEYS.difference(keys), role="HTGSupercellHartreeFockRun canonical adapter"))
+    if not basis_path.is_file():
+        blockers.append(
+            _missing_file_blocker(
+                basis_path,
+                role="HTGSupercellProjectedBasisData.basis.wavefunctions, fold/band metadata, lattice metadata, and interaction metadata",
+            )
+        )
+    else:
+        keys, error = _npz_key_set(basis_path)
+        if keys is None:
+            blockers.append(f"could not inspect HTG supercell projected-basis archive {basis_path}: {error}")
+        else:
+            metadata["projected_basis_keys"] = sorted(keys)
+            blockers.extend(_missing_key_blockers(basis_path, _HTG_SUPERCELL_BASIS_CONTRACT_KEYS.difference(keys), role="HTGSupercellProjectedBasisData exact projected basis"))
+    if not summary_path.is_file():
+        blockers.append(_missing_file_blocker(summary_path, role="HTG supercell run summary/model metadata"))
+    blockers.append("no repository archive loader currently materializes HTGSupercellHartreeFockRun from historical files without recomputing physics")
+    return tuple(blockers), metadata
+
+
 def _manifest_candidate_roots(root: Path, max_candidates: int) -> list[Path]:
     candidates: list[Path] = []
     if root.is_file():
@@ -209,6 +490,39 @@ def _rlg_hbn_archive_candidates(root: Path, max_candidates: int) -> list[Path]:
             candidates.append(archive_path)
         if len(candidates) >= max_candidates:
             break
+    return candidates[:max_candidates]
+
+
+def _tdbg_archive_candidates(root: Path, max_candidates: int) -> list[Path]:
+    if not _path_text_mentions(root, "tdbg"):
+        return []
+    if root.is_file():
+        return [root] if root.name == "hf_state.npz" else []
+    if not root.exists():
+        return []
+    return list(sorted(root.rglob("hf_state.npz")))[:max_candidates]
+
+
+def _htg_archive_candidates(root: Path, max_candidates: int) -> list[Path]:
+    if not _path_text_mentions(root, "htg"):
+        return []
+    archive_names = {
+        "hf_ground_state.npz",
+        "hf_supercell_ground_state.npz",
+        "hf_supercell_ground_state_best.npz",
+        "hf_supercell_ground_state_best_copy_of_candidate.npz",
+    }
+    if root.is_file():
+        return [root] if root.name in archive_names else []
+    if not root.exists():
+        return []
+    candidates: list[Path] = []
+    for name in sorted(archive_names):
+        for archive_path in sorted(root.rglob(name)):
+            if archive_path not in candidates:
+                candidates.append(archive_path)
+            if len(candidates) >= max_candidates:
+                return candidates[:max_candidates]
     return candidates[:max_candidates]
 
 
@@ -304,11 +618,7 @@ def _classify_manifest_root(root: Path) -> BackfillCandidate:
         )
 
     if normal_system == "tdbg":
-        blockers = (
-            "historical TDBG hf_state.npz stores final matrices but not the full TDBGProjectedHFData object",
-            "canonical ProjectedBasis requires micro_wavefunctions and labels from the raw projected basis",
-            "rebuilding missing basis data would require a system archive loader or fresh diagonalization, which this helper will not do",
-        )
+        blockers, archive_metadata = _tdbg_contract_blockers(root, files)
         return BackfillCandidate(
             kind="result_manifest",
             root=str(root),
@@ -323,15 +633,38 @@ def _classify_manifest_root(root: Path) -> BackfillCandidate:
             evidence=tuple(evidence + [f"files={sorted(str(key) for key in files)}"]),
             adapters=(_TDBG_ADAPTER,),
             blockers=blockers,
-            uncertainty=("Safe backfill needs an archive loader that restores TDBGProjectedHFResult without recomputing physics.",),
+            uncertainty=(
+                "Safe backfill needs an archive loader that restores TDBGProjectedHFResult without recomputing physics.",
+                "Existing summaries/matrices are insufficient when projected micro-wavefunctions or run-history scalars are absent.",
+            ),
+            metadata=archive_metadata,
+        )
+
+    if normal_system == "htg":
+        blockers, archive_metadata = _htg_primitive_contract_blockers(root, files)
+        return BackfillCandidate(
+            kind="result_manifest",
+            root=str(root),
+            manifest_path=str(manifest_path),
+            target_root=str(root),
+            system_name=system_name,
+            workflow=workflow,
+            decision="requires_archive_loader",
+            can_backfill_now=False,
+            would_write=False,
+            reason="HTG primitive has an in-memory canonical adapter but needs a raw-run archive loader before historical sidecars can be generated safely",
+            evidence=tuple(evidence + [f"files={sorted(str(key) for key in files)}"]),
+            adapters=(_HTG_PRIMITIVE_ADAPTER,),
+            blockers=blockers,
+            uncertainty=(
+                "Safe backfill needs an archive loader that restores HTGHartreeFockRun without recomputing physics.",
+                "Existing state archives are insufficient when projected micro-wavefunctions/model/interaction metadata are absent.",
+            ),
+            metadata=archive_metadata,
         )
 
     if normal_system == "htg_supercell":
-        blockers = (
-            "saved HTG supercell NPZ archives do not by themselves restore HTGSupercellProjectedBasisData.basis.wavefunctions",
-            "canonical ProjectedBasis requires model/interaction metadata and micro_wavefunctions from the raw run object",
-            "no repository loader currently restores HTGSupercellHartreeFockRun from historical output roots",
-        )
+        blockers, archive_metadata = _htg_supercell_contract_blockers(root, files)
         return BackfillCandidate(
             kind="result_manifest",
             root=str(root),
@@ -346,7 +679,11 @@ def _classify_manifest_root(root: Path) -> BackfillCandidate:
             evidence=tuple(evidence + [f"files={sorted(str(key) for key in files)}"]),
             adapters=(_HTG_ADAPTER,),
             blockers=blockers,
-            uncertainty=("Safe backfill needs an archive loader that restores HTGSupercellHartreeFockRun without recomputing physics.",),
+            uncertainty=(
+                "Safe backfill needs an archive loader that restores HTGSupercellHartreeFockRun without recomputing physics.",
+                "Existing state archives are insufficient when projected micro-wavefunctions/model/interaction metadata are absent.",
+            ),
+            metadata=archive_metadata,
         )
 
     if normal_system == "rlg_hbn":
@@ -385,6 +722,79 @@ def _classify_manifest_root(root: Path) -> BackfillCandidate:
         reason=reason,
         evidence=tuple(evidence + [f"files={sorted(str(key) for key in files)}"]),
         uncertainty=("Only TDBG, HTG supercell, and RLG/hBN historical rules were audited in this task.",),
+    )
+
+
+def _classify_tdbg_archive(archive_path: Path) -> BackfillCandidate:
+    root = archive_path.parent
+    blockers, archive_metadata = _tdbg_contract_blockers(root, {"hf_state": archive_path.name})
+    evidence = [
+        f"archive={archive_path}",
+        "header-only TDBG archive inspection; arrays are not materialized for physics",
+    ]
+    return BackfillCandidate(
+        kind="tdbg_archive",
+        root=str(root),
+        archive_path=str(archive_path),
+        target_root=str(root),
+        system_name="tdbg",
+        workflow="tdbg.projected_hf.archive",
+        decision="requires_archive_loader",
+        can_backfill_now=False,
+        would_write=False,
+        reason="TDBG projected-HF archive cannot be backfilled until a loader restores the exact TDBGProjectedHFResult raw object",
+        evidence=tuple(evidence),
+        adapters=(_TDBG_ADAPTER,),
+        blockers=blockers,
+        uncertainty=(
+            "Do not fabricate projected micro-wavefunctions or raw run history from final matrices.",
+            "If a future archive satisfies the listed contract, add an explicit loader test before enabling write-mode.",
+        ),
+        metadata=archive_metadata,
+    )
+
+
+def _classify_htg_archive(archive_path: Path) -> BackfillCandidate:
+    root = archive_path.parent
+    keys, key_error = _npz_key_set(archive_path)
+    is_supercell = archive_path.name.startswith("hf_supercell") or (keys is not None and "supercell_matrix" in keys)
+    if is_supercell:
+        blockers, archive_metadata = _htg_supercell_contract_blockers(root, {"hf_supercell_ground_state": archive_path.name}, archive_name=archive_path.name)
+        system_name = "htg_supercell"
+        workflow = "htg.supercell_hf.archive"
+        adapter = _HTG_ADAPTER
+        raw_name = "HTGSupercellHartreeFockRun"
+    else:
+        blockers, archive_metadata = _htg_primitive_contract_blockers(root, {"hf_ground_state": archive_path.name}, archive_name=archive_path.name)
+        system_name = "htg"
+        workflow = "htg.primitive_hf.archive"
+        adapter = _HTG_PRIMITIVE_ADAPTER
+        raw_name = "HTGHartreeFockRun"
+    evidence = [
+        f"archive={archive_path}",
+        "header-only HTG archive inspection; arrays are not materialized for physics",
+    ]
+    if key_error is not None:
+        evidence.append(f"npz_header_error={key_error}")
+    return BackfillCandidate(
+        kind="htg_supercell_archive" if is_supercell else "htg_primitive_archive",
+        root=str(root),
+        archive_path=str(archive_path),
+        target_root=str(root),
+        system_name=system_name,
+        workflow=workflow,
+        decision="requires_archive_loader",
+        can_backfill_now=False,
+        would_write=False,
+        reason=f"HTG archive cannot be backfilled until a loader restores the exact {raw_name} raw object",
+        evidence=tuple(evidence),
+        adapters=(adapter,),
+        blockers=blockers,
+        uncertainty=(
+            "Do not fabricate projected micro-wavefunctions/model/interaction metadata from final matrices.",
+            "If a future archive satisfies the listed contract, add an explicit loader test before enabling write-mode.",
+        ),
+        metadata=archive_metadata,
     )
 
 
@@ -549,8 +959,8 @@ def scan_backfill_candidates(
 ) -> list[BackfillCandidate]:
     """Return dry-run canonical HF sidecar backfill candidates.
 
-    The scan is metadata-only except for recognized RLG/hBN NPZ header/scalar
-    inspection.  It never writes into result directories.
+    The scan is metadata-only except for recognized TDBG/HTG/RLG-hBN NPZ
+    header/scalar inspection.  It never writes into result directories.
     """
 
     records: list[BackfillCandidate] = []
@@ -565,9 +975,21 @@ def scan_backfill_candidates(
             seen_manifest_roots.add(resolved)
             records.append(_classify_manifest_root(candidate_root))
         if include_archives:
+            for archive_path in _tdbg_archive_candidates(root, max_candidates=max_candidates):
+                resolved = archive_path.resolve()
+                if resolved in seen_archives or archive_path.parent.resolve() in seen_manifest_roots:
+                    continue
+                seen_archives.add(resolved)
+                records.append(_classify_tdbg_archive(archive_path))
+            for archive_path in _htg_archive_candidates(root, max_candidates=max_candidates):
+                resolved = archive_path.resolve()
+                if resolved in seen_archives or archive_path.parent.resolve() in seen_manifest_roots:
+                    continue
+                seen_archives.add(resolved)
+                records.append(_classify_htg_archive(archive_path))
             for archive_path in _rlg_hbn_archive_candidates(root, max_candidates=max_candidates):
                 resolved = archive_path.resolve()
-                if resolved in seen_archives:
+                if resolved in seen_archives or archive_path.parent.resolve() in seen_manifest_roots:
                     continue
                 seen_archives.add(resolved)
                 records.append(_classify_rlg_hbn_archive(archive_path))
@@ -848,6 +1270,7 @@ def backfill_strategy() -> dict[str, object]:
             "Write-mode requires --write, --target-root, and at least one --allow-target-root allowlist entry.",
             "Only eligible RLG/hBN archives are materialized through the existing archive loader and canonical adapter.",
             "TDBG/HTG remain blocked until archive loaders restore their raw run objects without recomputing physics.",
+            "TDBG/HTG diagnostics list the precise missing raw files/fields so future runs can save a loader-compatible archive contract.",
             "Staged writes produce sidecars, manifest patches, and audit manifests under the caller-specified target root only.",
         ],
         "systems": [
@@ -856,14 +1279,36 @@ def backfill_strategy() -> dict[str, object]:
                 "current_status": "needs_archive_loader_for_historical_roots",
                 "existing_adapter": _TDBG_ADAPTER,
                 "safe_now": False,
-                "blocker": "Historical hf_state.npz roots do not contain full TDBGProjectedHFResult/TDBGProjectedHFData, especially micro_wavefunctions and labels.",
+                "blocker": "Historical hf_state.npz roots do not contain full TDBGProjectedHFResult/TDBGProjectedHFData, especially projected micro_wavefunctions, raw run history/mu, and exact config/model fields.",
+                "archive_format_contract": _contract_metadata(
+                    raw_object="mean_field.systems.tdbg.projected_hf_state.TDBGProjectedHFResult",
+                    state_keys=_TDBG_HF_STATE_CONTRACT_KEYS,
+                    basis_keys=_TDBG_PROJECTED_BASIS_CONTRACT_KEYS,
+                ),
+            },
+            {
+                "system": "htg",
+                "current_status": "needs_archive_loader_for_historical_roots",
+                "existing_adapter": _HTG_PRIMITIVE_ADAPTER,
+                "safe_now": False,
+                "blocker": "Saved primitive HTG hf_ground_state.npz archives are not full HTGHartreeFockRun archives with basis wavefunctions/model/interaction objects.",
+                "archive_format_contract": _contract_metadata(
+                    raw_object="mean_field.systems.htg.mean_field_adapter.HTGHartreeFockRun",
+                    state_keys=_HTG_PRIMITIVE_STATE_CONTRACT_KEYS,
+                    basis_keys=_HTG_PRIMITIVE_BASIS_CONTRACT_KEYS,
+                ),
             },
             {
                 "system": "htg_supercell",
                 "current_status": "needs_archive_loader_for_historical_roots",
                 "existing_adapter": _HTG_ADAPTER,
                 "safe_now": False,
-                "blocker": "Saved run NPZ is not a full HTGSupercellHartreeFockRun archive with basis wavefunctions/model/interaction objects.",
+                "blocker": "Saved supercell HTG NPZ archives are not full HTGSupercellHartreeFockRun archives with basis wavefunctions/model/interaction objects.",
+                "archive_format_contract": _contract_metadata(
+                    raw_object="mean_field.systems.htg.supercell.HTGSupercellHartreeFockRun",
+                    state_keys=_HTG_SUPERCELL_STATE_CONTRACT_KEYS,
+                    basis_keys=_HTG_SUPERCELL_BASIS_CONTRACT_KEYS,
+                ),
             },
             {
                 "system": "rlg_hbn / RnG_hBN",
@@ -936,6 +1381,11 @@ def render_markdown_inventory(payload: Mapping[str, object]) -> str:
                 f"  - blocker: {system.get('blocker')}",
             ]
         )
+        contract = _mapping(system.get("archive_format_contract"))
+        if contract:
+            lines.append(f"  - archive raw object: `{contract.get('raw_object')}`")
+            lines.append(f"  - state NPZ keys: `{', '.join(str(key) for key in contract.get('state_npz_required_keys', []))}`")
+            lines.append(f"  - projected-basis NPZ keys: `{', '.join(str(key) for key in contract.get('projected_basis_npz_required_keys', []))}`")
     lines.extend(["", "## Decision counts", ""])
     for key, value in _mapping(summary.get("decision_counts")).items():
         lines.append(f"- `{key}`: `{value}`")
@@ -1051,7 +1501,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Allow replacing existing files in the staging target root. Default refuses overwrites.",
     )
-    parser.add_argument("--no-archives", action="store_true", help="Skip RLG/hBN hf_ground_state.npz archive inventory.")
+    parser.add_argument("--no-archives", action="store_true", help="Skip TDBG/HTG/RLG-hBN NPZ archive inventory.")
     parser.add_argument("--max-candidates", type=int, default=10000, help="Safety cap per root and candidate kind.")
     parser.add_argument("--report-json", type=Path, default=None, help="Optional explicit JSON report path.")
     parser.add_argument("--report-md", type=Path, default=None, help="Optional explicit Markdown report path.")

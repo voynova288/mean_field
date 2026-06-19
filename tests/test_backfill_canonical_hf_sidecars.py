@@ -116,7 +116,106 @@ def test_scanner_marks_tdbg_historical_root_as_needing_archive_loader(tmp_path: 
     assert record.can_backfill_now is False
     assert record.would_write is False
     assert any("TDBGProjectedHFData" in blocker for blocker in record.blockers)
+    assert record.metadata["archive_format_contract"]["raw_object"].endswith("TDBGProjectedHFResult")
     assert not (result_root / "canonical_hf_run_result.json").exists()
+
+
+def test_scanner_reports_tdbg_archive_missing_exact_raw_fields(tmp_path: Path) -> None:
+    result_root = tmp_path / "tdbg_archive_case"
+    result_root.mkdir()
+    matrix = np.zeros((2, 2, 1), dtype=np.complex128)
+    np.savez(
+        result_root / "hf_state.npz",
+        density=matrix,
+        hamiltonian=matrix,
+        h0=matrix,
+        energies=np.zeros((2, 1), dtype=float),
+        k_grid_frac=np.zeros((1, 1, 2), dtype=float),
+        kvec_nm_inv=np.zeros((1, 2), dtype=float),
+        band_indices=np.asarray([0, 1], dtype=int),
+        reference_density=matrix,
+    )
+    (result_root / "state_labels.json").write_text("[]", encoding="utf-8")
+    (result_root / "projected_hf_summary.json").write_text("{}", encoding="utf-8")
+
+    records = scan_backfill_candidates([result_root])
+
+    assert len(records) == 1
+    record = records[0]
+    assert record.kind == "tdbg_archive"
+    assert record.decision == "requires_archive_loader"
+    assert any("missing key `mu`" in blocker for blocker in record.blockers)
+    assert any("projected-basis micro_wavefunctions" in blocker for blocker in record.blockers)
+    assert record.metadata["archive_format_contract"]["state_npz_required_keys"]
+    assert not (result_root / "canonical_hf_run_result.json").exists()
+
+
+def test_scanner_reports_htg_primitive_archive_missing_projected_basis(tmp_path: Path) -> None:
+    result_root = tmp_path / "HTG_primitive_archive_case"
+    result_root.mkdir()
+    matrix = np.zeros((4, 4, 1), dtype=np.complex128)
+    np.savez(
+        result_root / "hf_ground_state.npz",
+        density=matrix,
+        hamiltonian=matrix,
+        h0=matrix,
+        energies_ev=np.zeros((4, 1), dtype=float),
+        kvec_nm_inv=np.zeros((1, 2), dtype=float),
+        k_grid_frac=np.zeros((1, 1, 2), dtype=float),
+        iter_energy_ev=np.zeros(1, dtype=float),
+        iter_err=np.zeros(1, dtype=float),
+        iter_oda=np.zeros(1, dtype=float),
+    )
+    (result_root / "hf_params.json").write_text("{}", encoding="utf-8")
+
+    records = scan_backfill_candidates([result_root])
+
+    assert len(records) == 1
+    record = records[0]
+    assert record.kind == "htg_primitive_archive"
+    assert record.system_name == "htg"
+    assert record.decision == "requires_archive_loader"
+    assert any("missing key `mu`" in blocker for blocker in record.blockers)
+    assert any("HTGProjectedBasisData.basis.wavefunctions" in blocker for blocker in record.blockers)
+    assert "htg_hf_run_to_hf_run_result" in " ".join(record.adapters)
+
+
+def test_scanner_reports_htg_supercell_archive_missing_projected_basis(tmp_path: Path) -> None:
+    result_root = tmp_path / "HTG_supercell_archive_case"
+    result_root.mkdir()
+    matrix = np.zeros((4, 4, 1), dtype=np.complex128)
+    np.savez(
+        result_root / "hf_supercell_ground_state.npz",
+        density=matrix,
+        hamiltonian=matrix,
+        h0=matrix,
+        energies=np.zeros((4, 1), dtype=float),
+        kvec=np.zeros(1, dtype=np.complex128),
+        k_grid_frac=np.zeros((1, 1, 2), dtype=float),
+        iter_energy=np.zeros(1, dtype=float),
+        iter_err=np.zeros(1, dtype=float),
+        iter_oda=np.zeros(1, dtype=float),
+        reference_diagonal=np.zeros(1, dtype=float),
+        fold_representatives=np.zeros((1, 2), dtype=int),
+        supercell_matrix=np.eye(2, dtype=int),
+        primitive_nu=np.asarray(3.5),
+        init_mode=np.asarray("bm"),
+        seed=np.asarray(1),
+        converged=np.asarray(True),
+        exit_reason=np.asarray("converged"),
+    )
+    (result_root / "summary.json").write_text("{}", encoding="utf-8")
+
+    records = scan_backfill_candidates([result_root])
+
+    assert len(records) == 1
+    record = records[0]
+    assert record.kind == "htg_supercell_archive"
+    assert record.system_name == "htg_supercell"
+    assert record.decision == "requires_archive_loader"
+    assert any("missing key `mu`" in blocker for blocker in record.blockers)
+    assert any("HTGSupercellProjectedBasisData.basis.wavefunctions" in blocker for blocker in record.blockers)
+    assert "htg_supercell_hf_run_to_hf_run_result" in " ".join(record.adapters)
 
 
 def test_scanner_identifies_rlg_hbn_archive_with_existing_loader_inputs(tmp_path: Path) -> None:
