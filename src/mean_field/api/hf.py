@@ -37,7 +37,9 @@ class HFAdapterInfo:
     ``supports_run_hf_config`` is intentionally separate from registration:
     most stable adapters are post-run canonical I/O converters, not config-to-run
     solvers. Registering them here makes the stable public surface discoverable
-    without inventing missing ``HFConfig -> system runner`` logic.
+    without inventing missing ``HFConfig -> system runner`` logic.  The
+    ``run_hf_config_reason`` records either the explicit config contract for a
+    supported run adapter or why a converter remains post-run-only.
     """
 
     name: str
@@ -47,6 +49,7 @@ class HFAdapterInfo:
     description: str
     supports_run_hf_config: bool = False
     requires_explicit_inputs: tuple[str, ...] = ()
+    run_hf_config_reason: str = ""
 
 @dataclass(frozen=True)
 class HFConfig:
@@ -117,6 +120,7 @@ _HF_ADAPTER_REGISTRY: tuple[HFAdapterInfo, ...] = (
         import_path="mean_field.systems.tdbg.projected_hf_contracts:tdbg_projected_hf_result_to_hf_run_result",
         description="Post-run canonical HFRunResult view for an explicit TDBGProjectedHFResult.",
         requires_explicit_inputs=("TDBGProjectedHFResult",),
+        run_hf_config_reason="Post-run converter only; use tdbg_explicit_projected_run_hf for explicit TDBG config dispatch.",
     ),
     HFAdapterInfo(
         name="tdbg_explicit_projected_run_hf",
@@ -126,6 +130,7 @@ _HF_ADAPTER_REGISTRY: tuple[HFAdapterInfo, ...] = (
         description="Public run_hf dispatch for an explicit TDBGProjectedHFConfig plus init_mode.",
         supports_run_hf_config=True,
         requires_explicit_inputs=("tdbg_config=TDBGProjectedHFConfig", "init_mode"),
+        run_hf_config_reason="Requires explicit tdbg_config=TDBGProjectedHFConfig plus init_mode; generic HFConfig inference is not implemented.",
     ),
     HFAdapterInfo(
         name="htg_hf_run_to_hf_run_result",
@@ -134,6 +139,7 @@ _HF_ADAPTER_REGISTRY: tuple[HFAdapterInfo, ...] = (
         import_path="mean_field.systems.htg.mean_field_adapter:htg_hf_run_to_hf_run_result",
         description="Post-run canonical HFRunResult view for an existing primitive-cell HTG HF run.",
         requires_explicit_inputs=("HTGHartreeFockRun",),
+        run_hf_config_reason="Post-run converter only; use htg_explicit_primitive_run_hf for explicit HTG config dispatch.",
     ),
     HFAdapterInfo(
         name="htg_hf_run_to_hf_result",
@@ -142,6 +148,17 @@ _HF_ADAPTER_REGISTRY: tuple[HFAdapterInfo, ...] = (
         import_path="mean_field.systems.htg.mean_field_adapter:htg_hf_run_to_hf_result",
         description="Public HFResult view of an existing primitive-cell HTG HF run.",
         requires_explicit_inputs=("HTGHartreeFockRun",),
+        run_hf_config_reason="Post-run HFResult converter only; use htg_explicit_primitive_run_hf for explicit HTG config dispatch.",
+    ),
+    HFAdapterInfo(
+        name="htg_explicit_primitive_run_hf",
+        system_name="htg",
+        adapter_type="run_hf",
+        import_path="mean_field.systems.htg.mean_field_adapter:run_htg_hf_config_adapter",
+        description="Public run_hf dispatch for an explicit primitive-cell HTGRunHFConfig.",
+        supports_run_hf_config=True,
+        requires_explicit_inputs=("htg_config=HTGRunHFConfig",),
+        run_hf_config_reason="Requires explicit htg_config=HTGRunHFConfig; generic HFConfig to HTG runner inference is not implemented.",
     ),
     HFAdapterInfo(
         name="htg_supercell_hf_run_to_hf_run_result",
@@ -150,6 +167,7 @@ _HF_ADAPTER_REGISTRY: tuple[HFAdapterInfo, ...] = (
         import_path="mean_field.systems.htg.supercell_contracts:htg_supercell_hf_run_to_hf_run_result",
         description="Post-run canonical HFRunResult view for an existing HTG folded-supercell HF run.",
         requires_explicit_inputs=("HTGSupercellHartreeFockRun",),
+        run_hf_config_reason="Post-run converter only; use htg_explicit_supercell_run_hf for explicit HTG supercell config dispatch.",
     ),
     HFAdapterInfo(
         name="htg_supercell_hf_run_to_hf_result",
@@ -158,6 +176,17 @@ _HF_ADAPTER_REGISTRY: tuple[HFAdapterInfo, ...] = (
         import_path="mean_field.systems.htg.supercell_contracts:htg_supercell_hf_run_to_hf_result",
         description="Public HFResult view of an existing HTG folded-supercell HF run.",
         requires_explicit_inputs=("HTGSupercellHartreeFockRun",),
+        run_hf_config_reason="Post-run HFResult converter only; use htg_explicit_supercell_run_hf for explicit HTG supercell config dispatch.",
+    ),
+    HFAdapterInfo(
+        name="htg_explicit_supercell_run_hf",
+        system_name="htg_supercell",
+        adapter_type="run_hf",
+        import_path="mean_field.systems.htg.supercell_contracts:run_htg_supercell_hf_config_adapter",
+        description="Public run_hf dispatch for an explicit folded-supercell HTGSupercellRunHFConfig.",
+        supports_run_hf_config=True,
+        requires_explicit_inputs=("htg_supercell_config=HTGSupercellRunHFConfig",),
+        run_hf_config_reason="Requires explicit htg_supercell_config=HTGSupercellRunHFConfig; generic fractional-filling inference is not implemented.",
     ),
     HFAdapterInfo(
         name="tbg_zero_field_hf_run_to_hf_run_result",
@@ -166,6 +195,7 @@ _HF_ADAPTER_REGISTRY: tuple[HFAdapterInfo, ...] = (
         import_path="mean_field.systems.tbg.zero_field.hf_contracts:tbg_zero_field_hf_run_to_hf_run_result",
         description="Post-run canonical HFRunResult view for a TBG zero-field HF run plus matching BMSolution grid.",
         requires_explicit_inputs=("RestrictedHartreeFockRun", "grid_solution=BMSolution"),
+        run_hf_config_reason="Post-run only: the matching BMSolution/grid workflow must be explicit and is not fabricated from HFConfig.",
     ),
     HFAdapterInfo(
         name="b0_hf_benchmark_run_to_hf_run_result",
@@ -174,6 +204,7 @@ _HF_ADAPTER_REGISTRY: tuple[HFAdapterInfo, ...] = (
         import_path="mean_field.systems.tbg.zero_field.hf_contracts:b0_hf_benchmark_run_to_hf_run_result",
         description="Post-run canonical HFRunResult view for a B0 HF benchmark result carrying the matching grid_solution.",
         requires_explicit_inputs=("B0HFBenchmarkRun-like result",),
+        run_hf_config_reason="Post-run benchmark converter only; no generic public HFConfig to B0 benchmark runner is frozen.",
     ),
     HFAdapterInfo(
         name="rlg_hbn_hf_run_to_hf_run_result",
@@ -182,6 +213,7 @@ _HF_ADAPTER_REGISTRY: tuple[HFAdapterInfo, ...] = (
         import_path="mean_field.systems.RnG_hBN.hf_contracts:rlg_hbn_hf_run_to_hf_run_result",
         description="Post-run canonical HFRunResult view for an existing RnG/hBN HF run.",
         requires_explicit_inputs=("RLGhBNHartreeFockRun",),
+        run_hf_config_reason="Post-run only: RnG/hBN screening/projection runner options are not yet frozen as a public run_hf config adapter.",
     ),
     HFAdapterInfo(
         name="polshyn_wang_hf_bundle_to_hf_run_result",
@@ -190,6 +222,7 @@ _HF_ADAPTER_REGISTRY: tuple[HFAdapterInfo, ...] = (
         import_path="mean_field.systems.tmbg.polshyn_supercell:polshyn_wang_hf_bundle_to_hf_run_result",
         description="Post-run canonical HFRunResult view for an explicit TMBG Polshyn-Wang (basis, state, info) bundle.",
         requires_explicit_inputs=("PolshynProjectedBasis", "PolshynWangHFState", "info"),
+        run_hf_config_reason="Post-run bundle converter only; basis/state/info must be explicit and are not inferred from HFConfig.",
     ),
 )
 _HF_ADAPTERS_BY_NAME: dict[str, HFAdapterInfo] = {info.name: info for info in _HF_ADAPTER_REGISTRY}
@@ -1149,12 +1182,27 @@ def _validate_tdbg_public_hf_config(model: object, config: HFConfig, tdbg_config
         raise ValueError(f"TDBG model cut={model_cut} does not match tdbg_config.cut={tdbg_config.cut}")
 
 
+def _run_registered_hf_config_adapter_if_explicit(
+    adapter_name: str,
+    model: object,
+    config: HFConfig,
+    kwargs: Mapping[str, Any],
+) -> HFResult | None:
+    result = _call_registered_hf_adapter(adapter_name, model, config, **dict(kwargs))
+    if result is None:
+        return None
+    if not isinstance(result, HFResult):
+        raise TypeError(
+            f"Registered run_hf adapter {adapter_name!r} returned {type(result).__name__}; expected HFResult or None"
+        )
+    return result
+
 def run_hf(model: object, config: HFConfig, **kwargs: Any) -> HFResult:
     """Run HF through a system-provided public hook.
 
-    Phase 1 intentionally does not rewrite existing HF runners.  Systems should
-    later expose a `run_hf(config, **kwargs)` adapter that returns or can be
-    wrapped as an `HFResult`.
+    This façade intentionally does not rewrite existing HF runners or infer
+    missing system settings.  Supported systems expose explicit system-owned
+    config adapters that return or can be wrapped as an `HFResult`.
     """
 
     if hasattr(model, "run_hf"):
@@ -1168,6 +1216,11 @@ def run_hf(model: object, config: HFConfig, **kwargs: Any) -> HFResult:
     explicit_result = _run_tdbg_hf_if_explicit(model, config, dict(kwargs))
     if explicit_result is not None:
         return explicit_result
+
+    for adapter_name in ("htg_explicit_primitive_run_hf", "htg_explicit_supercell_run_hf"):
+        explicit_result = _run_registered_hf_config_adapter_if_explicit(adapter_name, model, config, kwargs)
+        if explicit_result is not None:
+            return explicit_result
 
     raise NotImplementedError(
         "Unified run_hf is frozen at the API level, but this model has no run_hf(config) adapter yet"

@@ -141,13 +141,9 @@ def test_compute_bands_includes_declared_component_group_metadata() -> None:
     ]
 
 
-def test_public_run_hf_fails_explicitly_until_system_adapter_exists() -> None:
+def test_public_run_hf_fails_explicitly_for_system_without_adapter() -> None:
     cfg = HFConfig(filling=0.0, mesh=(2, 2))
-    model = make_model("htg", theta_deg=1.5, n_shells=0)
+    model = make_model("htqg", theta_deg=2.25, n_shells=0, domain="abg")
 
-    try:
+    with pytest.raises(NotImplementedError, match=r"no run_hf\(config\) adapter"):
         run_hf(model, cfg)
-    except NotImplementedError as exc:
-        assert "run_hf(config) adapter" in str(exc)
-    else:  # pragma: no cover - future adapters may implement this
-        raise AssertionError("HTG unexpectedly exposed the public run_hf adapter; update this contract test")

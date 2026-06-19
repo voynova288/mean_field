@@ -1724,6 +1724,142 @@ def scan_htg_ground_state(
     return HTGGroundStateScan(runs=tuple(runs))
 
 
+@dataclass(frozen=True)
+class HTGRunHFConfig:
+    """Explicit primitive-cell HTG public ``run_hf`` adapter config.
+
+    This dataclass mirrors the already-existing :func:`run_htg_hf` runner.  The
+    public :class:`mean_field.api.hf.HFConfig` must still match ``nu``,
+    ``mesh_size``, iteration controls, density convention, and interaction
+    scalars; no generic ``HFConfig -> HTG`` inference is performed here.
+    """
+
+    nu: float
+    mesh_size: int
+    interaction: InteractionParams = field(default_factory=InteractionParams)
+    init_mode: str = "flavor"
+    seed: int = 1
+    beta: float = 1.0
+    max_iter: int = 300
+    precision: float = 1.0e-6
+    oda_stall_threshold: float = 1.0e-3
+    g_shells: int | None = None
+    projected_band_count: int = 2
+    initial_density: np.ndarray | None = None
+    use_numba: bool | None = None
+
+    def __post_init__(self) -> None:
+        if int(self.mesh_size) <= 0:
+            raise ValueError(f"mesh_size must be positive, got {self.mesh_size}")
+        if int(self.max_iter) <= 0:
+            raise ValueError("max_iter must be positive")
+        if float(self.precision) <= 0.0:
+            raise ValueError("precision must be positive")
+        if float(self.oda_stall_threshold) <= 0.0:
+            raise ValueError("oda_stall_threshold must be positive")
+        if int(self.projected_band_count) <= 0:
+            raise ValueError("projected_band_count must be positive")
+        if self.g_shells is not None and int(self.g_shells) < 0:
+            raise ValueError("g_shells must be non-negative when provided")
+
+
+def _validate_htg_public_hf_config(config: "HFConfig", htg_config: HTGRunHFConfig) -> None:
+    if not isinstance(htg_config.interaction, InteractionParams):
+        raise TypeError(
+            f"htg_config.interaction must be InteractionParams, got {type(htg_config.interaction).__name__}"
+        )
+    mesh = (int(htg_config.mesh_size), int(htg_config.mesh_size))
+    if (int(config.mesh[0]), int(config.mesh[1])) != mesh:
+        raise ValueError(f"HTG public run_hf requires HFConfig.mesh={mesh}, got {config.mesh}")
+    if not np.isclose(float(config.filling), float(htg_config.nu)):
+        raise ValueError(f"HTG public run_hf requires HFConfig.filling={htg_config.nu}, got {config.filling}")
+    if int(config.max_iter) != int(htg_config.max_iter):
+        raise ValueError(
+            f"HTG public run_hf requires HFConfig.max_iter={htg_config.max_iter}, got {config.max_iter}"
+        )
+    if not np.isclose(float(config.precision), float(htg_config.precision)):
+        raise ValueError(
+            f"HTG public run_hf requires HFConfig.precision={htg_config.precision}, got {config.precision}"
+        )
+    if config.density_convention != "stored_delta":
+        raise ValueError(
+            "HTG primitive HF stores density as P-R; set HFConfig.density_convention='stored_delta'"
+        )
+    if config.active_window is not None or config.active_band_indices is not None:
+        raise NotImplementedError(
+            "HTG public run_hf takes the projected window from htg_config.projected_band_count; "
+            "leave HFConfig.active_window/active_band_indices unset for now"
+        )
+    interaction = htg_config.interaction
+    if config.interaction_scheme != interaction.subtraction:
+        raise ValueError(
+            f"HTG public run_hf requires HFConfig.interaction_scheme={interaction.subtraction!r}, "
+            f"got {config.interaction_scheme!r}"
+        )
+    if config.coulomb_kernel != "2d_gate":
+        raise ValueError("HTG public run_hf currently supports HFConfig.coulomb_kernel='2d_gate' only")
+    if not np.isclose(float(config.epsilon_r), float(interaction.epsilon_r)):
+        raise ValueError(
+            f"HTG public run_hf requires HFConfig.epsilon_r={interaction.epsilon_r}, got {config.epsilon_r}"
+        )
+    if not np.isclose(float(config.dsc_nm), float(interaction.d_sc_nm)):
+        raise ValueError(
+            f"HTG public run_hf requires HFConfig.dsc_nm={interaction.d_sc_nm}, got {config.dsc_nm}"
+        )
+
+
+def run_htg_hf_config_adapter(model: object, config: "HFConfig", **kwargs: Any) -> "HFResult | None":
+    """Run primitive-cell HTG HF from an explicit system config.
+
+    The adapter is intentionally narrow: callers must provide
+    ``htg_config=HTGRunHFConfig(...)`` and a matching public ``HFConfig``.  The
+    raw :class:`HTGHartreeFockRun` remains the source of truth and is wrapped by
+    the existing canonical HTG post-run adapter.
+    """
+
+    if not isinstance(model, HTGModel):
+        return None
+    if "htg_config" in kwargs and "htg_supercell_config" in kwargs:
+        raise TypeError("Pass only one of htg_config or htg_supercell_config")
+    if "htg_config" not in kwargs:
+        if "htg_supercell_config" in kwargs:
+            return None
+        raise NotImplementedError(
+            "Unified run_hf has an HTG primitive adapter only for explicit "
+            "htg_config=HTGRunHFConfig(...); generic HFConfig -> HTG runner mapping is not implemented"
+        )
+    htg_config = kwargs.pop("htg_config")
+    if not isinstance(htg_config, HTGRunHFConfig):
+        raise TypeError(f"htg_config must be HTGRunHFConfig, got {type(htg_config).__name__}")
+    if kwargs:
+        raise TypeError(f"Unsupported HTG primitive run_hf kwargs: {sorted(kwargs)}")
+
+    _validate_htg_public_hf_config(config, htg_config)
+    raw = run_htg_hf(
+        model,
+        htg_config.interaction,
+        nu=float(htg_config.nu),
+        init_mode=str(htg_config.init_mode),
+        seed=int(htg_config.seed),
+        beta=float(htg_config.beta),
+        max_iter=int(htg_config.max_iter),
+        precision=float(htg_config.precision),
+        oda_stall_threshold=float(htg_config.oda_stall_threshold),
+        mesh_size=int(htg_config.mesh_size),
+        g_shells=htg_config.g_shells,
+        projected_band_count=int(htg_config.projected_band_count),
+        initial_density=htg_config.initial_density,
+        use_numba=htg_config.use_numba,
+    )
+    return htg_hf_run_to_hf_result(
+        raw,
+        config=config,
+        observables={
+            "public_run_hf_adapter": "mean_field.systems.htg.mean_field_adapter.run_htg_hf_config_adapter",
+            "explicit_config_type": "HTGRunHFConfig",
+        },
+    )
+
 # Canonical post-run contract adapters ---------------------------------------
 
 def _contract_unavailable_hamiltonian_builder(_kvec: np.ndarray) -> np.ndarray:

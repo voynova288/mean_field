@@ -25,6 +25,7 @@ from .mean_field_adapter import (
     HTGInitializer,
     HTGInteractionComponents,
     HTGProjectedBasisData,
+    HTGRunHFConfig,
     HTGSeedOccupationSummary,
     build_htg_interaction_components,
     build_htg_hf_kernel,
@@ -54,6 +55,7 @@ from .mean_field_adapter import (
     normalize_htg_init_mode,
     projector_idempotency_residual,
     run_htg_hf,
+    run_htg_hf_config_adapter,
     scan_htg_ground_state,
 )
 from .model import HTGModel
@@ -91,7 +93,12 @@ from .supercell import (
     save_htg_supercell_run_npz,
     supercell_fold_representatives,
 )
-from .supercell_contracts import htg_supercell_hf_run_to_hf_result, htg_supercell_hf_run_to_hf_run_result
+from .supercell_contracts import (
+    HTGSupercellRunHFConfig,
+    htg_supercell_hf_run_to_hf_result,
+    htg_supercell_hf_run_to_hf_run_result,
+    run_htg_supercell_hf_config_adapter,
+)
 from .params import (
     HTGParams,
     InteractionParams,
@@ -140,6 +147,7 @@ __all__ = [
     "HTGParams",
     "HTGPathPlotTrace",
     "HTGProjectedBasisData",
+    "HTGRunHFConfig",
     "HTGSupercell",
     "HTGSupercellGroundStateScan",
     "HTGSupercellHartreeFockRun",
@@ -148,6 +156,7 @@ __all__ = [
     "HTGSupercellPathResult",
     "HTGSupercellProjectedBasisData",
     "HTGSupercellSCFGridPathSamples",
+    "HTGSupercellRunHFConfig",
     "HTGSeedOccupationSummary",
     "HTGStrongCouplingClassification",
     "InteractionParams",
@@ -237,7 +246,9 @@ __all__ = [
     "normalize_htg_init_mode",
     "projector_idempotency_residual",
     "run_htg_hf",
+    "run_htg_hf_config_adapter",
     "run_htg_supercell_hf",
+    "run_htg_supercell_hf_config_adapter",
     "save_htg_supercell_path_npz",
     "save_htg_supercell_run_npz",
     "scan_htg_ground_state",

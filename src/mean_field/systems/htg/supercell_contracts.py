@@ -8,6 +8,7 @@ topology, or cRPA behavior.
 """
 
 from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 import math
 
@@ -23,12 +24,16 @@ from mean_field.core.contracts import (
 )
 from mean_field.core.hf.contracts_bridge import density_state_from_delta
 
+from .model import HTGModel
+from .params import InteractionParams
 from .supercell import (
+    HTGSupercell,
     HTGSupercellHartreeFockRun,
     HTGSupercellProjectedBasisData,
     _supercell_reference_density_blocks,
     htg_supercell_filling_from_density,
     htg_supercell_occupied_count_per_k,
+    run_htg_supercell_hf,
 )
 
 if TYPE_CHECKING:
@@ -311,6 +316,151 @@ def _supercell_matrix_metadata(data: HTGSupercellProjectedBasisData) -> list[lis
         [int(data.supercell.n21), int(data.supercell.n22)],
     ]
 
+@dataclass(frozen=True)
+class HTGSupercellRunHFConfig:
+    """Explicit folded-supercell HTG public ``run_hf`` adapter config.
+
+    This mirrors the existing :func:`run_htg_supercell_hf` runner.  The generic
+    public ``HFConfig`` is only a matching contract: fractional filling,
+    supercell choice, projected band count, and initialization remain explicit
+    system-owned inputs.
+    """
+
+    primitive_nu: float
+    mesh_size: int
+    interaction: InteractionParams = field(default_factory=InteractionParams)
+    supercell: HTGSupercell | None = None
+    init_mode: str = "perturbed"
+    seed: int = 1
+    beta: float = 1.0
+    max_iter: int = 300
+    precision: float = 1.0e-6
+    oda_stall_threshold: float = 1.0e-3
+    g_shells: int | None = None
+    projected_band_count: int = 2
+    initial_density: np.ndarray | None = None
+    use_numba: bool | None = None
+
+    def __post_init__(self) -> None:
+        if int(self.mesh_size) <= 0:
+            raise ValueError(f"mesh_size must be positive, got {self.mesh_size}")
+        if int(self.max_iter) <= 0:
+            raise ValueError("max_iter must be positive")
+        if float(self.precision) <= 0.0:
+            raise ValueError("precision must be positive")
+        if float(self.oda_stall_threshold) <= 0.0:
+            raise ValueError("oda_stall_threshold must be positive")
+        if int(self.projected_band_count) <= 0:
+            raise ValueError("projected_band_count must be positive")
+        if self.g_shells is not None and int(self.g_shells) < 0:
+            raise ValueError("g_shells must be non-negative when provided")
+
+
+def _validate_public_hf_config_matches_supercell_config(
+    config: "HFConfig",
+    htg_supercell_config: HTGSupercellRunHFConfig,
+) -> None:
+    if not isinstance(htg_supercell_config.interaction, InteractionParams):
+        raise TypeError(
+            "htg_supercell_config.interaction must be InteractionParams, got "
+            f"{type(htg_supercell_config.interaction).__name__}"
+        )
+    mesh = (int(htg_supercell_config.mesh_size), int(htg_supercell_config.mesh_size))
+    if (int(config.mesh[0]), int(config.mesh[1])) != mesh:
+        raise ValueError(f"HTG supercell public run_hf requires HFConfig.mesh={mesh}, got {config.mesh}")
+    if not np.isclose(float(config.filling), float(htg_supercell_config.primitive_nu)):
+        raise ValueError(
+            "HTG supercell public run_hf requires "
+            f"HFConfig.filling={htg_supercell_config.primitive_nu}, got {config.filling}"
+        )
+    if int(config.max_iter) != int(htg_supercell_config.max_iter):
+        raise ValueError(
+            "HTG supercell public run_hf requires "
+            f"HFConfig.max_iter={htg_supercell_config.max_iter}, got {config.max_iter}"
+        )
+    if not np.isclose(float(config.precision), float(htg_supercell_config.precision)):
+        raise ValueError(
+            "HTG supercell public run_hf requires "
+            f"HFConfig.precision={htg_supercell_config.precision}, got {config.precision}"
+        )
+    if config.density_convention != "stored_delta":
+        raise ValueError(
+            "HTG supercell HF stores density as P-R; set HFConfig.density_convention='stored_delta'"
+        )
+    if config.active_window is not None or config.active_band_indices is not None:
+        raise NotImplementedError(
+            "HTG supercell public run_hf takes the projected window from "
+            "htg_supercell_config.projected_band_count; leave HFConfig.active_window/active_band_indices unset"
+        )
+    interaction = htg_supercell_config.interaction
+    if config.interaction_scheme != interaction.subtraction:
+        raise ValueError(
+            "HTG supercell public run_hf requires "
+            f"HFConfig.interaction_scheme={interaction.subtraction!r}, got {config.interaction_scheme!r}"
+        )
+    if config.coulomb_kernel != "2d_gate":
+        raise ValueError("HTG supercell public run_hf currently supports HFConfig.coulomb_kernel='2d_gate' only")
+    if not np.isclose(float(config.epsilon_r), float(interaction.epsilon_r)):
+        raise ValueError(
+            "HTG supercell public run_hf requires "
+            f"HFConfig.epsilon_r={interaction.epsilon_r}, got {config.epsilon_r}"
+        )
+    if not np.isclose(float(config.dsc_nm), float(interaction.d_sc_nm)):
+        raise ValueError(
+            f"HTG supercell public run_hf requires HFConfig.dsc_nm={interaction.d_sc_nm}, got {config.dsc_nm}"
+        )
+
+
+def run_htg_supercell_hf_config_adapter(model: object, config: "HFConfig", **kwargs: Any) -> "HFResult | None":
+    """Run folded-supercell HTG HF from an explicit system config."""
+
+    if not isinstance(model, HTGModel):
+        return None
+    if "htg_config" in kwargs and "htg_supercell_config" in kwargs:
+        raise TypeError("Pass only one of htg_config or htg_supercell_config")
+    if "htg_supercell_config" not in kwargs:
+        if "htg_config" in kwargs:
+            return None
+        raise NotImplementedError(
+            "Unified run_hf has an HTG supercell adapter only for explicit "
+            "htg_supercell_config=HTGSupercellRunHFConfig(...); generic HFConfig -> HTG supercell runner mapping is not implemented"
+        )
+    htg_supercell_config = kwargs.pop("htg_supercell_config")
+    if not isinstance(htg_supercell_config, HTGSupercellRunHFConfig):
+        raise TypeError(
+            "htg_supercell_config must be HTGSupercellRunHFConfig, got "
+            f"{type(htg_supercell_config).__name__}"
+        )
+    if kwargs:
+        raise TypeError(f"Unsupported HTG supercell run_hf kwargs: {sorted(kwargs)}")
+
+    _validate_public_hf_config_matches_supercell_config(config, htg_supercell_config)
+    raw = run_htg_supercell_hf(
+        model,
+        htg_supercell_config.interaction,
+        primitive_nu=float(htg_supercell_config.primitive_nu),
+        supercell=htg_supercell_config.supercell,
+        init_mode=str(htg_supercell_config.init_mode),
+        seed=int(htg_supercell_config.seed),
+        beta=float(htg_supercell_config.beta),
+        max_iter=int(htg_supercell_config.max_iter),
+        precision=float(htg_supercell_config.precision),
+        oda_stall_threshold=float(htg_supercell_config.oda_stall_threshold),
+        mesh_size=int(htg_supercell_config.mesh_size),
+        g_shells=htg_supercell_config.g_shells,
+        projected_band_count=int(htg_supercell_config.projected_band_count),
+        initial_density=htg_supercell_config.initial_density,
+        use_numba=htg_supercell_config.use_numba,
+    )
+    return htg_supercell_hf_run_to_hf_result(
+        raw,
+        config=config,
+        observables={
+            "public_run_hf_adapter": "mean_field.systems.htg.supercell_contracts.run_htg_supercell_hf_config_adapter",
+            "explicit_config_type": "HTGSupercellRunHFConfig",
+        },
+    )
+
 def _default_hf_config_from_run(run: HTGSupercellHartreeFockRun) -> "HFConfig":
     from mean_field.api.hf import HFConfig
 
@@ -485,4 +635,9 @@ def htg_supercell_hf_run_to_hf_result(
         canonical_run_result=canonical,
     )
 
-__all__ = ["htg_supercell_hf_run_to_hf_result", "htg_supercell_hf_run_to_hf_run_result"]
+__all__ = [
+    "HTGSupercellRunHFConfig",
+    "htg_supercell_hf_run_to_hf_result",
+    "htg_supercell_hf_run_to_hf_run_result",
+    "run_htg_supercell_hf_config_adapter",
+]
