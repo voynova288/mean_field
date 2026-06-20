@@ -26,7 +26,6 @@ from .topology import TopologyResult, compute_topology_from_eigenvectors, comput
 from .validation import (
     ValidationCheck,
     ValidationReport,
-    diagnose_ktilde_symmetry,
     validate_physics,
 )
 
@@ -58,7 +57,6 @@ __all__ = [
     "compute_topology_on_grid",
     "default_omega",
     "default_omega_prime",
-    "diagnose_ktilde_symmetry",
     "diagonalize_hamiltonian",
     "dirac_block",
     "hopping_to_velocity",

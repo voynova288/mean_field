@@ -295,6 +295,16 @@
       "legacy_lines_removed_gross": 600,
       "slice": "retire_tmbg_paper_checkpoint_runner",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Retired the remaining paper-specific tMBG Ktilde diagnostic CLI/export surface; core tMBG validate_physics and Hamiltonian cross-checks remain in system validation.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 350,
+      "slice": "retire_tmbg_ktilde_diagnostic_cli",
+      "tracked_files_deleted": [
+        "tests/test_cli_tmbg_artifacts.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -390,7 +400,7 @@
     "validation.py": {
       "files": [
         {
-          "lines": 609,
+          "lines": 457,
           "path": "src/mean_field/systems/tmbg/validation.py"
         },
         {
@@ -414,7 +424,7 @@
           "path": "src/mean_field/systems/htg/validation.py"
         }
       ],
-      "total_lines": 1354
+      "total_lines": 1202
     }
   },
   "phase2_targets": {
@@ -670,7 +680,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 196,
-  "src_python_lines": 65015,
+  "src_python_lines": 64648,
   "top_30_files": [
     {
       "lines": 2361,
@@ -725,10 +735,6 @@
       "path": "src/mean_field/systems/tbg/finite_field/spectrum.py"
     },
     {
-      "lines": 949,
-      "path": "src/mean_field/cli.py"
-    },
-    {
       "lines": 936,
       "path": "src/mean_field/systems/tbg/zero_field/supercell.py"
     },
@@ -751,6 +757,10 @@
     {
       "lines": 772,
       "path": "src/analysis/shift_current/core.py"
+    },
+    {
+      "lines": 736,
+      "path": "src/mean_field/cli.py"
     },
     {
       "lines": 735,
@@ -781,19 +791,19 @@
       "path": "src/mean_field/core/hf/overlap.py"
     },
     {
-      "lines": 609,
-      "path": "src/mean_field/systems/tmbg/validation.py"
-    },
-    {
       "lines": 565,
       "path": "src/analysis/topology/core.py"
     },
     {
       "lines": 528,
       "path": "src/mean_field/systems/tbg/zero_field/artifacts.py"
+    },
+    {
+      "lines": 498,
+      "path": "src/mean_field/crpa/validation.py"
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 71211,
-  "tracked_text_lines": 74994
+  "tracked_python_lines": 70830,
+  "tracked_text_lines": 74619
 }

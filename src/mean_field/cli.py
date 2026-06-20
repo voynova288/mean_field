@@ -8,7 +8,6 @@ from typing import Any
 
 import numpy as np
 
-from .api.artifacts import ModelRecord, write_contract_artifacts
 from .api.hf import HFConfig, run_hf
 from .api.models import make_model
 from .benchmarks import (
@@ -20,7 +19,6 @@ from .benchmarks import (
     load_bm_unstrained_runtime_benchmarks,
 )
 from .runtime import collect_runtime_environment, current_timestamp, ensure_not_running_compute_on_login_node
-from .systems.tmbg import diagnose_ktilde_symmetry
 from .systems.tbg.zero_field import (
     export_overlap_diagnostics,
     run_b0_hf_benchmark_case,
@@ -107,28 +105,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Allow replacing existing public contract sidecars in --output-dir.",
     )
 
-    tmbg_parser = subparsers.add_parser("tmbg", help="Run the tMBG noninteracting workflow.")
-    tmbg_subparsers = tmbg_parser.add_subparsers(dest="tmbg_command", required=True)
-    tmbg_diag = tmbg_subparsers.add_parser(
-        "diagnose-ktilde-symmetry",
-        help="Run the Ktilde chiral-limit and perturbation gap diagnostics.",
-    )
-    tmbg_diag.add_argument(
-        "--output-dir",
-        type=Path,
-        default=None,
-        help="If set, write the markdown report, runtime summary, and JSON metadata here.",
-    )
-    tmbg_diag.add_argument("--theta-deg", type=float, default=1.21, help="Twist angle used by the Ktilde diagnostics.")
-    tmbg_diag.add_argument("--n-shells", type=int, default=5, help="Moire reciprocal-lattice shell cutoff.")
-    tmbg_diag.add_argument(
-        "--valley",
-        type=int,
-        choices=(-1, 1),
-        default=1,
-        help="Valley label used by the Ktilde diagnostics.",
-    )
-
     tdbg_parser = subparsers.add_parser("tdbg", help="Run TDBG public API workflows.")
     tdbg_subparsers = tdbg_parser.add_subparsers(dest="tdbg_command", required=True)
     tdbg_hf = tdbg_subparsers.add_parser(
@@ -153,14 +129,6 @@ def _ensure_not_running_compute_on_login_node(workload_name: str) -> None:
     ensure_not_running_compute_on_login_node(workload_name)
 
 
-def _tmbg_report_payload(report) -> dict[str, object]:
-    return report.to_dict()
-
-
-def _tmbg_report_status(report) -> str:
-    return "fail" if report.has_failures else ("pass_with_skips" if report.has_skips else "pass")
-
-
 def _relative_existing_file(root: Path, path: Path) -> str | None:
     if not path.exists():
         return None
@@ -168,58 +136,6 @@ def _relative_existing_file(root: Path, path: Path) -> str | None:
         return path.resolve().relative_to(root.resolve()).as_posix()
     except ValueError:
         return str(path)
-
-
-def _write_tmbg_contract_sidecars(
-    output_dir: Path,
-    *,
-    workflow: str,
-    runner_kind: str,
-    parameters: dict[str, object],
-    runtime: dict[str, object],
-    artifacts: dict[str, object],
-    report,
-) -> dict[str, Path]:
-    report_payload = _tmbg_report_payload(report)
-    files = {
-        key: _relative_existing_file(output_dir, Path(value)) if isinstance(value, str) else value
-        for key, value in artifacts.items()
-        if value is not None
-    }
-    files["run_metadata"] = "run_metadata.json"
-    validation_payload = {
-        "status": _tmbg_report_status(report),
-        "failure_count": int(report.failure_count),
-        "skipped_count": int(report.skipped_count),
-        "checks": report_payload.get("checks", []),
-    }
-    environment = dict(runtime.get("environment", {})) if isinstance(runtime.get("environment"), dict) else {}
-    environment.update(
-        {
-            "start_time": runtime.get("start_time"),
-            "end_time": runtime.get("end_time"),
-            "total_elapsed_sec": runtime.get("total_elapsed_sec"),
-        }
-    )
-    return write_contract_artifacts(
-        output_dir,
-        workflow=workflow,
-        system_name="tmbg",
-        model=ModelRecord(system_name="tmbg", params={"runner_kind": runner_kind, **parameters}),
-        config={"implementation": "python_tmbg", "runner_kind": runner_kind, "parameters": parameters},
-        conventions={
-            "energy_unit": "eV",
-            "momentum_unit": "nm^-1",
-            "gauge": "tmbg_system_defined",
-            "topology_convention": "analysis.topology plaquette Chern",
-        },
-        environment=environment,
-        validation=validation_payload,
-        observables={"report": report_payload},
-        files=files,
-        metadata={"runner_kind": runner_kind},
-    )
-
 
 
 def _read_json_object(path: Path) -> dict[str, Any]:
@@ -752,128 +668,6 @@ def cmd_hf_compare_suite(
     return 0
 
 
-def cmd_tmbg_diagnose_ktilde_symmetry(
-    *,
-    output_dir: Path | None = None,
-    theta_deg: float = 1.21,
-    n_shells: int = 5,
-    valley: int = 1,
-) -> int:
-    _ensure_not_running_compute_on_login_node("tMBG Ktilde symmetry diagnostics")
-
-    start_time = current_timestamp()
-    total_start = perf_counter()
-    report = diagnose_ktilde_symmetry(
-        output_dir=output_dir,
-        theta_deg=theta_deg,
-        n_shells=n_shells,
-        valley=valley,
-    )
-    total_elapsed = perf_counter() - total_start
-    end_time = current_timestamp()
-    env = collect_runtime_environment()
-
-    output_suffix = ""
-    if output_dir is not None:
-        resolved_output_dir = Path(output_dir)
-        resolved_output_dir.mkdir(parents=True, exist_ok=True)
-        runtime_summary_path = resolved_output_dir / "runtime_summary.txt"
-        metadata_path = resolved_output_dir / "run_metadata.json"
-        report_path = resolved_output_dir / "ktilde_symmetry_report.md"
-
-        _write_key_value_summary(
-            runtime_summary_path,
-            [
-                ("implementation", "python_tmbg"),
-                ("runner_kind", "tmbg_ktilde_symmetry_diagnostics"),
-                ("theta_deg", f"{theta_deg:.16g}"),
-                ("n_shells", str(n_shells)),
-                ("valley", str(valley)),
-                ("start_time", start_time),
-                ("end_time", end_time),
-                ("total_elapsed_sec", f"{total_elapsed:.16e}"),
-                ("failure_count", str(report.failure_count)),
-                ("skipped_count", str(report.skipped_count)),
-                ("hostname", env.hostname),
-                ("cpu_model", env.cpu_model),
-                ("sys_cpu_threads", str(env.sys_cpu_threads)),
-                ("blas_threads", str(env.blas_threads)),
-                ("numba_threads", str(getattr(env, "numba_threads", ""))),
-                ("backend_choice", str(getattr(env, "backend_choice", ""))),
-                ("process_count", str(env.process_count)),
-                ("jit_warmup_included", str(env.jit_warmup_included).lower()),
-                ("slurm_partition", env.slurm_partition),
-                ("slurm_nodelist", env.slurm_nodelist),
-                ("slurm_cpus_per_task", str(env.slurm_cpus_per_task)),
-                ("python_version", env.python_version),
-                ("numpy_version", env.numpy_version),
-                ("ktilde_symmetry_report", str(report_path) if report_path.exists() else ""),
-            ],
-        )
-        metadata = {
-            "implementation": "python_tmbg",
-            "runner_kind": "tmbg_ktilde_symmetry_diagnostics",
-            "parameters": {
-                "theta_deg": theta_deg,
-                "n_shells": n_shells,
-                "valley": valley,
-            },
-            "runtime": {
-                "start_time": start_time,
-                "end_time": end_time,
-                "total_elapsed_sec": total_elapsed,
-                "environment": {
-                    "hostname": env.hostname,
-                    "cpu_model": env.cpu_model,
-                    "slurm_partition": env.slurm_partition,
-                    "slurm_nodelist": env.slurm_nodelist,
-                    "slurm_cpus_per_task": env.slurm_cpus_per_task,
-                    "blas_threads": env.blas_threads,
-                    "numba_threads": getattr(env, "numba_threads", None),
-                    "sys_cpu_threads": env.sys_cpu_threads,
-                    "process_count": env.process_count,
-                    "backend_choice": getattr(env, "backend_choice", None),
-                    "threadpoolctl_info": getattr(env, "threadpoolctl_info", ()),
-                    "thread_env": getattr(env, "thread_env", {}),
-                    "jit_warmup_included": env.jit_warmup_included,
-                    "python_version": env.python_version,
-                    "numpy_version": env.numpy_version,
-                },
-            },
-            "artifacts": {
-                "ktilde_symmetry_report_md": str(report_path) if report_path.exists() else None,
-                "runtime_summary_txt": str(runtime_summary_path),
-            },
-            "report": _tmbg_report_payload(report),
-        }
-        with metadata_path.open("w", encoding="utf-8") as handle:
-            json.dump(metadata, handle, indent=2)
-        _write_tmbg_contract_sidecars(
-            resolved_output_dir,
-            workflow="tmbg.ktilde_diagnostics",
-            runner_kind="tmbg_ktilde_symmetry_diagnostics",
-            parameters=dict(metadata["parameters"]),
-            runtime=dict(metadata["runtime"]),
-            artifacts=dict(metadata["artifacts"]),
-            report=report,
-        )
-        output_suffix = f"\toutput_dir={resolved_output_dir}"
-
-    status = _tmbg_report_status(report)
-    print(
-        f"status={status}\t"
-        f"checks={len(report.checks)}\t"
-        f"failures={report.failure_count}\t"
-        f"skipped={report.skipped_count}\t"
-        f"total_elapsed_sec={total_elapsed:.6f}"
-        f"{output_suffix}"
-    )
-    if report.has_failures:
-        failed_checks = ",".join(check.name for check in report.checks if check.status == "fail")
-        print(f"failed_checks={failed_checks}")
-    return 0
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -930,13 +724,6 @@ def main(argv: list[str] | None = None) -> int:
             overlap_lg=args.overlap_lg,
             output_dir=args.output_dir,
             overwrite_contract_sidecars=args.overwrite_contract_sidecars,
-        )
-    if args.command == "tmbg" and args.tmbg_command == "diagnose-ktilde-symmetry":
-        return cmd_tmbg_diagnose_ktilde_symmetry(
-            output_dir=args.output_dir,
-            theta_deg=args.theta_deg,
-            n_shells=args.n_shells,
-            valley=args.valley,
         )
     if args.command == "tdbg" and args.tdbg_command == "projected-hf":
         return cmd_tdbg_projected_hf(args.config_path, output_dir=args.output_dir, dry_run=args.dry_run)

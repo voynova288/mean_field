@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 74994
-- Tracked Python lines: 71211
+- Tracked text lines: 74619
+- Tracked Python lines: 70830
 - Tracked Julia lines: 826
 - `src` Python files: 196
-- `src` Python lines: 65015
+- `src` Python lines: 64648
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -252,6 +252,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 600.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### retire_tmbg_ktilde_diagnostic_cli
+
+- Retired the remaining paper-specific tMBG Ktilde diagnostic CLI/export surface; core tMBG validate_physics and Hamiltonian cross-checks remain in system validation.
+- Deleted files: `tests/test_cli_tmbg_artifacts.py`.
+- Gross legacy LOC removed/thinned: 350.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -269,13 +276,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 1258 | `src/mean_field/systems/tbg/zero_field/hf.py` |
 | 1149 | `src/mean_field/core/hf/finite_field.py` |
 | 1012 | `src/mean_field/systems/tbg/finite_field/spectrum.py` |
-| 949 | `src/mean_field/cli.py` |
 | 936 | `src/mean_field/systems/tbg/zero_field/supercell.py` |
 | 925 | `src/mean_field/systems/htqg/hf.py` |
 | 873 | `src/analysis/topology/quantum_geometry.py` |
 | 805 | `src/analysis/response_derivative_gauge.py` |
 | 786 | `src/mean_field/systems/RnG_hBN/cache.py` |
 | 772 | `src/analysis/shift_current/core.py` |
+| 736 | `src/mean_field/cli.py` |
 | 735 | `src/mean_field/systems/tbg/zero_field/hf_contracts.py` |
 | 710 | `src/mean_field/core/hf/tdhf.py` |
 | 686 | `src/mean_field/systems/RnG_hBN/hf_contracts.py` |
@@ -283,9 +290,9 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 643 | `src/mean_field/systems/htg/supercell_contracts.py` |
 | 627 | `src/mean_field/benchmarks.py` |
 | 617 | `src/mean_field/core/hf/overlap.py` |
-| 609 | `src/mean_field/systems/tmbg/validation.py` |
 | 565 | `src/analysis/topology/core.py` |
 | 528 | `src/mean_field/systems/tbg/zero_field/artifacts.py` |
+| 498 | `src/mean_field/crpa/validation.py` |
 
 ## Direct private-system imports in workflow surfaces
 
@@ -314,11 +321,11 @@ Total lines: 691
 
 ### `validation.py`
 
-Total lines: 1354
+Total lines: 1202
 
 | Lines | Path |
 |---:|---|
-| 609 | `src/mean_field/systems/tmbg/validation.py` |
+| 457 | `src/mean_field/systems/tmbg/validation.py` |
 | 193 | `src/mean_field/systems/htqg/validation.py` |
 | 161 | `src/mean_field/systems/atmg/validation.py` |
 | 156 | `src/mean_field/systems/RnG_hBN/validation.py` |

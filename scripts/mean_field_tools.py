@@ -15,9 +15,8 @@ if str(SRC_ROOT) not in sys.path:
 from mean_field.cli import main as cli_main
 
 
-CLI_GROUPS = {"benchmarks", "bm", "hf", "tmbg"}
+CLI_GROUPS = {"benchmarks", "bm", "hf"}
 CLI_ALIASES = {
-    "run_tmbg_ktilde_diagnostics": ("tmbg", "diagnose-ktilde-symmetry"),
 }
 MODULE_COMMANDS = {
     "backfill_canonical_hf_sidecars": ("mean_field.devtools.backfill_canonical_hf_sidecars", ()),

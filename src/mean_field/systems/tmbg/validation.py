@@ -2,11 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
-from pathlib import Path
 
 import numpy as np
 
-from ...core.io import write_text_artifact
 from ...core.validation import ValidationCheck, ValidationReport, make_validation_check, status_from_bool
 from .bands import PathBandsResult
 from .cross_check import (
@@ -44,26 +42,6 @@ class _CheckpointBandSummary:
         if not values:
             return None
         return float(min(values))
-
-
-@dataclass(frozen=True)
-class _KPointGapSummary:
-    k_label: str
-    k_tilde: complex
-    flat_band_indices: tuple[int, int]
-    valence_energy: float
-    conduction_energy: float
-    flat_gap: float
-
-
-@dataclass(frozen=True)
-class _KtildeDiagnosticCase:
-    name: str
-    detail_prefix: str
-    params: TMBGParameters
-    theta_deg: float = 1.21
-    expected_gap_upper: float | None = None
-    expected_gap_lower: float | None = None
 
 
 @dataclass(frozen=True)
@@ -111,55 +89,6 @@ def _summarize_flat_bands(path_result: PathBandsResult) -> _CheckpointBandSummar
         flat_gap=_minimum_gap(energies, valence_index, conduction_index),
         lower_gap=lower_gap,
         upper_gap=upper_gap,
-    )
-
-
-def _summarize_band_gap_at_k(
-    model: TMBGModel,
-    k_tilde: complex,
-    band_indices: tuple[int, int],
-    *,
-    valley: int,
-    k_label: str,
-) -> _KPointGapSummary:
-    upper_band = int(band_indices[1])
-    resolved_n_bands = max(upper_band + 1, 2)
-    evals, _ = model.diagonalize(complex(k_tilde), valley=valley, n_bands=resolved_n_bands)
-    valence_index, conduction_index = (int(band_indices[0]), int(band_indices[1]))
-    valence_energy = float(evals[valence_index])
-    conduction_energy = float(evals[conduction_index])
-    return _KPointGapSummary(
-        k_label=str(k_label),
-        k_tilde=complex(k_tilde),
-        flat_band_indices=(valence_index, conduction_index),
-        valence_energy=valence_energy,
-        conduction_energy=conduction_energy,
-        flat_gap=float(conduction_energy - valence_energy),
-    )
-
-
-def _summarize_neutral_gap_at_k(
-    model: TMBGModel,
-    k_tilde: complex,
-    *,
-    valley: int,
-    k_label: str,
-) -> _KPointGapSummary:
-    evals, _ = model.diagonalize(complex(k_tilde), valley=valley)
-    flat_band_indices = infer_flat_band_indices(np.asarray(evals, dtype=float).reshape(1, -1))
-    return _summarize_band_gap_at_k(
-        model,
-        complex(k_tilde),
-        flat_band_indices,
-        valley=valley,
-        k_label=k_label,
-    )
-
-
-def _describe_kpoint_gap(summary: _KPointGapSummary) -> str:
-    return (
-        f"{summary.k_label} gap={_format_mev(summary.flat_gap)} on bands {summary.flat_band_indices} "
-        f"(E_v={_format_mev(summary.valence_energy)}, E_c={_format_mev(summary.conduction_energy)})."
     )
 
 
@@ -305,86 +234,6 @@ def _describe_cutoff_convergence(summary: _CutoffConvergenceSummary) -> str:
         f"Δbw_v={_format_mev(summary.valence_width_delta)}, "
         f"Δbw_c={_format_mev(summary.conduction_width_delta)}"
     )
-
-
-def diagnose_ktilde_symmetry(
-    *,
-    theta_deg: float = 1.21,
-    n_shells: int = 5,
-    valley: int = 1,
-    output_dir: Path | str | None = None,
-) -> ValidationReport:
-    diagnostic_cases = (
-        _KtildeDiagnosticCase(
-            name="R1.full_model_delta_0_ktilde_gap",
-            detail_prefix="Current Park Fig. 2(a) full-model reference should remain nearly touching at K̃.",
-            params=TMBGParameters.full(interlayer_potential=0.0, staggered_potential=0.0),
-            theta_deg=theta_deg,
-            expected_gap_upper=1.0e-3,
-        ),
-        _KtildeDiagnosticCase(
-            name="D2.delta_p060_opens_ktilde_gap",
-            detail_prefix="Applying Δ=+60 meV should open a visible K̃ gap.",
-            params=TMBGParameters.full(interlayer_potential=0.06, staggered_potential=0.0),
-            theta_deg=theta_deg,
-            expected_gap_lower=5.0e-2,
-        ),
-    )
-
-    checks: list[ValidationCheck] = []
-    for case in diagnostic_cases:
-        model = TMBGModel.from_config(case.theta_deg, n_shells=n_shells, params=case.params)
-        _, path_summary = _compute_flat_band_path_summary(model, valley=valley)
-        summary = _summarize_band_gap_at_k(
-            model,
-            model.lattice.k_m,
-            path_summary.flat_band_indices,
-            valley=valley,
-            k_label="Ktilde",
-        )
-        passed = True
-        if case.expected_gap_upper is not None:
-            passed = summary.flat_gap < case.expected_gap_upper
-        if case.expected_gap_lower is not None:
-            passed = passed and summary.flat_gap > case.expected_gap_lower
-        checks.append(
-            make_validation_check(
-                case.name, passed, summary.flat_gap,
-                detail=(
-                    f"{case.detail_prefix} {_describe_kpoint_gap(summary)} "
-                    f"Flat-band indices inferred from the full K-Γ-M-K' path: {path_summary.flat_band_indices}."
-                ),
-            )
-        )
-
-    c2zt_model = TMBGModel.from_config(theta_deg, n_shells=n_shells, params=TMBGParameters.full())
-    _, c2zt_path_summary = _compute_flat_band_path_summary(c2zt_model, valley=valley)
-    c2zt_gap = _summarize_band_gap_at_k(
-        c2zt_model,
-        c2zt_model.lattice.k_m,
-        c2zt_path_summary.flat_band_indices,
-        valley=valley,
-        k_label="Ktilde",
-    )
-    c2zt_residual = _measure_c2zt_residual(c2zt_model, valley=valley, k_tilde=c2zt_model.lattice.k_m)
-    checks.append(
-        make_validation_check(
-            "D3.c2zt_absent", c2zt_residual > 1.0e-6, c2zt_residual,
-            detail=(
-                "tMBG should lack C2zT. "
-                f"max |U H* U^dagger - H| = {_format_mev(c2zt_residual)} at K̃; "
-                f"{_describe_kpoint_gap(c2zt_gap)}"
-            ),
-        )
-    )
-
-    report = ValidationReport(title="tMBG Ktilde Symmetry Diagnostics", checks=tuple(checks))
-    if output_dir is not None:
-        resolved_output_dir = Path(output_dir)
-        resolved_output_dir.mkdir(parents=True, exist_ok=True)
-        report_path = resolved_output_dir / "ktilde_symmetry_report.md"
-        write_text_artifact(report.to_markdown() + "\n", report_path)
-    return report
 
 
 def _rotate_c3(kvec: complex) -> complex:
@@ -604,6 +453,5 @@ __all__ = [
     "ValidationReport",
     "build_c2zt_unitary",
     "cross_check_hamiltonian",
-    "diagnose_ktilde_symmetry",
     "validate_physics",
 ]
