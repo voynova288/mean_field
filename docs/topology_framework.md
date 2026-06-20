@@ -35,7 +35,6 @@ src/analysis/topology/
   targets.py
   __init__.py
   README.md
-  validate_existing_results.py
 ```
 
 Main public objects:
@@ -130,23 +129,11 @@ Local/internal validation coverage for this framework includes:
 - tMBG sewn topology smoke test;
 - compatibility wrappers for tMBG, TDBG, ATMG, and RnG/hBN;
 - HTG Chern-basis link calculations;
-- saved tMBG Berry-flux integration against saved Chern values;
-- saved TDBG Fig. 3 Chern summary;
-- saved HTG Fig. 2b/3b Chern-basis values.
-
 Paper-specific saved-artifact mismatches and dated Slurm/test logs are kept in ignored local reports rather than this public framework contract.
 
-## Saved-result validator
+## Historical saved-result audits
 
-Use the file-only validator when checking old artifacts without rerunning Hamiltonian solves:
-
-```bash
-python -m analysis.topology.validate_existing_results \
-  --root /data/home/ziyuzhu/Mean_Field \
-  --output-dir /data/home/ziyuzhu/Mean_Field/results/topology_framework_validation_YYYYMMDD
-```
-
-This reads existing JSON/NPZ artifacts and performs consistency checks.  It does not generate missing wavefunctions.  For old tMBG/TDBG outputs, saved Chern numbers and Berry flux may exist even when full topology-grid eigenvectors were not persisted; exact recomputation with the new framework then requires regenerating eigenvectors from the model.
+Hard-coded checks for dated `results/...` artifacts are not part of the public topology framework. Keep those saved-artifact audits in ignored reports/internal workspaces, and use this package for the reusable Berry/Chern primitives plus system adapters. For old outputs, saved Chern numbers and Berry flux may exist even when full topology-grid eigenvectors were not persisted; exact recomputation with the current framework then requires regenerating eigenvectors from the model.
 
 ## Rules for future topology code
 

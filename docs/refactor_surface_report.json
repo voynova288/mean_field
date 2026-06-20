@@ -339,6 +339,16 @@
       "legacy_lines_removed_gross": 50,
       "slice": "retire_tmbg_optional_validation_diagnostics",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Retired the hard-coded analysis.topology saved-result validator for dated results trees; reusable topology primitives and system adapters remain, while historical artifact audits move to ignored internal workspaces.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 263,
+      "slice": "retire_topology_saved_artifact_validator",
+      "tracked_files_deleted": [
+        "src/analysis/topology/validate_existing_results.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -713,8 +723,8 @@
     ]
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
-  "src_python_files": 195,
-  "src_python_lines": 64072,
+  "src_python_files": 194,
+  "src_python_lines": 63809,
   "top_30_files": [
     {
       "lines": 2361,
@@ -838,6 +848,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 70199,
-  "tracked_text_lines": 74052
+  "tracked_python_lines": 69936,
+  "tracked_text_lines": 73787
 }

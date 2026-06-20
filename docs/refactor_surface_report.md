@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 74052
-- Tracked Python lines: 70199
+- Tracked text lines: 73787
+- Tracked Python lines: 69936
 - Tracked Julia lines: 826
-- `src` Python files: 195
-- `src` Python lines: 64072
+- `src` Python files: 194
+- `src` Python lines: 63809
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -285,6 +285,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Retired the optional tMBG node-exchange and C3 diagnostic branches from validate_physics while keeping compatibility kwargs and skipped report entries.
 - Deleted files: none; this slice thinned duplicated implementations in place.
 - Gross legacy LOC removed/thinned: 50.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
+### retire_topology_saved_artifact_validator
+
+- Retired the hard-coded analysis.topology saved-result validator for dated results trees; reusable topology primitives and system adapters remain, while historical artifact audits move to ignored internal workspaces.
+- Deleted files: `src/analysis/topology/validate_existing_results.py`.
+- Gross legacy LOC removed/thinned: 263.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
 ## Top 30 Python files under `src`

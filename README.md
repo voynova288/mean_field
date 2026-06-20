@@ -46,11 +46,7 @@ python -m compileall -q src scripts
 
 Core conventions are documented in `docs/conventions.md`. Public API contracts live under `docs/api/`. The generic TDHF/RPA core contract is documented in `docs/tdhf_core_contract.md`.
 
-The unified topology framework has its durable design note in `docs/topology_framework.md`.  Existing saved topology artifacts can be checked without rerunning Hamiltonian solves via:
-
-```bash
-python -m analysis.topology.validate_existing_results --root /path/to/Mean_Field
-```
+The unified topology framework has its durable design note in `docs/topology_framework.md`.
 
 Heavy self-consistent HF calculations, topology-grid eigensolver recomputations, and broad numerical pytest runs should be submitted to a compute node through Slurm rather than run on a login node.
 

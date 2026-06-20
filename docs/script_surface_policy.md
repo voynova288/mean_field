@@ -50,4 +50,4 @@ When cleaning up existing files:
 - migrate reusable logic into system modules, common analysis modules, or an existing devtool;
 - preserve durable public design details in `docs/`, and keep run-specific diagnostics in ignored local `reports/` directories or result metadata rather than in many near-duplicate launch scripts;
 - delete or untrack obsolete wrappers after confirming no current documentation or tests depend on them;
-- keep heavy validation on Slurm and use saved-result validators when available.
+- keep heavy validation on Slurm; keep hard-coded saved-result artifact audits in ignored reports/internal workspaces rather than public package modules.
