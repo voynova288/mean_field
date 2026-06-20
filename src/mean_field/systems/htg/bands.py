@@ -1,31 +1,18 @@
 from __future__ import annotations
 
 
-from .hamiltonian import build_coupling_table, centered_band_indices, diagonalize_hamiltonian
+from .hamiltonian import build_coupling_table, diagonalize_hamiltonian
 from ...core.bands import (
     GridBandsResult,
     PathBandsResult,
     compute_grid_bands,
     compute_path_bands,
     estimate_central_pair_metrics,
+    resolve_selected_band_indices,
 )
 from .lattice import HTGLattice, KPath, build_moire_k_grid
 from .params import HTGParams
 
-
-def _resolve_band_indices(
-    lattice: HTGLattice,
-    *,
-    band_indices: tuple[int, ...] | None,
-    central_band_count: int | None,
-) -> tuple[int, ...]:
-    if band_indices is not None and central_band_count is not None:
-        raise ValueError("Pass either band_indices or central_band_count, not both.")
-    if band_indices is not None:
-        return tuple(int(index) for index in band_indices)
-    if central_band_count is not None:
-        return centered_band_indices(lattice.matrix_dim, int(central_band_count))
-    return tuple(range(lattice.matrix_dim))
 
 
 def compute_bands_along_path(
@@ -40,8 +27,8 @@ def compute_bands_along_path(
     central_band_count: int | None = None,
     return_eigenvectors: bool = False,
 ) -> PathBandsResult:
-    resolved_indices = _resolve_band_indices(
-        lattice,
+    resolved_indices = resolve_selected_band_indices(
+        lattice.matrix_dim,
         band_indices=band_indices,
         central_band_count=central_band_count,
     )
@@ -88,8 +75,8 @@ def compute_bands_on_grid(
     endpoint: bool = False,
     frac_shift: tuple[float, float] = (0.0, 0.0),
 ) -> GridBandsResult:
-    resolved_indices = _resolve_band_indices(
-        lattice,
+    resolved_indices = resolve_selected_band_indices(
+        lattice.matrix_dim,
         band_indices=band_indices,
         central_band_count=central_band_count,
     )

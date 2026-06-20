@@ -6,6 +6,7 @@ import math
 import numpy as np
 from scipy.linalg import eigh
 
+from mean_field.core.bands import centered_band_indices
 from mean_field.core.lattice import build_shift_coupling_edges, complex_lattice_key
 from mean_field.core.validation import validate_valley as _validate_valley
 
@@ -28,17 +29,6 @@ class MoireCouplingEntry:
     source_index: int
     target_index: int
 
-
-def centered_band_indices(matrix_dim: int, band_count: int) -> tuple[int, ...]:
-    if band_count <= 0:
-        raise ValueError(f"Expected positive band_count, got {band_count}")
-    if band_count > matrix_dim:
-        raise ValueError(f"band_count={band_count} exceeds matrix_dim={matrix_dim}")
-    center = int(matrix_dim) // 2
-    lower = max(0, center - int(band_count) // 2)
-    upper = min(int(matrix_dim), lower + int(band_count))
-    lower = max(0, upper - int(band_count))
-    return tuple(range(lower, upper))
 
 
 def dirac_block(kvec: complex, angle_rad: float, vf_ev_nm: float) -> np.ndarray:

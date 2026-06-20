@@ -57,6 +57,14 @@
       "legacy_lines_removed_gross": 49,
       "slice": "dedupe_htg_htqg_central_band_metrics",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Moved centered/selected band-index resolution into mean_field.core.bands. HTG and HTQG bands now use the core resolver, while their hamiltonian modules preserve centered_band_indices as a compatibility alias.",
+      "direct_mean_field_systems_imports_after": 9,
+      "direct_mean_field_systems_imports_before": 9,
+      "legacy_lines_removed_gross": 39,
+      "slice": "dedupe_selected_band_indices",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -122,11 +130,11 @@
           "path": "src/mean_field/systems/RnG_hBN/bands.py"
         },
         {
-          "lines": 153,
+          "lines": 140,
           "path": "src/mean_field/systems/htqg/bands.py"
         },
         {
-          "lines": 140,
+          "lines": 127,
           "path": "src/mean_field/systems/htg/bands.py"
         },
         {
@@ -138,7 +146,7 @@
           "path": "src/mean_field/systems/tdbg/bands.py"
         }
       ],
-      "total_lines": 787
+      "total_lines": 761
     },
     "topology.py": {
       "files": [
@@ -218,14 +226,6 @@
           "src/mean_field/systems/tmbg/bands.py"
         ],
         "symbol": "_diagonalize"
-      },
-      {
-        "count": 2,
-        "paths": [
-          "src/mean_field/systems/htg/bands.py",
-          "src/mean_field/systems/htqg/bands.py"
-        ],
-        "symbol": "_resolve_band_indices"
       },
       {
         "count": 6,
@@ -467,7 +467,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 199,
-  "src_python_lines": 68440,
+  "src_python_lines": 68427,
   "top_30_files": [
     {
       "lines": 2361,

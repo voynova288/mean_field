@@ -51,6 +51,37 @@ def resolve_n_bands(matrix_dim: int, n_bands: int | None) -> int:
         raise ValueError(f"n_bands={resolved} exceeds matrix_dim={int(matrix_dim)}")
     return resolved
 
+def centered_band_indices(matrix_dim: int, band_count: int) -> tuple[int, ...]:
+    """Return contiguous band indices centered around charge neutrality."""
+
+    count = int(band_count)
+    dim = int(matrix_dim)
+    if count <= 0:
+        raise ValueError(f"Expected positive band_count, got {count}")
+    if count > dim:
+        raise ValueError(f"band_count={count} exceeds matrix_dim={dim}")
+    center = dim // 2
+    lower = max(0, center - count // 2)
+    upper = min(dim, lower + count)
+    lower = max(0, upper - count)
+    return tuple(range(lower, upper))
+
+def resolve_selected_band_indices(
+    matrix_dim: int,
+    *,
+    band_indices: Iterable[int] | None,
+    central_band_count: int | None,
+) -> tuple[int, ...]:
+    """Resolve explicit or central selected-band indices for system band adapters."""
+
+    if band_indices is not None and central_band_count is not None:
+        raise ValueError("Pass either band_indices or central_band_count, not both.")
+    if band_indices is not None:
+        return tuple(int(index) for index in band_indices)
+    if central_band_count is not None:
+        return centered_band_indices(int(matrix_dim), int(central_band_count))
+    return tuple(range(int(matrix_dim)))
+
 
 def compute_path_bands(
     path: KPath,
@@ -178,8 +209,10 @@ __all__ = [
     "DiagonalizeCallback",
     "GridBandsResult",
     "PathBandsResult",
+    "centered_band_indices",
     "compute_grid_bands",
     "compute_path_bands",
     "estimate_central_pair_metrics",
     "resolve_n_bands",
+    "resolve_selected_band_indices",
 ]

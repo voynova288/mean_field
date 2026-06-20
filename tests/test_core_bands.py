@@ -2,7 +2,15 @@ from __future__ import annotations
 
 import numpy as np
 
-from mean_field.core.bands import GridBandsResult, compute_grid_bands, compute_path_bands, estimate_central_pair_metrics, resolve_n_bands
+from mean_field.core.bands import (
+    GridBandsResult,
+    centered_band_indices,
+    compute_grid_bands,
+    compute_path_bands,
+    estimate_central_pair_metrics,
+    resolve_n_bands,
+    resolve_selected_band_indices,
+)
 from mean_field.core.lattice import KPath
 
 
@@ -26,6 +34,14 @@ def _toy_diagonalize(k: complex, n_bands: int, return_eigenvectors: bool):
 def test_resolve_n_bands_defaults_and_bounds() -> None:
     assert resolve_n_bands(4, None) == 4
     assert resolve_n_bands(4, 2) == 2
+
+
+def test_centered_and_selected_band_indices() -> None:
+    assert centered_band_indices(8, 2) == (3, 4)
+    assert centered_band_indices(8, 3) == (3, 4, 5)
+    assert resolve_selected_band_indices(6, band_indices=(1, 4), central_band_count=None) == (1, 4)
+    assert resolve_selected_band_indices(6, band_indices=None, central_band_count=2) == (2, 3)
+    assert resolve_selected_band_indices(4, band_indices=None, central_band_count=None) == (0, 1, 2, 3)
 
 
 def test_compute_path_bands_with_eigenvectors() -> None:
