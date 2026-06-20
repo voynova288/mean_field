@@ -445,14 +445,12 @@ def diagnose_ktilde_symmetry(
         if case.expected_gap_lower is not None:
             passed = passed and summary.flat_gap > case.expected_gap_lower
         checks.append(
-            ValidationCheck(
-                name=case.name,
-                status=status_from_bool(passed),
+            make_validation_check(
+                case.name, passed, summary.flat_gap,
                 detail=(
                     f"{case.detail_prefix} {_describe_kpoint_gap(summary)} "
                     f"Flat-band indices inferred from the full K-Γ-M-K' path: {path_summary.flat_band_indices}."
                 ),
-                value=summary.flat_gap,
             )
         )
 
@@ -467,15 +465,13 @@ def diagnose_ktilde_symmetry(
     )
     c2zt_residual = _measure_c2zt_residual(c2zt_model, valley=valley, k_tilde=c2zt_model.lattice.k_m)
     checks.append(
-        ValidationCheck(
-            name="D3.c2zt_absent",
-            status=status_from_bool(c2zt_residual > 1.0e-6),
+        make_validation_check(
+            "D3.c2zt_absent", c2zt_residual > 1.0e-6, c2zt_residual,
             detail=(
                 "tMBG should lack C2zT. "
                 f"max |U H* U^dagger - H| = {_format_mev(c2zt_residual)} at K̃; "
                 f"{_describe_kpoint_gap(c2zt_gap)}"
             ),
-            value=c2zt_residual,
         )
     )
 

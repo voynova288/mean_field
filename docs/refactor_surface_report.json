@@ -209,6 +209,14 @@
       "legacy_lines_removed_gross": 14,
       "slice": "thin_rlg_hbn_band_helpers",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Reused core.validation.make_validation_check for tMBG Ktilde diagnostic pass/fail checks while preserving detail strings.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 4,
+      "slice": "dedupe_tmbg_ktilde_validation_checks",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -304,7 +312,7 @@
     "validation.py": {
       "files": [
         {
-          "lines": 1099,
+          "lines": 1095,
           "path": "src/mean_field/systems/tmbg/validation.py"
         },
         {
@@ -328,7 +336,7 @@
           "path": "src/mean_field/systems/htg/validation.py"
         }
       ],
-      "total_lines": 1848
+      "total_lines": 1844
     }
   },
   "phase2_targets": {
@@ -592,7 +600,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 200,
-  "src_python_lines": 68313,
+  "src_python_lines": 68309,
   "top_30_files": [
     {
       "lines": 2361,
@@ -647,7 +655,7 @@
       "path": "src/mean_field/core/hf/finite_field.py"
     },
     {
-      "lines": 1099,
+      "lines": 1095,
       "path": "src/mean_field/systems/tmbg/validation.py"
     },
     {

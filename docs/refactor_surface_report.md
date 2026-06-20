@@ -5,7 +5,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 ## Summary
 
 - `src` Python files: 200
-- `src` Python lines: 68313
+- `src` Python lines: 68309
 - Files over 1000 lines: 15
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -186,6 +186,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 14.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### dedupe_tmbg_ktilde_validation_checks
+
+- Reused core.validation.make_validation_check for tMBG Ktilde diagnostic pass/fail checks while preserving detail strings.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 4.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -203,7 +210,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 1258 | `src/mean_field/systems/tbg/zero_field/hf.py` |
 | 1202 | `src/mean_field/cli.py` |
 | 1149 | `src/mean_field/core/hf/finite_field.py` |
-| 1099 | `src/mean_field/systems/tmbg/validation.py` |
+| 1095 | `src/mean_field/systems/tmbg/validation.py` |
 | 1012 | `src/mean_field/systems/tbg/finite_field/spectrum.py` |
 | 936 | `src/mean_field/systems/tbg/zero_field/supercell.py` |
 | 925 | `src/mean_field/systems/htqg/hf.py` |
@@ -248,11 +255,11 @@ Total lines: 691
 
 ### `validation.py`
 
-Total lines: 1848
+Total lines: 1844
 
 | Lines | Path |
 |---:|---|
-| 1099 | `src/mean_field/systems/tmbg/validation.py` |
+| 1095 | `src/mean_field/systems/tmbg/validation.py` |
 | 193 | `src/mean_field/systems/htqg/validation.py` |
 | 161 | `src/mean_field/systems/atmg/validation.py` |
 | 160 | `src/mean_field/systems/RnG_hBN/validation.py` |
