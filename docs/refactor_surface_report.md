@@ -4,8 +4,8 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- `src` Python files: 198
-- `src` Python lines: 66778
+- `src` Python files: 197
+- `src` Python lines: 66429
 - Files over 1000 lines: 15
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -219,6 +219,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Retired the unexported Chaudhary 2021 Hartree diagnostic module from the TBG system package; the maintained Chaudhary shift-current adapter remains in mean_field.systems.tbg.chaudhary2021.
 - Deleted files: `src/mean_field/systems/tbg/chaudhary2021_hartree.py`.
 - Gross legacy LOC removed/thinned: 733.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
+### retire_tdbg_hf_plotting_helper
+
+- Retired the non-exported TDBG projected-HF plotting helper module and its lone helper-specific test; the public TDBG path plotting surface remains in mean_field.systems.tdbg.plot.
+- Deleted files: `src/mean_field/systems/tdbg/hf_plotting.py`.
+- Gross legacy LOC removed/thinned: 349.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
 ## Top 30 Python files under `src`

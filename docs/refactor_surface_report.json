@@ -253,6 +253,16 @@
       "tracked_files_deleted": [
         "src/mean_field/systems/tbg/chaudhary2021_hartree.py"
       ]
+    },
+    {
+      "description": "Retired the non-exported TDBG projected-HF plotting helper module and its lone helper-specific test; the public TDBG path plotting surface remains in mean_field.systems.tdbg.plot.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 349,
+      "slice": "retire_tdbg_hf_plotting_helper",
+      "tracked_files_deleted": [
+        "src/mean_field/systems/tdbg/hf_plotting.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -635,8 +645,8 @@
     ]
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
-  "src_python_files": 198,
-  "src_python_lines": 66778,
+  "src_python_files": 197,
+  "src_python_lines": 66429,
   "top_30_files": [
     {
       "lines": 2361,
