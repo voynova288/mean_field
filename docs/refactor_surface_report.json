@@ -39,10 +39,20 @@
       "tracked_files_deleted": [
         "src/mean_field/devtools/run_htqg_projected_hf.py"
       ]
+    },
+    {
+      "description": "Removed duplicate HTG projected-HF CLI glue from devtools after the public API gained explicit HTGRunHFConfig dispatch and the system runner remains available in systems/htg.",
+      "direct_mean_field_systems_imports_after": 9,
+      "direct_mean_field_systems_imports_before": 10,
+      "legacy_lines_removed_gross": 463,
+      "slice": "remove_htg_hf_devtool",
+      "tracked_files_deleted": [
+        "src/mean_field/devtools/run_htg_hf.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
-    "count": 10,
+    "count": 9,
     "items": [
       {
         "line": 1141,
@@ -58,11 +68,6 @@
         "line": 9,
         "path": "src/mean_field/devtools/prepare_tbg_crpa_bm.py",
         "text": "from mean_field.systems.tbg.params import TBGParameters"
-      },
-      {
-        "line": 21,
-        "path": "src/mean_field/devtools/run_htg_hf.py",
-        "text": "from mean_field.systems.htg import ("
       },
       {
         "line": 35,
@@ -453,8 +458,8 @@
     ]
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
-  "src_python_files": 200,
-  "src_python_lines": 68892,
+  "src_python_files": 199,
+  "src_python_lines": 68429,
   "top_30_files": [
     {
       "lines": 2361,

@@ -66,8 +66,8 @@ Examples:
 
 ```bash
 python scripts/mean_field_tools.py help
-python scripts/mean_field_tools.py run_htg_hf --help
-sbatch scripts/submit_mean_field.sbatch python scripts/mean_field_tools.py run_htg_hf --help
+python scripts/mean_field_tools.py hf --help
+sbatch scripts/submit_mean_field.sbatch python scripts/mean_field_tools.py hf --help
 ```
 
 ## Repository Layout

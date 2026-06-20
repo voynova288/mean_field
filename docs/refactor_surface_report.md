@@ -4,10 +4,10 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- `src` Python files: 200
-- `src` Python lines: 68892
+- `src` Python files: 199
+- `src` Python lines: 68429
 - Files over 1000 lines: 15
-- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 10
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 9
 
 ## Completed cleanup slices
 
@@ -38,6 +38,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Deleted files: `src/mean_field/devtools/run_htqg_projected_hf.py`.
 - Gross legacy LOC removed: 400.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 13 -> 10.
+
+### remove_htg_hf_devtool
+
+- Removed duplicate HTG projected-HF CLI glue from devtools after the public API gained explicit HTGRunHFConfig dispatch and the system runner remains available in systems/htg.
+- Deleted files: `src/mean_field/devtools/run_htg_hf.py`.
+- Gross legacy LOC removed: 463.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 10 -> 9.
 
 ## Top 30 Python files under `src`
 
@@ -81,7 +88,6 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | `src/mean_field/devtools/backfill_canonical_hf_sidecars.py` | 1141 | `from mean_field.systems.RnG_hBN.tdhf import load_rlg_hbn_tdhf_run_from_archive` |
 | `src/mean_field/devtools/backfill_canonical_hf_sidecars.py` | 1146 | `from mean_field.systems.RnG_hBN.hf_contracts import rlg_hbn_hf_run_to_hf_run_result` |
 | `src/mean_field/devtools/prepare_tbg_crpa_bm.py` | 9 | `from mean_field.systems.tbg.params import TBGParameters` |
-| `src/mean_field/devtools/run_htg_hf.py` | 21 | `from mean_field.systems.htg import (` |
 | `src/mean_field/devtools/run_rlg_hbn_paper_hf.py` | 35 | `from mean_field.systems.RnG_hBN import (` |
 | `src/mean_field/devtools/run_rlg_hbn_paper_hf.py` | 50 | `from mean_field.systems.RnG_hBN.hf import RLG_HBN_FORM_FACTOR_CONVENTION_VERSION` |
 | `src/mean_field/devtools/run_rlg_hbn_tdhf_finite_q.py` | 16 | `from mean_field.systems.RnG_hBN import (` |
