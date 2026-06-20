@@ -14,18 +14,7 @@ from .hamiltonian import (
 from .lattice import TMBGLattice, build_kpath_from_nodes, build_moire_k_grid, build_standard_kpath, build_tmbg_lattice
 from .model import TMBGModel
 from .params import TMBGParameters, VALID_BERNAL_CONVENTIONS, VALID_BLG_STACKINGS, default_omega, default_omega_prime, hopping_to_velocity
-from .plot import (
-    infer_flat_band_indices,
-    write_tmbg_band_plot,
-    write_tmbg_berry_curvature_plot,
-    write_tmbg_lattice_plot,
-)
 from .topology import TopologyResult, compute_topology_from_eigenvectors, compute_topology_from_grid_result, compute_topology_on_grid
-from .validation import (
-    ValidationCheck,
-    ValidationReport,
-    validate_physics,
-)
 
 __all__ = [
     "GridBandsResult",
@@ -35,8 +24,6 @@ __all__ = [
     "TMBGParameters",
     "TMBGLattice",
     "TopologyResult",
-    "ValidationCheck",
-    "ValidationReport",
     "VALID_BERNAL_CONVENTIONS",
     "VALID_BLG_STACKINGS",
     "blg_interlayer",
@@ -57,10 +44,5 @@ __all__ = [
     "diagonalize_hamiltonian",
     "dirac_block",
     "hopping_to_velocity",
-    "infer_flat_band_indices",
     "moire_coupling_matrix",
-    "validate_physics",
-    "write_tmbg_band_plot",
-    "write_tmbg_berry_curvature_plot",
-    "write_tmbg_lattice_plot",
 ]
