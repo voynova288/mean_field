@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 67394
-- Tracked Python lines: 63373
+- Tracked text lines: 67222
+- Tracked Python lines: 63213
 - Tracked Julia lines: 826
-- `src` Python files: 179
-- `src` Python lines: 57180
+- `src` Python files: 177
+- `src` Python lines: 57020
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -432,6 +432,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Archived the original RnG/hBN topology module and split HF microstate sewing into a small system gauge bridge, leaving topology.py as a thin boundary-sewing adapter around analysis.topology.
 - Deleted files: none; this slice thinned duplicated implementations in place.
 - Gross legacy LOC removed/thinned: 81.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
+### archive_retire_system_plot_helpers
+
+- Archived and removed RnG/hBN and TDBG system-local band-plot helper modules; tracked plotting should go through core plotting or workflow-level adapters rather than system paper/helper surfaces.
+- Deleted files: `src/mean_field/systems/RnG_hBN/plot.py`, `src/mean_field/systems/tdbg/plot.py`.
+- Gross legacy LOC removed/thinned: 160.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
 ## Top 30 Python files under `src`
