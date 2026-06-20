@@ -4,13 +4,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 66977
-- Tracked Python lines: 62918
+- Tracked text lines: 65792
+- Tracked Python lines: 61727
 - Tracked Julia lines: 826
 - `src` Python files: 177
-- `src` Python lines: 56797
-- Files over 1000 lines: 13
-- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
+- `src` Python lines: 55607
+- Files over 1000 lines: 12
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 3
 
 ## Completed cleanup slices
 
@@ -462,6 +462,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 31.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### archive_retire_rlg_hbn_paper_hf_runner
+
+- Archived the RnG/hBN paper-HF runner to ignored local_archive and thinned the tracked devtool to metadata sidecar/archive compatibility helpers only; removed the dispatcher command so the paper runner is no longer active command surface.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 1248.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 3.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -470,7 +477,6 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 2252 | `src/mean_field/systems/RnG_hBN/hf.py` |
 | 1640 | `src/mean_field/systems/RnG_hBN/tdhf.py` |
 | 1566 | `src/mean_field/devtools/backfill_canonical_hf_sidecars.py` |
-| 1563 | `src/mean_field/devtools/run_rlg_hbn_paper_hf.py` |
 | 1348 | `src/mean_field/systems/tbg/zero_field/runners.py` |
 | 1347 | `src/mean_field/systems/htg/supercell.py` |
 | 1306 | `src/mean_field/api/hf.py` |
@@ -496,14 +502,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 498 | `src/mean_field/crpa/validation.py` |
 | 492 | `src/mean_field/systems/RnG_hBN/screening.py` |
 | 456 | `src/mean_field/systems/tbg/zero_field/model.py` |
+| 454 | `src/mean_field/crpa/workflow.py` |
 
 ## Direct private-system imports in workflow surfaces
 
 | Path | Line | Import |
 |---|---:|---|
 | `src/mean_field/devtools/prepare_tbg_crpa_bm.py` | 9 | `from mean_field.systems.tbg.params import TBGParameters` |
-| `src/mean_field/devtools/run_rlg_hbn_paper_hf.py` | 35 | `from mean_field.systems.RnG_hBN import (` |
-| `src/mean_field/devtools/run_rlg_hbn_paper_hf.py` | 50 | `from mean_field.systems.RnG_hBN.hf import RLG_HBN_FORM_FACTOR_CONVENTION_VERSION` |
 | `src/mean_field/devtools/run_rlg_hbn_tdhf_finite_q.py` | 16 | `from mean_field.systems.RnG_hBN import (` |
 | `src/mean_field/devtools/validate_tbg_crpa_artifact.py` | 22 | `from mean_field.systems.tbg import TBGParameters` |
 

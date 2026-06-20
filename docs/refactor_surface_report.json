@@ -571,25 +571,23 @@
       "legacy_lines_removed_gross": 31,
       "slice": "retire_system_central_band_metric_wrappers",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Archived the RnG/hBN paper-HF runner to ignored local_archive and thinned the tracked devtool to metadata sidecar/archive compatibility helpers only; removed the dispatcher command so the paper runner is no longer active command surface.",
+      "direct_mean_field_systems_imports_after": 3,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 1248,
+      "slice": "archive_retire_rlg_hbn_paper_hf_runner",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
-    "count": 5,
+    "count": 3,
     "items": [
       {
         "line": 9,
         "path": "src/mean_field/devtools/prepare_tbg_crpa_bm.py",
         "text": "from mean_field.systems.tbg.params import TBGParameters"
-      },
-      {
-        "line": 35,
-        "path": "src/mean_field/devtools/run_rlg_hbn_paper_hf.py",
-        "text": "from mean_field.systems.RnG_hBN import ("
-      },
-      {
-        "line": 50,
-        "path": "src/mean_field/devtools/run_rlg_hbn_paper_hf.py",
-        "text": "from mean_field.systems.RnG_hBN.hf import RLG_HBN_FORM_FACTOR_CONVENTION_VERSION"
       },
       {
         "line": 16,
@@ -603,7 +601,7 @@
       }
     ]
   },
-  "files_over_1000_lines": 13,
+  "files_over_1000_lines": 12,
   "module_families": {
     "bands.py": {
       "files": [
@@ -776,9 +774,9 @@
     ],
     "validation.py": []
   },
-  "root": "/data/home/ziyuzhu/tmp/mean_field_report_band_metric_20260620_224804",
+  "root": "/data/home/ziyuzhu/tmp/mean_field_report_rlg_paper_hf_runner_20260620_225823",
   "src_python_files": 177,
-  "src_python_lines": 56797,
+  "src_python_lines": 55607,
   "top_30_files": [
     {
       "lines": 2305,
@@ -795,10 +793,6 @@
     {
       "lines": 1566,
       "path": "src/mean_field/devtools/backfill_canonical_hf_sidecars.py"
-    },
-    {
-      "lines": 1563,
-      "path": "src/mean_field/devtools/run_rlg_hbn_paper_hf.py"
     },
     {
       "lines": 1348,
@@ -899,9 +893,13 @@
     {
       "lines": 456,
       "path": "src/mean_field/systems/tbg/zero_field/model.py"
+    },
+    {
+      "lines": 454,
+      "path": "src/mean_field/crpa/workflow.py"
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 62918,
-  "tracked_text_lines": 66977
+  "tracked_python_lines": 61727,
+  "tracked_text_lines": 65792
 }
