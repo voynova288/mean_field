@@ -2024,61 +2024,6 @@ def build_rlg_hbn_density_from_hamiltonian(
     return density, energies, float(mu), occ_mask
 
 
-@dataclass(frozen=True)
-class RLGhBNInitializer:
-    initial_density: np.ndarray | None = None
-
-    def __call__(self, state: RLGhBNHartreeFockState, *, init_mode: str, seed: int) -> None:
-        if self.initial_density is not None:
-            density = np.asarray(self.initial_density, dtype=np.complex128)
-            if density.shape != state.density.shape:
-                raise ValueError(f"Expected initial_density shape {state.density.shape}, got {density.shape}")
-            state.density[:, :, :] = density
-        else:
-            state.density[:, :, :] = initialize_rlg_hbn_density(
-                state.h0,
-                nu=state.nu,
-                reference_density=state.reference_density,
-                active_valence_bands=state.active_valence_bands,
-                init_mode=init_mode,
-                seed=seed,
-                n_spin=state.n_spin,
-                n_eta=state.n_eta,
-                n_band=state.n_band,
-            )
-        _hermitize_blocks_inplace(state.density)
-        _update_rlg_hbn_diagnostics_from_density(state)
-
-
-@dataclass(frozen=True)
-class RLGhBNDensityBuilder:
-    nu: float
-    reference_density: np.ndarray
-    active_valence_bands: int
-    occupation_counts: tuple[int, ...] | None = None
-    n_spin: int = 2
-    n_eta: int = 2
-    n_band: int = 2
-
-    def __call__(self, hamiltonian: np.ndarray) -> DensityUpdateResult:
-        density, energies, mu, occupation_mask = build_rlg_hbn_density_from_hamiltonian(
-            hamiltonian,
-            nu=self.nu,
-            reference_density=self.reference_density,
-            active_valence_bands=self.active_valence_bands,
-            occupation_counts=self.occupation_counts,
-            n_spin=self.n_spin,
-            n_eta=self.n_eta,
-            n_band=self.n_band,
-        )
-        return DensityUpdateResult(
-            density=density,
-            energies=energies,
-            mu=mu,
-            observables={"occupation_mask": occupation_mask},
-        )
-
-
 def build_rlg_hbn_hf_problem(
     state: RLGhBNHartreeFockState,
     overlap_blocks: RLGhBNLayerOverlapBlockSet,
@@ -2095,15 +2040,45 @@ def build_rlg_hbn_hf_problem(
     :class:`mean_field.core.hf.HartreeFockProblem` interface.
     """
 
-    density_builder = RLGhBNDensityBuilder(
-        nu=state.nu,
-        reference_density=state.reference_density,
-        active_valence_bands=state.active_valence_bands,
-        occupation_counts=state.occupation_counts,
-        n_spin=state.n_spin,
-        n_eta=state.n_eta,
-        n_band=state.n_band,
-    )
+    def initialize_state(state_obj: RLGhBNHartreeFockState, *, init_mode: str, seed: int) -> None:
+        if initial_density is not None:
+            density = np.asarray(initial_density, dtype=np.complex128)
+            if density.shape != state_obj.density.shape:
+                raise ValueError(f"Expected initial_density shape {state_obj.density.shape}, got {density.shape}")
+            state_obj.density[:, :, :] = density
+        else:
+            state_obj.density[:, :, :] = initialize_rlg_hbn_density(
+                state_obj.h0,
+                nu=state_obj.nu,
+                reference_density=state_obj.reference_density,
+                active_valence_bands=state_obj.active_valence_bands,
+                init_mode=init_mode,
+                seed=seed,
+                n_spin=state_obj.n_spin,
+                n_eta=state_obj.n_eta,
+                n_band=state_obj.n_band,
+            )
+        _hermitize_blocks_inplace(state_obj.density)
+        _update_rlg_hbn_diagnostics_from_density(state_obj)
+
+    def build_density(hamiltonian: np.ndarray) -> DensityUpdateResult:
+        density, energies, mu, occupation_mask = build_rlg_hbn_density_from_hamiltonian(
+            hamiltonian,
+            nu=state.nu,
+            reference_density=state.reference_density,
+            active_valence_bands=state.active_valence_bands,
+            occupation_counts=state.occupation_counts,
+            n_spin=state.n_spin,
+            n_eta=state.n_eta,
+            n_band=state.n_band,
+        )
+        return DensityUpdateResult(
+            density=density,
+            energies=energies,
+            mu=mu,
+            observables={"occupation_mask": occupation_mask},
+        )
+
     kernel = HartreeFockKernel(
         interaction_builder=lambda density: build_rlg_hbn_hf_interaction_hamiltonian(
             density,
@@ -2111,7 +2086,7 @@ def build_rlg_hbn_hf_problem(
             v0=state.v0,
             beta=beta,
         ),
-        density_builder=density_builder,
+        density_builder=build_density,
         energy_functional=compute_hf_energy,
         oda_parameterizer=lambda state_obj, delta_density: compute_rlg_hbn_oda_parameter(
             state_obj,  # type: ignore[arg-type]
@@ -2125,7 +2100,7 @@ def build_rlg_hbn_hf_problem(
         convergence_rule="raw",
     )
     return HartreeFockProblem(
-        initializer=RLGhBNInitializer(initial_density=initial_density),
+        initializer=initialize_state,
         kernel=kernel,
     )
 
@@ -2236,11 +2211,9 @@ def scan_rlg_hbn_ground_state(
 
 
 __all__ = [
-    "RLGhBNDensityBuilder",
     "RLGhBNGroundStateScan",
     "RLGhBNHartreeFockRun",
     "RLGhBNHartreeFockState",
-    "RLGhBNInitializer",
     "RLGhBNInteractionComponents",
     "RLGhBNLayerOverlapBlockSet",
     "RLGhBNProjectedBasisData",
