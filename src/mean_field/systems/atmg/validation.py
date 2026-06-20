@@ -5,7 +5,6 @@ import numpy as np
 from ...core.validation import ValidationCheck, ValidationReport, status_from_bool
 from .bilayer_map import analytic_singular_values, build_W_matrix, svd_decompose
 from .model import ATMGModel
-from .params import ATMGParameters
 from .tbg import build_tbg_hamiltonian
 
 
@@ -131,31 +130,9 @@ def validate_physics(
     )
 
 
-def reproduce_khalaf_checkpoints(
-    *,
-    n_shells: int = 1,
-) -> tuple[ValidationReport, ...]:
-    cases = (
-        ATMGParameters.chiral(2, 1.05),
-        ATMGParameters.realistic(2, 1.05, kappa=0.8),
-        ATMGParameters.chiral(3, 1.53),
-        ATMGParameters.chiral(4, 1.75),
-    )
-    reports: list[ValidationReport] = []
-    for params in cases:
-        model = ATMGModel.from_config(
-            params.n_layers,
-            params.theta_deg,
-            n_shells=n_shells,
-            params=params,
-        )
-        reports.append(validate_physics(model))
-    return tuple(reports)
-
 
 __all__ = [
     "ValidationCheck",
     "ValidationReport",
-    "reproduce_khalaf_checkpoints",
     "validate_physics",
 ]

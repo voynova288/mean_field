@@ -24,7 +24,7 @@ from .tbg import (
     moire_coupling_matrix,
 )
 from .topology import TopologyResult, compute_topology_from_eigenvectors, compute_topology_from_grid_result, compute_topology_on_grid
-from .validation import ValidationCheck, ValidationReport, reproduce_khalaf_checkpoints, validate_physics
+from .validation import ValidationCheck, ValidationReport, validate_physics
 
 __all__ = [
     "ATMGModel",
@@ -60,7 +60,6 @@ __all__ = [
     "diagonalize_tbg_hamiltonian",
     "dirac_block",
     "moire_coupling_matrix",
-    "reproduce_khalaf_checkpoints",
     "svd_decompose",
     "validate_physics",
 ]

@@ -313,6 +313,14 @@
       "legacy_lines_removed_gross": 150,
       "slice": "retire_tmbg_cutoff_validation_path",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Retired the unreferenced ATMG Khalaf paper-checkpoint helper from the public system surface; ATMG validate_physics remains as the lightweight validation entry point.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 27,
+      "slice": "retire_atmg_khalaf_checkpoint_helper",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -416,12 +424,12 @@
           "path": "src/mean_field/systems/htqg/validation.py"
         },
         {
-          "lines": 161,
-          "path": "src/mean_field/systems/atmg/validation.py"
-        },
-        {
           "lines": 156,
           "path": "src/mean_field/systems/RnG_hBN/validation.py"
+        },
+        {
+          "lines": 138,
+          "path": "src/mean_field/systems/atmg/validation.py"
         },
         {
           "lines": 126,
@@ -432,7 +440,7 @@
           "path": "src/mean_field/systems/htg/validation.py"
         }
       ],
-      "total_lines": 1053
+      "total_lines": 1030
     }
   },
   "phase2_targets": {
@@ -688,7 +696,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 196,
-  "src_python_lines": 64499,
+  "src_python_lines": 64475,
   "top_30_files": [
     {
       "lines": 2361,
@@ -812,6 +820,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 70626,
-  "tracked_text_lines": 74432
+  "tracked_python_lines": 70602,
+  "tracked_text_lines": 74423
 }

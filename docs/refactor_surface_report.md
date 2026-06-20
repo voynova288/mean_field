@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 74432
-- Tracked Python lines: 70626
+- Tracked text lines: 74423
+- Tracked Python lines: 70602
 - Tracked Julia lines: 826
 - `src` Python files: 196
-- `src` Python lines: 64499
+- `src` Python lines: 64475
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -266,6 +266,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 150.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### retire_atmg_khalaf_checkpoint_helper
+
+- Retired the unreferenced ATMG Khalaf paper-checkpoint helper from the public system surface; ATMG validate_physics remains as the lightweight validation entry point.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 27.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -328,14 +335,14 @@ Total lines: 691
 
 ### `validation.py`
 
-Total lines: 1053
+Total lines: 1030
 
 | Lines | Path |
 |---:|---|
 | 308 | `src/mean_field/systems/tmbg/validation.py` |
 | 193 | `src/mean_field/systems/htqg/validation.py` |
-| 161 | `src/mean_field/systems/atmg/validation.py` |
 | 156 | `src/mean_field/systems/RnG_hBN/validation.py` |
+| 138 | `src/mean_field/systems/atmg/validation.py` |
 | 126 | `src/mean_field/systems/tdbg/validation.py` |
 | 109 | `src/mean_field/systems/htg/validation.py` |
 
