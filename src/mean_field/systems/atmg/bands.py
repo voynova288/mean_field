@@ -1,32 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from ...core.bands import GridBandsResult, PathBandsResult, compute_grid_bands, compute_path_bands
 from ...core.lattice import KPath
 from .hamiltonian import diagonalize_hamiltonian
 from .lattice import ATMGLattice, build_moire_k_grid
 from .params import ATMGParameters
 from .tbg import build_coupling_table
-
-if TYPE_CHECKING:
-    from .model import ATMGModel
-
-
-def build_khalaf_fig3_path(model: "ATMGModel", points_per_segment: int) -> KPath:
-    """Return the Khalaf et al. Fig. 3 ATMG path convention."""
-
-    kprime = -complex(model.lattice.q0)
-    kpoint = 0.0 + 0.0j
-    gamma = -complex(model.lattice.q0) - complex(model.lattice.q_plus)
-    gamma_prime = gamma + complex(model.lattice.g_m1)
-    kprime_translated = kprime + complex(model.lattice.g_m1)
-    return model.build_kpath(
-        (kprime, kpoint, gamma, gamma_prime, kprime_translated),
-        ("K'", "K", r"$\Gamma$", r"$\Gamma'$", "K'"),
-        points_per_segment=points_per_segment,
-    )
-
 
 def _make_diagonalizer(lattice: ATMGLattice, params: ATMGParameters, *, valley: int):
     coupling_table = build_coupling_table(lattice.g_vectors, lattice.q_vectors, valley=valley)
@@ -88,7 +67,6 @@ def compute_bands_on_grid(
 __all__ = [
     "GridBandsResult",
     "PathBandsResult",
-    "build_khalaf_fig3_path",
     "compute_bands_along_path",
     "compute_bands_on_grid",
 ]
