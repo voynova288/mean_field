@@ -401,6 +401,16 @@
       "tracked_files_deleted": [
         "src/mean_field/systems/htqg/plot.py"
       ]
+    },
+    {
+      "description": "Deleted the unexported HTQG real-space charge-density diagnostic helper module after confirming no package, docs, or tracked tests reference it.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 102,
+      "slice": "retire_htqg_charge_density_diagnostic",
+      "tracked_files_deleted": [
+        "src/mean_field/systems/htqg/density.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -775,8 +785,8 @@
     ]
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
-  "src_python_files": 192,
-  "src_python_lines": 61289,
+  "src_python_files": 191,
+  "src_python_lines": 61187,
   "top_30_files": [
     {
       "lines": 2361,
@@ -900,6 +910,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 67416,
-  "tracked_text_lines": 71360
+  "tracked_python_lines": 67314,
+  "tracked_text_lines": 71275
 }

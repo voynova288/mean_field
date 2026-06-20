@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 71360
-- Tracked Python lines: 67416
+- Tracked text lines: 71275
+- Tracked Python lines: 67314
 - Tracked Julia lines: 826
-- `src` Python files: 192
-- `src` Python lines: 61289
+- `src` Python files: 191
+- `src` Python lines: 61187
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -334,6 +334,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Deleted the unexported HTQG private plotting helper module; reusable plotting remains in mean_field.core.plotting and active system plot adapters.
 - Deleted files: `src/mean_field/systems/htqg/plot.py`.
 - Gross legacy LOC removed/thinned: 81.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
+### retire_htqg_charge_density_diagnostic
+
+- Deleted the unexported HTQG real-space charge-density diagnostic helper module after confirming no package, docs, or tracked tests reference it.
+- Deleted files: `src/mean_field/systems/htqg/density.py`.
+- Gross legacy LOC removed/thinned: 102.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
 ## Top 30 Python files under `src`
