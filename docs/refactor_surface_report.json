@@ -73,6 +73,14 @@
       "legacy_lines_removed_gross": 12,
       "slice": "dedupe_tdbg_tmbg_band_diagonalizers",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Collapsed duplicate path/grid diagonalizer closures inside the RnG/hBN band adapter without touching the dirty HF/TDHF implementation files.",
+      "direct_mean_field_systems_imports_after": 9,
+      "direct_mean_field_systems_imports_before": 9,
+      "legacy_lines_removed_gross": 8,
+      "slice": "dedupe_rlg_hbn_band_diagonalizer",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -134,7 +142,7 @@
           "path": "src/mean_field/systems/atmg/bands.py"
         },
         {
-          "lines": 173,
+          "lines": 169,
           "path": "src/mean_field/systems/RnG_hBN/bands.py"
         },
         {
@@ -154,7 +162,7 @@
           "path": "src/mean_field/systems/tdbg/bands.py"
         }
       ],
-      "total_lines": 749
+      "total_lines": 745
     },
     "topology.py": {
       "files": [
@@ -236,8 +244,9 @@
         "symbol": "_diagonalize"
       },
       {
-        "count": 3,
+        "count": 4,
         "paths": [
+          "src/mean_field/systems/RnG_hBN/bands.py",
           "src/mean_field/systems/atmg/bands.py",
           "src/mean_field/systems/tdbg/bands.py",
           "src/mean_field/systems/tmbg/bands.py"
@@ -484,7 +493,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 199,
-  "src_python_lines": 68415,
+  "src_python_lines": 68411,
   "top_30_files": [
     {
       "lines": 2361,
