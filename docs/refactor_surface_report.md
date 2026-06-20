@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 67222
-- Tracked Python lines: 63213
+- Tracked text lines: 67154
+- Tracked Python lines: 63127
 - Tracked Julia lines: 826
 - `src` Python files: 177
-- `src` Python lines: 57020
+- `src` Python lines: 56934
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -441,6 +441,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 160.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### archive_thin_atmg_band_adapter
+
+- Archived ATMG bands.py and retired the mapped-spectrum audit payload from path/grid band APIs; tracked ATMG bands now expose only the thin generic path/grid adapter and Khalaf path convention.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 86.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -490,14 +497,14 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ### `bands.py`
 
-Total lines: 691
+Total lines: 611
 
 | Lines | Path |
 |---:|---|
-| 174 | `src/mean_field/systems/atmg/bands.py` |
 | 155 | `src/mean_field/systems/RnG_hBN/bands.py` |
 | 130 | `src/mean_field/systems/htqg/bands.py` |
 | 113 | `src/mean_field/systems/htg/bands.py` |
+| 94 | `src/mean_field/systems/atmg/bands.py` |
 | 64 | `src/mean_field/systems/tmbg/bands.py` |
 | 55 | `src/mean_field/systems/tdbg/bands.py` |
 

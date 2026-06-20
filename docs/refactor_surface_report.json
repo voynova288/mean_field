@@ -545,6 +545,14 @@
         "src/mean_field/systems/RnG_hBN/plot.py",
         "src/mean_field/systems/tdbg/plot.py"
       ]
+    },
+    {
+      "description": "Archived ATMG bands.py and retired the mapped-spectrum audit payload from path/grid band APIs; tracked ATMG bands now expose only the thin generic path/grid adapter and Khalaf path convention.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 86,
+      "slice": "archive_thin_atmg_band_adapter",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -582,10 +590,6 @@
     "bands.py": {
       "files": [
         {
-          "lines": 174,
-          "path": "src/mean_field/systems/atmg/bands.py"
-        },
-        {
           "lines": 155,
           "path": "src/mean_field/systems/RnG_hBN/bands.py"
         },
@@ -598,6 +602,10 @@
           "path": "src/mean_field/systems/htg/bands.py"
         },
         {
+          "lines": 94,
+          "path": "src/mean_field/systems/atmg/bands.py"
+        },
+        {
           "lines": 64,
           "path": "src/mean_field/systems/tmbg/bands.py"
         },
@@ -606,7 +614,7 @@
           "path": "src/mean_field/systems/tdbg/bands.py"
         }
       ],
-      "total_lines": 691
+      "total_lines": 611
     },
     "topology.py": {
       "files": [
@@ -758,9 +766,9 @@
     ],
     "validation.py": []
   },
-  "root": "/data/home/ziyuzhu/tmp/mean_field_report_plot_archive_20260620_221158",
+  "root": "/data/home/ziyuzhu/tmp/mean_field_report_atmg_bands_20260620_221516",
   "src_python_files": 177,
-  "src_python_lines": 57020,
+  "src_python_lines": 56934,
   "top_30_files": [
     {
       "lines": 2305,
@@ -884,6 +892,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 63213,
-  "tracked_text_lines": 67222
+  "tracked_python_lines": 63127,
+  "tracked_text_lines": 67154
 }
