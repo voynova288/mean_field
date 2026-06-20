@@ -597,22 +597,22 @@
       "tracked_files_deleted": [
         "src/mean_field/devtools/run_rlg_hbn_tdhf_finite_q.py"
       ]
+    },
+    {
+      "description": "Archived and removed the cRPA prep/validation wrappers that directly imported private TBG system modules, leaving the tracked tested cRPA chunk/merge devtools intact and avoiding cRPA algorithm changes.",
+      "direct_mean_field_systems_imports_after": 0,
+      "direct_mean_field_systems_imports_before": 2,
+      "legacy_lines_removed_gross": 368,
+      "slice": "archive_retire_crpa_direct_import_devtools",
+      "tracked_files_deleted": [
+        "src/mean_field/devtools/prepare_tbg_crpa_bm.py",
+        "src/mean_field/devtools/validate_tbg_crpa_artifact.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
-    "count": 2,
-    "items": [
-      {
-        "line": 9,
-        "path": "src/mean_field/devtools/prepare_tbg_crpa_bm.py",
-        "text": "from mean_field.systems.tbg.params import TBGParameters"
-      },
-      {
-        "line": 22,
-        "path": "src/mean_field/devtools/validate_tbg_crpa_artifact.py",
-        "text": "from mean_field.systems.tbg import TBGParameters"
-      }
-    ]
+    "count": 0,
+    "items": []
   },
   "files_over_1000_lines": 12,
   "module_families": {
@@ -787,9 +787,9 @@
     ],
     "validation.py": []
   },
-  "root": "/data/home/ziyuzhu/tmp/mean_field_report_retire_finite_q_devtool_20260620_232559",
-  "src_python_files": 176,
-  "src_python_lines": 54979,
+  "root": "/data/home/ziyuzhu/tmp/mean_field_report_retire_crpa_devtools_20260620_232902",
+  "src_python_files": 174,
+  "src_python_lines": 54613,
   "top_30_files": [
     {
       "lines": 2305,
@@ -913,6 +913,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 61097,
-  "tracked_text_lines": 65180
+  "tracked_python_lines": 60729,
+  "tracked_text_lines": 64823
 }

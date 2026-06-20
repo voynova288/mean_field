@@ -4,13 +4,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 65180
-- Tracked Python lines: 61097
+- Tracked text lines: 64823
+- Tracked Python lines: 60729
 - Tracked Julia lines: 826
-- `src` Python files: 176
-- `src` Python lines: 54979
+- `src` Python files: 174
+- `src` Python lines: 54613
 - Files over 1000 lines: 12
-- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 2
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0
 
 ## Completed cleanup slices
 
@@ -483,6 +483,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 408.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 3 -> 2.
 
+### archive_retire_crpa_direct_import_devtools
+
+- Archived and removed the cRPA prep/validation wrappers that directly imported private TBG system modules, leaving the tracked tested cRPA chunk/merge devtools intact and avoiding cRPA algorithm changes.
+- Deleted files: `src/mean_field/devtools/prepare_tbg_crpa_bm.py`, `src/mean_field/devtools/validate_tbg_crpa_artifact.py`.
+- Gross legacy LOC removed/thinned: 368.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 2 -> 0.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -522,8 +529,6 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 | Path | Line | Import |
 |---|---:|---|
-| `src/mean_field/devtools/prepare_tbg_crpa_bm.py` | 9 | `from mean_field.systems.tbg.params import TBGParameters` |
-| `src/mean_field/devtools/validate_tbg_crpa_artifact.py` | 22 | `from mean_field.systems.tbg import TBGParameters` |
 
 ## Repeated module-family line counts
 
