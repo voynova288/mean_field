@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
 
 import numpy as np
 
-from ...core.validation import ValidationCheck, ValidationReport, make_validation_check, status_from_bool
-from .bands import PathBandsResult
+from ...core.validation import ValidationCheck, ValidationReport, make_validation_check
 from .cross_check import (
     build_coupling_table as build_cross_coupling_table,
     build_hamiltonian_tmbg as build_cross_check_hamiltonian,
@@ -14,50 +12,6 @@ from .cross_check import (
 )
 from .hamiltonian import build_diagonal_block
 from .model import TMBGModel
-from .params import TMBGParameters
-from .plot import infer_flat_band_indices
-
-
-
-
-
-
-
-@dataclass(frozen=True)
-class _CheckpointBandSummary:
-    flat_band_indices: tuple[int, int]
-    valence_width: float
-    conduction_width: float
-    flat_gap: float
-    lower_gap: float | None
-    upper_gap: float | None
-
-    @property
-    def widest_flat_band(self) -> float:
-        return float(max(self.valence_width, self.conduction_width))
-
-    @property
-    def outer_gap_floor(self) -> float | None:
-        values = [gap for gap in (self.lower_gap, self.upper_gap) if gap is not None]
-        if not values:
-            return None
-        return float(min(values))
-
-
-@dataclass(frozen=True)
-class _CutoffConvergenceSummary:
-    base_n_shells: int
-    refined_n_shells: int
-    base_flat_band_indices: tuple[int, int]
-    refined_flat_band_indices: tuple[int, int]
-    gap_delta: float
-    valence_width_delta: float
-    conduction_width_delta: float
-
-    @property
-    def max_delta(self) -> float:
-        return float(max(self.gap_delta, self.valence_width_delta, self.conduction_width_delta))
-
 
 def _format_mev(value_ev: float | None) -> str:
     if value_ev is None:
@@ -65,49 +19,9 @@ def _format_mev(value_ev: float | None) -> str:
     return f"{value_ev * 1.0e3:.3f} meV"
 
 
-def _band_width(energies: np.ndarray, band_index: int) -> float:
-    band = np.asarray(energies[:, int(band_index)], dtype=float)
-    return float(np.max(band) - np.min(band))
 
 
-def _minimum_gap(energies: np.ndarray, lower_band: int, upper_band: int) -> float:
-    lower = np.asarray(energies[:, int(lower_band)], dtype=float)
-    upper = np.asarray(energies[:, int(upper_band)], dtype=float)
-    return float(np.min(upper - lower))
 
-
-def _summarize_flat_bands(path_result: PathBandsResult) -> _CheckpointBandSummary:
-    energies = np.asarray(path_result.energies, dtype=float)
-    valence_index, conduction_index = infer_flat_band_indices(energies)
-
-    lower_gap = None if valence_index == 0 else _minimum_gap(energies, valence_index - 1, valence_index)
-    upper_gap = None if conduction_index + 1 >= energies.shape[1] else _minimum_gap(energies, conduction_index, conduction_index + 1)
-    return _CheckpointBandSummary(
-        flat_band_indices=(int(valence_index), int(conduction_index)),
-        valence_width=_band_width(energies, valence_index),
-        conduction_width=_band_width(energies, conduction_index),
-        flat_gap=_minimum_gap(energies, valence_index, conduction_index),
-        lower_gap=lower_gap,
-        upper_gap=upper_gap,
-    )
-
-
-def _clone_params(params: TMBGParameters) -> TMBGParameters:
-    return TMBGParameters(
-        graphene_lattice_constant_nm=params.graphene_lattice_constant_nm,
-        t0=params.t0,
-        t1=params.t1,
-        t3=params.t3,
-        t4=params.t4,
-        delta=params.delta,
-        omega=params.omega,
-        omega_prime=params.omega_prime,
-        interlayer_potential=params.interlayer_potential,
-        staggered_potential=params.staggered_potential,
-        blg_stacking=params.blg_stacking,
-        bernal_convention=params.bernal_convention,
-        model_name=params.model_name,
-    )
 
 
 def build_c2zt_unitary(g_vectors: np.ndarray) -> np.ndarray:
@@ -182,58 +96,6 @@ def cross_check_hamiltonian(model: TMBGModel, *, valley: int = 1) -> dict[str, f
         )
         diffs[label] = float(np.max(np.abs(h_main - h_cross)))
     return diffs
-
-
-def _compute_flat_band_path_summary(
-    model: TMBGModel,
-    *,
-    valley: int,
-    points_per_segment: int = 120,
-) -> tuple[PathBandsResult, _CheckpointBandSummary]:
-    path_result = model.bands_along_standard_path(
-        points_per_segment=points_per_segment,
-        valley=valley,
-        n_bands=model.lattice.matrix_dim,
-    )
-    return path_result, _summarize_flat_bands(path_result)
-
-
-def _compute_cutoff_convergence_summary(
-    model: TMBGModel,
-    *,
-    valley: int,
-    points_per_segment: int = 120,
-) -> _CutoffConvergenceSummary:
-    _, base_summary = _compute_flat_band_path_summary(model, valley=valley, points_per_segment=points_per_segment)
-    refined_model = TMBGModel.from_config(
-        model.theta_deg,
-        n_shells=model.n_shells + 1,
-        params=_clone_params(model.params),
-    )
-    _, refined_summary = _compute_flat_band_path_summary(
-        refined_model,
-        valley=valley,
-        points_per_segment=points_per_segment,
-    )
-    return _CutoffConvergenceSummary(
-        base_n_shells=int(model.n_shells),
-        refined_n_shells=int(refined_model.n_shells),
-        base_flat_band_indices=tuple(int(index) for index in base_summary.flat_band_indices),
-        refined_flat_band_indices=tuple(int(index) for index in refined_summary.flat_band_indices),
-        gap_delta=float(abs(refined_summary.flat_gap - base_summary.flat_gap)),
-        valence_width_delta=float(abs(refined_summary.valence_width - base_summary.valence_width)),
-        conduction_width_delta=float(abs(refined_summary.conduction_width - base_summary.conduction_width)),
-    )
-
-
-def _describe_cutoff_convergence(summary: _CutoffConvergenceSummary) -> str:
-    return (
-        f"n_shells={summary.base_n_shells}->{summary.refined_n_shells}, "
-        f"flat bands {summary.base_flat_band_indices}->{summary.refined_flat_band_indices}, "
-        f"Δgap={_format_mev(summary.gap_delta)}, "
-        f"Δbw_v={_format_mev(summary.valence_width_delta)}, "
-        f"Δbw_c={_format_mev(summary.conduction_width_delta)}"
-    )
 
 
 def _rotate_c3(kvec: complex) -> complex:
@@ -424,27 +286,16 @@ def validate_physics(
             )
         )
 
-    if include_cutoff_check:
-        cutoff_summary = _compute_cutoff_convergence_summary(model, valley=valley)
-        checks.append(
-            make_validation_check(
-                "C9.cutoff_convergence",
-                cutoff_summary.max_delta < 5.0e-4,
-                cutoff_summary.max_delta,
-                detail=(
-                    "Flat-band gap and bandwidths inferred along K-Γ-M-K' should change by less than 0.5 meV "
-                    f"when n_shells increases by one. {_describe_cutoff_convergence(cutoff_summary)}"
-                ),
-            )
+    checks.append(
+        ValidationCheck(
+            name="C9.cutoff_convergence",
+            status="skipped",
+            detail=(
+                "Cutoff convergence is retired from lightweight validation; "
+                "run a dedicated convergence workflow on Slurm when needed."
+            ),
         )
-    else:
-        checks.append(
-            ValidationCheck(
-                name="C9.cutoff_convergence",
-                status="skipped",
-                detail="Disabled for the default lightweight validation pass.",
-            )
-        )
+    )
 
     return ValidationReport(title="tMBG Core Physics Validation", checks=tuple(checks))
 

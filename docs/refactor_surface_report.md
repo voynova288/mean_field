@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 74619
-- Tracked Python lines: 70830
+- Tracked text lines: 74432
+- Tracked Python lines: 70626
 - Tracked Julia lines: 826
 - `src` Python files: 196
-- `src` Python lines: 64648
+- `src` Python lines: 64499
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -259,6 +259,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 350.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### retire_tmbg_cutoff_validation_path
+
+- Retired the optional tMBG cutoff-convergence path from lightweight validation; C9 remains a skipped report check pointing users to dedicated Slurm convergence workflows.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 150.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -321,11 +328,11 @@ Total lines: 691
 
 ### `validation.py`
 
-Total lines: 1202
+Total lines: 1053
 
 | Lines | Path |
 |---:|---|
-| 457 | `src/mean_field/systems/tmbg/validation.py` |
+| 308 | `src/mean_field/systems/tmbg/validation.py` |
 | 193 | `src/mean_field/systems/htqg/validation.py` |
 | 161 | `src/mean_field/systems/atmg/validation.py` |
 | 156 | `src/mean_field/systems/RnG_hBN/validation.py` |

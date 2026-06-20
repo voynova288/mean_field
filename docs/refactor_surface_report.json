@@ -305,6 +305,14 @@
       "tracked_files_deleted": [
         "tests/test_cli_tmbg_artifacts.py"
       ]
+    },
+    {
+      "description": "Retired the optional tMBG cutoff-convergence path from lightweight validation; C9 remains a skipped report check pointing users to dedicated Slurm convergence workflows.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 150,
+      "slice": "retire_tmbg_cutoff_validation_path",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -400,7 +408,7 @@
     "validation.py": {
       "files": [
         {
-          "lines": 457,
+          "lines": 308,
           "path": "src/mean_field/systems/tmbg/validation.py"
         },
         {
@@ -424,7 +432,7 @@
           "path": "src/mean_field/systems/htg/validation.py"
         }
       ],
-      "total_lines": 1202
+      "total_lines": 1053
     }
   },
   "phase2_targets": {
@@ -680,7 +688,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 196,
-  "src_python_lines": 64648,
+  "src_python_lines": 64499,
   "top_30_files": [
     {
       "lines": 2361,
@@ -804,6 +812,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 70830,
-  "tracked_text_lines": 74619
+  "tracked_python_lines": 70626,
+  "tracked_text_lines": 74432
 }
