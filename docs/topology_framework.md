@@ -32,7 +32,6 @@ src/analysis/topology/
   system.py
   quantum_geometry.py
   wavefunction.py
-  targets.py
   __init__.py
   README.md
 ```

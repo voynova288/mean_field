@@ -54,7 +54,6 @@ from .system import (
     make_topology_adapter,
     topology_result_from_lattice_result,
 )
-from .targets import GeometryReproductionTarget, known_geometry_reproduction_targets
 from .wavefunction import (
     CanonicalWavefunctionGrid,
     WavefunctionLayout,
@@ -68,7 +67,6 @@ __all__ = [
     "CanonicalWavefunctionGrid",
     "CoordinateSystem",
     "DirectBandGapReport",
-    "GeometryReproductionTarget",
     "LatticeTopologyResult",
     "LinkMethod",
     "LinkVariables",
@@ -96,7 +94,6 @@ __all__ = [
     "fubini_study_trace",
     "infer_berry_sign_from_chern",
     "integrated_fubini_study_metric",
-    "known_geometry_reproduction_targets",
     "matrix_sewing_transform",
     "normalize_quantum_geometry_maps",
     "normalize_state_indices",

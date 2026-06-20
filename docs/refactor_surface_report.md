@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 71996
-- Tracked Python lines: 68113
+- Tracked text lines: 71850
+- Tracked Python lines: 67953
 - Tracked Julia lines: 826
-- `src` Python files: 194
-- `src` Python lines: 61986
+- `src` Python files: 193
+- `src` Python lines: 61826
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -306,6 +306,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Replaced the unexported TBG zero-field supercell BM/SCF workflow module with the small Zhang sqrt(3) filling-convention helpers that are actually referenced.
 - Deleted files: none; this slice thinned duplicated implementations in place.
 - Gross legacy LOC removed/thinned: 879.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
+### retire_topology_paper_target_registry
+
+- Retired the hard-coded analysis.topology paper/artifact target registry from the common topology package; dated reproduction inventories belong in ignored reports/internal workspaces.
+- Deleted files: `src/analysis/topology/targets.py`.
+- Gross legacy LOC removed/thinned: 157.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
 ## Top 30 Python files under `src`

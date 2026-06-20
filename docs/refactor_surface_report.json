@@ -365,6 +365,16 @@
       "legacy_lines_removed_gross": 879,
       "slice": "retire_tbg_zero_field_supercell_legacy_workflow",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Retired the hard-coded analysis.topology paper/artifact target registry from the common topology package; dated reproduction inventories belong in ignored reports/internal workspaces.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 157,
+      "slice": "retire_topology_paper_target_registry",
+      "tracked_files_deleted": [
+        "src/analysis/topology/targets.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -739,8 +749,8 @@
     ]
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
-  "src_python_files": 194,
-  "src_python_lines": 61986,
+  "src_python_files": 193,
+  "src_python_lines": 61826,
   "top_30_files": [
     {
       "lines": 2361,
@@ -864,6 +874,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 68113,
-  "tracked_text_lines": 71996
+  "tracked_python_lines": 67953,
+  "tracked_text_lines": 71850
 }
