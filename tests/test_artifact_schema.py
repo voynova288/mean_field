@@ -750,7 +750,7 @@ def test_rlg_hbn_hf_archive_records_density_convention_metadata(tmp_path) -> Non
 
 
 def test_rlg_hbn_band_plot_updates_manifest_without_overwriting_contract(tmp_path) -> None:
-    from mean_field.devtools.plot_rlg_hbn_paper_hf_bands import _update_band_plot_manifest
+    from mean_field.systems.RnG_hBN import update_paper_hf_band_plot_manifest
 
     write_contract_artifacts(
         tmp_path,
@@ -762,7 +762,7 @@ def test_rlg_hbn_band_plot_updates_manifest_without_overwriting_contract(tmp_pat
     )
     original_observables = (tmp_path / "observables.json").read_text(encoding="utf-8")
 
-    _update_band_plot_manifest(
+    update_paper_hf_band_plot_manifest(
         tmp_path,
         paper_target="fig5",
         panel_names=["xi1_V040meV"],

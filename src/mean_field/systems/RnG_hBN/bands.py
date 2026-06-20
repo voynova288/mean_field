@@ -1,14 +1,81 @@
 from __future__ import annotations
 
 
+from pathlib import Path
+
 import numpy as np
 from scipy.linalg import eigvalsh
 
+from ...api.artifacts import update_artifact_manifest
 from ...core.bands import GridBandsResult, PathBandsResult, compute_grid_bands, compute_path_bands
 from ...core.lattice import KPath
 from .hamiltonian import build_hamiltonian, diagonalize_hamiltonian, flat_band_indices, hamiltonian_dimension
-from .lattice import RLGhBNLattice, build_moire_k_grid
+from .lattice import RLGhBNLattice, build_kpath_from_nodes, build_moire_k_grid
 from .params import RLGhBNParams
+
+
+def build_fig6_paper_hf_path(model: object, points_per_segment: int) -> KPath:
+    """Return the paper-style RnG/hBN HF path used by the Fig. 6 workflow."""
+
+    lattice = model.lattice
+    g2 = lattice.g_m2
+    # Keep the Fig. 6 M' representative explicit.  The projected-basis builder
+    # folds each target k for diagonalization and then relabels plane-wave
+    # coefficients back into this raw path convention before form factors are
+    # evaluated.
+    mprime_fig6 = g2 / 2.0
+    m_fig6 = lattice.m_m
+    nodes = (
+        lattice.gamma_m,
+        lattice.k_m,
+        lattice.kprime_m,
+        lattice.gamma_m,
+        mprime_fig6,
+        m_fig6,
+        lattice.gamma_m,
+    )
+    labels = ("$\\Gamma_M$", "$K_M$", "$K'_M$", "$\\Gamma_M$", "$M'_M$", "$M_M$", "$\\Gamma_M$")
+    return build_kpath_from_nodes(
+        nodes,
+        labels,
+        tuple(int(points_per_segment) for _ in range(len(nodes) - 1)),
+    )
+
+
+def update_paper_hf_band_plot_manifest(
+    source_dir: Path | str,
+    *,
+    paper_target: str,
+    panel_names: list[str],
+    status: str,
+) -> Path:
+    """Record RnG/hBN paper-HF band-plot files without overwriting core sidecars."""
+
+    source_dir = Path(source_dir)
+    files: dict[str, object] = {
+        "hf_band_plot_config": "hf_band_plot_config.json",
+        "hf_band_plot_panels": panel_names,
+    }
+    if status != "dry_run":
+        files.update(
+            {
+                "hf_band_plot_summary": "hf_band_plot_summary.json",
+                "hf_band_plot_combined_png": f"paper_{paper_target}_hf_bands.png",
+                "hf_band_plot_combined_pdf": f"paper_{paper_target}_hf_bands.pdf",
+            }
+        )
+    return update_artifact_manifest(
+        source_dir,
+        files=files,
+        metadata={
+            "band_plot": {
+                "workflow": "rlg_hbn.paper_hf_bands",
+                "status": str(status),
+                "paper_target": str(paper_target),
+                "panel_count": int(len(panel_names)),
+            }
+        },
+    )
 
 
 def neutrality_energy_mev(path_result: PathBandsResult, lattice: RLGhBNLattice, params: RLGhBNParams) -> float:
@@ -98,7 +165,9 @@ def compute_bands_on_grid(
 __all__ = [
     "GridBandsResult",
     "PathBandsResult",
+    "build_fig6_paper_hf_path",
     "compute_bands_along_path",
     "compute_bands_on_grid",
     "neutrality_energy_mev",
+    "update_paper_hf_band_plot_manifest",
 ]

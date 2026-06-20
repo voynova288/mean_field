@@ -4,20 +4,26 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- `src` Python files: 203
-- `src` Python lines: 70165
+- `src` Python files: 202
+- `src` Python lines: 69505
 - Files over 1000 lines: 15
-- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 18
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 17
 
 ## Completed cleanup slices
 
 ### remove_atmg_fig3_devtool
 
-- Deleted tracked one-off paper-panel devtool `src/mean_field/devtools/run_atmg_fig3_band_plot.py` (665 lines before deletion).
-- Moved durable `build_khalaf_fig3_path` convention into `src/mean_field/systems/atmg/bands.py`.
-- Removed the `run_atmg_fig3_band_plot` command from `scripts/mean_field_tools.py`.
-- Updated `tests/test_atmg_fig3_path.py` to import the system-owned path helper.
+- Moved reusable build_khalaf_fig3_path helper from one-off devtool to systems/atmg/bands.py, removed run_atmg_fig3_band_plot dispatcher command, and deleted tracked paper-panel devtool.
+- Deleted files: `src/mean_field/devtools/run_atmg_fig3_band_plot.py`.
+- Gross legacy LOC removed: 665.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 20 -> 18.
+
+### remove_rlg_hbn_band_plot_devtool
+
+- Moved reusable RnG/hBN Fig.6 HF path and band-plot manifest helpers into systems/RnG_hBN/bands.py, removed plot_rlg_hbn_paper_hf_bands dispatcher command, and deleted tracked paper-panel plotting devtool.
+- Deleted files: `src/mean_field/devtools/plot_rlg_hbn_paper_hf_bands.py`.
+- Gross legacy LOC removed: 739.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 18 -> 17.
 
 ## Top 30 Python files under `src`
 
@@ -45,7 +51,6 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 786 | `src/mean_field/systems/RnG_hBN/cache.py` |
 | 778 | `src/analysis/shift_current/toy_models/hipolito2016.py` |
 | 772 | `src/analysis/shift_current/core.py` |
-| 739 | `src/mean_field/devtools/plot_rlg_hbn_paper_hf_bands.py` |
 | 735 | `src/mean_field/systems/tbg/zero_field/hf_contracts.py` |
 | 733 | `src/mean_field/systems/tbg/chaudhary2021_hartree.py` |
 | 710 | `src/mean_field/core/hf/tdhf.py` |
@@ -53,6 +58,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 686 | `src/mean_field/systems/RnG_hBN/hf_contracts.py` |
 | 683 | `src/mean_field/systems/tbg/chaudhary2021.py` |
 | 643 | `src/mean_field/systems/htg/supercell_contracts.py` |
+| 627 | `src/mean_field/benchmarks.py` |
 
 ## Direct private-system imports in workflow surfaces
 
@@ -60,7 +66,6 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 |---|---:|---|
 | `src/mean_field/devtools/backfill_canonical_hf_sidecars.py` | 1141 | `from mean_field.systems.RnG_hBN.tdhf import load_rlg_hbn_tdhf_run_from_archive` |
 | `src/mean_field/devtools/backfill_canonical_hf_sidecars.py` | 1146 | `from mean_field.systems.RnG_hBN.hf_contracts import rlg_hbn_hf_run_to_hf_run_result` |
-| `src/mean_field/devtools/plot_rlg_hbn_paper_hf_bands.py` | 20 | `from mean_field.systems.RnG_hBN import (` |
 | `src/mean_field/devtools/prepare_tbg_crpa_bm.py` | 9 | `from mean_field.systems.tbg.params import TBGParameters` |
 | `src/mean_field/devtools/run_htg_hf.py` | 21 | `from mean_field.systems.htg import (` |
 | `src/mean_field/devtools/run_htqg_fig1_bands.py` | 11 | `from mean_field.systems.htqg.bands import compute_bands_along_path, estimate_central_band_metrics` |
@@ -81,14 +86,14 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ### `bands.py`
 
-Total lines: 751
+Total lines: 820
 
 | Lines | Path |
 |---:|---|
 | 190 | `src/mean_field/systems/atmg/bands.py` |
 | 176 | `src/mean_field/systems/htqg/bands.py` |
+| 173 | `src/mean_field/systems/RnG_hBN/bands.py` |
 | 150 | `src/mean_field/systems/htg/bands.py` |
-| 104 | `src/mean_field/systems/RnG_hBN/bands.py` |
 | 74 | `src/mean_field/systems/tmbg/bands.py` |
 | 57 | `src/mean_field/systems/tdbg/bands.py` |
 

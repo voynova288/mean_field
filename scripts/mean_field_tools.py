@@ -26,7 +26,6 @@ MODULE_COMMANDS = {
     "merge_rlg_hbn_parallel_hf": ("mean_field.devtools.merge_rlg_hbn_parallel_hf", ()),
 
     "merge_tbg_crpa_chunks": ("mean_field.devtools.merge_tbg_crpa_chunks", ()),
-    "plot_rlg_hbn_paper_hf_bands": ("mean_field.devtools.plot_rlg_hbn_paper_hf_bands", ()),
     "prepare_tbg_crpa_bm": ("mean_field.devtools.prepare_tbg_crpa_bm", ()),
     "run_htg_hf": ("mean_field.devtools.run_htg_hf", ()),
     "run_htqg_fig1_bands": ("mean_field.devtools.run_htqg_fig1_bands", ()),

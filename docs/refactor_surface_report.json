@@ -9,10 +9,20 @@
       "tracked_files_deleted": [
         "src/mean_field/devtools/run_atmg_fig3_band_plot.py"
       ]
+    },
+    {
+      "description": "Moved reusable RnG/hBN Fig.6 HF path and band-plot manifest helpers into systems/RnG_hBN/bands.py, removed plot_rlg_hbn_paper_hf_bands dispatcher command, and deleted tracked paper-panel plotting devtool.",
+      "direct_mean_field_systems_imports_after": 17,
+      "direct_mean_field_systems_imports_before": 18,
+      "legacy_lines_removed_gross": 739,
+      "slice": "remove_rlg_hbn_band_plot_devtool",
+      "tracked_files_deleted": [
+        "src/mean_field/devtools/plot_rlg_hbn_paper_hf_bands.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
-    "count": 18,
+    "count": 17,
     "items": [
       {
         "line": 1141,
@@ -23,11 +33,6 @@
         "line": 1146,
         "path": "src/mean_field/devtools/backfill_canonical_hf_sidecars.py",
         "text": "from mean_field.systems.RnG_hBN.hf_contracts import rlg_hbn_hf_run_to_hf_run_result"
-      },
-      {
-        "line": 20,
-        "path": "src/mean_field/devtools/plot_rlg_hbn_paper_hf_bands.py",
-        "text": "from mean_field.systems.RnG_hBN import ("
       },
       {
         "line": 9,
@@ -119,12 +124,12 @@
           "path": "src/mean_field/systems/htqg/bands.py"
         },
         {
-          "lines": 150,
-          "path": "src/mean_field/systems/htg/bands.py"
+          "lines": 173,
+          "path": "src/mean_field/systems/RnG_hBN/bands.py"
         },
         {
-          "lines": 104,
-          "path": "src/mean_field/systems/RnG_hBN/bands.py"
+          "lines": 150,
+          "path": "src/mean_field/systems/htg/bands.py"
         },
         {
           "lines": 74,
@@ -135,7 +140,7 @@
           "path": "src/mean_field/systems/tdbg/bands.py"
         }
       ],
-      "total_lines": 751
+      "total_lines": 820
     },
     "topology.py": {
       "files": [
@@ -463,8 +468,8 @@
     ]
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
-  "src_python_files": 203,
-  "src_python_lines": 70165,
+  "src_python_files": 202,
+  "src_python_lines": 69505,
   "top_30_files": [
     {
       "lines": 2361,
@@ -555,10 +560,6 @@
       "path": "src/analysis/shift_current/core.py"
     },
     {
-      "lines": 739,
-      "path": "src/mean_field/devtools/plot_rlg_hbn_paper_hf_bands.py"
-    },
-    {
       "lines": 735,
       "path": "src/mean_field/systems/tbg/zero_field/hf_contracts.py"
     },
@@ -585,6 +586,10 @@
     {
       "lines": 643,
       "path": "src/mean_field/systems/htg/supercell_contracts.py"
+    },
+    {
+      "lines": 627,
+      "path": "src/mean_field/benchmarks.py"
     }
   ]
 }
