@@ -89,6 +89,14 @@
       "legacy_lines_removed_gross": 49,
       "slice": "dedupe_htqg_validation_types",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Removed tiny ATMG/TDBG local status alias functions and call core status_from_bool directly.",
+      "direct_mean_field_systems_imports_after": 9,
+      "direct_mean_field_systems_imports_before": 9,
+      "legacy_lines_removed_gross": 6,
+      "slice": "drop_validation_status_aliases",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -212,15 +220,15 @@
           "path": "src/mean_field/systems/htqg/validation.py"
         },
         {
-          "lines": 164,
-          "path": "src/mean_field/systems/atmg/validation.py"
-        },
-        {
           "lines": 163,
           "path": "src/mean_field/systems/RnG_hBN/validation.py"
         },
         {
-          "lines": 129,
+          "lines": 161,
+          "path": "src/mean_field/systems/atmg/validation.py"
+        },
+        {
+          "lines": 126,
           "path": "src/mean_field/systems/tdbg/validation.py"
         },
         {
@@ -228,7 +236,7 @@
           "path": "src/mean_field/systems/htg/validation.py"
         }
       ],
-      "total_lines": 1877
+      "total_lines": 1871
     }
   },
   "phase2_targets": {
@@ -457,16 +465,7 @@
       {
         "count": 2,
         "paths": [
-          "src/mean_field/systems/atmg/validation.py",
-          "src/mean_field/systems/htg/validation.py"
-        ],
-        "symbol": "_status"
-      },
-      {
-        "count": 3,
-        "paths": [
           "src/mean_field/systems/RnG_hBN/validation.py",
-          "src/mean_field/systems/tdbg/validation.py",
           "src/mean_field/systems/tmbg/validation.py"
         ],
         "symbol": "_status_from_bool"
@@ -501,7 +500,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 199,
-  "src_python_lines": 68361,
+  "src_python_lines": 68355,
   "top_30_files": [
     {
       "lines": 2361,

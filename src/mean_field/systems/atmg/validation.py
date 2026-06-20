@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ...core.validation import ValidationCheck, ValidationReport, ValidationStatus, status_from_bool
+from ...core.validation import ValidationCheck, ValidationReport, status_from_bool
 from .bilayer_map import analytic_singular_values, build_W_matrix, svd_decompose
 from .model import ATMGModel
 from .params import ATMGParameters
@@ -11,9 +11,6 @@ from .tbg import build_tbg_hamiltonian
 
 
 
-
-def _status(condition: bool) -> ValidationStatus:
-    return status_from_bool(condition)
 
 
 def _generic_k(model: ATMGModel) -> complex:
@@ -35,7 +32,7 @@ def validate_physics(
     checks.append(
         ValidationCheck(
             name="Hermiticity",
-            status=_status(hermitian_residual < hermitian_atol),
+            status=status_from_bool(hermitian_residual < hermitian_atol),
             detail="Full ATMG Hamiltonian is Hermitian at a generic mBZ momentum.",
             value=hermitian_residual,
         )
@@ -47,7 +44,7 @@ def validate_physics(
     checks.append(
         ValidationCheck(
             name="Time Reversal",
-            status=_status(time_reversal_residual < spectrum_atol),
+            status=status_from_bool(time_reversal_residual < spectrum_atol),
             detail="E_K(k) matches E_K'(-k) within tolerance.",
             value=time_reversal_residual,
         )
@@ -58,7 +55,7 @@ def validate_physics(
     checks.append(
         ValidationCheck(
             name="SVD Mapping",
-            status=_status(mapping_residual < spectrum_atol),
+            status=status_from_bool(mapping_residual < spectrum_atol),
             detail="Direct ATMG spectrum matches the TBG-sum mapping.",
             value=mapping_residual,
         )
@@ -71,7 +68,7 @@ def validate_physics(
         checks.append(
             ValidationCheck(
                 name="Singular Values",
-                status=_status(sv_residual < singular_value_atol),
+                status=status_from_bool(sv_residual < singular_value_atol),
                 detail="Numerical singular values match the analytic ATMG formula.",
                 value=sv_residual,
             )
@@ -99,7 +96,7 @@ def validate_physics(
         checks.append(
             ValidationCheck(
                 name="n=2 Reduction",
-                status=_status(reduction_residual < singular_value_atol),
+                status=status_from_bool(reduction_residual < singular_value_atol),
                 detail="Two-layer ATMG reduces exactly to the reference TBG builder.",
                 value=reduction_residual,
             )
@@ -110,7 +107,7 @@ def validate_physics(
         checks.append(
             ValidationCheck(
                 name="Particle Hole",
-                status=_status(particle_hole_residual < spectrum_atol),
+                status=status_from_bool(particle_hole_residual < spectrum_atol),
                 detail="The chiral spectrum is symmetric about zero energy.",
                 value=particle_hole_residual,
             )
@@ -122,7 +119,7 @@ def validate_physics(
         checks.append(
             ValidationCheck(
                 name="Odd-Layer Dirac Cone",
-                status=_status(dirac_residual < spectrum_atol),
+                status=status_from_bool(dirac_residual < spectrum_atol),
                 detail="Odd-layer ATMG retains the decoupled monolayer Dirac crossing at the moire-zone origin in this gauge.",
                 value=dirac_residual,
             )

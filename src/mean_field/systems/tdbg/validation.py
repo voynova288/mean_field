@@ -5,15 +5,12 @@ from pathlib import Path
 
 import numpy as np
 
-from ...core.validation import ValidationCheck, ValidationReport, ValidationStatus, status_from_bool
+from ...core.validation import ValidationCheck, ValidationReport, status_from_bool
 from .bands import PathBandsResult
 from .lattice import build_standard_kpath
 from .model import TDBGModel
 
 
-
-def _status_from_bool(condition: bool) -> ValidationStatus:
-    return status_from_bool(condition)
 
 
 
@@ -86,7 +83,7 @@ def validate_physics(
     checks = [
         ValidationCheck(
             name="hermiticity",
-            status=_status_from_bool(hermiticity_residual < 1.0e-10),
+            status=status_from_bool(hermiticity_residual < 1.0e-10),
             detail="The Q-basis TDBG Hamiltonian is Hermitian at a generic moire momentum.",
             value=hermiticity_residual,
         ),
@@ -107,19 +104,19 @@ def validate_physics(
             [
                 ValidationCheck(
                     name="reference_kpath",
-                    status=_status_from_bool(comparison.kpath_max_abs_diff < 1.0e-12),
+                    status=status_from_bool(comparison.kpath_max_abs_diff < 1.0e-12),
                     detail="The standard K-Gamma-M-K' path matches the pytwist reference path.",
                     value=comparison.kpath_max_abs_diff,
                 ),
                 ValidationCheck(
                     name="reference_bands_valley_minus",
-                    status=_status_from_bool(comparison.evals_minus_max_abs_diff < 1.0e-10),
+                    status=status_from_bool(comparison.evals_minus_max_abs_diff < 1.0e-10),
                     detail="The valley K' path bands agree with the pytwist reference.",
                     value=comparison.evals_minus_max_abs_diff,
                 ),
                 ValidationCheck(
                     name="reference_bands_valley_plus",
-                    status=_status_from_bool(comparison.evals_plus_max_abs_diff < 1.0e-10),
+                    status=status_from_bool(comparison.evals_plus_max_abs_diff < 1.0e-10),
                     detail="The valley K path bands agree with the pytwist reference.",
                     value=comparison.evals_plus_max_abs_diff,
                 ),
