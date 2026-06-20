@@ -536,14 +536,10 @@ def reproduce_paper_checkpoints(
     _, _, cp1_summary = get_path_case(cp1_case)
     cp1_pass = cp1_summary.widest_flat_band < 5.0e-3
     checks.append(
-        ValidationCheck(
-            name="CP1.minimal_magic_angle_bandwidth",
-            status=status_from_bool(cp1_pass),
-            detail=(
-                "Minimal model at θ=1.07° should keep the neutral flat-band pair below 5 meV. "
-                + _describe_band_summary(cp1_summary)
-            ),
-            value=cp1_summary.widest_flat_band,
+        make_validation_check(
+            "CP1.minimal_magic_angle_bandwidth", cp1_pass, cp1_summary.widest_flat_band,
+            detail="Minimal model at θ=1.07° should keep the neutral flat-band pair below 5 meV. "
+            + _describe_band_summary(cp1_summary),
         )
     )
 
@@ -579,14 +575,10 @@ def reproduce_paper_checkpoints(
         outer_gap_floor = summary.outer_gap_floor
         cp2_pass = summary.widest_flat_band < 2.0e-2 and outer_gap_floor is not None and outer_gap_floor > 1.0e-2
         checks.append(
-            ValidationCheck(
-                name=f"CP2.delta_{_delta_token(case.interlayer_potential)}_band_isolation",
-                status=status_from_bool(cp2_pass),
-                detail=(
-                    "Full model along K-Γ-M-K' should show an isolated neutral flat-band pair in the Fig. 2 window. "
-                    + _describe_band_summary(summary)
-                ),
-                value=summary.widest_flat_band,
+            make_validation_check(
+                f"CP2.delta_{_delta_token(case.interlayer_potential)}_band_isolation", cp2_pass, summary.widest_flat_band,
+                detail="Full model along K-Γ-M-K' should show an isolated neutral flat-band pair in the Fig. 2 window. "
+                + _describe_band_summary(summary),
             )
         )
 
@@ -600,14 +592,12 @@ def reproduce_paper_checkpoints(
             )
             cp2b_pass = ktilde_gap.flat_gap < 1.0e-3
             checks.append(
-                ValidationCheck(
-                    name="CP2b.delta_0_band_touching",
-                    status=status_from_bool(cp2b_pass),
+                make_validation_check(
+                    "CP2b.delta_0_band_touching", cp2b_pass, ktilde_gap.flat_gap,
                     detail=(
                         "At Δ = 0 in the full model, the neutral flat-band pair should remain nearly touching "
                         f"at K̃ in Park Fig. 2(a); {_describe_kpoint_gap(ktilde_gap)}"
                     ),
-                    value=ktilde_gap.flat_gap,
                 )
             )
 
@@ -618,14 +608,14 @@ def reproduce_paper_checkpoints(
         observed_conduction = int(observed_conduction_result.rounded_chern_number)
         cp3_pass = (observed_valence, observed_conduction) == (expected_valence, expected_conduction)
         checks.append(
-            ValidationCheck(
-                name=f"CP3.delta_{_delta_token(case.interlayer_potential)}_valley_chern",
-                status=status_from_bool(cp3_pass),
+            make_validation_check(
+                f"CP3.delta_{_delta_token(case.interlayer_potential)}_valley_chern",
+                cp3_pass,
+                str((observed_valence, observed_conduction)),
                 detail=(
                     f"K valley flat-band Chern numbers should match {expected_valence, expected_conduction}; "
                     f"observed {(observed_valence, observed_conduction)} on bands {summary.flat_band_indices}."
                 ),
-                value=str((observed_valence, observed_conduction)),
             )
         )
 
@@ -638,14 +628,14 @@ def reproduce_paper_checkpoints(
                 kprime_valence == -observed_valence and kprime_conduction == -observed_conduction
             )
             checks.append(
-                ValidationCheck(
-                    name=f"CP3.delta_{_delta_token(case.interlayer_potential)}_opposite_valley",
-                    status=status_from_bool(opposite_valley_pass),
+                make_validation_check(
+                    f"CP3.delta_{_delta_token(case.interlayer_potential)}_opposite_valley",
+                    opposite_valley_pass,
+                    str((kprime_valence, kprime_conduction)),
                     detail=(
                         "K' valley should carry the opposite Chern numbers. "
                         f"K={(observed_valence, observed_conduction)}, K'={(kprime_valence, kprime_conduction)}."
                     ),
-                    value=str((kprime_valence, kprime_conduction)),
                 )
             )
         else:
@@ -673,14 +663,12 @@ def reproduce_paper_checkpoints(
     cp4_min_asym = abs(cp4_min_plus_summary.widest_flat_band - cp4_min_minus_summary.widest_flat_band)
     cp4_pass = cp4_full_asym > max(2.0 * cp4_min_asym, 1.0e-3)
     checks.append(
-        ValidationCheck(
-            name="CP4.delta_sign_asymmetry",
-            status=status_from_bool(cp4_pass),
+        make_validation_check(
+            "CP4.delta_sign_asymmetry", cp4_pass, cp4_full_asym,
             detail=(
                 "Full model should show a visibly stronger Δ ↔ -Δ asymmetry than the minimal model. "
                 f"full asymmetry={_format_mev(cp4_full_asym)}, minimal asymmetry={_format_mev(cp4_min_asym)}."
             ),
-            value=cp4_full_asym,
         )
     )
 
@@ -691,15 +679,13 @@ def reproduce_paper_checkpoints(
     cp5_ratio = cp5_full_summary.widest_flat_band / max(cp5_min_summary.widest_flat_band, 1.0e-12)
     cp5_pass = cp5_full_summary.widest_flat_band > cp5_min_summary.widest_flat_band and cp5_ratio > 2.0
     checks.append(
-        ValidationCheck(
-            name="CP5.full_vs_minimal_bandwidth",
-            status=status_from_bool(cp5_pass),
+        make_validation_check(
+            "CP5.full_vs_minimal_bandwidth", cp5_pass, cp5_ratio,
             detail=(
                 "Full model should broaden the neutral flat-band pair relative to the minimal model at the same parameters. "
                 f"full={_format_mev(cp5_full_summary.widest_flat_band)}, "
                 f"minimal={_format_mev(cp5_min_summary.widest_flat_band)}, ratio={cp5_ratio:.3f}."
             ),
-            value=cp5_ratio,
         )
     )
 
@@ -722,14 +708,12 @@ def reproduce_paper_checkpoints(
     cp6_reference_abs_max = 0 if cp3_delta_zero_pair is None else max(abs(value) for value in cp3_delta_zero_pair)
     cp6_pass = cp6_reference_abs_max == 3 and all(abs_max < 3 for abs_max in cp6_abs_maxima)
     checks.append(
-        ValidationCheck(
-            name="CP6.staggered_potential_suppresses_abs3",
-            status=status_from_bool(cp6_pass),
+        make_validation_check(
+            "CP6.staggered_potential_suppresses_abs3", cp6_pass, str(tuple(cp6_abs_maxima)),
             detail=(
                 "At the sampled Fig. 4 reference point, Δ_S ≠ 0 should remove |C|=3 from the neutral flat-band pair. "
                 f"reference max |C|={cp6_reference_abs_max}, staggered max |C| values={tuple(cp6_abs_maxima)}."
             ),
-            value=str(tuple(cp6_abs_maxima)),
         )
     )
 
