@@ -31,7 +31,6 @@ from ...core.hf import (
     run_hartree_fock_problem,
     screened_coulomb,
     screened_coulomb_matrix,
-    sector_block_energies,
     unflatten_sector_blocks as _core_unflatten_sector_blocks,
     unflatten_sector_energies as _core_unflatten_sector_energies,
 )
@@ -1060,74 +1059,6 @@ def wang_sector_energy_blocks(state: PolshynWangHFState, basis: PolshynProjected
     return unflatten_sector_energies(state.energies, n_spin=basis.n_spin, n_eta=basis.n_eta, nb=basis.nb)
 
 
-def wang_target_hamiltonian(
-    target: PolshynProjectedBasis,
-    source: PolshynProjectedBasis,
-    source_state: PolshynWangHFState,
-    source_overlap_blocks: HFOverlapBlockSet,
-    shifts: tuple[tuple[int, int], ...],
-    gvecs: np.ndarray,
-    *,
-    v0: float,
-    epsilon_r: float,
-    d_sc_nm: float,
-    progress_prefix: str | None = None,
-) -> tuple[np.ndarray, HFOverlapBlockSet, HFOverlapBlockSet]:
-    """Evaluate a Wang/Xiaoyu HF Hamiltonian on a target basis from a source density."""
-
-    target_overlap_blocks = build_wang_overlap_blocks(
-        target,
-        target,
-        shifts,
-        gvecs,
-        epsilon_r=epsilon_r,
-        d_sc_nm=d_sc_nm,
-        include_hartree=True,
-        include_fock=False,
-        progress_prefix=None if progress_prefix is None else f"{progress_prefix} target",
-    )
-    target_source_overlap_blocks = build_wang_overlap_blocks(
-        target,
-        source,
-        shifts,
-        gvecs,
-        epsilon_r=epsilon_r,
-        d_sc_nm=d_sc_nm,
-        include_hartree=False,
-        include_fock=True,
-        progress_prefix=None if progress_prefix is None else f"{progress_prefix} target-source",
-    )
-    h0_target = flatten_sector_blocks(target.h0_blocks)
-    h_target = build_projected_target_hamiltonian(
-        h0_target,
-        source_state.density,
-        source_overlap_blocks=source_overlap_blocks,
-        target_overlap_blocks=target_overlap_blocks,
-        target_source_overlap_blocks=target_source_overlap_blocks,
-        v0=float(v0),
-        beta=1.0,
-    )
-    return h_target, target_overlap_blocks, target_source_overlap_blocks
-
-
-def wang_sector_energies_from_flat_hamiltonian(
-    hamiltonian_flat: np.ndarray,
-    *,
-    n_spin: int,
-    n_eta: int,
-    nb: int,
-) -> np.ndarray:
-    h = np.asarray(hamiltonian_flat, dtype=np.complex128)
-    nk = h.shape[2]
-    out = np.zeros((int(n_spin), int(n_eta), int(nb), int(nk)), dtype=float)
-    for ispin in range(int(n_spin)):
-        for ieta in range(int(n_eta)):
-            idx = _flat_sector_indices(n_spin, n_eta, nb, ispin, ieta)
-            for ik in range(int(nk)):
-                block_h = h[idx[:, None], idx[None, :], ik]
-                block_h = 0.5 * (block_h + block_h.conjugate().T)
-                out[ispin, ieta, :, ik] = np.linalg.eigvalsh(block_h)
-    return out
 
 
 def translation_order_parameters(
@@ -1170,9 +1101,6 @@ def translation_order_parameters(
     }
 
 
-def path_sector_energies(h_blocks: np.ndarray) -> np.ndarray:
-    return sector_block_energies(h_blocks)
-
 def estimate_fermi_level_from_sector_energies(energies: np.ndarray, occupation_counts: np.ndarray) -> float:
     vals = np.asarray(energies, dtype=float)
     occ = np.asarray(occupation_counts, dtype=int)
@@ -1197,8 +1125,3 @@ def estimate_fermi_level_from_sector_energies(energies: np.ndarray, occupation_c
 def moire_cell_area_nm2(lattice: TMBGLattice, *, area_ratio: int = 1) -> float:
     primitive_area = real_space_cell_area_nm2_from_reciprocal(lattice.g_m1, lattice.g_m2)
     return float(area_ratio) * float(primitive_area)
-
-
-def max_hermitian_error(blocks: np.ndarray) -> float:
-    arr = np.asarray(blocks, dtype=np.complex128)
-    return float(np.max(np.abs(arr - np.swapaxes(arr.conjugate(), 2, 3))))

@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 71090
-- Tracked Python lines: 67082
+- Tracked text lines: 71028
+- Tracked Python lines: 67005
 - Tracked Julia lines: 826
 - `src` Python files: 191
-- `src` Python lines: 60955
+- `src` Python lines: 60878
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -357,6 +357,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 38.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### prune_tmbg_polshyn_unused_diagnostics
+
+- Removed unreferenced Polshyn/Wang target-Hamiltonian and sector diagnostic helpers while preserving the tested Wang HF problem builder, bundle adapter, filling helpers, and CDW order diagnostics.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 71.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -371,8 +378,8 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 1306 | `src/mean_field/api/hf.py` |
 | 1267 | `src/mean_field/crpa/hf_interface.py` |
 | 1258 | `src/mean_field/systems/tbg/zero_field/hf.py` |
-| 1204 | `src/mean_field/systems/tmbg/polshyn_supercell.py` |
 | 1149 | `src/mean_field/core/hf/finite_field.py` |
+| 1127 | `src/mean_field/systems/tmbg/polshyn_supercell.py` |
 | 1012 | `src/mean_field/systems/tbg/finite_field/spectrum.py` |
 | 925 | `src/mean_field/systems/htqg/hf.py` |
 | 873 | `src/analysis/topology/quantum_geometry.py` |

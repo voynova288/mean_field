@@ -427,6 +427,14 @@
       "legacy_lines_removed_gross": 38,
       "slice": "prune_devtool_runtime_selectors",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Removed unreferenced Polshyn/Wang target-Hamiltonian and sector diagnostic helpers while preserving the tested Wang HF problem builder, bundle adapter, filling helpers, and CDW order diagnostics.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 71,
+      "slice": "prune_tmbg_polshyn_unused_diagnostics",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -802,7 +810,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 191,
-  "src_python_lines": 60955,
+  "src_python_lines": 60878,
   "top_30_files": [
     {
       "lines": 2361,
@@ -845,12 +853,12 @@
       "path": "src/mean_field/systems/tbg/zero_field/hf.py"
     },
     {
-      "lines": 1204,
-      "path": "src/mean_field/systems/tmbg/polshyn_supercell.py"
-    },
-    {
       "lines": 1149,
       "path": "src/mean_field/core/hf/finite_field.py"
+    },
+    {
+      "lines": 1127,
+      "path": "src/mean_field/systems/tmbg/polshyn_supercell.py"
     },
     {
       "lines": 1012,
@@ -926,6 +934,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 67082,
-  "tracked_text_lines": 71090
+  "tracked_python_lines": 67005,
+  "tracked_text_lines": 71028
 }
