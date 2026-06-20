@@ -145,10 +145,18 @@
       "legacy_lines_removed_gross": 88,
       "slice": "thin_rlg_hbn_fig6_prereq_devtool",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Removed the top-level RnG/hBN system import from the q=0 TDHF devtool; the heavy system adapter is now imported lazily only after dry-run/config validation and login-node guards.",
+      "direct_mean_field_systems_imports_after": 7,
+      "direct_mean_field_systems_imports_before": 8,
+      "legacy_lines_removed_gross": 6,
+      "slice": "lazy_load_rlg_hbn_q0_tdhf_devtool",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
-    "count": 8,
+    "count": 7,
     "items": [
       {
         "line": 1141,
@@ -178,11 +186,6 @@
       {
         "line": 16,
         "path": "src/mean_field/devtools/run_rlg_hbn_tdhf_finite_q.py",
-        "text": "from mean_field.systems.RnG_hBN import ("
-      },
-      {
-        "line": 21,
-        "path": "src/mean_field/devtools/run_rlg_hbn_tdhf_q0.py",
         "text": "from mean_field.systems.RnG_hBN import ("
       },
       {
@@ -535,7 +538,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 200,
-  "src_python_lines": 68364,
+  "src_python_lines": 68370,
   "top_30_files": [
     {
       "lines": 2361,

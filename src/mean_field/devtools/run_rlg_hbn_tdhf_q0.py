@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime
+from importlib import import_module
 import json
 import os
 from pathlib import Path
@@ -18,12 +19,6 @@ from mean_field.core.hf import (
 )
 from mean_field.devtools._runtime import ensure_not_running_compute_on_login_node, write_json
 from mean_field.workflows import collect_slurm_metadata
-from mean_field.systems.RnG_hBN import (
-    build_rlg_hbn_tdhf_orbitals,
-    build_rlg_hbn_tdhf_q0_matrices_from_pairs,
-    build_rlg_hbn_tdhf_q0_pairs,
-    load_rlg_hbn_tdhf_run_from_archive,
-)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "results" / "RnG_hBN" / "tdhf"
@@ -71,6 +66,16 @@ def _atomic_savez(path: Path, **arrays: object) -> None:
     tmp_path = path.with_suffix(path.suffix + ".tmp.npz")
     np.savez_compressed(tmp_path, **arrays)
     tmp_path.replace(path)
+
+
+def _load_rlg_hbn_tdhf_q0_adapter() -> dict[str, object]:
+    module = import_module("mean_field.systems.RnG_hBN")
+    return {
+        "build_orbitals": module.build_rlg_hbn_tdhf_orbitals,
+        "build_matrices_from_pairs": module.build_rlg_hbn_tdhf_q0_matrices_from_pairs,
+        "build_pairs": module.build_rlg_hbn_tdhf_q0_pairs,
+        "load_run": module.load_rlg_hbn_tdhf_run_from_archive,
+    }
 
 
 def _load_summary(summary_path: Path | None, archive_path: Path) -> dict[str, object]:
@@ -291,13 +296,14 @@ def main() -> None:
             "Refusing to run TDHF on an unconverged HF archive; pass --allow-unconverged for diagnostics only."
         )
 
-    run = load_rlg_hbn_tdhf_run_from_archive(
+    adapter = _load_rlg_hbn_tdhf_q0_adapter()
+    run = adapter["load_run"](
         archive_path,
         cache_dir=args.cache_dir,
         summary_path=args.summary_path,
     )
-    orbitals = build_rlg_hbn_tdhf_orbitals(run.state)
-    all_pairs = build_rlg_hbn_tdhf_q0_pairs(orbitals)
+    orbitals = adapter["build_orbitals"](run.state)
+    all_pairs = adapter["build_pairs"](orbitals)
     pairs, channel_counts = _filter_pairs(all_pairs, str(args.channel))
     if len(pairs) > int(args.max_pairs):
         raise SystemExit(
@@ -314,7 +320,7 @@ def main() -> None:
         )
 
     use_shortcut, shortcut_reason = _shortcut_decision(run.state, str(args.single_flavor_shortcut), str(args.channel))
-    matrices = build_rlg_hbn_tdhf_q0_matrices_from_pairs(
+    matrices = adapter["build_matrices_from_pairs"](
         run,
         orbitals,
         pairs,
