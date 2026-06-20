@@ -21,7 +21,6 @@ CLI_ALIASES = {
 MODULE_COMMANDS = {
     "backfill_canonical_hf_sidecars": ("mean_field.devtools.backfill_canonical_hf_sidecars", ()),
     "compare_tbg_crpa_fig1e": ("mean_field.devtools.compare_tbg_crpa_fig1e", ()),
-    "merge_rlg_hbn_parallel_hf": ("mean_field.devtools.merge_rlg_hbn_parallel_hf", ()),
 
     "merge_tbg_crpa_chunks": ("mean_field.devtools.merge_tbg_crpa_chunks", ()),
     "prepare_tbg_crpa_bm": ("mean_field.devtools.prepare_tbg_crpa_bm", ()),
