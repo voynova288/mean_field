@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 72857
-- Tracked Python lines: 68989
+- Tracked text lines: 71996
+- Tracked Python lines: 68113
 - Tracked Julia lines: 826
 - `src` Python files: 194
-- `src` Python lines: 62862
+- `src` Python lines: 61986
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -301,6 +301,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 948.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### retire_tbg_zero_field_supercell_legacy_workflow
+
+- Replaced the unexported TBG zero-field supercell BM/SCF workflow module with the small Zhang sqrt(3) filling-convention helpers that are actually referenced.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 879.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -318,7 +325,6 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 1204 | `src/mean_field/systems/tmbg/polshyn_supercell.py` |
 | 1149 | `src/mean_field/core/hf/finite_field.py` |
 | 1012 | `src/mean_field/systems/tbg/finite_field/spectrum.py` |
-| 936 | `src/mean_field/systems/tbg/zero_field/supercell.py` |
 | 925 | `src/mean_field/systems/htqg/hf.py` |
 | 873 | `src/analysis/topology/quantum_geometry.py` |
 | 805 | `src/analysis/response_derivative_gauge.py` |
@@ -335,6 +341,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 565 | `src/analysis/topology/core.py` |
 | 528 | `src/mean_field/systems/tbg/zero_field/artifacts.py` |
 | 498 | `src/mean_field/crpa/validation.py` |
+| 492 | `src/mean_field/systems/RnG_hBN/screening.py` |
 
 ## Direct private-system imports in workflow surfaces
 

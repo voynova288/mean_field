@@ -357,6 +357,14 @@
       "legacy_lines_removed_gross": 948,
       "slice": "thin_tmbg_polshyn_legacy_helpers",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Replaced the unexported TBG zero-field supercell BM/SCF workflow module with the small Zhang sqrt(3) filling-convention helpers that are actually referenced.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 879,
+      "slice": "retire_tbg_zero_field_supercell_legacy_workflow",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -732,7 +740,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 194,
-  "src_python_lines": 62862,
+  "src_python_lines": 61986,
   "top_30_files": [
     {
       "lines": 2361,
@@ -785,10 +793,6 @@
     {
       "lines": 1012,
       "path": "src/mean_field/systems/tbg/finite_field/spectrum.py"
-    },
-    {
-      "lines": 936,
-      "path": "src/mean_field/systems/tbg/zero_field/supercell.py"
     },
     {
       "lines": 925,
@@ -853,9 +857,13 @@
     {
       "lines": 498,
       "path": "src/mean_field/crpa/validation.py"
+    },
+    {
+      "lines": 492,
+      "path": "src/mean_field/systems/RnG_hBN/screening.py"
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 68989,
-  "tracked_text_lines": 72857
+  "tracked_python_lines": 68113,
+  "tracked_text_lines": 71996
 }
