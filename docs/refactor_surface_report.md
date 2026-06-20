@@ -4,13 +4,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 65573
-- Tracked Python lines: 61505
+- Tracked text lines: 65180
+- Tracked Python lines: 61097
 - Tracked Julia lines: 826
-- `src` Python files: 177
-- `src` Python lines: 55386
+- `src` Python files: 176
+- `src` Python lines: 54979
 - Files over 1000 lines: 12
-- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 3
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 2
 
 ## Completed cleanup slices
 
@@ -476,6 +476,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 231.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 3 -> 3.
 
+### archive_retire_rlg_hbn_finite_q_tdhf_devtool
+
+- Archived and removed the RnG/hBN finite-q TDHF devtool command surface while leaving system adapter code/tests intact; finite-q production policy remains a system-layer task, not a tracked one-off runner.
+- Deleted files: `src/mean_field/devtools/run_rlg_hbn_tdhf_finite_q.py`.
+- Gross legacy LOC removed/thinned: 408.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 3 -> 2.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -516,7 +523,6 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | Path | Line | Import |
 |---|---:|---|
 | `src/mean_field/devtools/prepare_tbg_crpa_bm.py` | 9 | `from mean_field.systems.tbg.params import TBGParameters` |
-| `src/mean_field/devtools/run_rlg_hbn_tdhf_finite_q.py` | 16 | `from mean_field.systems.RnG_hBN import (` |
 | `src/mean_field/devtools/validate_tbg_crpa_artifact.py` | 22 | `from mean_field.systems.tbg import TBGParameters` |
 
 ## Repeated module-family line counts

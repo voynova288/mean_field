@@ -587,20 +587,25 @@
       "legacy_lines_removed_gross": 231,
       "slice": "archive_retire_rlg_hbn_parallel_merge_devtool",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Archived and removed the RnG/hBN finite-q TDHF devtool command surface while leaving system adapter code/tests intact; finite-q production policy remains a system-layer task, not a tracked one-off runner.",
+      "direct_mean_field_systems_imports_after": 2,
+      "direct_mean_field_systems_imports_before": 3,
+      "legacy_lines_removed_gross": 408,
+      "slice": "archive_retire_rlg_hbn_finite_q_tdhf_devtool",
+      "tracked_files_deleted": [
+        "src/mean_field/devtools/run_rlg_hbn_tdhf_finite_q.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
-    "count": 3,
+    "count": 2,
     "items": [
       {
         "line": 9,
         "path": "src/mean_field/devtools/prepare_tbg_crpa_bm.py",
         "text": "from mean_field.systems.tbg.params import TBGParameters"
-      },
-      {
-        "line": 16,
-        "path": "src/mean_field/devtools/run_rlg_hbn_tdhf_finite_q.py",
-        "text": "from mean_field.systems.RnG_hBN import ("
       },
       {
         "line": 22,
@@ -782,9 +787,9 @@
     ],
     "validation.py": []
   },
-  "root": "/data/home/ziyuzhu/tmp/mean_field_report_rlg_merge_20260620_230127",
-  "src_python_files": 177,
-  "src_python_lines": 55386,
+  "root": "/data/home/ziyuzhu/tmp/mean_field_report_retire_finite_q_devtool_20260620_232559",
+  "src_python_files": 176,
+  "src_python_lines": 54979,
   "top_30_files": [
     {
       "lines": 2305,
@@ -908,6 +913,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 61505,
-  "tracked_text_lines": 65573
+  "tracked_python_lines": 61097,
+  "tracked_text_lines": 65180
 }
