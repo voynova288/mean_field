@@ -1,18 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from itertools import permutations
-import os
 from pathlib import Path
-import tempfile
-from typing import Literal
 
 import numpy as np
-from scipy.optimize import linear_sum_assignment
 
 from ...core.plotting.bands import load_plot_backend
 from .bands import PathBandsResult
-
 
 @dataclass(frozen=True)
 class HTGPathPlotTrace:
@@ -137,6 +131,7 @@ def write_htg_hf_path_band_plot(
         ax.axvline(x=xpos, color="#9a9a9a", linestyle=":", linewidth=0.8, zorder=0)
     ax.axhline(y=0.0, color="#777777", linestyle="-", linewidth=0.45, alpha=0.55, zorder=0)
 
+    scatter = None
     for band_index in range(energies.shape[1]):
         ax.plot(path.kdist, energies[:, band_index], color="#4f4f4f", linewidth=0.36, alpha=0.42, zorder=1)
         scatter = ax.scatter(
@@ -160,184 +155,14 @@ def write_htg_hf_path_band_plot(
     ax.set_ylabel(ylabel)
     if title is not None:
         ax.set_title(title, fontsize=10)
-    cbar = fig.colorbar(scatter, ax=ax, fraction=0.035, pad=0.018)
-    cbar.set_label(r"$\langle \tilde{\sigma}_z \rangle$", fontsize=9)
+    if scatter is not None:
+        cbar = fig.colorbar(scatter, ax=ax, fraction=0.035, pad=0.018)
+        cbar.set_label(r"$\langle \tilde{\sigma}_z \rangle$", fontsize=9)
     fig.tight_layout()
     fig.savefig(png_path, dpi=300, bbox_inches="tight")
     fig.savefig(pdf_path, bbox_inches="tight")
     plt.close(fig)
     return {"band_plot_png": png_path, "band_plot_pdf": pdf_path}
-
-
-def _spin_sector_path_bands(
-    hamiltonian: np.ndarray,
-    sigma_z_operator: np.ndarray,
-    *,
-    spin_index: int,
-    n_spin: int = 2,
-    n_eta: int = 2,
-    n_band: int | None = None,
-) -> tuple[np.ndarray, np.ndarray]:
-    hamiltonian = np.asarray(hamiltonian, dtype=np.complex128)
-    sigma_z_operator = np.asarray(sigma_z_operator, dtype=np.complex128)
-    nt, _, nk = hamiltonian.shape
-    if n_band is None:
-        if nt % (int(n_spin) * int(n_eta)) != 0:
-            raise ValueError(f"Hamiltonian dimension {nt} is incompatible with n_spin={n_spin}, n_eta={n_eta}")
-        n_band = nt // (int(n_spin) * int(n_eta))
-    if nt != int(n_spin) * int(n_eta) * int(n_band):
-        raise ValueError(f"Hamiltonian dimension {nt} is incompatible with n_spin={n_spin}, n_eta={n_eta}, n_band={n_band}")
-    if sigma_z_operator.shape != hamiltonian.shape:
-        raise ValueError(f"Expected sigma_z_operator shape {hamiltonian.shape}, got {sigma_z_operator.shape}")
-    if not (0 <= int(spin_index) < int(n_spin)):
-        raise ValueError(f"spin_index={spin_index} is out of range for n_spin={n_spin}")
-
-    idx = np.arange(nt, dtype=int).reshape((n_spin, n_eta, n_band), order="F")
-    block_indices = np.asarray(idx[int(spin_index), :, :].reshape(-1, order="C"), dtype=int)
-    energies = np.zeros((nk, block_indices.size), dtype=float)
-    sigma_z = np.zeros_like(energies)
-    previous_vectors: np.ndarray | None = None
-    for ik in range(nk):
-        h_block = hamiltonian[:, :, ik][np.ix_(block_indices, block_indices)]
-        sigma_block = sigma_z_operator[:, :, ik][np.ix_(block_indices, block_indices)]
-        eigvals, eigvecs = np.linalg.eigh(h_block)
-        if previous_vectors is not None:
-            order = _best_eigenvector_overlap_order(previous_vectors, eigvecs)
-            eigvals = eigvals[order]
-            eigvecs = eigvecs[:, order]
-        energies[ik, :] = eigvals
-        sigma_z[ik, :] = np.real(np.diag(eigvecs.conjugate().T @ sigma_block @ eigvecs))
-        previous_vectors = eigvecs
-    return energies, sigma_z
-
-
-def _best_eigenvector_overlap_order(previous_vectors: np.ndarray, current_vectors: np.ndarray) -> np.ndarray:
-    previous_vectors = np.asarray(previous_vectors, dtype=np.complex128)
-    current_vectors = np.asarray(current_vectors, dtype=np.complex128)
-    if previous_vectors.shape != current_vectors.shape or previous_vectors.ndim != 2:
-        raise ValueError(
-            f"Expected matching 2D eigensystem shapes, got {previous_vectors.shape} and {current_vectors.shape}"
-        )
-
-    n_band = previous_vectors.shape[1]
-    overlap = np.abs(previous_vectors.conjugate().T @ current_vectors) ** 2
-    best_order: tuple[int, ...] | None = None
-    best_score = -np.inf
-    if n_band <= 6:
-        for order in permutations(range(n_band)):
-            score = float(np.sum(overlap[np.arange(n_band), np.asarray(order, dtype=int)]))
-            if score > best_score:
-                best_score = score
-                best_order = tuple(int(index) for index in order)
-    else:
-        rows, cols = linear_sum_assignment(-overlap)
-        ordered_cols = np.zeros(n_band, dtype=int)
-        ordered_cols[np.asarray(rows, dtype=int)] = np.asarray(cols, dtype=int)
-        best_order = tuple(int(index) for index in ordered_cols)
-    if best_order is None:
-        raise ValueError("Could not determine a band-tracking permutation.")
-    return np.asarray(best_order, dtype=int)
-
-
-def write_htg_fig7_spin_resolved_plot(
-    output_dir: Path | str,
-    hf_path_result,
-    *,
-    stem: str = "fig7_spin_resolved_bands",
-    title: str | None = None,
-    energy_scale: float = 1000.0,
-    energy_reference_ev: float | None = None,
-    ylim: tuple[float, float] = (-60.0, 40.0),
-) -> dict[str, Path]:
-    """Write the spin-resolved Fig. 7-style HF path-band plot.
-
-    Each panel highlights one spin sector with Chern-sublattice coloring and
-    shows the opposite spin sector as thin dotted black lines, matching the
-    paper's Fig. 7 visual convention more closely than the all-band overview.
-    """
-
-    plt = _load_plot_backend()
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    png_path = output_dir / f"{stem}.png"
-    pdf_path = output_dir / f"{stem}.pdf"
-
-    path = hf_path_result.path
-    hamiltonian = np.asarray(hf_path_result.hamiltonian, dtype=np.complex128)
-    sigma_z_operator = np.asarray(hf_path_result.sigma_z_operator, dtype=np.complex128)
-    reference_ev = energy_reference_ev
-    if reference_ev is None:
-        reference_ev = getattr(hf_path_result, "mu", 0.0)
-
-    spin_energies: list[np.ndarray] = []
-    spin_sigma: list[np.ndarray] = []
-    for spin_index in range(2):
-        energies_ev, sigma_values = _spin_sector_path_bands(
-            hamiltonian,
-            sigma_z_operator,
-            spin_index=spin_index,
-        )
-        spin_energies.append((energies_ev - float(reference_ev)) * float(energy_scale))
-        spin_sigma.append(sigma_values)
-
-    fig, axes = plt.subplots(2, 1, figsize=(3.4, 3.75), sharex=True, sharey=True, constrained_layout=True)
-    node_x = [float(node.k_dist) for node in path.nodes]
-    node_labels = [_display_node_label(node.label) for node in path.nodes]
-    spin_titles = (r"spin $\uparrow$", r"spin $\downarrow$")
-    scatter = None
-    for spin_index, ax in enumerate(axes):
-        other_spin = 1 - spin_index
-        for xpos in node_x:
-            ax.axvline(x=xpos, color="#9a9a9a", linestyle="-", linewidth=0.45, alpha=0.75, zorder=0)
-        ax.axhline(y=0.0, color="#777777", linestyle="-", linewidth=0.35, alpha=0.45, zorder=0)
-        for band_index in range(spin_energies[other_spin].shape[1]):
-            ax.plot(
-                path.kdist,
-                spin_energies[other_spin][:, band_index],
-                color="#1f1f1f",
-                linestyle=":",
-                linewidth=0.42,
-                alpha=0.58,
-                zorder=1,
-            )
-        for band_index in range(spin_energies[spin_index].shape[1]):
-            ax.plot(
-                path.kdist,
-                spin_energies[spin_index][:, band_index],
-                color="#303030",
-                linewidth=0.32,
-                alpha=0.55,
-                zorder=2,
-            )
-            scatter = ax.scatter(
-                path.kdist,
-                spin_energies[spin_index][:, band_index],
-                c=spin_sigma[spin_index][:, band_index],
-                cmap="coolwarm",
-                vmin=-1.0,
-                vmax=1.0,
-                s=7.0,
-                linewidths=0.0,
-                alpha=0.96,
-                zorder=3,
-            )
-        ax.text(0.5, 1.02, spin_titles[spin_index], transform=ax.transAxes, ha="center", va="bottom", fontsize=8.2)
-        ax.set_ylabel(r"$E$ (meV)", fontsize=8)
-        ax.tick_params(axis="both", labelsize=7)
-        ax.set_ylim(*ylim)
-        ax.set_xlim(float(node_x[0]), float(node_x[-1]))
-
-    axes[-1].set_xticks(node_x, node_labels)
-    if title is not None:
-        axes[0].set_title(title, fontsize=8.8, pad=16)
-    if scatter is not None:
-        cbar = fig.colorbar(scatter, ax=axes, fraction=0.045, pad=0.025)
-        cbar.set_label(r"$\langle \tilde{\sigma}_z \rangle$", fontsize=8)
-        cbar.ax.tick_params(labelsize=7)
-    fig.savefig(png_path, dpi=300, bbox_inches="tight")
-    fig.savefig(pdf_path, bbox_inches="tight")
-    plt.close(fig)
-    return {"fig7_plot_png": png_path, "fig7_plot_pdf": pdf_path}
 
 
 def _hf_path_plot_energy_values(
@@ -353,118 +178,8 @@ def _hf_path_plot_energy_values(
     return (energies - float(reference_ev)) * float(energy_scale)
 
 
-def _select_hartree_reference(values_ev: np.ndarray, mode: Literal["none", "global_mean", "global_min"]) -> float:
-    if mode == "none":
-        return 0.0
-    if mode == "global_mean":
-        return float(np.mean(values_ev))
-    if mode == "global_min":
-        return float(np.min(values_ev))
-    raise ValueError(f"Unsupported Hartree reference mode: {mode}")
-
-
-def write_htg_fig8a_potential_plot(
-    output_dir: Path | str,
-    interaction_path_result,
-    *,
-    stem: str = "fig8a_hartree_fock_potentials",
-    title: str | None = r"$\nu=+4$",
-    spin_index: int = 0,
-    valley_index: int = 0,
-    hartree_reference: Literal["none", "global_mean", "global_min"] = "global_min",
-) -> dict[str, Path]:
-    """Write a Fig. 8a-style path plot of Chern-sublattice diagonal potentials."""
-
-    plt = _load_plot_backend()
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    png_path = output_dir / f"{stem}.png"
-    pdf_path = output_dir / f"{stem}.pdf"
-
-    path = interaction_path_result.path
-    hartree_diag = np.asarray(interaction_path_result.hartree_diagonal_ev, dtype=float)
-    fock_diag = np.asarray(interaction_path_result.fock_diagonal_ev, dtype=float)
-    if hartree_diag.shape != fock_diag.shape or hartree_diag.ndim != 4:
-        raise ValueError(f"Expected diagonal arrays with matching shape (n_spin,n_eta,n_band,nk), got {hartree_diag.shape} and {fock_diag.shape}")
-    if not (0 <= spin_index < hartree_diag.shape[0]):
-        raise ValueError(f"spin_index={spin_index} is out of range for shape {hartree_diag.shape}")
-    if not (0 <= valley_index < hartree_diag.shape[1]):
-        raise ValueError(f"valley_index={valley_index} is out of range for shape {hartree_diag.shape}")
-    if hartree_diag.shape[2] < 2:
-        raise ValueError("Fig. 8a-style potential plot expects at least two Chern-sublattice bands.")
-
-    hartree_selected = hartree_diag[spin_index, valley_index, :2, :]
-    fock_selected = fock_diag[spin_index, valley_index, :2, :]
-    hartree_reference_ev = _select_hartree_reference(hartree_selected, hartree_reference)
-    hartree_mev = (hartree_selected - hartree_reference_ev) * 250.0
-    fock_mev = fock_selected * 1000.0
-
-    fig, axes = plt.subplots(2, 1, figsize=(4.2, 3.2), sharex=True)
-    node_x = [float(node.k_dist) for node in path.nodes]
-    node_labels = [_display_node_label(node.label) for node in path.nodes]
-    colors = ("#d62728", "#1f5eff")
-    labels = (r"$\tau=K,\tilde{\sigma}=A$", r"$\tau=K,\tilde{\sigma}=B$")
-
-    for ax in axes:
-        for xpos in node_x:
-            ax.axvline(x=xpos, color="#a8a8a8", linestyle="-", linewidth=0.45, alpha=0.65, zorder=0)
-        ax.set_xlim(float(node_x[0]), float(node_x[-1]))
-
-    for band_index, (color, label) in enumerate(zip(colors, labels, strict=True)):
-        axes[0].plot(path.kdist, hartree_mev[band_index], color=color, linewidth=0.8, label=label)
-        axes[1].plot(path.kdist, fock_mev[band_index], color=color, linewidth=0.8, label=label)
-
-    axes[0].set_ylabel(r"$\frac{1}{4} E_{\mathrm{Hartree}}$ (meV)")
-    axes[1].set_ylabel(r"$E_{\mathrm{Fock}}$ (meV)")
-    axes[1].set_xticks(node_x, node_labels)
-    if title is not None:
-        axes[0].set_title(title, fontsize=9)
-    axes[0].legend(loc="upper left", fontsize=6.8, frameon=False)
-    for ax in axes:
-        ax.tick_params(axis="both", labelsize=7)
-    fig.tight_layout(h_pad=0.5)
-    fig.savefig(png_path, dpi=300, bbox_inches="tight")
-    fig.savefig(pdf_path, bbox_inches="tight")
-    plt.close(fig)
-    return {"potential_plot_png": png_path, "potential_plot_pdf": pdf_path}
-
-
-def write_htg_fig3b_plot(
-    output_dir: Path | str,
-    panels: tuple[tuple[str, PathBandsResult, float], ...],
-    *,
-    stem: str = "fig3b_chiral_bands",
-    ylim: tuple[float, float] = (-0.7, 0.7),
-) -> dict[str, Path]:
-    if not panels:
-        raise ValueError("Expected at least one panel.")
-    plt = _load_plot_backend()
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    png_path = output_dir / f"{stem}.png"
-    pdf_path = output_dir / f"{stem}.pdf"
-
-    fig, axes = plt.subplots(1, len(panels), figsize=(4.1 * len(panels), 4.2), sharey=True)
-    if len(panels) == 1:
-        axes = np.asarray([axes])
-
-    for ax, (title, result, energy_scale) in zip(axes, panels, strict=True):
-        energies = np.asarray(result.energies, dtype=float) * float(energy_scale)
-        node_x = [float(node.k_dist) for node in result.path.nodes]
-        node_labels = [_display_node_label(node.label) for node in result.path.nodes]
-        for xpos in node_x:
-            ax.axvline(x=xpos, color="#9a9a9a", linestyle=":", linewidth=0.75, zorder=0)
-        ax.axhline(y=0.0, color="#777777", linestyle="-", linewidth=0.45, alpha=0.55, zorder=0)
-        for band_index in range(energies.shape[1]):
-            ax.plot(result.path.kdist, energies[:, band_index], color="#1f1f1f", linewidth=0.62, alpha=0.9, zorder=2)
-        ax.set_xticks(node_x, node_labels)
-        ax.set_xlim(float(node_x[0]), float(node_x[-1]))
-        ax.set_ylim(*ylim)
-        ax.set_title(title, fontsize=10)
-        ax.set_xlabel("k-path")
-    axes[0].set_ylabel(r"$E / v k_\theta$")
-    fig.tight_layout()
-    fig.savefig(png_path, dpi=300, bbox_inches="tight")
-    fig.savefig(pdf_path, bbox_inches="tight")
-    plt.close(fig)
-    return {"band_plot_png": png_path, "band_plot_pdf": pdf_path}
+__all__ = [
+    "HTGPathPlotTrace",
+    "write_htg_hf_path_band_plot",
+    "write_htg_path_band_plot",
+]

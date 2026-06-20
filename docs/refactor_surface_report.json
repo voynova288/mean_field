@@ -375,6 +375,14 @@
       "tracked_files_deleted": [
         "src/analysis/topology/targets.py"
       ]
+    },
+    {
+      "description": "Retired HTG Fig. 3b/Fig. 7/Fig. 8a paper-panel plotting writers from the public system surface while keeping generic HTG path and HF path band plotting helpers.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 285,
+      "slice": "retire_htg_paper_plot_writers",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -750,7 +758,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 193,
-  "src_python_lines": 61826,
+  "src_python_lines": 61535,
   "top_30_files": [
     {
       "lines": 2361,
@@ -874,6 +882,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 67953,
-  "tracked_text_lines": 71850
+  "tracked_python_lines": 68168,
+  "tracked_text_lines": 72082
 }

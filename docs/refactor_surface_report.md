@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 71850
-- Tracked Python lines: 67953
+- Tracked text lines: 72082
+- Tracked Python lines: 68168
 - Tracked Julia lines: 826
 - `src` Python files: 193
-- `src` Python lines: 61826
+- `src` Python lines: 61535
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -313,6 +313,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Retired the hard-coded analysis.topology paper/artifact target registry from the common topology package; dated reproduction inventories belong in ignored reports/internal workspaces.
 - Deleted files: `src/analysis/topology/targets.py`.
 - Gross legacy LOC removed/thinned: 157.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
+### retire_htg_paper_plot_writers
+
+- Retired HTG Fig. 3b/Fig. 7/Fig. 8a paper-panel plotting writers from the public system surface while keeping generic HTG path and HF path band plotting helpers.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 285.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
 ## Top 30 Python files under `src`

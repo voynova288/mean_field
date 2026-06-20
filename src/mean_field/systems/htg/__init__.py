@@ -109,9 +109,6 @@ from .params import (
 )
 from .plot import (
     HTGPathPlotTrace,
-    write_htg_fig3b_plot,
-    write_htg_fig7_spin_resolved_plot,
-    write_htg_fig8a_potential_plot,
     write_htg_hf_path_band_plot,
     write_htg_path_band_plot,
 )
@@ -260,9 +257,6 @@ __all__ = [
     "validate_lattice",
     "validate_static_hamiltonian",
     "velocity_m_per_s_to_ev_nm",
-    "write_htg_fig3b_plot",
-    "write_htg_fig7_spin_resolved_plot",
     "write_htg_hf_path_band_plot",
-    "write_htg_fig8a_potential_plot",
     "write_htg_path_band_plot",
 ]
