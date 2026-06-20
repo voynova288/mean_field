@@ -608,6 +608,14 @@
         "src/mean_field/devtools/prepare_tbg_crpa_bm.py",
         "src/mean_field/devtools/validate_tbg_crpa_artifact.py"
       ]
+    },
+    {
+      "description": "Thinned archived system bands modules to compact generic path/grid adapter shims; systems still supply Hamiltonians, grids, and diagonalizers while core.bands owns the loops/result containers.",
+      "direct_mean_field_systems_imports_after": 0,
+      "direct_mean_field_systems_imports_before": 0,
+      "legacy_lines_removed_gross": 361,
+      "slice": "thin_system_band_adapters",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -619,31 +627,31 @@
     "bands.py": {
       "files": [
         {
-          "lines": 115,
-          "path": "src/mean_field/systems/htqg/bands.py"
-        },
-        {
-          "lines": 101,
-          "path": "src/mean_field/systems/htg/bands.py"
-        },
-        {
-          "lines": 73,
+          "lines": 35,
           "path": "src/mean_field/systems/RnG_hBN/bands.py"
         },
         {
-          "lines": 72,
+          "lines": 35,
+          "path": "src/mean_field/systems/htqg/bands.py"
+        },
+        {
+          "lines": 28,
           "path": "src/mean_field/systems/atmg/bands.py"
         },
         {
-          "lines": 64,
-          "path": "src/mean_field/systems/tmbg/bands.py"
+          "lines": 28,
+          "path": "src/mean_field/systems/htg/bands.py"
         },
         {
-          "lines": 55,
+          "lines": 26,
           "path": "src/mean_field/systems/tdbg/bands.py"
+        },
+        {
+          "lines": 26,
+          "path": "src/mean_field/systems/tmbg/bands.py"
         }
       ],
-      "total_lines": 480
+      "total_lines": 178
     },
     "topology.py": {
       "files": [
@@ -787,9 +795,9 @@
     ],
     "validation.py": []
   },
-  "root": "/data/home/ziyuzhu/tmp/mean_field_report_retire_crpa_devtools_20260620_232902",
+  "root": "/data/home/ziyuzhu/tmp/mean_field_report_thin_bands_20260620_233702",
   "src_python_files": 174,
-  "src_python_lines": 54613,
+  "src_python_lines": 54311,
   "top_30_files": [
     {
       "lines": 2305,
@@ -913,6 +921,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 60729,
-  "tracked_text_lines": 64823
+  "tracked_python_lines": 60427,
+  "tracked_text_lines": 64526
 }

@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 64823
-- Tracked Python lines: 60729
+- Tracked text lines: 64526
+- Tracked Python lines: 60427
 - Tracked Julia lines: 826
 - `src` Python files: 174
-- `src` Python lines: 54613
+- `src` Python lines: 54311
 - Files over 1000 lines: 12
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0
 
@@ -490,6 +490,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 368.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 2 -> 0.
 
+### thin_system_band_adapters
+
+- Thinned archived system bands modules to compact generic path/grid adapter shims; systems still supply Hamiltonians, grids, and diagonalizers while core.bands owns the loops/result containers.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 361.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -534,16 +541,16 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ### `bands.py`
 
-Total lines: 480
+Total lines: 178
 
 | Lines | Path |
 |---:|---|
-| 115 | `src/mean_field/systems/htqg/bands.py` |
-| 101 | `src/mean_field/systems/htg/bands.py` |
-| 73 | `src/mean_field/systems/RnG_hBN/bands.py` |
-| 72 | `src/mean_field/systems/atmg/bands.py` |
-| 64 | `src/mean_field/systems/tmbg/bands.py` |
-| 55 | `src/mean_field/systems/tdbg/bands.py` |
+| 35 | `src/mean_field/systems/RnG_hBN/bands.py` |
+| 35 | `src/mean_field/systems/htqg/bands.py` |
+| 28 | `src/mean_field/systems/atmg/bands.py` |
+| 28 | `src/mean_field/systems/htg/bands.py` |
+| 26 | `src/mean_field/systems/tdbg/bands.py` |
+| 26 | `src/mean_field/systems/tmbg/bands.py` |
 
 ### `validation.py`
 
