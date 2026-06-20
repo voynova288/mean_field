@@ -999,10 +999,10 @@ def validate_physics(
         evals_kprime_node, _ = model.diagonalize(lattice.kprime_m, valley=-valley, n_bands=n_bands)
         node_exchange_residual = float(np.max(np.abs(evals_k_node - evals_kprime_node)))
         checks.append(
-            ValidationCheck(
-                name="C4.k_to_kprime_node_exchange",
-                status=status_from_bool(node_exchange_residual < 1.0e-10),
-                value=node_exchange_residual,
+            make_validation_check(
+                "C4.k_to_kprime_node_exchange",
+                node_exchange_residual < 1.0e-10,
+                node_exchange_residual,
                 detail="At the mBZ nodes, E_+(K) must match E_-(K').",
             )
         )
@@ -1022,10 +1022,10 @@ def validate_physics(
         evals_c3, _ = model.diagonalize(_rotate_c3(sample_k), valley=valley, n_bands=n_bands)
         c3_residual = float(np.max(np.abs(evals_k - evals_c3)))
         checks.append(
-            ValidationCheck(
-                name="C3.c3_symmetry",
-                status=status_from_bool(c3_residual < 1.0e-6),
-                value=c3_residual,
+            make_validation_check(
+                "C3.c3_symmetry",
+                c3_residual < 1.0e-6,
+                c3_residual,
                 detail="E(k) should match E(C3 k) when Delta_S = 0 and no strain is present.",
             )
         )
@@ -1039,10 +1039,10 @@ def validate_physics(
         )
 
     checks.append(
-        ValidationCheck(
-            name="C10.c2zt_absent",
-            status=status_from_bool(c2zt_residual > 1.0e-6),
-            value=c2zt_residual,
+        make_validation_check(
+            "C10.c2zt_absent",
+            c2zt_residual > 1.0e-6,
+            c2zt_residual,
             detail=(
                 "tMBG should not satisfy C2zT. "
                 f"max |U H* U^dagger - H| at K̃ = {_format_mev(c2zt_residual)}."
@@ -1052,10 +1052,10 @@ def validate_physics(
 
     if cross_check_error is None:
         checks.append(
-            ValidationCheck(
-                name="C11.hamiltonian_cross_check",
-                status=status_from_bool(cross_check_max < 1.0e-12),
-                value=cross_check_max,
+            make_validation_check(
+                "C11.hamiltonian_cross_check",
+                cross_check_max < 1.0e-12,
+                cross_check_max,
                 detail=(
                     "Independent cross-check builder should reproduce the primary Hamiltonian at Γ, K̃, and M̃. "
                     f"G-set={cross_check_diffs['G_vectors']:.2e}, "
@@ -1077,10 +1077,10 @@ def validate_physics(
     if include_cutoff_check:
         cutoff_summary = _compute_cutoff_convergence_summary(model, valley=valley)
         checks.append(
-            ValidationCheck(
-                name="C9.cutoff_convergence",
-                status=status_from_bool(cutoff_summary.max_delta < 5.0e-4),
-                value=cutoff_summary.max_delta,
+            make_validation_check(
+                "C9.cutoff_convergence",
+                cutoff_summary.max_delta < 5.0e-4,
+                cutoff_summary.max_delta,
                 detail=(
                     "Flat-band gap and bandwidths inferred along K-Γ-M-K' should change by less than 0.5 meV "
                     f"when n_shells increases by one. {_describe_cutoff_convergence(cutoff_summary)}"

@@ -169,6 +169,14 @@
       "legacy_lines_removed_gross": 14,
       "slice": "dedupe_tmbg_validation_check_helper",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Reused core.validation.make_validation_check for the remaining simple tMBG append-time validation checks, leaving skipped/fail diagnostics explicit.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 10,
+      "slice": "dedupe_tmbg_validation_append_checks",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
