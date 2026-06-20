@@ -15,6 +15,7 @@ from .crpa import CRPAConfig, compute_crpa
 from .hf import HFConfig, HFResult, HFState, WavefunctionBundle, reconstruct_canonical_hf_run_result, run_hf
 from .models import BandEigenResult, ContinuumModel, component_group_records, component_groups, make_model, model_record
 from .tdhf import TDHFConfig, run_tdhf
+from .validation import validate_fig6_screening_checkpoints
 
 __all__ = [
     "ArtifactManifest",
@@ -45,5 +46,6 @@ __all__ = [
     "run_hf",
     "run_tdhf",
     "update_artifact_manifest",
+    "validate_fig6_screening_checkpoints",
     "write_contract_artifacts",
 ]

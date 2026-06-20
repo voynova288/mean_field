@@ -137,10 +137,18 @@
       "legacy_lines_removed_gross": 2,
       "slice": "dedupe_htqg_validation_check_helper",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Moved the reusable RnG/hBN Fig. 6 screened-U checkpoint helper behind mean_field.api.validation and thinned the devtool to CLI argument parsing plus login-node guard.",
+      "direct_mean_field_systems_imports_after": 8,
+      "direct_mean_field_systems_imports_before": 9,
+      "legacy_lines_removed_gross": 88,
+      "slice": "thin_rlg_hbn_fig6_prereq_devtool",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
-    "count": 9,
+    "count": 8,
     "items": [
       {
         "line": 1141,
@@ -175,11 +183,6 @@
       {
         "line": 21,
         "path": "src/mean_field/devtools/run_rlg_hbn_tdhf_q0.py",
-        "text": "from mean_field.systems.RnG_hBN import ("
-      },
-      {
-        "line": 10,
-        "path": "src/mean_field/devtools/validate_rlg_hbn_fig6_prereqs.py",
         "text": "from mean_field.systems.RnG_hBN import ("
       },
       {
@@ -531,8 +534,8 @@
     ]
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
-  "src_python_files": 199,
-  "src_python_lines": 68356,
+  "src_python_files": 200,
+  "src_python_lines": 68364,
   "top_30_files": [
     {
       "lines": 2361,

@@ -4,10 +4,10 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- `src` Python files: 199
-- `src` Python lines: 68356
+- `src` Python files: 200
+- `src` Python lines: 68364
 - Files over 1000 lines: 15
-- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 9
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 8
 
 ## Completed cleanup slices
 
@@ -123,6 +123,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 2.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 9 -> 9.
 
+### thin_rlg_hbn_fig6_prereq_devtool
+
+- Moved the reusable RnG/hBN Fig. 6 screened-U checkpoint helper behind mean_field.api.validation and thinned the devtool to CLI argument parsing plus login-node guard.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 88.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 9 -> 8.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -169,7 +176,6 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | `src/mean_field/devtools/run_rlg_hbn_paper_hf.py` | 50 | `from mean_field.systems.RnG_hBN.hf import RLG_HBN_FORM_FACTOR_CONVENTION_VERSION` |
 | `src/mean_field/devtools/run_rlg_hbn_tdhf_finite_q.py` | 16 | `from mean_field.systems.RnG_hBN import (` |
 | `src/mean_field/devtools/run_rlg_hbn_tdhf_q0.py` | 21 | `from mean_field.systems.RnG_hBN import (` |
-| `src/mean_field/devtools/validate_rlg_hbn_fig6_prereqs.py` | 10 | `from mean_field.systems.RnG_hBN import (` |
 | `src/mean_field/devtools/validate_tbg_crpa_artifact.py` | 22 | `from mean_field.systems.tbg import TBGParameters` |
 
 ## Repeated module-family line counts
