@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 68964
-- Tracked Python lines: 64974
+- Tracked text lines: 68164
+- Tracked Python lines: 64162
 - Tracked Julia lines: 826
-- `src` Python files: 185
-- `src` Python lines: 58847
+- `src` Python files: 181
+- `src` Python lines: 58035
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -392,6 +392,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 434.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### retire_htg_paper_helper_tails
+
+- Retired ignored-test-only HTG paper plotting, strong-coupling classification, Mao2025 response, and lightweight validation helper modules while keeping the maintained HTG model, HF, supercell, and topology surfaces.
+- Deleted files: `src/mean_field/systems/htg/plot.py`, `src/mean_field/systems/htg/strong_coupling.py`, `src/mean_field/systems/htg/mao2025.py`, `src/mean_field/systems/htg/validation.py`.
+- Gross legacy LOC removed/thinned: 781.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -454,7 +461,7 @@ Total lines: 691
 
 ### `validation.py`
 
-Total lines: 722
+Total lines: 613
 
 | Lines | Path |
 |---:|---|
@@ -462,7 +469,6 @@ Total lines: 722
 | 156 | `src/mean_field/systems/RnG_hBN/validation.py` |
 | 138 | `src/mean_field/systems/atmg/validation.py` |
 | 126 | `src/mean_field/systems/tdbg/validation.py` |
-| 109 | `src/mean_field/systems/htg/validation.py` |
 
 ### `topology.py`
 
@@ -493,8 +499,6 @@ Total lines: 1058
 
 | Symbol | Count | Paths |
 |---|---:|---|
-| `_check` | 2 | `src/mean_field/systems/htg/validation.py`, `src/mean_field/systems/htqg/validation.py` |
-| `validate_lattice` | 2 | `src/mean_field/systems/htg/validation.py`, `src/mean_field/systems/htqg/validation.py` |
 | `validate_physics` | 3 | `src/mean_field/systems/RnG_hBN/validation.py`, `src/mean_field/systems/atmg/validation.py`, `src/mean_field/systems/tdbg/validation.py` |
 
 ### `topology.py`

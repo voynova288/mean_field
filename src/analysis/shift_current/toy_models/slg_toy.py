@@ -6,7 +6,9 @@ import math
 import numpy as np
 from scipy.linalg import eigh
 
-from mean_field.systems.htg.mao2025 import CARBON_BOND_NM
+from mean_field.systems.htg.params import GRAPHENE_LATTICE_CONSTANT_NM
+
+CARBON_BOND_NM = GRAPHENE_LATTICE_CONSTANT_NM / math.sqrt(3.0)
 
 
 @dataclass(frozen=True)

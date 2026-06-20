@@ -476,6 +476,19 @@
         "src/mean_field/systems/tmbg/plot.py",
         "src/mean_field/systems/tmbg/validation.py"
       ]
+    },
+    {
+      "description": "Retired ignored-test-only HTG paper plotting, strong-coupling classification, Mao2025 response, and lightweight validation helper modules while keeping the maintained HTG model, HF, supercell, and topology surfaces.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 781,
+      "slice": "retire_htg_paper_helper_tails",
+      "tracked_files_deleted": [
+        "src/mean_field/systems/htg/plot.py",
+        "src/mean_field/systems/htg/strong_coupling.py",
+        "src/mean_field/systems/htg/mao2025.py",
+        "src/mean_field/systems/htg/validation.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -581,13 +594,9 @@
         {
           "lines": 126,
           "path": "src/mean_field/systems/tdbg/validation.py"
-        },
-        {
-          "lines": 109,
-          "path": "src/mean_field/systems/htg/validation.py"
         }
       ],
-      "total_lines": 722
+      "total_lines": 613
     }
   },
   "phase2_targets": {
@@ -749,22 +758,6 @@
     ],
     "validation.py": [
       {
-        "count": 2,
-        "paths": [
-          "src/mean_field/systems/htg/validation.py",
-          "src/mean_field/systems/htqg/validation.py"
-        ],
-        "symbol": "_check"
-      },
-      {
-        "count": 2,
-        "paths": [
-          "src/mean_field/systems/htg/validation.py",
-          "src/mean_field/systems/htqg/validation.py"
-        ],
-        "symbol": "validate_lattice"
-      },
-      {
         "count": 3,
         "paths": [
           "src/mean_field/systems/RnG_hBN/validation.py",
@@ -776,8 +769,8 @@
     ]
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
-  "src_python_files": 185,
-  "src_python_lines": 58847,
+  "src_python_files": 181,
+  "src_python_lines": 58035,
   "top_30_files": [
     {
       "lines": 2361,
@@ -901,6 +894,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 64974,
-  "tracked_text_lines": 68964
+  "tracked_python_lines": 64162,
+  "tracked_text_lines": 68164
 }
