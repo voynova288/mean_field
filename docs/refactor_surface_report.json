@@ -547,11 +547,21 @@
       ]
     },
     {
-      "description": "Archived ATMG bands.py and retired the mapped-spectrum audit payload from path/grid band APIs; tracked ATMG bands now expose only the thin generic path/grid adapter and Khalaf path convention.",
+      "description": "Archived ATMG bands.py and retired the mapped-spectrum audit payload from path/grid band APIs; tracked ATMG bands now expose only the thin generic path/grid adapter.",
       "direct_mean_field_systems_imports_after": 5,
       "direct_mean_field_systems_imports_before": 5,
-      "legacy_lines_removed_gross": 86,
+      "legacy_lines_removed_gross": 158,
       "slice": "archive_thin_atmg_band_adapter",
+      "tracked_files_deleted": [
+        "tests/test_atmg_fig3_path.py"
+      ]
+    },
+    {
+      "description": "Archived RnG/hBN bands.py and retired paper Fig.6 path, plot-manifest, and neutrality-energy helper exports; tracked RnG/hBN bands now expose only generic path/grid band adapters.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 133,
+      "slice": "archive_retire_rlg_hbn_paper_band_helpers",
       "tracked_files_deleted": []
     }
   ],
@@ -590,10 +600,6 @@
     "bands.py": {
       "files": [
         {
-          "lines": 155,
-          "path": "src/mean_field/systems/RnG_hBN/bands.py"
-        },
-        {
           "lines": 130,
           "path": "src/mean_field/systems/htqg/bands.py"
         },
@@ -602,7 +608,11 @@
           "path": "src/mean_field/systems/htg/bands.py"
         },
         {
-          "lines": 94,
+          "lines": 73,
+          "path": "src/mean_field/systems/RnG_hBN/bands.py"
+        },
+        {
+          "lines": 72,
           "path": "src/mean_field/systems/atmg/bands.py"
         },
         {
@@ -614,7 +624,7 @@
           "path": "src/mean_field/systems/tdbg/bands.py"
         }
       ],
-      "total_lines": 611
+      "total_lines": 507
     },
     "topology.py": {
       "files": [
@@ -766,9 +776,9 @@
     ],
     "validation.py": []
   },
-  "root": "/data/home/ziyuzhu/tmp/mean_field_report_atmg_bands_20260620_221516",
+  "root": "/data/home/ziyuzhu/tmp/mean_field_report_bands_archive_20260620_224350",
   "src_python_files": 177,
-  "src_python_lines": 56934,
+  "src_python_lines": 56824,
   "top_30_files": [
     {
       "lines": 2305,
@@ -892,6 +902,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 63127,
-  "tracked_text_lines": 67154
+  "tracked_python_lines": 62945,
+  "tracked_text_lines": 66987
 }

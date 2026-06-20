@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 67154
-- Tracked Python lines: 63127
+- Tracked text lines: 66987
+- Tracked Python lines: 62945
 - Tracked Julia lines: 826
 - `src` Python files: 177
-- `src` Python lines: 56934
+- `src` Python lines: 56824
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -443,9 +443,16 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ### archive_thin_atmg_band_adapter
 
-- Archived ATMG bands.py and retired the mapped-spectrum audit payload from path/grid band APIs; tracked ATMG bands now expose only the thin generic path/grid adapter and Khalaf path convention.
+- Archived ATMG bands.py and retired the mapped-spectrum audit payload from path/grid band APIs; tracked ATMG bands now expose only the thin generic path/grid adapter.
+- Deleted files: `tests/test_atmg_fig3_path.py`.
+- Gross legacy LOC removed/thinned: 158.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
+### archive_retire_rlg_hbn_paper_band_helpers
+
+- Archived RnG/hBN bands.py and retired paper Fig.6 path, plot-manifest, and neutrality-energy helper exports; tracked RnG/hBN bands now expose only generic path/grid band adapters.
 - Deleted files: none; this slice thinned duplicated implementations in place.
-- Gross legacy LOC removed/thinned: 86.
+- Gross legacy LOC removed/thinned: 133.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
 ## Top 30 Python files under `src`
@@ -497,14 +504,14 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ### `bands.py`
 
-Total lines: 611
+Total lines: 507
 
 | Lines | Path |
 |---:|---|
-| 155 | `src/mean_field/systems/RnG_hBN/bands.py` |
 | 130 | `src/mean_field/systems/htqg/bands.py` |
 | 113 | `src/mean_field/systems/htg/bands.py` |
-| 94 | `src/mean_field/systems/atmg/bands.py` |
+| 73 | `src/mean_field/systems/RnG_hBN/bands.py` |
+| 72 | `src/mean_field/systems/atmg/bands.py` |
 | 64 | `src/mean_field/systems/tmbg/bands.py` |
 | 55 | `src/mean_field/systems/tdbg/bands.py` |
 
