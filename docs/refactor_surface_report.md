@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 71275
-- Tracked Python lines: 67314
+- Tracked text lines: 71115
+- Tracked Python lines: 67122
 - Tracked Julia lines: 826
 - `src` Python files: 191
-- `src` Python lines: 61187
+- `src` Python lines: 60995
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -341,6 +341,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Deleted the unexported HTQG real-space charge-density diagnostic helper module after confirming no package, docs, or tracked tests reference it.
 - Deleted files: `src/mean_field/systems/htqg/density.py`.
 - Gross legacy LOC removed/thinned: 102.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
+### thin_slg_toy_point_reference
+
+- Removed unreferenced full-BZ SLG toy integration and C3 diagnostic helpers while keeping the point-level Hamiltonian, derivatives, and diagonalizer used by gauge-safe response tests.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 186.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
 ## Top 30 Python files under `src`
