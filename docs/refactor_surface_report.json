@@ -225,6 +225,14 @@
       "legacy_lines_removed_gross": 16,
       "slice": "dedupe_tmbg_checkpoint_validation_checks",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Reused core.validation.make_validation_check for RnG/hBN validation pass/fail records while preserving re-exported validation types and diagnostics.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 7,
+      "slice": "dedupe_rlg_hbn_validation_checks",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -332,7 +340,7 @@
           "path": "src/mean_field/systems/atmg/validation.py"
         },
         {
-          "lines": 160,
+          "lines": 156,
           "path": "src/mean_field/systems/RnG_hBN/validation.py"
         },
         {
@@ -344,7 +352,7 @@
           "path": "src/mean_field/systems/htg/validation.py"
         }
       ],
-      "total_lines": 1828
+      "total_lines": 1824
     }
   },
   "phase2_targets": {
@@ -608,7 +616,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 200,
-  "src_python_lines": 68293,
+  "src_python_lines": 68289,
   "top_30_files": [
     {
       "lines": 2361,

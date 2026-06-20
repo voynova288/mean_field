@@ -5,7 +5,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 ## Summary
 
 - `src` Python files: 200
-- `src` Python lines: 68293
+- `src` Python lines: 68289
 - Files over 1000 lines: 15
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -200,6 +200,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 16.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### dedupe_rlg_hbn_validation_checks
+
+- Reused core.validation.make_validation_check for RnG/hBN validation pass/fail records while preserving re-exported validation types and diagnostics.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 7.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -262,14 +269,14 @@ Total lines: 691
 
 ### `validation.py`
 
-Total lines: 1828
+Total lines: 1824
 
 | Lines | Path |
 |---:|---|
 | 1079 | `src/mean_field/systems/tmbg/validation.py` |
 | 193 | `src/mean_field/systems/htqg/validation.py` |
 | 161 | `src/mean_field/systems/atmg/validation.py` |
-| 160 | `src/mean_field/systems/RnG_hBN/validation.py` |
+| 156 | `src/mean_field/systems/RnG_hBN/validation.py` |
 | 126 | `src/mean_field/systems/tdbg/validation.py` |
 | 109 | `src/mean_field/systems/htg/validation.py` |
 

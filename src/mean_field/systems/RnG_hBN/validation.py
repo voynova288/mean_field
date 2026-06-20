@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ...core.validation import ValidationCheck, ValidationReport, ValidationStatus, status_from_bool
+from ...core.validation import ValidationCheck, ValidationReport, ValidationStatus, make_validation_check
 from .hamiltonian import build_hamiltonian, flat_band_indices
 from .lattice import rotate_complex
 from .model import RLGhBNModel
@@ -74,62 +74,58 @@ def validate_physics(model: RLGhBNModel) -> ValidationReport:
     flat_valence, flat_conduction = flat_band_indices(model.lattice, model.params)
 
     checks = [
-        ValidationCheck(
-            name="parameter_table",
-            status=status_from_bool(
-                np.isclose(model.params.fermi_velocity_mev_nm, DEFAULT_FERMI_VELOCITY_MEV_NM)
-                and np.isclose(model.params.v3_mev_nm, DEFAULT_REMOTE_VELOCITY_MEV_NM)
-                and np.isclose(model.params.v4_mev_nm, DEFAULT_REMOTE_VELOCITY_MEV_NM)
-                and np.isclose(model.params.t1_mev, DEFAULT_T1_MEV)
-                and np.isclose(model.params.t2_mev, DEFAULT_T2_MEV)
-                and np.allclose(
-                    [model.params.moire_v0_mev, model.params.moire_v1_mev, model.params.moire_phase_deg],
-                    table_params,
-                )
-            ),
+        make_validation_check(
+            "parameter_table",
+            np.isclose(model.params.fermi_velocity_mev_nm, DEFAULT_FERMI_VELOCITY_MEV_NM)
+            and np.isclose(model.params.v3_mev_nm, DEFAULT_REMOTE_VELOCITY_MEV_NM)
+            and np.isclose(model.params.v4_mev_nm, DEFAULT_REMOTE_VELOCITY_MEV_NM)
+            and np.isclose(model.params.t1_mev, DEFAULT_T1_MEV)
+            and np.isclose(model.params.t2_mev, DEFAULT_T2_MEV)
+            and np.allclose([model.params.moire_v0_mev, model.params.moire_v1_mev, model.params.moire_phase_deg], table_params),
+            None,
             detail="Core RLG and hBN moire parameters match the work-document Table II defaults.",
         ),
-        ValidationCheck(
-            name="default_g_basis_size",
-            status=status_from_bool(model.lattice.shell_count != 4 or model.lattice.n_g == 19),
+        make_validation_check(
+            "default_g_basis_size",
+            model.lattice.shell_count != 4 or model.lattice.n_g == 19,
+            model.lattice.n_g,
             detail="The paper default shell_count=4 keeps N_G=19 reciprocal vectors.",
-            value=model.lattice.n_g,
         ),
-        ValidationCheck(
-            name="q_c3_norms",
-            status=status_from_bool(q_norm_residual < 1.0e-12 and g_norm_residual < 1.0e-12),
+        make_validation_check(
+            "q_c3_norms",
+            q_norm_residual < 1.0e-12 and g_norm_residual < 1.0e-12,
+            max(q_norm_residual, g_norm_residual),
             detail="The three q vectors and three moire reciprocal vectors have equal norms.",
-            value=max(q_norm_residual, g_norm_residual),
         ),
-        ValidationCheck(
-            name="hermiticity",
-            status=status_from_bool(hermiticity_residual < 1.0e-10),
+        make_validation_check(
+            "hermiticity",
+            hermiticity_residual < 1.0e-10,
+            hermiticity_residual,
             detail="The RLG/hBN single-particle Hamiltonian is Hermitian at a generic moire momentum.",
-            value=hermiticity_residual,
         ),
-        ValidationCheck(
-            name="moire_bottom_layer_only",
-            status=status_from_bool(moire_bottom_residual < 1.0e-12),
+        make_validation_check(
+            "moire_bottom_layer_only",
+            moire_bottom_residual < 1.0e-12,
+            moire_bottom_residual,
             detail="Subtracting the no-moire Hamiltonian leaves moire terms only in layer l=0 blocks.",
-            value=moire_bottom_residual,
         ),
-        ValidationCheck(
-            name="time_reversal",
-            status=status_from_bool(time_reversal_residual < 1.0e-10),
+        make_validation_check(
+            "time_reversal",
+            time_reversal_residual < 1.0e-10,
+            time_reversal_residual,
             detail="The K and Kprime spectra satisfy E_K(k)=E_Kprime(-k).",
-            value=time_reversal_residual,
         ),
-        ValidationCheck(
-            name="c3_spectrum",
-            status=status_from_bool(c3_residual < 1.0e-8),
+        make_validation_check(
+            "c3_spectrum",
+            c3_residual < 1.0e-8,
+            c3_residual,
             detail="The finite reciprocal-vector shell preserves the single-valley C3 spectrum.",
-            value=c3_residual,
         ),
-        ValidationCheck(
-            name="flat_band_indices",
-            status=status_from_bool(flat_valence == model.params.layer_count * model.lattice.n_g - 1 and flat_conduction == flat_valence + 1),
+        make_validation_check(
+            "flat_band_indices",
+            flat_valence == model.params.layer_count * model.lattice.n_g - 1 and flat_conduction == flat_valence + 1,
+            f"{flat_valence},{flat_conduction}",
             detail="The central valence and conduction bands use the L*N_G valence-count convention.",
-            value=f"{flat_valence},{flat_conduction}",
         ),
     ]
 
