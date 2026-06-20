@@ -102,7 +102,6 @@ class ATMGModel:
         valley: int = 1,
         n_bands: int | None = None,
         return_eigenvectors: bool = False,
-        include_mapped: bool = False,
     ) -> PathBandsResult:
         return compute_bands_along_path(
             path,
@@ -111,7 +110,6 @@ class ATMGModel:
             valley=valley,
             n_bands=n_bands,
             return_eigenvectors=return_eigenvectors,
-            include_mapped=include_mapped,
         )
 
     def bands_along_standard_path(
@@ -121,14 +119,12 @@ class ATMGModel:
         n_bands: int | None = None,
         points_per_segment: int = 120,
         return_eigenvectors: bool = False,
-        include_mapped: bool = False,
     ) -> PathBandsResult:
         return self.bands_along_path(
             self.standard_kpath(points_per_segment=points_per_segment),
             valley=valley,
             n_bands=n_bands,
             return_eigenvectors=return_eigenvectors,
-            include_mapped=include_mapped,
         )
 
     def bands_on_grid(
@@ -140,7 +136,6 @@ class ATMGModel:
         return_eigenvectors: bool = False,
         endpoint: bool = False,
         frac_shift: tuple[float, float] = (0.0, 0.0),
-        include_mapped: bool = False,
     ) -> GridBandsResult:
         return compute_bands_on_grid(
             mesh_size,
@@ -151,7 +146,6 @@ class ATMGModel:
             return_eigenvectors=return_eigenvectors,
             endpoint=endpoint,
             frac_shift=frac_shift,
-            include_mapped=include_mapped,
         )
 
     def topology_on_grid(
