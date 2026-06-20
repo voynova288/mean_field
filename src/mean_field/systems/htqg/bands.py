@@ -14,25 +14,18 @@ from .lattice import HTQGLattice, KPath, build_moire_k_grid
 from .params import HTQGParams
 
 
-
-def compute_bands_along_path(
-    path: KPath,
+def _prepare_band_diagonalizer(
     lattice: HTQGLattice,
     params: HTQGParams,
     *,
-    domain: str | HTQGDomain = "alpha_beta_alpha",
-    valley: int = 1,
-    d12: complex | None = None,
-    d34: complex | None = None,
-    band_indices: tuple[int, ...] | None = None,
-    central_band_count: int | None = None,
-    return_eigenvectors: bool = False,
-) -> PathBandsResult:
-    resolved_indices = resolve_selected_band_indices(
-        lattice.matrix_dim,
-        band_indices=band_indices,
-        central_band_count=central_band_count,
-    )
+    domain: str | HTQGDomain,
+    valley: int,
+    d12: complex | None,
+    d34: complex | None,
+    band_indices: tuple[int, ...] | None,
+    central_band_count: int | None,
+):
+    resolved_indices = resolve_selected_band_indices(lattice.matrix_dim, band_indices=band_indices, central_band_count=central_band_count)
     coupling_table = build_coupling_table(lattice.g_vectors, lattice.q_vectors)
 
     def _diagonalize(kval: complex, resolved_n_bands: int, want_eigenvectors: bool):
@@ -51,12 +44,32 @@ def compute_bands_along_path(
             return_eigenvectors=want_eigenvectors,
         )
 
+    return resolved_indices, _diagonalize
+
+
+def compute_bands_along_path(
+    path: KPath,
+    lattice: HTQGLattice,
+    params: HTQGParams,
+    *,
+    domain: str | HTQGDomain = "alpha_beta_alpha",
+    valley: int = 1,
+    d12: complex | None = None,
+    d34: complex | None = None,
+    band_indices: tuple[int, ...] | None = None,
+    central_band_count: int | None = None,
+    return_eigenvectors: bool = False,
+) -> PathBandsResult:
+    resolved_indices, diagonalize = _prepare_band_diagonalizer(
+        lattice, params, domain=domain, valley=valley, d12=d12, d34=d34,
+        band_indices=band_indices, central_band_count=central_band_count,
+    )
     return compute_path_bands(
         path,
         matrix_dim=lattice.matrix_dim,
         n_bands=len(resolved_indices),
         return_eigenvectors=return_eigenvectors,
-        diagonalize=_diagonalize,
+        diagonalize=diagonalize,
         result_band_indices=resolved_indices,
         result_metadata={"system": "htqg", "domain": str(domain), "valley": int(valley)},
     )
@@ -77,48 +90,25 @@ def compute_bands_on_grid(
     endpoint: bool = False,
     frac_shift: tuple[float, float] = (0.0, 0.0),
 ) -> GridBandsResult:
-    resolved_indices = resolve_selected_band_indices(
-        lattice.matrix_dim,
-        band_indices=band_indices,
-        central_band_count=central_band_count,
+    resolved_indices, diagonalize = _prepare_band_diagonalizer(
+        lattice, params, domain=domain, valley=valley, d12=d12, d34=d34,
+        band_indices=band_indices, central_band_count=central_band_count,
     )
     k_grid_frac, kvec = build_moire_k_grid(lattice, mesh_size, endpoint=endpoint, frac_shift=frac_shift)
-    coupling_table = build_coupling_table(lattice.g_vectors, lattice.q_vectors)
-
-    def _diagonalize(kval: complex, resolved_n_bands: int, want_eigenvectors: bool):
-        if resolved_n_bands != len(resolved_indices):
-            raise ValueError("HTQG selected-band loop received inconsistent band count")
-        return diagonalize_hamiltonian(
-            complex(kval),
-            lattice,
-            params,
-            domain=domain,
-            valley=valley,
-            d12=d12,
-            d34=d34,
-            coupling_table=coupling_table,
-            band_indices=resolved_indices,
-            return_eigenvectors=want_eigenvectors,
-        )
-
     return compute_grid_bands(
         k_grid_frac=k_grid_frac,
         kvec=kvec,
         matrix_dim=lattice.matrix_dim,
         n_bands=len(resolved_indices),
         return_eigenvectors=return_eigenvectors,
-        diagonalize=_diagonalize,
+        diagonalize=diagonalize,
         result_band_indices=resolved_indices,
         result_metadata={"system": "htqg", "domain": str(domain), "valley": int(valley)},
     )
 
 
 def estimate_central_band_metrics(result: PathBandsResult | GridBandsResult, matrix_dim: int) -> dict[str, float | None]:
-    """Estimate central two-band bandwidths and remote gap from sampled bands.
-
-    This is a sampling diagnostic, not a paper-level checkpoint by itself.  The
-    paper metrics require a sufficiently dense path/grid and cutoff convergence.
-    """
+    """Estimate central two-band bandwidths and remote gap from sampled bands."""
 
     metrics = estimate_central_pair_metrics(result, matrix_dim)
     return {

@@ -177,6 +177,14 @@
       "legacy_lines_removed_gross": 10,
       "slice": "dedupe_tmbg_validation_append_checks",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Collapsed duplicate HTQG path/grid selected-band diagonalizer setup into one system-local helper while preserving public compute_bands_* APIs and metadata.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 10,
+      "slice": "dedupe_htqg_band_diagonalizer",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -222,7 +230,7 @@
           "path": "src/mean_field/systems/RnG_hBN/bands.py"
         },
         {
-          "lines": 140,
+          "lines": 130,
           "path": "src/mean_field/systems/htqg/bands.py"
         },
         {
@@ -238,7 +246,7 @@
           "path": "src/mean_field/systems/tdbg/bands.py"
         }
       ],
-      "total_lines": 745
+      "total_lines": 735
     },
     "topology.py": {
       "files": [
@@ -552,7 +560,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 200,
-  "src_python_lines": 68367,
+  "src_python_lines": 68357,
   "top_30_files": [
     {
       "lines": 2361,

@@ -5,7 +5,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 ## Summary
 
 - `src` Python files: 200
-- `src` Python lines: 68367
+- `src` Python lines: 68357
 - Files over 1000 lines: 15
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -158,6 +158,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 10.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### dedupe_htqg_band_diagonalizer
+
+- Collapsed duplicate HTQG path/grid selected-band diagonalizer setup into one system-local helper while preserving public compute_bands_* APIs and metadata.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 10.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -207,13 +214,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ### `bands.py`
 
-Total lines: 745
+Total lines: 735
 
 | Lines | Path |
 |---:|---|
 | 190 | `src/mean_field/systems/atmg/bands.py` |
 | 169 | `src/mean_field/systems/RnG_hBN/bands.py` |
-| 140 | `src/mean_field/systems/htqg/bands.py` |
+| 130 | `src/mean_field/systems/htqg/bands.py` |
 | 127 | `src/mean_field/systems/htg/bands.py` |
 | 64 | `src/mean_field/systems/tmbg/bands.py` |
 | 55 | `src/mean_field/systems/tdbg/bands.py` |
