@@ -193,6 +193,14 @@
       "legacy_lines_removed_gross": 14,
       "slice": "dedupe_htg_band_diagonalizer",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Collapsed repeated ATMG direct diagonalization calls used by plain and mapped band paths into one system-local helper without changing mapped-spectrum logic.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 16,
+      "slice": "dedupe_atmg_band_diagonalizer_call",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -230,7 +238,7 @@
     "bands.py": {
       "files": [
         {
-          "lines": 190,
+          "lines": 174,
           "path": "src/mean_field/systems/atmg/bands.py"
         },
         {
@@ -254,7 +262,7 @@
           "path": "src/mean_field/systems/tdbg/bands.py"
         }
       ],
-      "total_lines": 721
+      "total_lines": 705
     },
     "topology.py": {
       "files": [
@@ -576,7 +584,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 200,
-  "src_python_lines": 68343,
+  "src_python_lines": 68327,
   "top_30_files": [
     {
       "lines": 2361,

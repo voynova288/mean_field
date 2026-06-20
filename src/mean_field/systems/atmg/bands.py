@@ -35,23 +35,21 @@ def build_khalaf_fig3_path(model: "ATMGModel", points_per_segment: int) -> KPath
     )
 
 
-def _make_diagonalizer(
-    lattice: ATMGLattice,
-    params: ATMGParameters,
-    *,
-    valley: int,
-    coupling_table,
-):
+def _diagonalize_selected(kval: complex, lattice: ATMGLattice, params: ATMGParameters, *, valley: int, n_bands: int, coupling_table):
+    return diagonalize_hamiltonian(
+        complex(kval),
+        lattice,
+        params,
+        valley=valley,
+        n_bands=int(n_bands),
+        coupling_table=coupling_table,
+    )
+
+
+def _make_diagonalizer(lattice: ATMGLattice, params: ATMGParameters, *, valley: int, coupling_table):
     def _diagonalize(kval: complex, resolved_band_count: int, want_eigenvectors: bool):
         del want_eigenvectors
-        return diagonalize_hamiltonian(
-            complex(kval),
-            lattice,
-            params,
-            valley=valley,
-            n_bands=resolved_band_count,
-            coupling_table=coupling_table,
-        )
+        return _diagonalize_selected(kval, lattice, params, valley=valley, n_bands=resolved_band_count, coupling_table=coupling_table)
 
     return _diagonalize
 
@@ -89,14 +87,7 @@ def compute_bands_along_path(
     mapped_blocks: list[np.ndarray] | None = None
 
     for ik, kval in enumerate(path.kvec):
-        evals, evecs = diagonalize_hamiltonian(
-            complex(kval),
-            lattice,
-            params,
-            valley=valley,
-            n_bands=resolved_n_bands,
-            coupling_table=coupling_table,
-        )
+        evals, evecs = _diagonalize_selected(kval, lattice, params, valley=valley, n_bands=resolved_n_bands, coupling_table=coupling_table)
         energies[ik, :] = evals
         if return_eigenvectors and eigenvectors is not None:
             eigenvectors[ik, :, :] = evecs
@@ -158,14 +149,7 @@ def compute_bands_on_grid(
 
     for i in range(mesh_size):
         for j in range(mesh_size):
-            evals, evecs = diagonalize_hamiltonian(
-                complex(kvec[i, j]),
-                lattice,
-                params,
-                valley=valley,
-                n_bands=resolved_n_bands,
-                coupling_table=coupling_table,
-            )
+            evals, evecs = _diagonalize_selected(kvec[i, j], lattice, params, valley=valley, n_bands=resolved_n_bands, coupling_table=coupling_table)
             energies[i, j, :] = evals
             if return_eigenvectors and eigenvectors is not None:
                 eigenvectors[i, j, :, :] = evecs

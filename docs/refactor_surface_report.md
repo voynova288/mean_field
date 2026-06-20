@@ -5,7 +5,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 ## Summary
 
 - `src` Python files: 200
-- `src` Python lines: 68343
+- `src` Python lines: 68327
 - Files over 1000 lines: 15
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -172,6 +172,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 14.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### dedupe_atmg_band_diagonalizer_call
+
+- Collapsed repeated ATMG direct diagonalization calls used by plain and mapped band paths into one system-local helper without changing mapped-spectrum logic.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 16.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -221,11 +228,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ### `bands.py`
 
-Total lines: 721
+Total lines: 705
 
 | Lines | Path |
 |---:|---|
-| 190 | `src/mean_field/systems/atmg/bands.py` |
+| 174 | `src/mean_field/systems/atmg/bands.py` |
 | 169 | `src/mean_field/systems/RnG_hBN/bands.py` |
 | 130 | `src/mean_field/systems/htqg/bands.py` |
 | 113 | `src/mean_field/systems/htg/bands.py` |
