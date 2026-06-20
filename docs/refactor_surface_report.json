@@ -349,6 +349,14 @@
       "tracked_files_deleted": [
         "src/analysis/topology/validate_existing_results.py"
       ]
+    },
+    {
+      "description": "Removed old standalone Polshyn path/grid/projected-basis/manual-SCF helper paths while keeping the registered Polshyn-Wang canonical bundle adapter and tested Wang problem/filling utilities.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 948,
+      "slice": "thin_tmbg_polshyn_legacy_helpers",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -724,7 +732,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 194,
-  "src_python_lines": 63809,
+  "src_python_lines": 62862,
   "top_30_files": [
     {
       "lines": 2361,
@@ -733,10 +741,6 @@
     {
       "lines": 2305,
       "path": "src/mean_field/systems/htg/mean_field_adapter.py"
-    },
-    {
-      "lines": 2151,
-      "path": "src/mean_field/systems/tmbg/polshyn_supercell.py"
     },
     {
       "lines": 1640,
@@ -769,6 +773,10 @@
     {
       "lines": 1258,
       "path": "src/mean_field/systems/tbg/zero_field/hf.py"
+    },
+    {
+      "lines": 1204,
+      "path": "src/mean_field/systems/tmbg/polshyn_supercell.py"
     },
     {
       "lines": 1149,
@@ -848,6 +856,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 69936,
-  "tracked_text_lines": 73787
+  "tracked_python_lines": 68989,
+  "tracked_text_lines": 72857
 }
