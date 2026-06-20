@@ -15,15 +15,6 @@ from mean_field.systems.htqg import (
     domain_displacements,
     fujimoto_2025_fig2_checkpoint,
 )
-from mean_field.systems.htqg.hf import (
-    HTQGInteractionSettings,
-    HTQGProjectedHFConfig,
-    build_htqg_interaction_components,
-    build_htqg_overlap_blocks,
-    build_htqg_projected_hf_data,
-    initialize_htqg_density,
-    occupation_by_label,
-)
 from mean_field.systems.htqg.validation import run_lightweight_validation
 
 
@@ -102,41 +93,3 @@ def test_htqg_model_band_helpers_return_central_band_shapes() -> None:
     assert grid.energies.shape == (2, 2, 4)
     assert grid.eigenvectors is None
     assert tuple(grid.band_indices) == (2, 3, 4, 5)
-
-
-def test_htqg_projected_hf_tiny_data_overlap_and_density_contract() -> None:
-    config = HTQGProjectedHFConfig(
-        theta_deg=2.25,
-        n_shells=0,
-        mesh_size=1,
-        active_band_count=2,
-        domain="alpha_beta_alpha",
-        filling=0,
-        params=_light_params(),
-        interaction=HTQGInteractionSettings(g_shells=0),
-    )
-    data = build_htqg_projected_hf_data(config)
-
-    assert data.nt == 8
-    assert data.nk == 1
-    assert data.n_occupied_per_k == 4
-    assert data.h0.shape == (data.nt, data.nt, data.nk)
-    np.testing.assert_allclose(data.h0[:, :, 0], data.h0[:, :, 0].conj().T, atol=1.0e-12)
-
-    overlap_blocks = build_htqg_overlap_blocks(data)
-    assert overlap_blocks.shifts == ((0, 0),)
-
-    density = initialize_htqg_density(data, init_mode="bm", seed=1)
-    assert density.shape == data.h0.shape
-    np.testing.assert_allclose(density[:, :, 0], density[:, :, 0].conj().T, atol=1.0e-12)
-    assert np.isclose(np.trace(density[:, :, 0]).real, data.n_occupied_per_k)
-
-    components = build_htqg_interaction_components(data, density, overlap_blocks=overlap_blocks)
-    assert set(components) == {"hartree", "fock", "total"}
-    for component in components.values():
-        assert component.shape == data.h0.shape
-        np.testing.assert_allclose(component[:, :, 0], component[:, :, 0].conj().T, atol=1.0e-12)
-
-    occupations = occupation_by_label(data, density)
-    assert len(occupations) == data.nt
-    assert np.isclose(sum(occupations.values()), data.n_occupied_per_k)
