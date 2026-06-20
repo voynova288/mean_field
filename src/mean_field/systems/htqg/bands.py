@@ -5,7 +5,6 @@ from ...core.bands import (
     PathBandsResult,
     compute_grid_bands,
     compute_path_bands,
-    estimate_central_pair_metrics,
     resolve_selected_band_indices,
 )
 from .domains import HTQGDomain
@@ -107,24 +106,10 @@ def compute_bands_on_grid(
     )
 
 
-def estimate_central_band_metrics(result: PathBandsResult | GridBandsResult, matrix_dim: int) -> dict[str, float | None]:
-    """Estimate central two-band bandwidths and remote gap from sampled bands."""
-
-    metrics = estimate_central_pair_metrics(result, matrix_dim)
-    return {
-        "valence_bandwidth_ev": metrics["valence_bandwidth_ev"],
-        "conduction_bandwidth_ev": metrics["conduction_bandwidth_ev"],
-        "mean_flat_bandwidth_ev": metrics["mean_flat_bandwidth_ev"],
-        "central_manifold_span_ev": metrics["central_manifold_span_ev"],
-        "central_gap_ev": metrics["central_gap_ev"],
-        "remote_gap_ev": metrics["remote_gap_ev"],
-    }
-
 
 __all__ = [
     "GridBandsResult",
     "PathBandsResult",
     "compute_bands_along_path",
     "compute_bands_on_grid",
-    "estimate_central_band_metrics",
 ]

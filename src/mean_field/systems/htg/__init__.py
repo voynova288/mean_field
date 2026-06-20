@@ -1,6 +1,6 @@
 """Helical trilayer graphene noninteracting continuum model."""
 
-from .bands import GridBandsResult, PathBandsResult, compute_bands_along_path, compute_bands_on_grid, estimate_central_band_metrics
+from .bands import GridBandsResult, PathBandsResult, compute_bands_along_path, compute_bands_on_grid
 from .chiral import MAGIC_ALPHA_ZETA0, build_chiral_lattice_from_alpha
 from .hamiltonian import (
     MoireCouplingEntry,
@@ -169,7 +169,6 @@ __all__ = [
     'default_displacements',
     'diagonalize_hamiltonian',
     'dirac_block',
-    'estimate_central_band_metrics',
     'evaluate_htg_hf_path',
     'evaluate_htg_interaction_path',
     'evaluate_htg_supercell_hf_path',

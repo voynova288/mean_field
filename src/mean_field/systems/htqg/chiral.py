@@ -6,7 +6,8 @@ from typing import Iterable
 import numpy as np
 from scipy.optimize import minimize_scalar
 
-from .bands import compute_bands_on_grid, estimate_central_band_metrics
+from ...core.bands import estimate_central_pair_metrics
+from .bands import compute_bands_on_grid
 from .domains import HTQGDomain, canonical_domain_key
 from .hamiltonian import build_hamiltonian
 from .lattice import HTQGLattice, build_htqg_lattice
@@ -94,7 +95,7 @@ def central_pair_bandwidth_on_grid(
         central_band_count=4,
         return_eigenvectors=False,
     )
-    metrics = estimate_central_band_metrics(result, lattice.matrix_dim)
+    metrics = estimate_central_pair_metrics(result, lattice.matrix_dim)
     return MagicScanPoint(
         alpha=float(alpha),
         theta_deg=float(lattice.theta_deg),

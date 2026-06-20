@@ -6,7 +6,6 @@ from ...core.bands import (
     PathBandsResult,
     compute_grid_bands,
     compute_path_bands,
-    estimate_central_pair_metrics,
     resolve_selected_band_indices,
 )
 from .lattice import HTGLattice, KPath, build_moire_k_grid
@@ -100,14 +99,3 @@ def compute_bands_on_grid(
         diagonalize=diagonalize,
         result_band_indices=resolved_indices,
     )
-
-
-def estimate_central_band_metrics(result: PathBandsResult, matrix_dim: int) -> dict[str, float | None]:
-    metrics = estimate_central_pair_metrics(result, matrix_dim)
-    if metrics["central_bandwidth_ev"] is None:
-        return {"central_bandwidth_ev": None, "remote_gap_ev": None}
-    return {
-        "central_bandwidth_ev": metrics["central_bandwidth_ev"],
-        "central_manifold_span_ev": metrics["central_manifold_span_ev"],
-        "remote_gap_ev": metrics["remote_gap_ev"],
-    }
