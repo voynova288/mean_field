@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 65792
-- Tracked Python lines: 61727
+- Tracked text lines: 65573
+- Tracked Python lines: 61505
 - Tracked Julia lines: 826
 - `src` Python files: 177
-- `src` Python lines: 55607
+- `src` Python lines: 55386
 - Files over 1000 lines: 12
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 3
 
@@ -468,6 +468,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Deleted files: none; this slice thinned duplicated implementations in place.
 - Gross legacy LOC removed/thinned: 1248.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 3.
+
+### archive_retire_rlg_hbn_parallel_merge_devtool
+
+- Archived the RnG/hBN parallel paper-HF merge workflow and thinned the tracked devtool to metadata sidecar compatibility only; removed its dispatcher command.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 231.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 3 -> 3.
 
 ## Top 30 Python files under `src`
 
