@@ -119,18 +119,6 @@ class KPath:
         )
 
 
-def build_uniform_lattice(g1: complex, g2: complex, lk: int) -> LatticeGrid:
-    frac = np.arange(lk + 1, dtype=float) / float(lk)
-    kvec = np.ravel(frac[:, None] * g1 + frac[None, :] * g2, order="F")
-    return LatticeGrid(
-        k1=frac.copy(),
-        k2=frac.copy(),
-        kvec=np.asarray(kvec, dtype=np.complex128),
-        nk=int(kvec.size),
-        lk=int(lk),
-        flag_inv=True,
-    )
-
 
 def cumulative_distance(kvec: Iterable[complex]) -> np.ndarray:
     values = np.asarray(list(kvec), dtype=np.complex128)

@@ -435,6 +435,14 @@
       "legacy_lines_removed_gross": 71,
       "slice": "prune_tmbg_polshyn_unused_diagnostics",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Removed unreferenced generic uniform-lattice and TBG path-sample segment helpers while preserving the active LatticeGrid dataclass and path projection API.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 22,
+      "slice": "prune_unused_lattice_path_helpers",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -810,7 +818,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 191,
-  "src_python_lines": 60878,
+  "src_python_lines": 60854,
   "top_30_files": [
     {
       "lines": 2361,
@@ -934,6 +942,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 67005,
-  "tracked_text_lines": 71028
+  "tracked_python_lines": 66981,
+  "tracked_text_lines": 71004
 }

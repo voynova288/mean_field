@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 71028
-- Tracked Python lines: 67005
+- Tracked text lines: 71004
+- Tracked Python lines: 66981
 - Tracked Julia lines: 826
 - `src` Python files: 191
-- `src` Python lines: 60878
+- `src` Python lines: 60854
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -362,6 +362,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Removed unreferenced Polshyn/Wang target-Hamiltonian and sector diagnostic helpers while preserving the tested Wang HF problem builder, bundle adapter, filling helpers, and CDW order diagnostics.
 - Deleted files: none; this slice thinned duplicated implementations in place.
 - Gross legacy LOC removed/thinned: 71.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
+### prune_unused_lattice_path_helpers
+
+- Removed unreferenced generic uniform-lattice and TBG path-sample segment helpers while preserving the active LatticeGrid dataclass and path projection API.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 22.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
 ## Top 30 Python files under `src`

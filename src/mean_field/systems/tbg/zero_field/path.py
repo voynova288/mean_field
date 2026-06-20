@@ -88,18 +88,6 @@ def build_gamma_m_k_gamma_kprime_kpath(params: TBGParameters, points_per_segment
     )
 
 
-def path_segment_indices_for_samples(path: KPath, sample_indices: Iterable[int]) -> np.ndarray:
-    samples = np.asarray(list(sample_indices), dtype=int)
-    if samples.size == 0:
-        return np.asarray([], dtype=int)
-
-    end_indices = np.asarray(path.node_indices[1:], dtype=int) - 1
-    segment_indices = np.searchsorted(end_indices, samples, side="right")
-    max_segment = max(len(path.node_indices) - 2, 0)
-    if max_segment == 0:
-        return np.zeros(samples.size, dtype=int)
-    return np.clip(segment_indices, 0, max_segment).astype(int)
-
 
 def project_kvec_onto_path(
     path: KPath,
