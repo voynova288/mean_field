@@ -489,6 +489,17 @@
         "src/mean_field/systems/htg/mao2025.py",
         "src/mean_field/systems/htg/validation.py"
       ]
+    },
+    {
+      "description": "Retired ignored-test-only ATMG and TDBG lightweight validation modules while keeping the maintained model, bands, topology, HF, artifact, and shift-current surfaces.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 264,
+      "slice": "retire_atmg_tdbg_validation_tails",
+      "tracked_files_deleted": [
+        "src/mean_field/systems/atmg/validation.py",
+        "src/mean_field/systems/tdbg/validation.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -586,17 +597,9 @@
         {
           "lines": 156,
           "path": "src/mean_field/systems/RnG_hBN/validation.py"
-        },
-        {
-          "lines": 138,
-          "path": "src/mean_field/systems/atmg/validation.py"
-        },
-        {
-          "lines": 126,
-          "path": "src/mean_field/systems/tdbg/validation.py"
         }
       ],
-      "total_lines": 613
+      "total_lines": 349
     }
   },
   "phase2_targets": {
@@ -756,21 +759,11 @@
         "symbol": "transform"
       }
     ],
-    "validation.py": [
-      {
-        "count": 3,
-        "paths": [
-          "src/mean_field/systems/RnG_hBN/validation.py",
-          "src/mean_field/systems/atmg/validation.py",
-          "src/mean_field/systems/tdbg/validation.py"
-        ],
-        "symbol": "validate_physics"
-      }
-    ]
+    "validation.py": []
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
-  "src_python_files": 181,
-  "src_python_lines": 58035,
+  "src_python_files": 179,
+  "src_python_lines": 57755,
   "top_30_files": [
     {
       "lines": 2361,
@@ -894,6 +887,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 64162,
-  "tracked_text_lines": 68164
+  "tracked_python_lines": 63882,
+  "tracked_text_lines": 67881
 }
