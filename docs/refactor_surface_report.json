@@ -65,6 +65,14 @@
       "legacy_lines_removed_gross": 39,
       "slice": "dedupe_selected_band_indices",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Collapsed duplicate path/grid diagonalizer closures inside TDBG and TMBG band adapters while preserving their public compute_bands_* APIs.",
+      "direct_mean_field_systems_imports_after": 9,
+      "direct_mean_field_systems_imports_before": 9,
+      "legacy_lines_removed_gross": 12,
+      "slice": "dedupe_tdbg_tmbg_band_diagonalizers",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -138,15 +146,15 @@
           "path": "src/mean_field/systems/htg/bands.py"
         },
         {
-          "lines": 74,
+          "lines": 64,
           "path": "src/mean_field/systems/tmbg/bands.py"
         },
         {
-          "lines": 57,
+          "lines": 55,
           "path": "src/mean_field/systems/tdbg/bands.py"
         }
       ],
-      "total_lines": 761
+      "total_lines": 749
     },
     "topology.py": {
       "files": [
@@ -226,6 +234,15 @@
           "src/mean_field/systems/tmbg/bands.py"
         ],
         "symbol": "_diagonalize"
+      },
+      {
+        "count": 3,
+        "paths": [
+          "src/mean_field/systems/atmg/bands.py",
+          "src/mean_field/systems/tdbg/bands.py",
+          "src/mean_field/systems/tmbg/bands.py"
+        ],
+        "symbol": "_make_diagonalizer"
       },
       {
         "count": 6,
@@ -467,7 +484,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 199,
-  "src_python_lines": 68427,
+  "src_python_lines": 68415,
   "top_30_files": [
     {
       "lines": 2361,
