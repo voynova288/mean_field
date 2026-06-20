@@ -5,7 +5,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 ## Summary
 
 - `src` Python files: 200
-- `src` Python lines: 68327
+- `src` Python lines: 68313
 - Files over 1000 lines: 15
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -179,6 +179,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 16.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### thin_rlg_hbn_band_helpers
+
+- Thinned RnG/hBN band helper payload construction without changing Fig. 6 path semantics, manifest keys, or public exports.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 14.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -228,12 +235,12 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ### `bands.py`
 
-Total lines: 705
+Total lines: 691
 
 | Lines | Path |
 |---:|---|
 | 174 | `src/mean_field/systems/atmg/bands.py` |
-| 169 | `src/mean_field/systems/RnG_hBN/bands.py` |
+| 155 | `src/mean_field/systems/RnG_hBN/bands.py` |
 | 130 | `src/mean_field/systems/htqg/bands.py` |
 | 113 | `src/mean_field/systems/htg/bands.py` |
 | 64 | `src/mean_field/systems/tmbg/bands.py` |

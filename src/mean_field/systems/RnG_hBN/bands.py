@@ -25,21 +25,9 @@ def build_fig6_paper_hf_path(model: object, points_per_segment: int) -> KPath:
     # evaluated.
     mprime_fig6 = g2 / 2.0
     m_fig6 = lattice.m_m
-    nodes = (
-        lattice.gamma_m,
-        lattice.k_m,
-        lattice.kprime_m,
-        lattice.gamma_m,
-        mprime_fig6,
-        m_fig6,
-        lattice.gamma_m,
-    )
+    nodes = (lattice.gamma_m, lattice.k_m, lattice.kprime_m, lattice.gamma_m, mprime_fig6, m_fig6, lattice.gamma_m)
     labels = ("$\\Gamma_M$", "$K_M$", "$K'_M$", "$\\Gamma_M$", "$M'_M$", "$M_M$", "$\\Gamma_M$")
-    return build_kpath_from_nodes(
-        nodes,
-        labels,
-        tuple(int(points_per_segment) for _ in range(len(nodes) - 1)),
-    )
+    return build_kpath_from_nodes(nodes, labels, tuple(int(points_per_segment) for _ in range(len(nodes) - 1)))
 
 
 def update_paper_hf_band_plot_manifest(
@@ -67,14 +55,12 @@ def update_paper_hf_band_plot_manifest(
     return update_artifact_manifest(
         source_dir,
         files=files,
-        metadata={
-            "band_plot": {
-                "workflow": "rlg_hbn.paper_hf_bands",
-                "status": str(status),
-                "paper_target": str(paper_target),
-                "panel_count": int(len(panel_names)),
-            }
-        },
+        metadata={"band_plot": {
+            "workflow": "rlg_hbn.paper_hf_bands",
+            "status": str(status),
+            "paper_target": str(paper_target),
+            "panel_count": int(len(panel_names)),
+        }},
     )
 
 
