@@ -19,10 +19,20 @@
       "tracked_files_deleted": [
         "src/mean_field/devtools/plot_rlg_hbn_paper_hf_bands.py"
       ]
+    },
+    {
+      "description": "Removed one-off HTQG Fig.1 first-pass band plotting devtool from tracked command surface. The reusable HTQG band/path/domain APIs remain in systems/htqg; projected-HF workflow is intentionally kept for pending validation.",
+      "direct_mean_field_systems_imports_after": 13,
+      "direct_mean_field_systems_imports_before": 17,
+      "legacy_lines_removed_gross": 213,
+      "slice": "remove_htqg_fig1_bands_devtool",
+      "tracked_files_deleted": [
+        "src/mean_field/devtools/run_htqg_fig1_bands.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
-    "count": 17,
+    "count": 13,
     "items": [
       {
         "line": 1141,
@@ -43,26 +53,6 @@
         "line": 21,
         "path": "src/mean_field/devtools/run_htg_hf.py",
         "text": "from mean_field.systems.htg import ("
-      },
-      {
-        "line": 11,
-        "path": "src/mean_field/devtools/run_htqg_fig1_bands.py",
-        "text": "from mean_field.systems.htqg.bands import compute_bands_along_path, estimate_central_band_metrics"
-      },
-      {
-        "line": 12,
-        "path": "src/mean_field/devtools/run_htqg_fig1_bands.py",
-        "text": "from mean_field.systems.htqg.domains import domain_displacements"
-      },
-      {
-        "line": 13,
-        "path": "src/mean_field/devtools/run_htqg_fig1_bands.py",
-        "text": "from mean_field.systems.htqg.lattice import build_htqg_lattice, build_standard_kpath"
-      },
-      {
-        "line": 14,
-        "path": "src/mean_field/devtools/run_htqg_fig1_bands.py",
-        "text": "from mean_field.systems.htqg.params import DEFAULT_THETA_DEG, HTQGParams"
       },
       {
         "line": 12,
@@ -468,8 +458,8 @@
     ]
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
-  "src_python_files": 202,
-  "src_python_lines": 69505,
+  "src_python_files": 201,
+  "src_python_lines": 69292,
   "top_30_files": [
     {
       "lines": 2361,

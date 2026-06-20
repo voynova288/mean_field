@@ -4,10 +4,10 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- `src` Python files: 202
-- `src` Python lines: 69505
+- `src` Python files: 201
+- `src` Python lines: 69292
 - Files over 1000 lines: 15
-- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 17
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 13
 
 ## Completed cleanup slices
 
@@ -24,6 +24,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Deleted files: `src/mean_field/devtools/plot_rlg_hbn_paper_hf_bands.py`.
 - Gross legacy LOC removed: 739.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 18 -> 17.
+
+### remove_htqg_fig1_bands_devtool
+
+- Removed one-off HTQG Fig.1 first-pass band plotting devtool from tracked command surface. The reusable HTQG band/path/domain APIs remain in systems/htqg; projected-HF workflow is intentionally kept for pending validation.
+- Deleted files: `src/mean_field/devtools/run_htqg_fig1_bands.py`.
+- Gross legacy LOC removed: 213.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 17 -> 13.
 
 ## Top 30 Python files under `src`
 
@@ -68,10 +75,6 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | `src/mean_field/devtools/backfill_canonical_hf_sidecars.py` | 1146 | `from mean_field.systems.RnG_hBN.hf_contracts import rlg_hbn_hf_run_to_hf_run_result` |
 | `src/mean_field/devtools/prepare_tbg_crpa_bm.py` | 9 | `from mean_field.systems.tbg.params import TBGParameters` |
 | `src/mean_field/devtools/run_htg_hf.py` | 21 | `from mean_field.systems.htg import (` |
-| `src/mean_field/devtools/run_htqg_fig1_bands.py` | 11 | `from mean_field.systems.htqg.bands import compute_bands_along_path, estimate_central_band_metrics` |
-| `src/mean_field/devtools/run_htqg_fig1_bands.py` | 12 | `from mean_field.systems.htqg.domains import domain_displacements` |
-| `src/mean_field/devtools/run_htqg_fig1_bands.py` | 13 | `from mean_field.systems.htqg.lattice import build_htqg_lattice, build_standard_kpath` |
-| `src/mean_field/devtools/run_htqg_fig1_bands.py` | 14 | `from mean_field.systems.htqg.params import DEFAULT_THETA_DEG, HTQGParams` |
 | `src/mean_field/devtools/run_htqg_projected_hf.py` | 12 | `from mean_field.systems.htqg.domains import domain_displacements` |
 | `src/mean_field/devtools/run_htqg_projected_hf.py` | 13 | `from mean_field.systems.htqg.hf import (` |
 | `src/mean_field/devtools/run_htqg_projected_hf.py` | 22 | `from mean_field.systems.htqg.params import DEFAULT_THETA_DEG, HTQGParams` |
