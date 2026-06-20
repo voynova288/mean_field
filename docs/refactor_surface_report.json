@@ -616,6 +616,14 @@
       "legacy_lines_removed_gross": 361,
       "slice": "thin_system_band_adapters",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Thinned archived system topology modules to compact generic adapter shims; systems retain only boundary-sewing bridges and metadata routing while analysis.topology owns Berry/Chern calculations.",
+      "direct_mean_field_systems_imports_after": 0,
+      "direct_mean_field_systems_imports_before": 0,
+      "legacy_lines_removed_gross": 356,
+      "slice": "thin_system_topology_adapters",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -656,23 +664,23 @@
     "topology.py": {
       "files": [
         {
-          "lines": 167,
-          "path": "src/mean_field/systems/tdbg/topology.py"
-        },
-        {
-          "lines": 164,
+          "lines": 61,
           "path": "src/mean_field/systems/RnG_hBN/topology.py"
         },
         {
-          "lines": 69,
+          "lines": 61,
+          "path": "src/mean_field/systems/tdbg/topology.py"
+        },
+        {
+          "lines": 25,
           "path": "src/mean_field/systems/atmg/topology.py"
         },
         {
-          "lines": 69,
+          "lines": 25,
           "path": "src/mean_field/systems/tmbg/topology.py"
         }
       ],
-      "total_lines": 469
+      "total_lines": 172
     },
     "validation.py": {
       "files": [
@@ -795,9 +803,9 @@
     ],
     "validation.py": []
   },
-  "root": "/data/home/ziyuzhu/tmp/mean_field_report_thin_bands_20260620_233702",
+  "root": "/data/home/ziyuzhu/tmp/mean_field_report_thin_topology_20260620_234456",
   "src_python_files": 174,
-  "src_python_lines": 54311,
+  "src_python_lines": 54014,
   "top_30_files": [
     {
       "lines": 2305,
@@ -921,6 +929,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 60427,
-  "tracked_text_lines": 64526
+  "tracked_python_lines": 60130,
+  "tracked_text_lines": 64244
 }

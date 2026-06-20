@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 64526
-- Tracked Python lines: 60427
+- Tracked text lines: 64244
+- Tracked Python lines: 60130
 - Tracked Julia lines: 826
 - `src` Python files: 174
-- `src` Python lines: 54311
+- `src` Python lines: 54014
 - Files over 1000 lines: 12
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0
 
@@ -497,6 +497,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 361.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
 
+### thin_system_topology_adapters
+
+- Thinned archived system topology modules to compact generic adapter shims; systems retain only boundary-sewing bridges and metadata routing while analysis.topology owns Berry/Chern calculations.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 356.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -563,14 +570,14 @@ Total lines: 349
 
 ### `topology.py`
 
-Total lines: 469
+Total lines: 172
 
 | Lines | Path |
 |---:|---|
-| 167 | `src/mean_field/systems/tdbg/topology.py` |
-| 164 | `src/mean_field/systems/RnG_hBN/topology.py` |
-| 69 | `src/mean_field/systems/atmg/topology.py` |
-| 69 | `src/mean_field/systems/tmbg/topology.py` |
+| 61 | `src/mean_field/systems/RnG_hBN/topology.py` |
+| 61 | `src/mean_field/systems/tdbg/topology.py` |
+| 25 | `src/mean_field/systems/atmg/topology.py` |
+| 25 | `src/mean_field/systems/tmbg/topology.py` |
 
 ## Repeated symbol names
 
