@@ -9,7 +9,7 @@ from typing import Literal
 import numpy as np
 
 from ...core.io import write_text_artifact
-from ...core.validation import ValidationCheck, ValidationReport, ValidationStatus, status_from_bool
+from ...core.validation import ValidationCheck, ValidationReport, status_from_bool
 from .bands import PathBandsResult
 from .cross_check import (
     build_coupling_table as build_cross_coupling_table,
@@ -22,9 +22,6 @@ from .params import TMBGParameters
 from .plot import TMBGBandPlotPanel, infer_flat_band_indices, write_tmbg_lattice_plot, write_tmbg_paper_band_figure
 
 
-
-def _status_from_bool(condition: bool) -> ValidationStatus:
-    return status_from_bool(condition)
 
 
 
@@ -450,7 +447,7 @@ def diagnose_ktilde_symmetry(
         checks.append(
             ValidationCheck(
                 name=case.name,
-                status=_status_from_bool(passed),
+                status=status_from_bool(passed),
                 detail=(
                     f"{case.detail_prefix} {_describe_kpoint_gap(summary)} "
                     f"Flat-band indices inferred from the full K-Γ-M-K' path: {path_summary.flat_band_indices}."
@@ -472,7 +469,7 @@ def diagnose_ktilde_symmetry(
     checks.append(
         ValidationCheck(
             name="D3.c2zt_absent",
-            status=_status_from_bool(c2zt_residual > 1.0e-6),
+            status=status_from_bool(c2zt_residual > 1.0e-6),
             detail=(
                 "tMBG should lack C2zT. "
                 f"max |U H* U^dagger - H| = {_format_mev(c2zt_residual)} at K̃; "
@@ -545,7 +542,7 @@ def reproduce_paper_checkpoints(
     checks.append(
         ValidationCheck(
             name="CP1.minimal_magic_angle_bandwidth",
-            status=_status_from_bool(cp1_pass),
+            status=status_from_bool(cp1_pass),
             detail=(
                 "Minimal model at θ=1.07° should keep the neutral flat-band pair below 5 meV. "
                 + _describe_band_summary(cp1_summary)
@@ -588,7 +585,7 @@ def reproduce_paper_checkpoints(
         checks.append(
             ValidationCheck(
                 name=f"CP2.delta_{_delta_token(case.interlayer_potential)}_band_isolation",
-                status=_status_from_bool(cp2_pass),
+                status=status_from_bool(cp2_pass),
                 detail=(
                     "Full model along K-Γ-M-K' should show an isolated neutral flat-band pair in the Fig. 2 window. "
                     + _describe_band_summary(summary)
@@ -609,7 +606,7 @@ def reproduce_paper_checkpoints(
             checks.append(
                 ValidationCheck(
                     name="CP2b.delta_0_band_touching",
-                    status=_status_from_bool(cp2b_pass),
+                    status=status_from_bool(cp2b_pass),
                     detail=(
                         "At Δ = 0 in the full model, the neutral flat-band pair should remain nearly touching "
                         f"at K̃ in Park Fig. 2(a); {_describe_kpoint_gap(ktilde_gap)}"
@@ -627,7 +624,7 @@ def reproduce_paper_checkpoints(
         checks.append(
             ValidationCheck(
                 name=f"CP3.delta_{_delta_token(case.interlayer_potential)}_valley_chern",
-                status=_status_from_bool(cp3_pass),
+                status=status_from_bool(cp3_pass),
                 detail=(
                     f"K valley flat-band Chern numbers should match {expected_valence, expected_conduction}; "
                     f"observed {(observed_valence, observed_conduction)} on bands {summary.flat_band_indices}."
@@ -647,7 +644,7 @@ def reproduce_paper_checkpoints(
             checks.append(
                 ValidationCheck(
                     name=f"CP3.delta_{_delta_token(case.interlayer_potential)}_opposite_valley",
-                    status=_status_from_bool(opposite_valley_pass),
+                    status=status_from_bool(opposite_valley_pass),
                     detail=(
                         "K' valley should carry the opposite Chern numbers. "
                         f"K={(observed_valence, observed_conduction)}, K'={(kprime_valence, kprime_conduction)}."
@@ -682,7 +679,7 @@ def reproduce_paper_checkpoints(
     checks.append(
         ValidationCheck(
             name="CP4.delta_sign_asymmetry",
-            status=_status_from_bool(cp4_pass),
+            status=status_from_bool(cp4_pass),
             detail=(
                 "Full model should show a visibly stronger Δ ↔ -Δ asymmetry than the minimal model. "
                 f"full asymmetry={_format_mev(cp4_full_asym)}, minimal asymmetry={_format_mev(cp4_min_asym)}."
@@ -700,7 +697,7 @@ def reproduce_paper_checkpoints(
     checks.append(
         ValidationCheck(
             name="CP5.full_vs_minimal_bandwidth",
-            status=_status_from_bool(cp5_pass),
+            status=status_from_bool(cp5_pass),
             detail=(
                 "Full model should broaden the neutral flat-band pair relative to the minimal model at the same parameters. "
                 f"full={_format_mev(cp5_full_summary.widest_flat_band)}, "
@@ -731,7 +728,7 @@ def reproduce_paper_checkpoints(
     checks.append(
         ValidationCheck(
             name="CP6.staggered_potential_suppresses_abs3",
-            status=_status_from_bool(cp6_pass),
+            status=status_from_bool(cp6_pass),
             detail=(
                 "At the sampled Fig. 4 reference point, Δ_S ≠ 0 should remove |C|=3 from the neutral flat-band pair. "
                 f"reference max |C|={cp6_reference_abs_max}, staggered max |C| values={tuple(cp6_abs_maxima)}."
@@ -943,19 +940,19 @@ def validate_physics(
     checks: list[ValidationCheck] = [
         ValidationCheck(
             name="T1.q_vectors_equal_length",
-            status=_status_from_bool(np.max(np.abs(q_lengths - q_lengths[0])) < 1.0e-12),
+            status=status_from_bool(np.max(np.abs(q_lengths - q_lengths[0])) < 1.0e-12),
             value=float(np.max(np.abs(q_lengths - q_lengths[0]))),
             detail="|Q0|, |Q+|, |Q-| should agree.",
         ),
         ValidationCheck(
             name="T1.q_vectors_sum_zero",
-            status=_status_from_bool(abs(lattice.q0 + lattice.q_plus + lattice.q_minus) < 1.0e-12),
+            status=status_from_bool(abs(lattice.q0 + lattice.q_plus + lattice.q_minus) < 1.0e-12),
             value=float(abs(lattice.q0 + lattice.q_plus + lattice.q_minus)),
             detail="Q0 + Q+ + Q- should vanish.",
         ),
         ValidationCheck(
             name="T1.g_vectors_geometry",
-            status=_status_from_bool(
+            status=status_from_bool(
                 abs(g_lengths[0] - g_lengths[1]) < 1.0e-12
                 and abs(abs(np.angle(lattice.g_m2 / lattice.g_m1)) - math.pi / 3.0) < 1.0e-12
             ),
@@ -964,25 +961,25 @@ def validate_physics(
         ),
         ValidationCheck(
             name="T1.moire_period_identity",
-            status=_status_from_bool(abs(lattice.l_m - l_m_identity) < 1.0e-12),
+            status=status_from_bool(abs(lattice.l_m - l_m_identity) < 1.0e-12),
             value=float(abs(lattice.l_m - l_m_identity)),
             detail="L_M must satisfy 4pi / (sqrt(3)|G_M1|).",
         ),
         ValidationCheck(
             name="T1.g_vectors_sorted_unique",
-            status=_status_from_bool(zero_present and monotone_g and len(unique_points) == lattice.n_g),
+            status=status_from_bool(zero_present and monotone_g and len(unique_points) == lattice.n_g),
             value=int(lattice.n_g),
             detail="G set must include zero, remain unique, and be sorted by |G|.",
         ),
         ValidationCheck(
             name="C1.diagonal_block_hermitian",
-            status=_status_from_bool(diagonal_residual < 1.0e-12),
+            status=status_from_bool(diagonal_residual < 1.0e-12),
             value=diagonal_residual,
             detail="Diagonal 6x6 block must be Hermitian.",
         ),
         ValidationCheck(
             name="C1.full_hamiltonian_hermitian",
-            status=_status_from_bool(hermitian_residual < 1.0e-10),
+            status=status_from_bool(hermitian_residual < 1.0e-10),
             value=hermitian_residual,
             detail="Full moire Hamiltonian must be Hermitian.",
         ),
@@ -993,7 +990,7 @@ def validate_physics(
         ),
         ValidationCheck(
             name="C4.time_reversal",
-            status=_status_from_bool(time_reversal_residual < 1.0e-10),
+            status=status_from_bool(time_reversal_residual < 1.0e-10),
             value=time_reversal_residual,
             detail="E_K(k) must match E_K'(-k).",
         ),
@@ -1006,7 +1003,7 @@ def validate_physics(
         checks.append(
             ValidationCheck(
                 name="C4.k_to_kprime_node_exchange",
-                status=_status_from_bool(node_exchange_residual < 1.0e-10),
+                status=status_from_bool(node_exchange_residual < 1.0e-10),
                 value=node_exchange_residual,
                 detail="At the mBZ nodes, E_+(K) must match E_-(K').",
             )
@@ -1029,7 +1026,7 @@ def validate_physics(
         checks.append(
             ValidationCheck(
                 name="C3.c3_symmetry",
-                status=_status_from_bool(c3_residual < 1.0e-6),
+                status=status_from_bool(c3_residual < 1.0e-6),
                 value=c3_residual,
                 detail="E(k) should match E(C3 k) when Delta_S = 0 and no strain is present.",
             )
@@ -1046,7 +1043,7 @@ def validate_physics(
     checks.append(
         ValidationCheck(
             name="C10.c2zt_absent",
-            status=_status_from_bool(c2zt_residual > 1.0e-6),
+            status=status_from_bool(c2zt_residual > 1.0e-6),
             value=c2zt_residual,
             detail=(
                 "tMBG should not satisfy C2zT. "
@@ -1059,7 +1056,7 @@ def validate_physics(
         checks.append(
             ValidationCheck(
                 name="C11.hamiltonian_cross_check",
-                status=_status_from_bool(cross_check_max < 1.0e-12),
+                status=status_from_bool(cross_check_max < 1.0e-12),
                 value=cross_check_max,
                 detail=(
                     "Independent cross-check builder should reproduce the primary Hamiltonian at Γ, K̃, and M̃. "
@@ -1084,7 +1081,7 @@ def validate_physics(
         checks.append(
             ValidationCheck(
                 name="C9.cutoff_convergence",
-                status=_status_from_bool(cutoff_summary.max_delta < 5.0e-4),
+                status=status_from_bool(cutoff_summary.max_delta < 5.0e-4),
                 value=cutoff_summary.max_delta,
                 detail=(
                     "Flat-band gap and bandwidths inferred along K-Γ-M-K' should change by less than 0.5 meV "

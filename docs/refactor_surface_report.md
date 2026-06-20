@@ -5,7 +5,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 ## Summary
 
 - `src` Python files: 199
-- `src` Python lines: 68355
+- `src` Python lines: 68352
 - Files over 1000 lines: 15
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 9
 
@@ -88,6 +88,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 6.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 9 -> 9.
 
+### drop_tmbg_validation_status_alias
+
+- Removed the tMBG local status alias and call core status_from_bool directly throughout validation.py.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 3.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 9 -> 9.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -105,7 +112,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 1258 | `src/mean_field/systems/tbg/zero_field/hf.py` |
 | 1202 | `src/mean_field/cli.py` |
 | 1149 | `src/mean_field/core/hf/finite_field.py` |
-| 1104 | `src/mean_field/systems/tmbg/validation.py` |
+| 1101 | `src/mean_field/systems/tmbg/validation.py` |
 | 1012 | `src/mean_field/systems/tbg/finite_field/spectrum.py` |
 | 936 | `src/mean_field/systems/tbg/zero_field/supercell.py` |
 | 925 | `src/mean_field/systems/htqg/hf.py` |
@@ -154,11 +161,11 @@ Total lines: 745
 
 ### `validation.py`
 
-Total lines: 1871
+Total lines: 1868
 
 | Lines | Path |
 |---:|---|
-| 1104 | `src/mean_field/systems/tmbg/validation.py` |
+| 1101 | `src/mean_field/systems/tmbg/validation.py` |
 | 193 | `src/mean_field/systems/htqg/validation.py` |
 | 163 | `src/mean_field/systems/RnG_hBN/validation.py` |
 | 161 | `src/mean_field/systems/atmg/validation.py` |
@@ -195,7 +202,6 @@ Total lines: 1362
 | Symbol | Count | Paths |
 |---|---:|---|
 | `_check` | 2 | `src/mean_field/systems/htg/validation.py`, `src/mean_field/systems/htqg/validation.py` |
-| `_status_from_bool` | 2 | `src/mean_field/systems/RnG_hBN/validation.py`, `src/mean_field/systems/tmbg/validation.py` |
 | `reproduce_paper_checkpoints` | 2 | `src/mean_field/systems/RnG_hBN/validation.py`, `src/mean_field/systems/tmbg/validation.py` |
 | `validate_lattice` | 2 | `src/mean_field/systems/htg/validation.py`, `src/mean_field/systems/htqg/validation.py` |
 | `validate_physics` | 4 | `src/mean_field/systems/RnG_hBN/validation.py`, `src/mean_field/systems/atmg/validation.py`, `src/mean_field/systems/tdbg/validation.py`, `src/mean_field/systems/tmbg/validation.py` |
