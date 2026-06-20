@@ -161,6 +161,14 @@
       "legacy_lines_removed_gross": 2,
       "slice": "lazy_load_rlg_hbn_backfill_adapters",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Reused core.validation.make_validation_check for the simple tMBG validate_physics checks, reducing repeated condition/status/value/detail boilerplate without changing thresholds or diagnostics.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 14,
+      "slice": "dedupe_tmbg_validation_check_helper",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -256,7 +264,7 @@
     "validation.py": {
       "files": [
         {
-          "lines": 1101,
+          "lines": 1099,
           "path": "src/mean_field/systems/tmbg/validation.py"
         },
         {
@@ -280,7 +288,7 @@
           "path": "src/mean_field/systems/htg/validation.py"
         }
       ],
-      "total_lines": 1850
+      "total_lines": 1848
     }
   },
   "phase2_targets": {
@@ -536,7 +544,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 200,
-  "src_python_lines": 68369,
+  "src_python_lines": 68367,
   "top_30_files": [
     {
       "lines": 2361,
@@ -591,7 +599,7 @@
       "path": "src/mean_field/core/hf/finite_field.py"
     },
     {
-      "lines": 1101,
+      "lines": 1099,
       "path": "src/mean_field/systems/tmbg/validation.py"
     },
     {

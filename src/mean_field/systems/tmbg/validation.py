@@ -9,7 +9,7 @@ from typing import Literal
 import numpy as np
 
 from ...core.io import write_text_artifact
-from ...core.validation import ValidationCheck, ValidationReport, status_from_bool
+from ...core.validation import ValidationCheck, ValidationReport, make_validation_check, status_from_bool
 from .bands import PathBandsResult
 from .cross_check import (
     build_coupling_table as build_cross_coupling_table,
@@ -938,49 +938,47 @@ def validate_physics(
     )
 
     checks: list[ValidationCheck] = [
-        ValidationCheck(
-            name="T1.q_vectors_equal_length",
-            status=status_from_bool(np.max(np.abs(q_lengths - q_lengths[0])) < 1.0e-12),
-            value=float(np.max(np.abs(q_lengths - q_lengths[0]))),
+        make_validation_check(
+            "T1.q_vectors_equal_length",
+            np.max(np.abs(q_lengths - q_lengths[0])) < 1.0e-12,
+            float(np.max(np.abs(q_lengths - q_lengths[0]))),
             detail="|Q0|, |Q+|, |Q-| should agree.",
         ),
-        ValidationCheck(
-            name="T1.q_vectors_sum_zero",
-            status=status_from_bool(abs(lattice.q0 + lattice.q_plus + lattice.q_minus) < 1.0e-12),
-            value=float(abs(lattice.q0 + lattice.q_plus + lattice.q_minus)),
+        make_validation_check(
+            "T1.q_vectors_sum_zero",
+            abs(lattice.q0 + lattice.q_plus + lattice.q_minus) < 1.0e-12,
+            float(abs(lattice.q0 + lattice.q_plus + lattice.q_minus)),
             detail="Q0 + Q+ + Q- should vanish.",
         ),
-        ValidationCheck(
-            name="T1.g_vectors_geometry",
-            status=status_from_bool(
-                abs(g_lengths[0] - g_lengths[1]) < 1.0e-12
-                and abs(abs(np.angle(lattice.g_m2 / lattice.g_m1)) - math.pi / 3.0) < 1.0e-12
-            ),
-            value=float(abs(g_lengths[0] - g_lengths[1])),
+        make_validation_check(
+            "T1.g_vectors_geometry",
+            abs(g_lengths[0] - g_lengths[1]) < 1.0e-12
+            and abs(abs(np.angle(lattice.g_m2 / lattice.g_m1)) - math.pi / 3.0) < 1.0e-12,
+            float(abs(g_lengths[0] - g_lengths[1])),
             detail="|G_M1| = |G_M2| and the enclosed angle is 60 degrees.",
         ),
-        ValidationCheck(
-            name="T1.moire_period_identity",
-            status=status_from_bool(abs(lattice.l_m - l_m_identity) < 1.0e-12),
-            value=float(abs(lattice.l_m - l_m_identity)),
+        make_validation_check(
+            "T1.moire_period_identity",
+            abs(lattice.l_m - l_m_identity) < 1.0e-12,
+            float(abs(lattice.l_m - l_m_identity)),
             detail="L_M must satisfy 4pi / (sqrt(3)|G_M1|).",
         ),
-        ValidationCheck(
-            name="T1.g_vectors_sorted_unique",
-            status=status_from_bool(zero_present and monotone_g and len(unique_points) == lattice.n_g),
-            value=int(lattice.n_g),
+        make_validation_check(
+            "T1.g_vectors_sorted_unique",
+            zero_present and monotone_g and len(unique_points) == lattice.n_g,
+            int(lattice.n_g),
             detail="G set must include zero, remain unique, and be sorted by |G|.",
         ),
-        ValidationCheck(
-            name="C1.diagonal_block_hermitian",
-            status=status_from_bool(diagonal_residual < 1.0e-12),
-            value=diagonal_residual,
+        make_validation_check(
+            "C1.diagonal_block_hermitian",
+            diagonal_residual < 1.0e-12,
+            diagonal_residual,
             detail="Diagonal 6x6 block must be Hermitian.",
         ),
-        ValidationCheck(
-            name="C1.full_hamiltonian_hermitian",
-            status=status_from_bool(hermitian_residual < 1.0e-10),
-            value=hermitian_residual,
+        make_validation_check(
+            "C1.full_hamiltonian_hermitian",
+            hermitian_residual < 1.0e-10,
+            hermitian_residual,
             detail="Full moire Hamiltonian must be Hermitian.",
         ),
         ValidationCheck(
@@ -988,10 +986,10 @@ def validate_physics(
             status="pass",
             detail="Top-layer momentum shift is wired through k_t = k + G + valley*Q0 in build_diagonal_block.",
         ),
-        ValidationCheck(
-            name="C4.time_reversal",
-            status=status_from_bool(time_reversal_residual < 1.0e-10),
-            value=time_reversal_residual,
+        make_validation_check(
+            "C4.time_reversal",
+            time_reversal_residual < 1.0e-10,
+            time_reversal_residual,
             detail="E_K(k) must match E_K'(-k).",
         ),
     ]
