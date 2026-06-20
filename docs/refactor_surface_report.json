@@ -1,0 +1,590 @@
+{
+  "completed_cleanup_slices": [
+    {
+      "description": "Moved reusable build_khalaf_fig3_path helper from one-off devtool to systems/atmg/bands.py, removed run_atmg_fig3_band_plot dispatcher command, and deleted tracked paper-panel devtool.",
+      "direct_mean_field_systems_imports_after": 18,
+      "direct_mean_field_systems_imports_before": 20,
+      "legacy_lines_removed_gross": 665,
+      "slice": "remove_atmg_fig3_devtool",
+      "tracked_files_deleted": [
+        "src/mean_field/devtools/run_atmg_fig3_band_plot.py"
+      ]
+    }
+  ],
+  "direct_mean_field_systems_imports": {
+    "count": 18,
+    "items": [
+      {
+        "line": 1141,
+        "path": "src/mean_field/devtools/backfill_canonical_hf_sidecars.py",
+        "text": "from mean_field.systems.RnG_hBN.tdhf import load_rlg_hbn_tdhf_run_from_archive"
+      },
+      {
+        "line": 1146,
+        "path": "src/mean_field/devtools/backfill_canonical_hf_sidecars.py",
+        "text": "from mean_field.systems.RnG_hBN.hf_contracts import rlg_hbn_hf_run_to_hf_run_result"
+      },
+      {
+        "line": 20,
+        "path": "src/mean_field/devtools/plot_rlg_hbn_paper_hf_bands.py",
+        "text": "from mean_field.systems.RnG_hBN import ("
+      },
+      {
+        "line": 9,
+        "path": "src/mean_field/devtools/prepare_tbg_crpa_bm.py",
+        "text": "from mean_field.systems.tbg.params import TBGParameters"
+      },
+      {
+        "line": 21,
+        "path": "src/mean_field/devtools/run_htg_hf.py",
+        "text": "from mean_field.systems.htg import ("
+      },
+      {
+        "line": 11,
+        "path": "src/mean_field/devtools/run_htqg_fig1_bands.py",
+        "text": "from mean_field.systems.htqg.bands import compute_bands_along_path, estimate_central_band_metrics"
+      },
+      {
+        "line": 12,
+        "path": "src/mean_field/devtools/run_htqg_fig1_bands.py",
+        "text": "from mean_field.systems.htqg.domains import domain_displacements"
+      },
+      {
+        "line": 13,
+        "path": "src/mean_field/devtools/run_htqg_fig1_bands.py",
+        "text": "from mean_field.systems.htqg.lattice import build_htqg_lattice, build_standard_kpath"
+      },
+      {
+        "line": 14,
+        "path": "src/mean_field/devtools/run_htqg_fig1_bands.py",
+        "text": "from mean_field.systems.htqg.params import DEFAULT_THETA_DEG, HTQGParams"
+      },
+      {
+        "line": 12,
+        "path": "src/mean_field/devtools/run_htqg_projected_hf.py",
+        "text": "from mean_field.systems.htqg.domains import domain_displacements"
+      },
+      {
+        "line": 13,
+        "path": "src/mean_field/devtools/run_htqg_projected_hf.py",
+        "text": "from mean_field.systems.htqg.hf import ("
+      },
+      {
+        "line": 22,
+        "path": "src/mean_field/devtools/run_htqg_projected_hf.py",
+        "text": "from mean_field.systems.htqg.params import DEFAULT_THETA_DEG, HTQGParams"
+      },
+      {
+        "line": 35,
+        "path": "src/mean_field/devtools/run_rlg_hbn_paper_hf.py",
+        "text": "from mean_field.systems.RnG_hBN import ("
+      },
+      {
+        "line": 50,
+        "path": "src/mean_field/devtools/run_rlg_hbn_paper_hf.py",
+        "text": "from mean_field.systems.RnG_hBN.hf import RLG_HBN_FORM_FACTOR_CONVENTION_VERSION"
+      },
+      {
+        "line": 16,
+        "path": "src/mean_field/devtools/run_rlg_hbn_tdhf_finite_q.py",
+        "text": "from mean_field.systems.RnG_hBN import ("
+      },
+      {
+        "line": 21,
+        "path": "src/mean_field/devtools/run_rlg_hbn_tdhf_q0.py",
+        "text": "from mean_field.systems.RnG_hBN import ("
+      },
+      {
+        "line": 10,
+        "path": "src/mean_field/devtools/validate_rlg_hbn_fig6_prereqs.py",
+        "text": "from mean_field.systems.RnG_hBN import ("
+      },
+      {
+        "line": 22,
+        "path": "src/mean_field/devtools/validate_tbg_crpa_artifact.py",
+        "text": "from mean_field.systems.tbg import TBGParameters"
+      }
+    ]
+  },
+  "files_over_1000_lines": 15,
+  "module_families": {
+    "bands.py": {
+      "files": [
+        {
+          "lines": 190,
+          "path": "src/mean_field/systems/atmg/bands.py"
+        },
+        {
+          "lines": 176,
+          "path": "src/mean_field/systems/htqg/bands.py"
+        },
+        {
+          "lines": 150,
+          "path": "src/mean_field/systems/htg/bands.py"
+        },
+        {
+          "lines": 104,
+          "path": "src/mean_field/systems/RnG_hBN/bands.py"
+        },
+        {
+          "lines": 74,
+          "path": "src/mean_field/systems/tmbg/bands.py"
+        },
+        {
+          "lines": 57,
+          "path": "src/mean_field/systems/tdbg/bands.py"
+        }
+      ],
+      "total_lines": 751
+    },
+    "topology.py": {
+      "files": [
+        {
+          "lines": 380,
+          "path": "src/mean_field/systems/RnG_hBN/topology.py"
+        },
+        {
+          "lines": 338,
+          "path": "src/mean_field/systems/htg/topology.py"
+        },
+        {
+          "lines": 304,
+          "path": "src/mean_field/systems/htqg/topology.py"
+        },
+        {
+          "lines": 167,
+          "path": "src/mean_field/systems/tdbg/topology.py"
+        },
+        {
+          "lines": 96,
+          "path": "src/mean_field/systems/tmbg/topology.py"
+        },
+        {
+          "lines": 77,
+          "path": "src/mean_field/systems/atmg/topology.py"
+        }
+      ],
+      "total_lines": 1362
+    },
+    "validation.py": {
+      "files": [
+        {
+          "lines": 1104,
+          "path": "src/mean_field/systems/tmbg/validation.py"
+        },
+        {
+          "lines": 248,
+          "path": "src/mean_field/systems/htqg/validation.py"
+        },
+        {
+          "lines": 164,
+          "path": "src/mean_field/systems/atmg/validation.py"
+        },
+        {
+          "lines": 163,
+          "path": "src/mean_field/systems/RnG_hBN/validation.py"
+        },
+        {
+          "lines": 129,
+          "path": "src/mean_field/systems/tdbg/validation.py"
+        },
+        {
+          "lines": 124,
+          "path": "src/mean_field/systems/htg/validation.py"
+        }
+      ],
+      "total_lines": 1932
+    }
+  },
+  "phase2_targets": {
+    "bands_goal": "systems/*/bands.py total <= 250 lines and each file <= 50 lines",
+    "devtools_direct_imports_goal": "reduce by at least 50% before claiming task 1 complete",
+    "large_file_goal": "reduce files over 1000 lines; RnG_hBN/hf.py, HTG adapter, cRPA bridge require separate physics-safe migrations",
+    "validation_goal": "generic validation types defined once; systems/*/validation.py total around <= 700 lines"
+  },
+  "repeated_symbols": {
+    "bands.py": [
+      {
+        "count": 6,
+        "paths": [
+          "src/mean_field/systems/RnG_hBN/bands.py",
+          "src/mean_field/systems/atmg/bands.py",
+          "src/mean_field/systems/htg/bands.py",
+          "src/mean_field/systems/htqg/bands.py",
+          "src/mean_field/systems/tdbg/bands.py",
+          "src/mean_field/systems/tmbg/bands.py"
+        ],
+        "symbol": "_diagonalize"
+      },
+      {
+        "count": 2,
+        "paths": [
+          "src/mean_field/systems/htg/bands.py",
+          "src/mean_field/systems/htqg/bands.py"
+        ],
+        "symbol": "_resolve_band_indices"
+      },
+      {
+        "count": 6,
+        "paths": [
+          "src/mean_field/systems/RnG_hBN/bands.py",
+          "src/mean_field/systems/atmg/bands.py",
+          "src/mean_field/systems/htg/bands.py",
+          "src/mean_field/systems/htqg/bands.py",
+          "src/mean_field/systems/tdbg/bands.py",
+          "src/mean_field/systems/tmbg/bands.py"
+        ],
+        "symbol": "compute_bands_along_path"
+      },
+      {
+        "count": 6,
+        "paths": [
+          "src/mean_field/systems/RnG_hBN/bands.py",
+          "src/mean_field/systems/atmg/bands.py",
+          "src/mean_field/systems/htg/bands.py",
+          "src/mean_field/systems/htqg/bands.py",
+          "src/mean_field/systems/tdbg/bands.py",
+          "src/mean_field/systems/tmbg/bands.py"
+        ],
+        "symbol": "compute_bands_on_grid"
+      },
+      {
+        "count": 2,
+        "paths": [
+          "src/mean_field/systems/htg/bands.py",
+          "src/mean_field/systems/htqg/bands.py"
+        ],
+        "symbol": "estimate_central_band_metrics"
+      }
+    ],
+    "topology.py": [
+      {
+        "count": 2,
+        "paths": [
+          "src/mean_field/systems/htg/topology.py",
+          "src/mean_field/systems/htqg/topology.py"
+        ],
+        "symbol": "ChernBasisResult"
+      },
+      {
+        "count": 2,
+        "paths": [
+          "src/mean_field/systems/htg/topology.py",
+          "src/mean_field/systems/htqg/topology.py"
+        ],
+        "symbol": "_central_eigensystem"
+      },
+      {
+        "count": 4,
+        "paths": [
+          "src/mean_field/systems/RnG_hBN/topology.py",
+          "src/mean_field/systems/atmg/topology.py",
+          "src/mean_field/systems/tdbg/topology.py",
+          "src/mean_field/systems/tmbg/topology.py"
+        ],
+        "symbol": "_normalize_band_indices"
+      },
+      {
+        "count": 2,
+        "paths": [
+          "src/mean_field/systems/RnG_hBN/topology.py",
+          "src/mean_field/systems/htg/topology.py"
+        ],
+        "symbol": "_reciprocal_translation"
+      },
+      {
+        "count": 4,
+        "paths": [
+          "src/mean_field/systems/RnG_hBN/topology.py",
+          "src/mean_field/systems/atmg/topology.py",
+          "src/mean_field/systems/tdbg/topology.py",
+          "src/mean_field/systems/tmbg/topology.py"
+        ],
+        "symbol": "_topology_adapters"
+      },
+      {
+        "count": 3,
+        "paths": [
+          "src/mean_field/systems/RnG_hBN/topology.py",
+          "src/mean_field/systems/htg/topology.py",
+          "src/mean_field/systems/htqg/topology.py"
+        ],
+        "symbol": "apply"
+      },
+      {
+        "count": 2,
+        "paths": [
+          "src/mean_field/systems/htqg/topology.py",
+          "src/mean_field/systems/tdbg/topology.py"
+        ],
+        "symbol": "boundary_sewing_transforms"
+      },
+      {
+        "count": 2,
+        "paths": [
+          "src/mean_field/systems/htg/topology.py",
+          "src/mean_field/systems/htqg/topology.py"
+        ],
+        "symbol": "compute_chern_basis_on_grid"
+      },
+      {
+        "count": 4,
+        "paths": [
+          "src/mean_field/systems/RnG_hBN/topology.py",
+          "src/mean_field/systems/atmg/topology.py",
+          "src/mean_field/systems/tdbg/topology.py",
+          "src/mean_field/systems/tmbg/topology.py"
+        ],
+        "symbol": "compute_topology_from_eigenvectors"
+      },
+      {
+        "count": 4,
+        "paths": [
+          "src/mean_field/systems/RnG_hBN/topology.py",
+          "src/mean_field/systems/atmg/topology.py",
+          "src/mean_field/systems/tdbg/topology.py",
+          "src/mean_field/systems/tmbg/topology.py"
+        ],
+        "symbol": "compute_topology_from_grid_result"
+      },
+      {
+        "count": 4,
+        "paths": [
+          "src/mean_field/systems/RnG_hBN/topology.py",
+          "src/mean_field/systems/atmg/topology.py",
+          "src/mean_field/systems/tdbg/topology.py",
+          "src/mean_field/systems/tmbg/topology.py"
+        ],
+        "symbol": "compute_topology_on_grid"
+      },
+      {
+        "count": 4,
+        "paths": [
+          "src/mean_field/systems/RnG_hBN/topology.py",
+          "src/mean_field/systems/atmg/topology.py",
+          "src/mean_field/systems/tdbg/topology.py",
+          "src/mean_field/systems/tmbg/topology.py"
+        ],
+        "symbol": "grid_builder"
+      },
+      {
+        "count": 2,
+        "paths": [
+          "src/mean_field/systems/htg/topology.py",
+          "src/mean_field/systems/htqg/topology.py"
+        ],
+        "symbol": "integer_residual_a"
+      },
+      {
+        "count": 2,
+        "paths": [
+          "src/mean_field/systems/htg/topology.py",
+          "src/mean_field/systems/htqg/topology.py"
+        ],
+        "symbol": "integer_residual_b"
+      },
+      {
+        "count": 2,
+        "paths": [
+          "src/mean_field/systems/htg/topology.py",
+          "src/mean_field/systems/htqg/topology.py"
+        ],
+        "symbol": "sublattice_sigma_z"
+      },
+      {
+        "count": 2,
+        "paths": [
+          "src/mean_field/systems/htg/topology.py",
+          "src/mean_field/systems/htqg/topology.py"
+        ],
+        "symbol": "to_dict"
+      },
+      {
+        "count": 2,
+        "paths": [
+          "src/mean_field/systems/RnG_hBN/topology.py",
+          "src/mean_field/systems/tdbg/topology.py"
+        ],
+        "symbol": "transform"
+      }
+    ],
+    "validation.py": [
+      {
+        "count": 2,
+        "paths": [
+          "src/mean_field/systems/htg/validation.py",
+          "src/mean_field/systems/htqg/validation.py"
+        ],
+        "symbol": "_check"
+      },
+      {
+        "count": 2,
+        "paths": [
+          "src/mean_field/systems/atmg/validation.py",
+          "src/mean_field/systems/htg/validation.py"
+        ],
+        "symbol": "_status"
+      },
+      {
+        "count": 3,
+        "paths": [
+          "src/mean_field/systems/RnG_hBN/validation.py",
+          "src/mean_field/systems/tdbg/validation.py",
+          "src/mean_field/systems/tmbg/validation.py"
+        ],
+        "symbol": "_status_from_bool"
+      },
+      {
+        "count": 2,
+        "paths": [
+          "src/mean_field/systems/RnG_hBN/validation.py",
+          "src/mean_field/systems/tmbg/validation.py"
+        ],
+        "symbol": "reproduce_paper_checkpoints"
+      },
+      {
+        "count": 2,
+        "paths": [
+          "src/mean_field/systems/htg/validation.py",
+          "src/mean_field/systems/htqg/validation.py"
+        ],
+        "symbol": "validate_lattice"
+      },
+      {
+        "count": 4,
+        "paths": [
+          "src/mean_field/systems/RnG_hBN/validation.py",
+          "src/mean_field/systems/atmg/validation.py",
+          "src/mean_field/systems/tdbg/validation.py",
+          "src/mean_field/systems/tmbg/validation.py"
+        ],
+        "symbol": "validate_physics"
+      }
+    ]
+  },
+  "root": "/data/home/ziyuzhu/Mean_Field",
+  "src_python_files": 203,
+  "src_python_lines": 70165,
+  "top_30_files": [
+    {
+      "lines": 2361,
+      "path": "src/mean_field/systems/RnG_hBN/hf.py"
+    },
+    {
+      "lines": 2305,
+      "path": "src/mean_field/systems/htg/mean_field_adapter.py"
+    },
+    {
+      "lines": 2151,
+      "path": "src/mean_field/systems/tmbg/polshyn_supercell.py"
+    },
+    {
+      "lines": 1640,
+      "path": "src/mean_field/systems/RnG_hBN/tdhf.py"
+    },
+    {
+      "lines": 1567,
+      "path": "src/mean_field/devtools/backfill_canonical_hf_sidecars.py"
+    },
+    {
+      "lines": 1563,
+      "path": "src/mean_field/devtools/run_rlg_hbn_paper_hf.py"
+    },
+    {
+      "lines": 1348,
+      "path": "src/mean_field/systems/tbg/zero_field/runners.py"
+    },
+    {
+      "lines": 1347,
+      "path": "src/mean_field/systems/htg/supercell.py"
+    },
+    {
+      "lines": 1306,
+      "path": "src/mean_field/api/hf.py"
+    },
+    {
+      "lines": 1267,
+      "path": "src/mean_field/crpa/hf_interface.py"
+    },
+    {
+      "lines": 1258,
+      "path": "src/mean_field/systems/tbg/zero_field/hf.py"
+    },
+    {
+      "lines": 1202,
+      "path": "src/mean_field/cli.py"
+    },
+    {
+      "lines": 1149,
+      "path": "src/mean_field/core/hf/finite_field.py"
+    },
+    {
+      "lines": 1104,
+      "path": "src/mean_field/systems/tmbg/validation.py"
+    },
+    {
+      "lines": 1012,
+      "path": "src/mean_field/systems/tbg/finite_field/spectrum.py"
+    },
+    {
+      "lines": 936,
+      "path": "src/mean_field/systems/tbg/zero_field/supercell.py"
+    },
+    {
+      "lines": 925,
+      "path": "src/mean_field/systems/htqg/hf.py"
+    },
+    {
+      "lines": 873,
+      "path": "src/analysis/topology/quantum_geometry.py"
+    },
+    {
+      "lines": 805,
+      "path": "src/analysis/response_derivative_gauge.py"
+    },
+    {
+      "lines": 786,
+      "path": "src/mean_field/systems/RnG_hBN/cache.py"
+    },
+    {
+      "lines": 778,
+      "path": "src/analysis/shift_current/toy_models/hipolito2016.py"
+    },
+    {
+      "lines": 772,
+      "path": "src/analysis/shift_current/core.py"
+    },
+    {
+      "lines": 739,
+      "path": "src/mean_field/devtools/plot_rlg_hbn_paper_hf_bands.py"
+    },
+    {
+      "lines": 735,
+      "path": "src/mean_field/systems/tbg/zero_field/hf_contracts.py"
+    },
+    {
+      "lines": 733,
+      "path": "src/mean_field/systems/tbg/chaudhary2021_hartree.py"
+    },
+    {
+      "lines": 710,
+      "path": "src/mean_field/core/hf/tdhf.py"
+    },
+    {
+      "lines": 687,
+      "path": "src/mean_field/systems/tmbg/full_flavor_ivc.py"
+    },
+    {
+      "lines": 686,
+      "path": "src/mean_field/systems/RnG_hBN/hf_contracts.py"
+    },
+    {
+      "lines": 683,
+      "path": "src/mean_field/systems/tbg/chaudhary2021.py"
+    },
+    {
+      "lines": 643,
+      "path": "src/mean_field/systems/htg/supercell_contracts.py"
+    }
+  ]
+}
