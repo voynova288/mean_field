@@ -48,6 +48,12 @@ src/mean_field/
 - `benchmarks.py` knows how to load benchmark metadata, not how to solve physics.
 - CLI commands call high-level runners, not low-level kernels directly.
 
+## Retirement archive policy
+
+Cleanup may retire system-specific implementation surfaces even when they could be useful as debugging references later. Before deleting or replacing substantial system-specific HF, topology, bands, band-plot, or Berry-curvature plotting code, copy the old tracked file or code slice into an ignored local archive such as `local_archive/retired_surface/<date-or-commit>/...`. The archive is intentionally not pushed to git and must not be imported by package code, tests, scripts, or docs examples. It is a recovery/reference stash only; the package surface and LOC metrics count only files tracked by git.
+
+After archival, keep only thin tracked adapters that connect system-owned Hamiltonian/basis/gauge/window choices to generic APIs such as `mean_field.api`, `mean_field.core.hf`, `mean_field.core.bands`, `mean_field.core.plotting`, and `analysis.topology`. Do not keep paper-panel plot writers, duplicated Berry/Chern loops, or system-local SCF/problem loops in tracked code merely as a backup; use the local archive or git history if a retired implementation must be consulted later.
+
 ## Unified topology / Berry-geometry layer
 
 Berry connection, Berry curvature / plaquette flux, and Chern-number calculations are unified under:

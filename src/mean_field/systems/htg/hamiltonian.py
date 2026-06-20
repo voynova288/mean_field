@@ -127,6 +127,13 @@ def build_coupling_table(
     )
 
 
+def sublattice_sigma_z(lattice: HTGLattice) -> np.ndarray:
+    """Layer-resolved graphene sublattice operator in the HTG plane-wave basis."""
+
+    pattern = np.asarray([1.0, -1.0, 1.0, -1.0, 1.0, -1.0], dtype=float)
+    return np.diag(np.tile(pattern, lattice.n_g)).astype(np.complex128)
+
+
 def default_displacements(lattice: HTGLattice, *, domain: str = "h") -> tuple[complex, complex]:
     if domain == "h":
         return complex(-lattice.delta), complex(lattice.delta)

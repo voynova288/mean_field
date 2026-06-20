@@ -49,5 +49,6 @@ When cleaning up existing files:
 
 - migrate reusable logic into system modules, common analysis modules, or an existing devtool;
 - preserve durable public design details in `docs/`, and keep run-specific diagnostics in ignored local `reports/` directories or result metadata rather than in many near-duplicate launch scripts;
+- when retiring substantial system-specific HF/topology/bands/plotting code, copy it first into ignored `local_archive/retired_surface/...` if it may be useful for future repair; archived code must not be imported by tracked package code and does not count as maintained surface;
 - delete or untrack obsolete wrappers after confirming no current documentation or tests depend on them;
 - keep heavy validation on Slurm; keep hard-coded saved-result artifact audits in ignored reports/internal workspaces rather than public package modules.

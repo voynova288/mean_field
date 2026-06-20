@@ -12,6 +12,7 @@ from .hamiltonian import (
     diagonalize_hamiltonian,
     dirac_block,
     moire_coupling_matrix,
+    sublattice_sigma_z,
 )
 from .lattice import HTGLattice, build_htg_lattice, build_kpath_from_nodes, build_moire_k_grid, build_paper_hf_kpath, build_standard_kpath
 from .mean_field_adapter import (
@@ -106,16 +107,7 @@ from .params import (
     theta_deg_from_alpha,
     velocity_m_per_s_to_ev_nm,
 )
-from .topology import (
-    ChernBasisResult,
-    compute_chern_basis_on_grid,
-    compute_htg_supercell_hf_band_topologies,
-    compute_htg_supercell_hf_subspace_topology,
-    sublattice_sigma_z,
-)
-
 __all__ = [
-    'ChernBasisResult',
     'GridBandsResult',
     'HTGLattice',
     'HTGDensityBuilder',
@@ -172,11 +164,8 @@ __all__ = [
     'centered_projection_band_indices',
     'compute_bands_along_path',
     'compute_bands_on_grid',
-    'compute_htg_supercell_hf_band_topologies',
-    'compute_htg_supercell_hf_subspace_topology',
     'compute_background_densities',
     'compute_background_density',
-    'compute_chern_basis_on_grid',
     'default_displacements',
     'diagonalize_hamiltonian',
     'dirac_block',

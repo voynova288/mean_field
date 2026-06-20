@@ -46,7 +46,7 @@ from .hamiltonian import build_hamiltonian, centered_band_indices
 from .lattice import HTGLattice, KPath, build_moire_k_grid
 from .model import HTGModel
 from .params import HTGParams, InteractionParams
-from .topology import sublattice_sigma_z
+from .hamiltonian import sublattice_sigma_z
 
 if TYPE_CHECKING:
     from mean_field.api import HFConfig, HFResult

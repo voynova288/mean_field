@@ -26,6 +26,7 @@ reference/
 tests/
 path/
 tmp/
+local_archive/
 outputs/
 artifacts/
 checkpoints/

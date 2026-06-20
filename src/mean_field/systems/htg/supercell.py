@@ -39,7 +39,7 @@ from .mean_field_adapter import (
 )
 from .model import HTGModel
 from .params import InteractionParams
-from .topology import sublattice_sigma_z
+from .hamiltonian import sublattice_sigma_z
 
 
 @dataclass(frozen=True)

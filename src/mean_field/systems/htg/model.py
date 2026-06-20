@@ -8,7 +8,6 @@ from .bands import GridBandsResult, PathBandsResult, compute_bands_along_path, c
 from .hamiltonian import build_hamiltonian, diagonalize_hamiltonian
 from .lattice import HTGLattice, KPath, build_htg_lattice, build_kpath_from_nodes, build_paper_hf_kpath, build_standard_kpath
 from .params import HTGParams
-from .topology import ChernBasisResult, compute_chern_basis_on_grid
 
 
 @dataclass(frozen=True)
@@ -170,6 +169,3 @@ class HTGModel:
             endpoint=endpoint,
             frac_shift=frac_shift,
         )
-
-    def chern_basis_on_grid(self, mesh_size: int, *, valley: int = 1) -> ChernBasisResult:
-        return compute_chern_basis_on_grid(mesh_size, self.lattice, self.params, valley=valley)
