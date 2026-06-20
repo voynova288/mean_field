@@ -624,6 +624,16 @@
       "legacy_lines_removed_gross": 356,
       "slice": "thin_system_topology_adapters",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Archived and removed the HTQG projected-HF implementation from tracked system surface; HTQG remains a noninteracting model with public run_hf explicitly unsupported.",
+      "direct_mean_field_systems_imports_after": 0,
+      "direct_mean_field_systems_imports_before": 0,
+      "legacy_lines_removed_gross": 972,
+      "slice": "archive_retire_htqg_projected_hf",
+      "tracked_files_deleted": [
+        "src/mean_field/systems/htqg/hf.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -803,9 +813,9 @@
     ],
     "validation.py": []
   },
-  "root": "/data/home/ziyuzhu/tmp/mean_field_report_thin_topology_20260620_234456",
-  "src_python_files": 174,
-  "src_python_lines": 54014,
+  "root": "/data/home/ziyuzhu/tmp/mean_field_report_htqg_hf_20260620_235114",
+  "src_python_files": 173,
+  "src_python_lines": 53089,
   "top_30_files": [
     {
       "lines": 2305,
@@ -854,10 +864,6 @@
     {
       "lines": 1012,
       "path": "src/mean_field/systems/tbg/finite_field/spectrum.py"
-    },
-    {
-      "lines": 925,
-      "path": "src/mean_field/systems/htqg/hf.py"
     },
     {
       "lines": 873,
@@ -926,9 +932,13 @@
     {
       "lines": 454,
       "path": "src/mean_field/crpa/workflow.py"
+    },
+    {
+      "lines": 446,
+      "path": "src/mean_field/systems/tdbg/hf.py"
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 60130,
-  "tracked_text_lines": 64244
+  "tracked_python_lines": 59158,
+  "tracked_text_lines": 63287
 }

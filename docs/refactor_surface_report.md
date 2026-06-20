@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 64244
-- Tracked Python lines: 60130
+- Tracked text lines: 63287
+- Tracked Python lines: 59158
 - Tracked Julia lines: 826
-- `src` Python files: 174
-- `src` Python lines: 54014
+- `src` Python files: 173
+- `src` Python lines: 53089
 - Files over 1000 lines: 12
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0
 
@@ -504,6 +504,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 356.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
 
+### archive_retire_htqg_projected_hf
+
+- Archived and removed the HTQG projected-HF implementation from tracked system surface; HTQG remains a noninteracting model with public run_hf explicitly unsupported.
+- Deleted files: `src/mean_field/systems/htqg/hf.py`.
+- Gross legacy LOC removed/thinned: 972.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -520,7 +527,6 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 1149 | `src/mean_field/core/hf/finite_field.py` |
 | 1127 | `src/mean_field/systems/tmbg/polshyn_supercell.py` |
 | 1012 | `src/mean_field/systems/tbg/finite_field/spectrum.py` |
-| 925 | `src/mean_field/systems/htqg/hf.py` |
 | 873 | `src/analysis/topology/quantum_geometry.py` |
 | 805 | `src/analysis/response_derivative_gauge.py` |
 | 786 | `src/mean_field/systems/RnG_hBN/cache.py` |
@@ -538,6 +544,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 492 | `src/mean_field/systems/RnG_hBN/screening.py` |
 | 456 | `src/mean_field/systems/tbg/zero_field/model.py` |
 | 454 | `src/mean_field/crpa/workflow.py` |
+| 446 | `src/mean_field/systems/tdbg/hf.py` |
 
 ## Direct private-system imports in workflow surfaces
 
