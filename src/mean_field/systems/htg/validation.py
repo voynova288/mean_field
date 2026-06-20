@@ -4,7 +4,7 @@ import math
 
 import numpy as np
 
-from mean_field.core.validation import ValidationCheck, ValidationReport, ValidationStatus, status_from_bool
+from mean_field.core.validation import ValidationCheck, ValidationReport, status_from_bool
 
 from .hamiltonian import build_hamiltonian, moire_coupling_matrix
 from .lattice import HTGLattice, dot_2d
@@ -19,9 +19,6 @@ from .mean_field_adapter import (
 )
 
 
-def _status(condition: bool) -> ValidationStatus:
-    return status_from_bool(condition)
-
 
 def _detail(value: float | str, tolerance: float | None = None) -> str:
     detail = f"value={value}"
@@ -33,7 +30,7 @@ def _detail(value: float | str, tolerance: float | None = None) -> str:
 def _check(name: str, condition: bool, value: float | str, tolerance: float | None = None) -> ValidationCheck:
     return ValidationCheck(
         name=name,
-        status=_status(condition),
+        status=status_from_bool(condition),
         detail=_detail(value, tolerance),
         value=value,
     )

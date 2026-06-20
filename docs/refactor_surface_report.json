@@ -113,6 +113,14 @@
       "legacy_lines_removed_gross": 3,
       "slice": "drop_rlg_hbn_validation_status_alias",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Removed the HTG local status alias and call core status_from_bool directly from its validation helper.",
+      "direct_mean_field_systems_imports_after": 9,
+      "direct_mean_field_systems_imports_before": 9,
+      "legacy_lines_removed_gross": 3,
+      "slice": "drop_htg_validation_status_alias",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -248,11 +256,11 @@
           "path": "src/mean_field/systems/tdbg/validation.py"
         },
         {
-          "lines": 124,
+          "lines": 121,
           "path": "src/mean_field/systems/htg/validation.py"
         }
       ],
-      "total_lines": 1865
+      "total_lines": 1862
     }
   },
   "phase2_targets": {
@@ -508,7 +516,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 199,
-  "src_python_lines": 68349,
+  "src_python_lines": 68346,
   "top_30_files": [
     {
       "lines": 2361,
