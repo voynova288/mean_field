@@ -8,7 +8,6 @@ from mean_field.systems.RnG_hBN import (
     RLGhBNInteractionParams,
     RLGhBNModel,
     ScreenedInterlayerPotentialResult,
-    build_fig6_paper_hf_path,
     ScreeningIteration,
     build_hamiltonian,
     build_rlg_hbn_projected_basis,
@@ -19,18 +18,6 @@ from mean_field.systems.RnG_hBN import (
     rlg_hbn_reference_density,
 )
 
-
-def test_fig6_paper_path_uses_canonical_kprime_representative() -> None:
-    model = RLGhBNModel.from_config(layer_count=5, xi=1, theta_deg=0.77, shell_count=1)
-
-    path = build_fig6_paper_hf_path(model, points_per_segment=6)
-    node_kvec = np.asarray(path.kvec, dtype=np.complex128)[np.asarray(path.node_indices, dtype=int) - 1]
-
-    assert np.isclose(node_kvec[1], model.lattice.k_m)
-    assert np.isclose(node_kvec[2], model.lattice.kprime_m)
-    assert not np.isclose(node_kvec[2], model.lattice.k_m)
-    assert np.isclose(node_kvec[4], model.lattice.g_m2 / 2.0)
-    assert np.isclose(node_kvec[5], model.lattice.m_m)
 
 
 def _fake_screening(model: RLGhBNModel, *, screened_u_mev: float) -> ScreenedInterlayerPotentialResult:

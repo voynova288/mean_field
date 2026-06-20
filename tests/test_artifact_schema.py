@@ -747,32 +747,3 @@ def test_rlg_hbn_hf_archive_records_density_convention_metadata(tmp_path) -> Non
     assert summary.metadata["density_axis_order"] == "abk"
     assert summary.metadata["reference_density_convention"] == "average"
     assert summary.metadata["form_factor_convention"]
-
-
-def test_rlg_hbn_band_plot_updates_manifest_without_overwriting_contract(tmp_path) -> None:
-    from mean_field.systems.RnG_hBN import update_paper_hf_band_plot_manifest
-
-    write_contract_artifacts(
-        tmp_path,
-        workflow="rlg_hbn.paper_hf",
-        system_name="rlg_hbn",
-        model=ModelRecord(system_name="rlg_hbn"),
-        config={"paper_target": "fig5"},
-        observables={"hf_energy_mev": -1.0},
-    )
-    original_observables = (tmp_path / "observables.json").read_text(encoding="utf-8")
-
-    update_paper_hf_band_plot_manifest(
-        tmp_path,
-        paper_target="fig5",
-        panel_names=["xi1_V040meV"],
-        status="complete",
-    )
-
-    assert (tmp_path / "observables.json").read_text(encoding="utf-8") == original_observables
-    loaded = load_result(tmp_path)
-    assert loaded.manifest["metadata"]["workflow"] == "rlg_hbn.paper_hf"
-    assert loaded.manifest["metadata"]["band_plot"]["workflow"] == "rlg_hbn.paper_hf_bands"
-    assert loaded.manifest["metadata"]["band_plot"]["status"] == "complete"
-    assert loaded.manifest["files"]["hf_band_plot_summary"] == "hf_band_plot_summary.json"
-    assert loaded.observables == {"hf_energy_mev": -1.0}

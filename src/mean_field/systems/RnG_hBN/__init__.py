@@ -3,11 +3,9 @@
 from .bands import (
     GridBandsResult,
     PathBandsResult,
-    build_fig6_paper_hf_path,
     compute_bands_along_path,
     compute_bands_on_grid,
     neutrality_energy_mev,
-    update_paper_hf_band_plot_manifest,
 )
 from .charge_background import ChargeBackgroundResult, compute_valence_charge_background
 from .hamiltonian import (
@@ -191,7 +189,6 @@ __all__ = [
     "average_scheme_density_delta",
     "basis_index",
     "build_coupling_table",
-    "build_fig6_paper_hf_path",
     "build_hamiltonian",
     "build_kpath_from_nodes",
     "build_moire_k_grid",
@@ -275,7 +272,6 @@ __all__ = [
     "screened_coulomb_layer_mev_nm2",
     "solve_screened_interlayer_potential",
     "table_ii_moire_parameters",
-    "update_paper_hf_band_plot_manifest",
     "validate_physics",
     "validate_rlg_hbn_tdhf_canonical_orbital_parity",
     "valence_band_count",
