@@ -20,7 +20,7 @@ from .benchmarks import (
     load_bm_unstrained_runtime_benchmarks,
 )
 from .runtime import collect_runtime_environment, current_timestamp, ensure_not_running_compute_on_login_node
-from .systems.tmbg import diagnose_ktilde_symmetry, reproduce_paper_checkpoints
+from .systems.tmbg import diagnose_ktilde_symmetry
 from .systems.tbg.zero_field import (
     export_overlap_diagnostics,
     run_b0_hf_benchmark_case,
@@ -109,73 +109,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     tmbg_parser = subparsers.add_parser("tmbg", help="Run the tMBG noninteracting workflow.")
     tmbg_subparsers = tmbg_parser.add_subparsers(dest="tmbg_command", required=True)
-    tmbg_checkpoints = tmbg_subparsers.add_parser(
-        "reproduce-checkpoints",
-        help="Run the Park 2020 CP1-CP6 checkpoint orchestration.",
-    )
-    tmbg_checkpoints.add_argument(
-        "--output-dir",
-        type=Path,
-        default=None,
-        help="If set, write the Fig. 2-like plots, markdown report, runtime summary, and JSON metadata here.",
-    )
-    tmbg_checkpoints.add_argument("--n-shells", type=int, default=5, help="Moire reciprocal-lattice shell cutoff.")
-    tmbg_checkpoints.add_argument(
-        "--points-per-segment",
-        type=int,
-        default=120,
-        help="Path resolution per high-symmetry segment.",
-    )
-    tmbg_checkpoints.add_argument(
-        "--path-n-bands",
-        type=int,
-        default=None,
-        help="Optional override for the number of bands kept along the checkpoint path.",
-    )
-    tmbg_checkpoints.add_argument(
-        "--topology-mesh-size",
-        type=int,
-        default=24,
-        help="Uniform mesh size used by the topology checkpoints.",
-    )
-    tmbg_checkpoints.add_argument(
-        "--topology-n-bands",
-        type=int,
-        default=None,
-        help="Optional override for the number of bands retained in topology runs.",
-    )
-    tmbg_checkpoints.add_argument(
-        "--bands-per-side",
-        type=int,
-        default=6,
-        help="Number of bands kept on each side of the neutral flat-band pair in Fig. 2-like outputs.",
-    )
-    tmbg_checkpoints.add_argument(
-        "--valley",
-        type=int,
-        choices=(-1, 1),
-        default=1,
-        help="Valley label used for CP3/CP6 topology checks.",
-    )
-    tmbg_checkpoints.add_argument(
-        "--skip-opposite-valley",
-        action="store_true",
-        help="Skip the K' sign-flip cross-check in CP3.",
-    )
-    tmbg_checkpoints.add_argument(
-        "--cp4-delta-abs",
-        type=float,
-        default=0.06,
-        help="Absolute interlayer-potential magnitude used by CP4.",
-    )
-    tmbg_checkpoints.add_argument(
-        "--cp6-staggered-potential",
-        dest="cp6_staggered_potentials",
-        type=float,
-        action="append",
-        default=None,
-        help="Repeat to override the sampled staggered potentials used by CP6.",
-    )
     tmbg_diag = tmbg_subparsers.add_parser(
         "diagnose-ktilde-symmetry",
         help="Run the Ktilde chiral-limit and perturbation gap diagnostics.",
@@ -819,174 +752,6 @@ def cmd_hf_compare_suite(
     return 0
 
 
-def cmd_tmbg_reproduce_checkpoints(
-    *,
-    output_dir: Path | None = None,
-    n_shells: int = 5,
-    points_per_segment: int = 120,
-    path_n_bands: int | None = None,
-    topology_mesh_size: int = 24,
-    topology_n_bands: int | None = None,
-    bands_per_side: int = 6,
-    valley: int = 1,
-    verify_opposite_valley: bool = True,
-    cp4_delta_abs: float = 0.06,
-    cp6_staggered_potentials: tuple[float, ...] = (0.01, -0.01),
-) -> int:
-    _ensure_not_running_compute_on_login_node("tMBG checkpoints")
-
-    start_time = current_timestamp()
-    total_start = perf_counter()
-    report = reproduce_paper_checkpoints(
-        n_shells=n_shells,
-        points_per_segment=points_per_segment,
-        path_n_bands=path_n_bands,
-        topology_mesh_size=topology_mesh_size,
-        topology_n_bands=topology_n_bands,
-        bands_per_side=bands_per_side,
-        valley=valley,
-        verify_opposite_valley=verify_opposite_valley,
-        cp4_delta_abs=cp4_delta_abs,
-        cp6_staggered_potentials=cp6_staggered_potentials,
-        output_dir=output_dir,
-    )
-    total_elapsed = perf_counter() - total_start
-    end_time = current_timestamp()
-    env = collect_runtime_environment()
-
-    output_suffix = ""
-    if output_dir is not None:
-        resolved_output_dir = Path(output_dir)
-        resolved_output_dir.mkdir(parents=True, exist_ok=True)
-        runtime_summary_path = resolved_output_dir / "runtime_summary.txt"
-        metadata_path = resolved_output_dir / "run_metadata.json"
-        report_path = resolved_output_dir / "paper_checkpoint_report.md"
-        validation_report_path = resolved_output_dir / "validation_report.md"
-        figure_png_path = resolved_output_dir / "fig2_like_bands.png"
-        figure_pdf_path = resolved_output_dir / "fig2_like_bands.pdf"
-        lattice_info_path = resolved_output_dir / "lattice_info.json"
-        run_log_path = resolved_output_dir / "run.log"
-
-        _write_key_value_summary(
-            runtime_summary_path,
-            [
-                ("implementation", "python_tmbg"),
-                ("runner_kind", "tmbg_paper_checkpoints"),
-                ("n_shells", str(n_shells)),
-                ("points_per_segment", str(points_per_segment)),
-                ("path_n_bands", "" if path_n_bands is None else str(path_n_bands)),
-                ("topology_mesh_size", str(topology_mesh_size)),
-                ("topology_n_bands", "" if topology_n_bands is None else str(topology_n_bands)),
-                ("bands_per_side", str(bands_per_side)),
-                ("valley", str(valley)),
-                ("verify_opposite_valley", str(bool(verify_opposite_valley)).lower()),
-                ("cp4_delta_abs", str(cp4_delta_abs)),
-                (
-                    "cp6_staggered_potentials",
-                    ",".join(f"{value:.16g}" for value in cp6_staggered_potentials),
-                ),
-                ("start_time", start_time),
-                ("end_time", end_time),
-                ("total_elapsed_sec", f"{total_elapsed:.16e}"),
-                ("failure_count", str(report.failure_count)),
-                ("skipped_count", str(report.skipped_count)),
-                ("hostname", env.hostname),
-                ("cpu_model", env.cpu_model),
-                ("sys_cpu_threads", str(env.sys_cpu_threads)),
-                ("blas_threads", str(env.blas_threads)),
-                ("numba_threads", str(getattr(env, "numba_threads", ""))),
-                ("backend_choice", str(getattr(env, "backend_choice", ""))),
-                ("process_count", str(env.process_count)),
-                ("jit_warmup_included", str(env.jit_warmup_included).lower()),
-                ("slurm_partition", env.slurm_partition),
-                ("slurm_nodelist", env.slurm_nodelist),
-                ("slurm_cpus_per_task", str(env.slurm_cpus_per_task)),
-                ("python_version", env.python_version),
-                ("numpy_version", env.numpy_version),
-                ("paper_checkpoint_report", str(report_path) if report_path.exists() else ""),
-                ("validation_report", str(validation_report_path) if validation_report_path.exists() else ""),
-                ("fig2_like_bands_png", str(figure_png_path) if figure_png_path.exists() else ""),
-                ("fig2_like_bands_pdf", str(figure_pdf_path) if figure_pdf_path.exists() else ""),
-                ("lattice_info_json", str(lattice_info_path) if lattice_info_path.exists() else ""),
-                ("run_log", str(run_log_path) if run_log_path.exists() else ""),
-            ],
-        )
-        metadata = {
-            "implementation": "python_tmbg",
-            "runner_kind": "tmbg_paper_checkpoints",
-            "parameters": {
-                "n_shells": n_shells,
-                "points_per_segment": points_per_segment,
-                "path_n_bands": path_n_bands,
-                "topology_mesh_size": topology_mesh_size,
-                "topology_n_bands": topology_n_bands,
-                "bands_per_side": bands_per_side,
-                "valley": valley,
-                "verify_opposite_valley": bool(verify_opposite_valley),
-                "cp4_delta_abs": cp4_delta_abs,
-                "cp6_staggered_potentials": list(cp6_staggered_potentials),
-            },
-            "runtime": {
-                "start_time": start_time,
-                "end_time": end_time,
-                "total_elapsed_sec": total_elapsed,
-                "environment": {
-                    "hostname": env.hostname,
-                    "cpu_model": env.cpu_model,
-                    "slurm_partition": env.slurm_partition,
-                    "slurm_nodelist": env.slurm_nodelist,
-                    "slurm_cpus_per_task": env.slurm_cpus_per_task,
-                    "blas_threads": env.blas_threads,
-                    "numba_threads": getattr(env, "numba_threads", None),
-                    "sys_cpu_threads": env.sys_cpu_threads,
-                    "process_count": env.process_count,
-                    "backend_choice": getattr(env, "backend_choice", None),
-                    "threadpoolctl_info": getattr(env, "threadpoolctl_info", ()),
-                    "thread_env": getattr(env, "thread_env", {}),
-                    "jit_warmup_included": env.jit_warmup_included,
-                    "python_version": env.python_version,
-                    "numpy_version": env.numpy_version,
-                },
-            },
-            "artifacts": {
-                "paper_checkpoint_report_md": str(report_path) if report_path.exists() else None,
-                "validation_report_md": str(validation_report_path) if validation_report_path.exists() else None,
-                "fig2_like_bands_png": str(figure_png_path) if figure_png_path.exists() else None,
-                "fig2_like_bands_pdf": str(figure_pdf_path) if figure_pdf_path.exists() else None,
-                "lattice_info_json": str(lattice_info_path) if lattice_info_path.exists() else None,
-                "run_log": str(run_log_path) if run_log_path.exists() else None,
-                "runtime_summary_txt": str(runtime_summary_path),
-            },
-            "report": _tmbg_report_payload(report),
-        }
-        with metadata_path.open("w", encoding="utf-8") as handle:
-            json.dump(metadata, handle, indent=2)
-        _write_tmbg_contract_sidecars(
-            resolved_output_dir,
-            workflow="tmbg.checkpoints",
-            runner_kind="tmbg_paper_checkpoints",
-            parameters=dict(metadata["parameters"]),
-            runtime=dict(metadata["runtime"]),
-            artifacts=dict(metadata["artifacts"]),
-            report=report,
-        )
-        output_suffix = f"\toutput_dir={resolved_output_dir}"
-
-    status = _tmbg_report_status(report)
-    print(
-        f"status={status}\t"
-        f"checks={len(report.checks)}\t"
-        f"failures={report.failure_count}\t"
-        f"skipped={report.skipped_count}\t"
-        f"total_elapsed_sec={total_elapsed:.6f}"
-        f"{output_suffix}"
-    )
-    if report.has_failures:
-        failed_checks = ",".join(check.name for check in report.checks if check.status == "fail")
-        print(f"failed_checks={failed_checks}")
-    return 0
-
-
 def cmd_tmbg_diagnose_ktilde_symmetry(
     *,
     output_dir: Path | None = None,
@@ -1165,24 +930,6 @@ def main(argv: list[str] | None = None) -> int:
             overlap_lg=args.overlap_lg,
             output_dir=args.output_dir,
             overwrite_contract_sidecars=args.overwrite_contract_sidecars,
-        )
-    if args.command == "tmbg" and args.tmbg_command == "reproduce-checkpoints":
-        return cmd_tmbg_reproduce_checkpoints(
-            output_dir=args.output_dir,
-            n_shells=args.n_shells,
-            points_per_segment=args.points_per_segment,
-            path_n_bands=args.path_n_bands,
-            topology_mesh_size=args.topology_mesh_size,
-            topology_n_bands=args.topology_n_bands,
-            bands_per_side=args.bands_per_side,
-            valley=args.valley,
-            verify_opposite_valley=not args.skip_opposite_valley,
-            cp4_delta_abs=args.cp4_delta_abs,
-            cp6_staggered_potentials=(
-                (0.01, -0.01)
-                if args.cp6_staggered_potentials is None
-                else tuple(args.cp6_staggered_potentials)
-            ),
         )
     if args.command == "tmbg" and args.tmbg_command == "diagnose-ktilde-symmetry":
         return cmd_tmbg_diagnose_ktilde_symmetry(

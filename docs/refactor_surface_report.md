@@ -4,12 +4,12 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 75739
-- Tracked Python lines: 71978
-- Tracked Julia lines: 831
+- Tracked text lines: 74994
+- Tracked Python lines: 71211
+- Tracked Julia lines: 826
 - `src` Python files: 196
-- `src` Python lines: 65742
-- Files over 1000 lines: 15
+- `src` Python lines: 65015
+- Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
 ## Completed cleanup slices
@@ -245,6 +245,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 699.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### retire_tmbg_paper_checkpoint_runner
+
+- Retired the heavy tMBG Park paper-checkpoint reproduction runner from system validation and CLI; lightweight validate_physics and Ktilde diagnostics remain available.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 600.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -260,10 +267,9 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 1306 | `src/mean_field/api/hf.py` |
 | 1267 | `src/mean_field/crpa/hf_interface.py` |
 | 1258 | `src/mean_field/systems/tbg/zero_field/hf.py` |
-| 1202 | `src/mean_field/cli.py` |
 | 1149 | `src/mean_field/core/hf/finite_field.py` |
-| 1079 | `src/mean_field/systems/tmbg/validation.py` |
 | 1012 | `src/mean_field/systems/tbg/finite_field/spectrum.py` |
+| 949 | `src/mean_field/cli.py` |
 | 936 | `src/mean_field/systems/tbg/zero_field/supercell.py` |
 | 925 | `src/mean_field/systems/htqg/hf.py` |
 | 873 | `src/analysis/topology/quantum_geometry.py` |
@@ -277,6 +283,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 643 | `src/mean_field/systems/htg/supercell_contracts.py` |
 | 627 | `src/mean_field/benchmarks.py` |
 | 617 | `src/mean_field/core/hf/overlap.py` |
+| 609 | `src/mean_field/systems/tmbg/validation.py` |
 | 565 | `src/analysis/topology/core.py` |
 | 528 | `src/mean_field/systems/tbg/zero_field/artifacts.py` |
 
@@ -307,11 +314,11 @@ Total lines: 691
 
 ### `validation.py`
 
-Total lines: 1824
+Total lines: 1354
 
 | Lines | Path |
 |---:|---|
-| 1079 | `src/mean_field/systems/tmbg/validation.py` |
+| 609 | `src/mean_field/systems/tmbg/validation.py` |
 | 193 | `src/mean_field/systems/htqg/validation.py` |
 | 161 | `src/mean_field/systems/atmg/validation.py` |
 | 156 | `src/mean_field/systems/RnG_hBN/validation.py` |
@@ -349,7 +356,6 @@ Total lines: 1362
 | Symbol | Count | Paths |
 |---|---:|---|
 | `_check` | 2 | `src/mean_field/systems/htg/validation.py`, `src/mean_field/systems/htqg/validation.py` |
-| `reproduce_paper_checkpoints` | 2 | `src/mean_field/systems/RnG_hBN/validation.py`, `src/mean_field/systems/tmbg/validation.py` |
 | `validate_lattice` | 2 | `src/mean_field/systems/htg/validation.py`, `src/mean_field/systems/htqg/validation.py` |
 | `validate_physics` | 4 | `src/mean_field/systems/RnG_hBN/validation.py`, `src/mean_field/systems/atmg/validation.py`, `src/mean_field/systems/tdbg/validation.py`, `src/mean_field/systems/tmbg/validation.py` |
 

@@ -17,7 +17,6 @@ from mean_field.cli import main as cli_main
 
 CLI_GROUPS = {"benchmarks", "bm", "hf", "tmbg"}
 CLI_ALIASES = {
-    "run_tmbg_checkpoints": ("tmbg", "reproduce-checkpoints"),
     "run_tmbg_ktilde_diagnostics": ("tmbg", "diagnose-ktilde-symmetry"),
 }
 MODULE_COMMANDS = {

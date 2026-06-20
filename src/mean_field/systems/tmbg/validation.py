@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
 import math
 from pathlib import Path
-from typing import Literal
 
 import numpy as np
 
@@ -19,35 +17,12 @@ from .cross_check import (
 from .hamiltonian import build_diagonal_block
 from .model import TMBGModel
 from .params import TMBGParameters
-from .plot import TMBGBandPlotPanel, infer_flat_band_indices, write_tmbg_lattice_plot, write_tmbg_paper_band_figure
+from .plot import infer_flat_band_indices
 
 
 
 
 
-
-
-@dataclass(frozen=True)
-class PaperCheckpointCase:
-    theta_deg: float
-    model_name: Literal["minimal", "full"]
-    interlayer_potential: float = 0.0
-    staggered_potential: float = 0.0
-
-    def build_params(self) -> TMBGParameters:
-        if self.model_name == "minimal":
-            return TMBGParameters.minimal(
-                interlayer_potential=self.interlayer_potential,
-                staggered_potential=self.staggered_potential,
-            )
-        return TMBGParameters.full(
-            interlayer_potential=self.interlayer_potential,
-            staggered_potential=self.staggered_potential,
-        )
-
-    @property
-    def panel_label(self) -> str:
-        return f"Δ = {_format_signed_mev(self.interlayer_potential)}"
 
 
 @dataclass(frozen=True)
@@ -112,36 +87,6 @@ def _format_mev(value_ev: float | None) -> str:
     return f"{value_ev * 1.0e3:.3f} meV"
 
 
-def _format_signed_mev(value_ev: float) -> str:
-    mev = value_ev * 1.0e3
-    if abs(mev) < 5.0e-10:
-        return "0 meV"
-    return f"{mev:+.0f} meV"
-
-
-def _delta_token(delta_ev: float) -> str:
-    if abs(delta_ev) < 5.0e-10:
-        return "0"
-    magnitude_mev = int(round(abs(delta_ev) * 1.0e3))
-    sign = "p" if delta_ev > 0.0 else "m"
-    return f"{sign}{magnitude_mev:03d}"
-
-
-def _delta_panel_dirname(delta_ev: float) -> str:
-    magnitude_mev = int(round(delta_ev * 1.0e3))
-    return f"delta_{magnitude_mev:+04d}mev"
-
-
-def _select_band_window_around_flat_pair(
-    total_bands: int,
-    flat_pair: tuple[int, int],
-    bands_per_side: int,
-) -> tuple[int, ...]:
-    lower = max(0, int(flat_pair[0]) - int(bands_per_side))
-    upper = min(int(total_bands), int(flat_pair[1]) + int(bands_per_side) + 1)
-    return tuple(range(lower, upper))
-
-
 def _band_width(energies: np.ndarray, band_index: int) -> float:
     band = np.asarray(energies[:, int(band_index)], dtype=float)
     return float(np.max(band) - np.min(band))
@@ -151,35 +96,6 @@ def _minimum_gap(energies: np.ndarray, lower_band: int, upper_band: int) -> floa
     lower = np.asarray(energies[:, int(lower_band)], dtype=float)
     upper = np.asarray(energies[:, int(upper_band)], dtype=float)
     return float(np.min(upper - lower))
-
-
-def _path_gap_minimum(
-    path_result: PathBandsResult,
-    band_indices: tuple[int, int],
-) -> tuple[int, float]:
-    valence_band = np.asarray(path_result.energies[:, int(band_indices[0])], dtype=float)
-    conduction_band = np.asarray(path_result.energies[:, int(band_indices[1])], dtype=float)
-    gaps = conduction_band - valence_band
-    index = int(np.argmin(gaps))
-    return index, float(gaps[index])
-
-
-def _format_k_location(path_result: PathBandsResult, index: int) -> str:
-    for node in path_result.path.nodes:
-        if int(node.index - 1) == int(index):
-            return _display_k_label(node.label)
-    kvec = complex(path_result.path.kvec[int(index)])
-    return f"({kvec.real:+.4f}, {kvec.imag:+.4f}) nm^-1"
-
-
-def _display_k_label(label: str) -> str:
-    return {"Gamma": "Γ", "GammaPrime": "Γ'", "M": "M", "K": "K", "Kprime": "K'", "KPrime": "K'"}.get(label, label)
-
-
-def _panel_annotation(delta_ev: float, path_result: PathBandsResult, band_indices: tuple[int, int]) -> str:
-    gap_index, gap = _path_gap_minimum(path_result, band_indices)
-    location = _format_k_location(path_result, gap_index)
-    return f"flat_gap @ Δ={_format_signed_mev(delta_ev)}: {gap * 1.0e3:.2f} meV at k={location}"
 
 
 def _summarize_flat_bands(path_result: PathBandsResult) -> _CheckpointBandSummary:
@@ -195,15 +111,6 @@ def _summarize_flat_bands(path_result: PathBandsResult) -> _CheckpointBandSummar
         flat_gap=_minimum_gap(energies, valence_index, conduction_index),
         lower_gap=lower_gap,
         upper_gap=upper_gap,
-    )
-
-
-def _describe_band_summary(summary: _CheckpointBandSummary) -> str:
-    return (
-        f"flat bands={summary.flat_band_indices}, "
-        f"widths=({_format_mev(summary.valence_width)}, {_format_mev(summary.conduction_width)}), "
-        f"flat gap={_format_mev(summary.flat_gap)}, "
-        f"outer gaps=({_format_mev(summary.lower_gap)}, {_format_mev(summary.upper_gap)})"
     )
 
 
@@ -400,10 +307,6 @@ def _describe_cutoff_convergence(summary: _CutoffConvergenceSummary) -> str:
     )
 
 
-def _build_checkpoint_model(case: PaperCheckpointCase, *, n_shells: int) -> TMBGModel:
-    return TMBGModel.from_config(case.theta_deg, n_shells=n_shells, params=case.build_params())
-
-
 def diagnose_ktilde_symmetry(
     *,
     theta_deg: float = 1.21,
@@ -481,388 +384,6 @@ def diagnose_ktilde_symmetry(
         resolved_output_dir.mkdir(parents=True, exist_ok=True)
         report_path = resolved_output_dir / "ktilde_symmetry_report.md"
         write_text_artifact(report.to_markdown() + "\n", report_path)
-    return report
-
-
-def reproduce_paper_checkpoints(
-    *,
-    n_shells: int = 5,
-    points_per_segment: int = 120,
-    path_n_bands: int | None = None,
-    topology_mesh_size: int = 24,
-    topology_n_bands: int | None = None,
-    valley: int = 1,
-    verify_opposite_valley: bool = True,
-    cp4_delta_abs: float = 0.06,
-    cp6_staggered_potentials: tuple[float, ...] = (0.01, -0.01),
-    bands_per_side: int = 6,
-    output_dir: Path | str | None = None,
-) -> ValidationReport:
-    path_cache: dict[PaperCheckpointCase, tuple[TMBGModel, PathBandsResult, _CheckpointBandSummary]] = {}
-    topology_cache: dict[tuple[PaperCheckpointCase, int, int], object] = {}
-    checks: list[ValidationCheck] = []
-
-    def get_path_case(case: PaperCheckpointCase) -> tuple[TMBGModel, PathBandsResult, _CheckpointBandSummary]:
-        cached = path_cache.get(case)
-        if cached is not None:
-            return cached
-
-        model = _build_checkpoint_model(case, n_shells=n_shells)
-        resolved_n_bands = model.lattice.matrix_dim if path_n_bands is None else int(path_n_bands)
-        path_result = model.bands_along_standard_path(points_per_segment=points_per_segment, n_bands=resolved_n_bands)
-        summary = _summarize_flat_bands(path_result)
-        cached = (model, path_result, summary)
-        path_cache[case] = cached
-        return cached
-
-    def get_topology_result(case: PaperCheckpointCase, band_index: int, *, valley_label: int):
-        cache_key = (case, int(band_index), int(valley_label))
-        cached = topology_cache.get(cache_key)
-        if cached is not None:
-            return cached
-
-        model, _, _ = get_path_case(case)
-        resolved_n_bands = max(int(band_index) + 1, 0 if topology_n_bands is None else int(topology_n_bands))
-        result = model.topology_on_grid(
-            topology_mesh_size,
-            int(band_index),
-            valley=valley_label,
-            n_bands=resolved_n_bands,
-        )
-        topology_cache[cache_key] = result
-        return result
-
-    cp1_case = PaperCheckpointCase(theta_deg=1.07, model_name="minimal")
-    _, _, cp1_summary = get_path_case(cp1_case)
-    cp1_pass = cp1_summary.widest_flat_band < 5.0e-3
-    checks.append(
-        make_validation_check(
-            "CP1.minimal_magic_angle_bandwidth", cp1_pass, cp1_summary.widest_flat_band,
-            detail="Minimal model at θ=1.07° should keep the neutral flat-band pair below 5 meV. "
-            + _describe_band_summary(cp1_summary),
-        )
-    )
-
-    fig2_cases = tuple(
-        PaperCheckpointCase(theta_deg=1.21, model_name="full", interlayer_potential=delta_ev)
-        for delta_ev in (0.0, 0.06, -0.04)
-    )
-    fig2_panels: list[TMBGBandPlotPanel] = []
-    cp3_expected = {
-        0.0: (2, -3),
-        0.06: (-2, 1),
-        -0.04: (1, -2),
-    }
-    cp3_delta_zero_pair: tuple[int, int] | None = None
-
-    for case in fig2_cases:
-        model, path_result, summary = get_path_case(case)
-        selected_band_indices = _select_band_window_around_flat_pair(
-            path_result.energies.shape[1],
-            summary.flat_band_indices,
-            bands_per_side,
-        )
-        fig2_panels.append(
-            TMBGBandPlotPanel(
-                label=case.panel_label,
-                path_result=path_result,
-                band_indices=selected_band_indices,
-                flat_band_indices=summary.flat_band_indices,
-                annotation=_panel_annotation(case.interlayer_potential, path_result, summary.flat_band_indices),
-            )
-        )
-
-        outer_gap_floor = summary.outer_gap_floor
-        cp2_pass = summary.widest_flat_band < 2.0e-2 and outer_gap_floor is not None and outer_gap_floor > 1.0e-2
-        checks.append(
-            make_validation_check(
-                f"CP2.delta_{_delta_token(case.interlayer_potential)}_band_isolation", cp2_pass, summary.widest_flat_band,
-                detail="Full model along K-Γ-M-K' should show an isolated neutral flat-band pair in the Fig. 2 window. "
-                + _describe_band_summary(summary),
-            )
-        )
-
-        if abs(case.interlayer_potential) < 5.0e-10:
-            ktilde_gap = _summarize_band_gap_at_k(
-                model=model,
-                k_tilde=model.lattice.k_m,
-                band_indices=summary.flat_band_indices,
-                valley=valley,
-                k_label="Ktilde",
-            )
-            cp2b_pass = ktilde_gap.flat_gap < 1.0e-3
-            checks.append(
-                make_validation_check(
-                    "CP2b.delta_0_band_touching", cp2b_pass, ktilde_gap.flat_gap,
-                    detail=(
-                        "At Δ = 0 in the full model, the neutral flat-band pair should remain nearly touching "
-                        f"at K̃ in Park Fig. 2(a); {_describe_kpoint_gap(ktilde_gap)}"
-                    ),
-                )
-            )
-
-        expected_valence, expected_conduction = cp3_expected[case.interlayer_potential]
-        observed_valence_result = get_topology_result(case, summary.flat_band_indices[0], valley_label=valley)
-        observed_conduction_result = get_topology_result(case, summary.flat_band_indices[1], valley_label=valley)
-        observed_valence = int(observed_valence_result.rounded_chern_number)
-        observed_conduction = int(observed_conduction_result.rounded_chern_number)
-        cp3_pass = (observed_valence, observed_conduction) == (expected_valence, expected_conduction)
-        checks.append(
-            make_validation_check(
-                f"CP3.delta_{_delta_token(case.interlayer_potential)}_valley_chern",
-                cp3_pass,
-                str((observed_valence, observed_conduction)),
-                detail=(
-                    f"K valley flat-band Chern numbers should match {expected_valence, expected_conduction}; "
-                    f"observed {(observed_valence, observed_conduction)} on bands {summary.flat_band_indices}."
-                ),
-            )
-        )
-
-        if verify_opposite_valley:
-            kprime_valence_result = get_topology_result(case, summary.flat_band_indices[0], valley_label=-valley)
-            kprime_conduction_result = get_topology_result(case, summary.flat_band_indices[1], valley_label=-valley)
-            kprime_valence = int(kprime_valence_result.rounded_chern_number)
-            kprime_conduction = int(kprime_conduction_result.rounded_chern_number)
-            opposite_valley_pass = (
-                kprime_valence == -observed_valence and kprime_conduction == -observed_conduction
-            )
-            checks.append(
-                make_validation_check(
-                    f"CP3.delta_{_delta_token(case.interlayer_potential)}_opposite_valley",
-                    opposite_valley_pass,
-                    str((kprime_valence, kprime_conduction)),
-                    detail=(
-                        "K' valley should carry the opposite Chern numbers. "
-                        f"K={(observed_valence, observed_conduction)}, K'={(kprime_valence, kprime_conduction)}."
-                    ),
-                )
-            )
-        else:
-            checks.append(
-                ValidationCheck(
-                    name=f"CP3.delta_{_delta_token(case.interlayer_potential)}_opposite_valley",
-                    status="skipped",
-                    detail="Opposite-valley topology verification disabled for this checkpoint run.",
-                )
-            )
-
-        if abs(case.interlayer_potential) < 5.0e-10:
-            cp3_delta_zero_pair = (observed_valence, observed_conduction)
-
-    cp4_full_plus = PaperCheckpointCase(theta_deg=1.21, model_name="full", interlayer_potential=cp4_delta_abs)
-    cp4_full_minus = PaperCheckpointCase(theta_deg=1.21, model_name="full", interlayer_potential=-cp4_delta_abs)
-    cp4_min_plus = PaperCheckpointCase(theta_deg=1.21, model_name="minimal", interlayer_potential=cp4_delta_abs)
-    cp4_min_minus = PaperCheckpointCase(theta_deg=1.21, model_name="minimal", interlayer_potential=-cp4_delta_abs)
-    _, _, cp4_full_plus_summary = get_path_case(cp4_full_plus)
-    _, _, cp4_full_minus_summary = get_path_case(cp4_full_minus)
-    _, _, cp4_min_plus_summary = get_path_case(cp4_min_plus)
-    _, _, cp4_min_minus_summary = get_path_case(cp4_min_minus)
-
-    cp4_full_asym = abs(cp4_full_plus_summary.widest_flat_band - cp4_full_minus_summary.widest_flat_band)
-    cp4_min_asym = abs(cp4_min_plus_summary.widest_flat_band - cp4_min_minus_summary.widest_flat_band)
-    cp4_pass = cp4_full_asym > max(2.0 * cp4_min_asym, 1.0e-3)
-    checks.append(
-        make_validation_check(
-            "CP4.delta_sign_asymmetry", cp4_pass, cp4_full_asym,
-            detail=(
-                "Full model should show a visibly stronger Δ ↔ -Δ asymmetry than the minimal model. "
-                f"full asymmetry={_format_mev(cp4_full_asym)}, minimal asymmetry={_format_mev(cp4_min_asym)}."
-            ),
-        )
-    )
-
-    cp5_full_case = PaperCheckpointCase(theta_deg=1.21, model_name="full")
-    cp5_min_case = PaperCheckpointCase(theta_deg=1.21, model_name="minimal")
-    _, _, cp5_full_summary = get_path_case(cp5_full_case)
-    _, _, cp5_min_summary = get_path_case(cp5_min_case)
-    cp5_ratio = cp5_full_summary.widest_flat_band / max(cp5_min_summary.widest_flat_band, 1.0e-12)
-    cp5_pass = cp5_full_summary.widest_flat_band > cp5_min_summary.widest_flat_band and cp5_ratio > 2.0
-    checks.append(
-        make_validation_check(
-            "CP5.full_vs_minimal_bandwidth", cp5_pass, cp5_ratio,
-            detail=(
-                "Full model should broaden the neutral flat-band pair relative to the minimal model at the same parameters. "
-                f"full={_format_mev(cp5_full_summary.widest_flat_band)}, "
-                f"minimal={_format_mev(cp5_min_summary.widest_flat_band)}, ratio={cp5_ratio:.3f}."
-            ),
-        )
-    )
-
-    cp6_abs_maxima: list[int] = []
-    for staggered_potential in cp6_staggered_potentials:
-        cp6_case = PaperCheckpointCase(
-            theta_deg=1.21,
-            model_name="full",
-            interlayer_potential=0.0,
-            staggered_potential=staggered_potential,
-        )
-        _, _, cp6_summary = get_path_case(cp6_case)
-        cp6_valence = int(
-            get_topology_result(cp6_case, cp6_summary.flat_band_indices[0], valley_label=valley).rounded_chern_number
-        )
-        cp6_conduction = int(
-            get_topology_result(cp6_case, cp6_summary.flat_band_indices[1], valley_label=valley).rounded_chern_number
-        )
-        cp6_abs_maxima.append(max(abs(cp6_valence), abs(cp6_conduction)))
-    cp6_reference_abs_max = 0 if cp3_delta_zero_pair is None else max(abs(value) for value in cp3_delta_zero_pair)
-    cp6_pass = cp6_reference_abs_max == 3 and all(abs_max < 3 for abs_max in cp6_abs_maxima)
-    checks.append(
-        make_validation_check(
-            "CP6.staggered_potential_suppresses_abs3", cp6_pass, str(tuple(cp6_abs_maxima)),
-            detail=(
-                "At the sampled Fig. 4 reference point, Δ_S ≠ 0 should remove |C|=3 from the neutral flat-band pair. "
-                f"reference max |C|={cp6_reference_abs_max}, staggered max |C| values={tuple(cp6_abs_maxima)}."
-            ),
-        )
-    )
-
-    report = ValidationReport(title="tMBG Park 2020 Checkpoint Validation", checks=tuple(checks))
-
-    if output_dir is not None:
-        resolved_output_dir = Path(output_dir)
-        resolved_output_dir.mkdir(parents=True, exist_ok=True)
-        reference_model, _, _ = get_path_case(fig2_cases[0])
-        lattice_info_path = resolved_output_dir / "lattice_info.json"
-        with lattice_info_path.open("w", encoding="utf-8") as handle:
-            json.dump(reference_model.lattice_summary(), handle, indent=2)
-        write_tmbg_lattice_plot(
-            resolved_output_dir,
-            reference_model.lattice,
-            title=f"tMBG moire reciprocal lattice, theta={reference_model.theta_deg:.2f}°",
-        )
-
-        for case in fig2_cases:
-            model, path_result, summary = get_path_case(case)
-            panel_dir = resolved_output_dir / _delta_panel_dirname(case.interlayer_potential)
-            panel_dir.mkdir(parents=True, exist_ok=True)
-            selected_band_indices = _select_band_window_around_flat_pair(
-                path_result.energies.shape[1],
-                summary.flat_band_indices,
-                bands_per_side,
-            )
-            max_selected_band = int(max(selected_band_indices))
-            grid_result = model.bands_on_grid(
-                topology_mesh_size,
-                valley=valley,
-                n_bands=max_selected_band + 1,
-                return_eigenvectors=False,
-            )
-            valence_topology = get_topology_result(case, summary.flat_band_indices[0], valley_label=valley)
-            conduction_topology = get_topology_result(case, summary.flat_band_indices[1], valley_label=valley)
-            np.savez_compressed(
-                panel_dir / "bands_path.npz",
-                k_distance=np.asarray(path_result.path.kdist, dtype=float),
-                energies=np.asarray(path_result.energies[:, selected_band_indices], dtype=float),
-                kvec_nm_inv=np.stack(
-                    [
-                        np.asarray(path_result.path.kvec.real, dtype=float),
-                        np.asarray(path_result.path.kvec.imag, dtype=float),
-                    ],
-                    axis=-1,
-                ),
-                band_indices=np.asarray(selected_band_indices, dtype=int),
-                flat_band_indices=np.asarray(summary.flat_band_indices, dtype=int),
-                k_labels=np.asarray(path_result.path.labels, dtype=object),
-            )
-            np.savez_compressed(
-                panel_dir / "bands_grid.npz",
-                k_grid_frac=np.asarray(grid_result.k_grid_frac, dtype=float),
-                kvec_nm_inv=np.stack(
-                    [
-                        np.asarray(grid_result.kvec.real, dtype=float),
-                        np.asarray(grid_result.kvec.imag, dtype=float),
-                    ],
-                    axis=-1,
-                ),
-                energies=np.asarray(grid_result.energies[:, :, selected_band_indices], dtype=float),
-                band_indices=np.asarray(selected_band_indices, dtype=int),
-                flat_band_indices=np.asarray(summary.flat_band_indices, dtype=int),
-            )
-            with (panel_dir / "chern_numbers.json").open("w", encoding="utf-8") as handle:
-                payload = {
-                    "delta_ev": float(case.interlayer_potential),
-                    "flat_band_indices": list(summary.flat_band_indices),
-                    "valley": int(valley),
-                    "valence": {
-                        "band_index": int(summary.flat_band_indices[0]),
-                        "chern_number": float(valence_topology.chern_number),
-                        "rounded_chern_number": int(valence_topology.rounded_chern_number),
-                        "integer_residual": float(valence_topology.integer_residual),
-                    },
-                    "conduction": {
-                        "band_index": int(summary.flat_band_indices[1]),
-                        "chern_number": float(conduction_topology.chern_number),
-                        "rounded_chern_number": int(conduction_topology.rounded_chern_number),
-                        "integer_residual": float(conduction_topology.integer_residual),
-                    },
-                }
-                if verify_opposite_valley:
-                    kprime_valence = get_topology_result(case, summary.flat_band_indices[0], valley_label=-valley)
-                    kprime_conduction = get_topology_result(case, summary.flat_band_indices[1], valley_label=-valley)
-                    payload["opposite_valley"] = {
-                        "valley": int(-valley),
-                        "valence": int(kprime_valence.rounded_chern_number),
-                        "conduction": int(kprime_conduction.rounded_chern_number),
-                    }
-                json.dump(payload, handle, indent=2)
-            np.savez_compressed(
-                panel_dir / "berry_curvature.npz",
-                berry_curvature=np.stack(
-                    [
-                        np.asarray(valence_topology.berry_curvature, dtype=float),
-                        np.asarray(conduction_topology.berry_curvature, dtype=float),
-                    ],
-                    axis=-1,
-                ),
-                band_indices=np.asarray(summary.flat_band_indices, dtype=int),
-                valley=int(valley),
-            )
-        write_tmbg_paper_band_figure(
-            resolved_output_dir,
-            tuple(fig2_panels),
-            stem="fig2_like_bands",
-            title="Park 2020 Fig. 2 Checkpoint",
-            ylim=(-0.100, 0.100),
-        )
-        report_path = resolved_output_dir / "paper_checkpoint_report.md"
-        write_text_artifact(report.to_markdown() + "\n", report_path)
-        ktilde_report = diagnose_ktilde_symmetry(
-            theta_deg=1.21,
-            n_shells=n_shells,
-            valley=valley,
-            output_dir=resolved_output_dir,
-        )
-        core_report = validate_physics(
-            reference_model,
-            valley=valley,
-            n_bands=min(12, reference_model.lattice.matrix_dim),
-            include_c3_check=True,
-            include_cutoff_check=True,
-        )
-        validation_report = ValidationReport.combine(
-            "tMBG Physical Validation",
-            core_report,
-            ktilde_report,
-            report,
-        )
-        validation_report_path = resolved_output_dir / "validation_report.md"
-        write_text_artifact(validation_report.to_markdown() + "\n", validation_report_path)
-        run_log_path = resolved_output_dir / "run.log"
-        write_text_artifact(
-            "\n\n".join(
-                [
-                    "# tMBG checkpoint run",
-                    validation_report.to_markdown(),
-                    f"paper_checkpoint_report={report_path}",
-                    f"validation_report={validation_report_path}",
-                    f"lattice_info={lattice_info_path}",
-                ]
-            )
-            + "\n",
-            run_log_path,
-        )
-
     return report
 
 
@@ -1077,3 +598,12 @@ def validate_physics(
         )
 
     return ValidationReport(title="tMBG Core Physics Validation", checks=tuple(checks))
+
+__all__ = [
+    "ValidationCheck",
+    "ValidationReport",
+    "build_c2zt_unitary",
+    "cross_check_hamiltonian",
+    "diagnose_ktilde_symmetry",
+    "validate_physics",
+]

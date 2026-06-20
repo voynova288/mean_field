@@ -287,6 +287,14 @@
         "scripts/_julia_impl/inspect_b0_hf_shift_metrics_julia.jl",
         "scripts/_julia_impl/inspect_b0_overlap_reference_julia.jl"
       ]
+    },
+    {
+      "description": "Retired the heavy tMBG Park paper-checkpoint reproduction runner from system validation and CLI; lightweight validate_physics and Ktilde diagnostics remain available.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 600,
+      "slice": "retire_tmbg_paper_checkpoint_runner",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -319,7 +327,7 @@
       }
     ]
   },
-  "files_over_1000_lines": 15,
+  "files_over_1000_lines": 13,
   "module_families": {
     "bands.py": {
       "files": [
@@ -382,7 +390,7 @@
     "validation.py": {
       "files": [
         {
-          "lines": 1079,
+          "lines": 609,
           "path": "src/mean_field/systems/tmbg/validation.py"
         },
         {
@@ -406,7 +414,7 @@
           "path": "src/mean_field/systems/htg/validation.py"
         }
       ],
-      "total_lines": 1824
+      "total_lines": 1354
     }
   },
   "phase2_targets": {
@@ -643,14 +651,6 @@
       {
         "count": 2,
         "paths": [
-          "src/mean_field/systems/RnG_hBN/validation.py",
-          "src/mean_field/systems/tmbg/validation.py"
-        ],
-        "symbol": "reproduce_paper_checkpoints"
-      },
-      {
-        "count": 2,
-        "paths": [
           "src/mean_field/systems/htg/validation.py",
           "src/mean_field/systems/htqg/validation.py"
         ],
@@ -670,7 +670,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 196,
-  "src_python_lines": 65742,
+  "src_python_lines": 65015,
   "top_30_files": [
     {
       "lines": 2361,
@@ -717,20 +717,16 @@
       "path": "src/mean_field/systems/tbg/zero_field/hf.py"
     },
     {
-      "lines": 1202,
-      "path": "src/mean_field/cli.py"
-    },
-    {
       "lines": 1149,
       "path": "src/mean_field/core/hf/finite_field.py"
     },
     {
-      "lines": 1079,
-      "path": "src/mean_field/systems/tmbg/validation.py"
-    },
-    {
       "lines": 1012,
       "path": "src/mean_field/systems/tbg/finite_field/spectrum.py"
+    },
+    {
+      "lines": 949,
+      "path": "src/mean_field/cli.py"
     },
     {
       "lines": 936,
@@ -785,6 +781,10 @@
       "path": "src/mean_field/core/hf/overlap.py"
     },
     {
+      "lines": 609,
+      "path": "src/mean_field/systems/tmbg/validation.py"
+    },
+    {
       "lines": 565,
       "path": "src/analysis/topology/core.py"
     },
@@ -793,7 +793,7 @@
       "path": "src/mean_field/systems/tbg/zero_field/artifacts.py"
     }
   ],
-  "tracked_julia_lines": 831,
-  "tracked_python_lines": 71978,
-  "tracked_text_lines": 75739
+  "tracked_julia_lines": 826,
+  "tracked_python_lines": 71211,
+  "tracked_text_lines": 74994
 }

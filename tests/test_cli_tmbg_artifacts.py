@@ -28,45 +28,6 @@ def _fake_runtime_environment() -> SimpleNamespace:
     )
 
 
-def test_cli_tmbg_reproduce_checkpoints_writes_contract_sidecars(monkeypatch, tmp_path: Path) -> None:
-    report = ValidationReport(
-        title="tMBG Park 2020 Checkpoint Validation",
-        checks=(
-            ValidationCheck(name="CP1.minimal_magic_angle_bandwidth", status="pass", detail="ok", value=0.0012),
-            ValidationCheck(name="CP3.delta_0_opposite_valley", status="skipped", detail="skipped"),
-        ),
-    )
-    called: dict[str, object] = {}
-    monkeypatch.setattr(cli, "_ensure_not_running_compute_on_login_node", lambda workload_name: None)
-    monkeypatch.setattr(cli, "collect_runtime_environment", _fake_runtime_environment)
-    monkeypatch.setattr(cli, "reproduce_paper_checkpoints", lambda **kwargs: called.update(kwargs) or report)
-
-    rc = cli.main(
-        [
-            "tmbg",
-            "reproduce-checkpoints",
-            "--output-dir",
-            str(tmp_path),
-            "--n-shells",
-            "4",
-            "--points-per-segment",
-            "80",
-            "--skip-opposite-valley",
-        ]
-    )
-
-    assert rc == 0
-    assert called["output_dir"] == tmp_path
-    assert {path.name for path in tmp_path.iterdir()} >= set(required_artifact_files())
-    result = load_result(tmp_path)
-    assert result.manifest["metadata"]["workflow"] == "tmbg.checkpoints"
-    assert result.manifest["files"]["runtime_summary_txt"] == "runtime_summary.txt"
-    assert result.config is not None and result.config["runner_kind"] == "tmbg_paper_checkpoints"
-    assert result.conventions is not None and result.conventions["energy_unit"] == "eV"
-    assert result.validation is not None and result.validation["status"] == "pass_with_skips"
-    assert result.observables is not None and result.observables["report"]["failure_count"] == 0
-
-
 def test_cli_tmbg_ktilde_diagnostics_writes_contract_sidecars(monkeypatch, tmp_path: Path) -> None:
     report = ValidationReport(
         title="tMBG Ktilde Symmetry Diagnostics",

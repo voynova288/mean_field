@@ -24,11 +24,9 @@ from .plot import (
 )
 from .topology import TopologyResult, compute_topology_from_eigenvectors, compute_topology_from_grid_result, compute_topology_on_grid
 from .validation import (
-    PaperCheckpointCase,
     ValidationCheck,
     ValidationReport,
     diagnose_ktilde_symmetry,
-    reproduce_paper_checkpoints,
     validate_physics,
 )
 
@@ -41,7 +39,6 @@ __all__ = [
     "TMBGLattice",
     "TMBGBandPlotPanel",
     "TopologyResult",
-    "PaperCheckpointCase",
     "ValidationCheck",
     "ValidationReport",
     "VALID_BERNAL_CONVENTIONS",
@@ -67,7 +64,6 @@ __all__ = [
     "hopping_to_velocity",
     "infer_flat_band_indices",
     "moire_coupling_matrix",
-    "reproduce_paper_checkpoints",
     "validate_physics",
     "write_tmbg_band_plot",
     "write_tmbg_berry_curvature_plot",
