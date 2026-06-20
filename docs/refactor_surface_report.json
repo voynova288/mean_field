@@ -243,6 +243,16 @@
       "tracked_files_deleted": [
         "src/analysis/shift_current/toy_models/hipolito2016.py"
       ]
+    },
+    {
+      "description": "Retired the unexported Chaudhary 2021 Hartree diagnostic module from the TBG system package; the maintained Chaudhary shift-current adapter remains in mean_field.systems.tbg.chaudhary2021.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 733,
+      "slice": "retire_chaudhary_hartree_diagnostic_module",
+      "tracked_files_deleted": [
+        "src/mean_field/systems/tbg/chaudhary2021_hartree.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -625,8 +635,8 @@
     ]
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
-  "src_python_files": 199,
-  "src_python_lines": 67511,
+  "src_python_files": 198,
+  "src_python_lines": 66778,
   "top_30_files": [
     {
       "lines": 2361,
@@ -717,10 +727,6 @@
       "path": "src/mean_field/systems/tbg/zero_field/hf_contracts.py"
     },
     {
-      "lines": 733,
-      "path": "src/mean_field/systems/tbg/chaudhary2021_hartree.py"
-    },
-    {
       "lines": 710,
       "path": "src/mean_field/core/hf/tdhf.py"
     },
@@ -747,6 +753,10 @@
     {
       "lines": 617,
       "path": "src/mean_field/core/hf/overlap.py"
+    },
+    {
+      "lines": 565,
+      "path": "src/analysis/topology/core.py"
     }
   ]
 }

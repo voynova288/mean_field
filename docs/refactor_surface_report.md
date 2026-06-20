@@ -4,8 +4,8 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- `src` Python files: 199
-- `src` Python lines: 67511
+- `src` Python files: 198
+- `src` Python lines: 66778
 - Files over 1000 lines: 15
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -214,6 +214,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 778.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### retire_chaudhary_hartree_diagnostic_module
+
+- Retired the unexported Chaudhary 2021 Hartree diagnostic module from the TBG system package; the maintained Chaudhary shift-current adapter remains in mean_field.systems.tbg.chaudhary2021.
+- Deleted files: `src/mean_field/systems/tbg/chaudhary2021_hartree.py`.
+- Gross legacy LOC removed/thinned: 733.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -240,7 +247,6 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 786 | `src/mean_field/systems/RnG_hBN/cache.py` |
 | 772 | `src/analysis/shift_current/core.py` |
 | 735 | `src/mean_field/systems/tbg/zero_field/hf_contracts.py` |
-| 733 | `src/mean_field/systems/tbg/chaudhary2021_hartree.py` |
 | 710 | `src/mean_field/core/hf/tdhf.py` |
 | 687 | `src/mean_field/systems/tmbg/full_flavor_ivc.py` |
 | 686 | `src/mean_field/systems/RnG_hBN/hf_contracts.py` |
@@ -248,6 +254,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 643 | `src/mean_field/systems/htg/supercell_contracts.py` |
 | 627 | `src/mean_field/benchmarks.py` |
 | 617 | `src/mean_field/core/hf/overlap.py` |
+| 565 | `src/analysis/topology/core.py` |
 
 ## Direct private-system imports in workflow surfaces
 
