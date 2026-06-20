@@ -563,6 +563,14 @@
       "legacy_lines_removed_gross": 133,
       "slice": "archive_retire_rlg_hbn_paper_band_helpers",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Retired HTG/HTQG system-local central-band metric wrappers; callers now use the generic core band metric helper directly.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 31,
+      "slice": "retire_system_central_band_metric_wrappers",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -600,11 +608,11 @@
     "bands.py": {
       "files": [
         {
-          "lines": 130,
+          "lines": 115,
           "path": "src/mean_field/systems/htqg/bands.py"
         },
         {
-          "lines": 113,
+          "lines": 101,
           "path": "src/mean_field/systems/htg/bands.py"
         },
         {
@@ -624,7 +632,7 @@
           "path": "src/mean_field/systems/tdbg/bands.py"
         }
       ],
-      "total_lines": 507
+      "total_lines": 480
     },
     "topology.py": {
       "files": [
@@ -722,14 +730,6 @@
           "src/mean_field/systems/tmbg/bands.py"
         ],
         "symbol": "compute_bands_on_grid"
-      },
-      {
-        "count": 2,
-        "paths": [
-          "src/mean_field/systems/htg/bands.py",
-          "src/mean_field/systems/htqg/bands.py"
-        ],
-        "symbol": "estimate_central_band_metrics"
       }
     ],
     "topology.py": [
@@ -776,9 +776,9 @@
     ],
     "validation.py": []
   },
-  "root": "/data/home/ziyuzhu/tmp/mean_field_report_bands_archive_20260620_224350",
+  "root": "/data/home/ziyuzhu/tmp/mean_field_report_band_metric_20260620_224804",
   "src_python_files": 177,
-  "src_python_lines": 56824,
+  "src_python_lines": 56797,
   "top_30_files": [
     {
       "lines": 2305,
@@ -902,6 +902,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 62945,
-  "tracked_text_lines": 66987
+  "tracked_python_lines": 62918,
+  "tracked_text_lines": 66977
 }

@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 66987
-- Tracked Python lines: 62945
+- Tracked text lines: 66977
+- Tracked Python lines: 62918
 - Tracked Julia lines: 826
 - `src` Python files: 177
-- `src` Python lines: 56824
+- `src` Python lines: 56797
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -455,6 +455,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 133.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### retire_system_central_band_metric_wrappers
+
+- Retired HTG/HTQG system-local central-band metric wrappers; callers now use the generic core band metric helper directly.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 31.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -504,12 +511,12 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ### `bands.py`
 
-Total lines: 507
+Total lines: 480
 
 | Lines | Path |
 |---:|---|
-| 130 | `src/mean_field/systems/htqg/bands.py` |
-| 113 | `src/mean_field/systems/htg/bands.py` |
+| 115 | `src/mean_field/systems/htqg/bands.py` |
+| 101 | `src/mean_field/systems/htg/bands.py` |
 | 73 | `src/mean_field/systems/RnG_hBN/bands.py` |
 | 72 | `src/mean_field/systems/atmg/bands.py` |
 | 64 | `src/mean_field/systems/tmbg/bands.py` |
@@ -546,7 +553,6 @@ Total lines: 469
 | `_prepare_band_diagonalizer` | 2 | `src/mean_field/systems/htg/bands.py`, `src/mean_field/systems/htqg/bands.py` |
 | `compute_bands_along_path` | 6 | `src/mean_field/systems/RnG_hBN/bands.py`, `src/mean_field/systems/atmg/bands.py`, `src/mean_field/systems/htg/bands.py`, `src/mean_field/systems/htqg/bands.py`, `src/mean_field/systems/tdbg/bands.py`, `src/mean_field/systems/tmbg/bands.py` |
 | `compute_bands_on_grid` | 6 | `src/mean_field/systems/RnG_hBN/bands.py`, `src/mean_field/systems/atmg/bands.py`, `src/mean_field/systems/htg/bands.py`, `src/mean_field/systems/htqg/bands.py`, `src/mean_field/systems/tdbg/bands.py`, `src/mean_field/systems/tmbg/bands.py` |
-| `estimate_central_band_metrics` | 2 | `src/mean_field/systems/htg/bands.py`, `src/mean_field/systems/htqg/bands.py` |
 
 ### `validation.py`
 
