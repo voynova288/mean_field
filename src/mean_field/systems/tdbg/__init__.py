@@ -38,7 +38,6 @@ from .hf import (
     validate_tdbg_interaction_settings,
     validate_tdbg_projected_hf_config,
 )
-from .plot import TDBGPathPlotTrace, write_tdbg_path_band_plot
 from .shift_current import (
     JOYA_GAMMA_CENTERED_FRAC_SHIFT,
     TDBGShiftCurrentPoint,
@@ -67,7 +66,6 @@ __all__ = [
     'TDBGFlavorCandidateEnergy',
     'TDBGInteractionSettings',
     'TDBGOnsiteHubbardFormFactorSummary',
-    'TDBGPathPlotTrace',
     'TDBGProjectedHFConfig',
     'TDBGProjectedHFData',
     'TDBGProjectedHFResult',
@@ -120,6 +118,5 @@ __all__ = [
     'tdbg_projected_hf_result_to_hf_run_result',
     'validate_tdbg_interaction_settings',
     'validate_tdbg_projected_hf_config',
-    'write_tdbg_path_band_plot',
     'zero_second_derivative',
 ]

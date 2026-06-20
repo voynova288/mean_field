@@ -107,7 +107,6 @@ from .interaction import (
 from .lattice import RLGhBNLattice, build_kpath_from_nodes, build_moire_k_grid, build_rlg_hbn_lattice, build_standard_kpath
 from .model import RLGhBNModel
 from .params import MOIRE_PARAMETER_TABLE, RLGhBNParams, table_ii_moire_parameters
-from .plot import RLGhBNPathPlotTrace, path_bandwidth_mev, write_rlg_hbn_path_band_plot
 from .screening import (
     InterlayerHartreeResult,
     LayerChargeResult,
@@ -174,7 +173,6 @@ __all__ = [
     "RLGhBNLayerOverlapBlockSet",
     "RLGhBNModel",
     "RLGhBNParams",
-    "RLGhBNPathPlotTrace",
     "RLGhBNProjectedBasisData",
     "RLGhBNRunHFConfig",
     "RLGhBNTDHFInteraction",
@@ -251,7 +249,6 @@ __all__ = [
     "normalize_rlg_hbn_init_mode",
     "evaluate_rlg_hbn_hf_path",
     "load_rlg_hbn_tdhf_run_from_archive",
-    "path_bandwidth_mev",
     "q0_interlayer_hartree_mev_nm2",
     "reproduce_paper_checkpoints",
     "rlg_hbn_density_delta",
@@ -282,5 +279,4 @@ __all__ = [
     "validate_physics",
     "validate_rlg_hbn_tdhf_canonical_orbital_parity",
     "valence_band_count",
-    "write_rlg_hbn_path_band_plot",
 ]
