@@ -1,7 +1,7 @@
 #!/bin/bash
 # Usage:
 #   sbatch scripts/submit_mean_field.sbatch python scripts/mean_field_tools.py tmbg reproduce-checkpoints --output-dir results/demo
-#   sbatch -p test -c 8 --mem=32G scripts/submit_mean_field.sbatch julia scripts/mean_field_tools.jl inspect_b0_grid_overlap_julia
+#   sbatch -p test -c 8 --mem=32G scripts/submit_mean_field.sbatch julia scripts/mean_field_tools.jl export_b0_parameter_reference_from_julia
 
 #SBATCH -J mean_field
 #SBATCH --account=hmt03

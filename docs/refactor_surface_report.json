@@ -273,6 +273,20 @@
       "tracked_files_deleted": [
         "src/mean_field/systems/tmbg/full_flavor_ivc.py"
       ]
+    },
+    {
+      "description": "Retired legacy B0 Julia inspect-only helpers from scripts/_julia_impl while preserving the Julia dispatcher and export/reference commands.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 699,
+      "slice": "retire_legacy_b0_julia_inspect_helpers",
+      "tracked_files_deleted": [
+        "scripts/_julia_impl/inspect_b0_grid_overlap_julia.jl",
+        "scripts/_julia_impl/inspect_b0_hf_first_iteration_julia.jl",
+        "scripts/_julia_impl/inspect_b0_hf_iteration_trace_julia.jl",
+        "scripts/_julia_impl/inspect_b0_hf_shift_metrics_julia.jl",
+        "scripts/_julia_impl/inspect_b0_overlap_reference_julia.jl"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -778,5 +792,8 @@
       "lines": 528,
       "path": "src/mean_field/systems/tbg/zero_field/artifacts.py"
     }
-  ]
+  ],
+  "tracked_julia_lines": 831,
+  "tracked_python_lines": 71978,
+  "tracked_text_lines": 75739
 }

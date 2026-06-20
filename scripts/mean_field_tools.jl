@@ -13,11 +13,6 @@ const COMMANDS = Dict(
     "export_b0_hf_iteration_snapshot_julia" => "export_b0_hf_iteration_snapshot_julia.jl",
     "export_b0_hf_state_density_julia" => "export_b0_hf_state_density_julia.jl",
     "export_b0_parameter_reference_from_julia" => "export_b0_parameter_reference_from_julia.jl",
-    "inspect_b0_grid_overlap_julia" => "inspect_b0_grid_overlap_julia.jl",
-    "inspect_b0_hf_first_iteration_julia" => "inspect_b0_hf_first_iteration_julia.jl",
-    "inspect_b0_hf_iteration_trace_julia" => "inspect_b0_hf_iteration_trace_julia.jl",
-    "inspect_b0_hf_shift_metrics_julia" => "inspect_b0_hf_shift_metrics_julia.jl",
-    "inspect_b0_overlap_reference_julia" => "inspect_b0_overlap_reference_julia.jl",
 )
 
 function print_help()

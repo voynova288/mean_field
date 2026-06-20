@@ -4,6 +4,9 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
+- Tracked text lines: 75739
+- Tracked Python lines: 71978
+- Tracked Julia lines: 831
 - `src` Python files: 196
 - `src` Python lines: 65742
 - Files over 1000 lines: 15
@@ -233,6 +236,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Retired the unexported Polshyn full-flavor IVC array-contract scaffold; no tracked production code imports it and the maintained Polshyn/Wang HF adapter remains in tmbg.polshyn_supercell.
 - Deleted files: `src/mean_field/systems/tmbg/full_flavor_ivc.py`.
 - Gross legacy LOC removed/thinned: 687.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
+### retire_legacy_b0_julia_inspect_helpers
+
+- Retired legacy B0 Julia inspect-only helpers from scripts/_julia_impl while preserving the Julia dispatcher and export/reference commands.
+- Deleted files: `scripts/_julia_impl/inspect_b0_grid_overlap_julia.jl`, `scripts/_julia_impl/inspect_b0_hf_first_iteration_julia.jl`, `scripts/_julia_impl/inspect_b0_hf_iteration_trace_julia.jl`, `scripts/_julia_impl/inspect_b0_hf_shift_metrics_julia.jl`, `scripts/_julia_impl/inspect_b0_overlap_reference_julia.jl`.
+- Gross legacy LOC removed/thinned: 699.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
 ## Top 30 Python files under `src`
