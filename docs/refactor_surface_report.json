@@ -383,6 +383,14 @@
       "legacy_lines_removed_gross": 285,
       "slice": "retire_htg_paper_plot_writers",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Retired the tMBG Fig. 2-like multi-panel paper-band composer and panel dataclass while keeping ordinary band, lattice, Berry-curvature, and flat-band-index plot helpers.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 159,
+      "slice": "retire_tmbg_paper_band_figure_writer",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -758,7 +766,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 193,
-  "src_python_lines": 61535,
+  "src_python_lines": 61370,
   "top_30_files": [
     {
       "lines": 2361,
@@ -882,6 +890,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 68168,
-  "tracked_text_lines": 72082
+  "tracked_python_lines": 67497,
+  "tracked_text_lines": 71426
 }

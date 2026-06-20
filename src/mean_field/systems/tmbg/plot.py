@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -9,18 +8,6 @@ from ...core.plotting.bands import format_kpath_axis, load_plot_backend, plot_ba
 from .bands import PathBandsResult
 from .lattice import TMBGLattice
 from .topology import TopologyResult
-
-
-@dataclass(frozen=True)
-class TMBGBandPlotPanel:
-    label: str
-    path_result: PathBandsResult
-    band_indices: tuple[int, ...] | None = None
-    flat_band_indices: tuple[int, int] | None = None
-    annotation: str | None = None
-    primary_label: str | None = None
-    overlay_path_results: tuple[PathBandsResult, ...] = ()
-    overlay_label: str | None = None
 
 
 def _load_plot_backend():
@@ -90,17 +77,6 @@ def infer_flat_band_indices(
     return best_pair
 
 
-def _resolve_flat_band_local_indices(panel: TMBGBandPlotPanel, selected_indices: np.ndarray) -> tuple[int | None, int | None]:
-    if panel.flat_band_indices is None:
-        if selected_indices.size < 2:
-            return None, None
-        local_valence, local_conduction = infer_flat_band_indices(panel.path_result.energies[:, selected_indices])
-        return int(local_valence), int(local_conduction)
-
-    selected_lookup = {int(index): ilocal for ilocal, index in enumerate(selected_indices.tolist())}
-    valence_abs, conduction_abs = (int(panel.flat_band_indices[0]), int(panel.flat_band_indices[1]))
-    return selected_lookup.get(valence_abs), selected_lookup.get(conduction_abs)
-
 
 def write_tmbg_band_plot(
     output_dir: Path | str,
@@ -135,143 +111,6 @@ def write_tmbg_band_plot(
     plt.close(fig)
     return paths
 
-
-def write_tmbg_paper_band_figure(
-    output_dir: Path | str,
-    panels: tuple[TMBGBandPlotPanel, ...],
-    *,
-    stem: str = "fig2_like_bands",
-    title: str | None = None,
-    ylim: tuple[float, float] | None = None,
-) -> dict[str, Path]:
-    if not panels:
-        raise ValueError("Expected at least one panel to plot.")
-
-    plt = _load_plot_backend()
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    png_path = output_dir / f"{stem}.png"
-    pdf_path = output_dir / f"{stem}.pdf"
-
-    all_selected: list[np.ndarray] = []
-    resolved_panel_data: list[tuple[TMBGBandPlotPanel, np.ndarray]] = []
-    for panel in panels:
-        energies = np.asarray(panel.path_result.energies, dtype=float)
-        if panel.band_indices is None:
-            selected = energies
-        else:
-            selected = energies[:, panel.band_indices]
-        resolved_panel_data.append((panel, selected))
-        all_selected.append(selected)
-
-    if ylim is None:
-        if len(panels) == 3:
-            ylim = (-0.100, 0.100)
-        else:
-            stacked = np.concatenate([data.ravel() for data in all_selected])
-            ymin = float(np.min(stacked))
-            ymax = float(np.max(stacked))
-            pad = 0.05 * max(ymax - ymin, 1.0e-3)
-            ylim = (ymin - pad, ymax + pad)
-
-    fig, axes = plt.subplots(1, len(panels), figsize=(4.2 * len(panels), 4.6), sharey=True)
-    if len(panels) == 1:
-        axes = [axes]
-
-    for ax, (panel, selected) in zip(axes, resolved_panel_data, strict=True):
-        selected_indices = (
-            np.arange(panel.path_result.energies.shape[1], dtype=int)
-            if panel.band_indices is None
-            else np.asarray(panel.band_indices, dtype=int)
-        )
-        n_selected = selected.shape[1]
-        valence_idx, conduction_idx = _resolve_flat_band_local_indices(panel, selected_indices)
-
-        overlay_label_used = False
-        for overlay_result in panel.overlay_path_results:
-            overlay_energies = np.asarray(overlay_result.energies, dtype=float)
-            overlay_selected = overlay_energies if panel.band_indices is None else overlay_energies[:, panel.band_indices]
-            for ib in range(overlay_selected.shape[1]):
-                ax.plot(
-                    overlay_result.path.kdist,
-                    overlay_selected[:, ib],
-                    color="#58a6d6",
-                    lw=0.85,
-                    ls=(0, (4, 3)),
-                    alpha=0.95,
-                    zorder=1.8,
-                    label=panel.overlay_label if panel.overlay_label and not overlay_label_used and ib == 0 else None,
-                )
-            overlay_label_used = True
-
-        for ib in range(n_selected):
-            color = "#6b6b6b"
-            lw = 1.0
-            zorder = 2
-            if valence_idx is not None and ib == valence_idx:
-                color = "#c73e1d"
-                lw = 1.4
-                zorder = 3
-            if conduction_idx is not None and ib == conduction_idx:
-                color = "#1d4e89"
-                lw = 1.4
-                zorder = 3
-            ax.plot(
-                panel.path_result.path.kdist,
-                selected[:, ib],
-                color=color,
-                lw=lw,
-                marker="o",
-                markersize=1.6,
-                markerfacecolor=color,
-                markeredgecolor="#ffffff",
-                markeredgewidth=0.18,
-                zorder=zorder,
-                label=panel.primary_label if panel.primary_label and ib == 0 else None,
-            )
-
-        node_x = [float(node.k_dist) for node in panel.path_result.path.nodes]
-        node_labels = [_display_node_label(node.label) for node in panel.path_result.path.nodes]
-        for xpos in node_x:
-            ax.axvline(x=xpos, color="#b8b8b8", ls=":", lw=0.8, zorder=1)
-        ax.set_xticks(node_x)
-        ax.set_xticklabels(node_labels)
-        ax.set_xlim(float(node_x[0]), float(node_x[-1]))
-        ax.set_ylim(*ylim)
-        ax.set_xlabel("k-path")
-        ax.set_title(panel.label, fontsize=10)
-        if panel.annotation is not None:
-            ax.text(
-                0.03,
-                0.97,
-                panel.annotation,
-                transform=ax.transAxes,
-                ha="left",
-                va="top",
-                fontsize=8.4,
-                color="#1f1f1f",
-                bbox={
-                    "boxstyle": "round,pad=0.24",
-                    "facecolor": (1.0, 1.0, 1.0, 0.82),
-                    "edgecolor": "#d0d0d0",
-                    "linewidth": 0.6,
-                },
-                zorder=4,
-            )
-        if panel.overlay_label is not None:
-            ax.legend(loc="lower right", fontsize=7.2, frameon=False, handlelength=2.6)
-
-    axes[0].set_ylabel("Energy (eV)")
-    if title is not None:
-        fig.suptitle(title, fontsize=11, y=0.98)
-        fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.95))
-    else:
-        fig.tight_layout()
-
-    fig.savefig(png_path, dpi=300, bbox_inches="tight")
-    fig.savefig(pdf_path, bbox_inches="tight")
-    plt.close(fig)
-    return {"paper_band_plot_png": png_path, "paper_band_plot_pdf": pdf_path}
 
 
 def _hexagon_vertices(lattice: TMBGLattice) -> np.ndarray:

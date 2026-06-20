@@ -15,12 +15,10 @@ from .lattice import TMBGLattice, build_kpath_from_nodes, build_moire_k_grid, bu
 from .model import TMBGModel
 from .params import TMBGParameters, VALID_BERNAL_CONVENTIONS, VALID_BLG_STACKINGS, default_omega, default_omega_prime, hopping_to_velocity
 from .plot import (
-    TMBGBandPlotPanel,
     infer_flat_band_indices,
     write_tmbg_band_plot,
     write_tmbg_berry_curvature_plot,
     write_tmbg_lattice_plot,
-    write_tmbg_paper_band_figure,
 )
 from .topology import TopologyResult, compute_topology_from_eigenvectors, compute_topology_from_grid_result, compute_topology_on_grid
 from .validation import (
@@ -36,7 +34,6 @@ __all__ = [
     "TMBGModel",
     "TMBGParameters",
     "TMBGLattice",
-    "TMBGBandPlotPanel",
     "TopologyResult",
     "ValidationCheck",
     "ValidationReport",
@@ -66,5 +63,4 @@ __all__ = [
     "write_tmbg_band_plot",
     "write_tmbg_berry_curvature_plot",
     "write_tmbg_lattice_plot",
-    "write_tmbg_paper_band_figure",
 ]
