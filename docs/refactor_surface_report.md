@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 67861
-- Tracked Python lines: 63866
+- Tracked text lines: 67845
+- Tracked Python lines: 63835
 - Tracked Julia lines: 826
 - `src` Python files: 179
-- `src` Python lines: 57673
+- `src` Python lines: 57642
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -413,12 +413,19 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 84.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### inline_rlg_hbn_hf_problem_callables
+
+- Removed exported RnG/hBN HF initializer and density-builder wrapper classes that were only used by build_rlg_hbn_hf_problem; equivalent initializer and density-update closures now feed the core HF problem directly.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 31.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
 |---:|---|
 | 2305 | `src/mean_field/systems/htg/mean_field_adapter.py` |
-| 2279 | `src/mean_field/systems/RnG_hBN/hf.py` |
+| 2252 | `src/mean_field/systems/RnG_hBN/hf.py` |
 | 1640 | `src/mean_field/systems/RnG_hBN/tdhf.py` |
 | 1566 | `src/mean_field/devtools/backfill_canonical_hf_sidecars.py` |
 | 1563 | `src/mean_field/devtools/run_rlg_hbn_paper_hf.py` |

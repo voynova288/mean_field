@@ -508,6 +508,14 @@
       "legacy_lines_removed_gross": 84,
       "slice": "thin_rlg_hbn_hf_overlap_density_helpers",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Removed exported RnG/hBN HF initializer and density-builder wrapper classes that were only used by build_rlg_hbn_hf_problem; equivalent initializer and density-update closures now feed the core HF problem directly.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 31,
+      "slice": "inline_rlg_hbn_hf_problem_callables",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -769,16 +777,16 @@
     ],
     "validation.py": []
   },
-  "root": "/data/home/ziyuzhu/tmp/mean_field_report_rlg_hbn_hf_20260620_205254",
+  "root": "/data/home/ziyuzhu/tmp/mean_field_report_rlg_hbn_classes_20260620_205746",
   "src_python_files": 179,
-  "src_python_lines": 57673,
+  "src_python_lines": 57642,
   "top_30_files": [
     {
       "lines": 2305,
       "path": "src/mean_field/systems/htg/mean_field_adapter.py"
     },
     {
-      "lines": 2279,
+      "lines": 2252,
       "path": "src/mean_field/systems/RnG_hBN/hf.py"
     },
     {
@@ -895,6 +903,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 63866,
-  "tracked_text_lines": 67861
+  "tracked_python_lines": 63835,
+  "tracked_text_lines": 67845
 }
