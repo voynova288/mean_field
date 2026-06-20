@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Literal
-
 import numpy as np
 
 from mean_field.core.io import write_json_artifact
@@ -49,41 +47,3 @@ def complex_from_pairs(values: np.ndarray) -> np.ndarray:
     if pairs.shape[-1] != 2:
         raise ValueError(f"Expected final axis of length 2 for complex pairs, got {pairs.shape}")
     return np.asarray(pairs[..., 0] + 1j * pairs[..., 1], dtype=np.complex128)
-
-
-def select_flat_pair_window(
-    total_bands: int,
-    flat_pair: tuple[int, int],
-    bands_per_side: int,
-    *,
-    mode: Literal["edges", "center"] = "edges",
-) -> tuple[int, ...]:
-    if mode == "center":
-        center = (int(flat_pair[0]) + int(flat_pair[1])) // 2
-        lower = max(0, center - int(bands_per_side))
-        upper = min(int(total_bands), center + int(bands_per_side) + 2)
-    else:
-        lower = max(0, int(flat_pair[0]) - int(bands_per_side))
-        upper = min(int(total_bands), int(flat_pair[1]) + int(bands_per_side) + 1)
-    return tuple(range(lower, upper))
-
-
-def select_energy_window_bands(
-    energies: np.ndarray,
-    *,
-    emin: float,
-    emax: float,
-    fallback_each_side: int,
-    fallback_include_center: bool = True,
-) -> np.ndarray:
-    energies = np.asarray(energies, dtype=float)
-    band_min = np.min(energies, axis=0)
-    band_max = np.max(energies, axis=0)
-    indices = np.nonzero((band_max >= float(emin)) & (band_min <= float(emax)))[0]
-    if indices.size > 0:
-        return indices
-    center = energies.shape[1] // 2
-    start = max(0, center - int(fallback_each_side))
-    center_padding = 1 if fallback_include_center else 0
-    stop = min(energies.shape[1], center + int(fallback_each_side) + center_padding)
-    return np.arange(start, stop, dtype=int)

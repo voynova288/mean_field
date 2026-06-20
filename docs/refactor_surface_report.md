@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 71115
-- Tracked Python lines: 67122
+- Tracked text lines: 71090
+- Tracked Python lines: 67082
 - Tracked Julia lines: 826
 - `src` Python files: 191
-- `src` Python lines: 60995
+- `src` Python lines: 60955
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -348,6 +348,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Removed unreferenced full-BZ SLG toy integration and C3 diagnostic helpers while keeping the point-level Hamiltonian, derivatives, and diagonalizer used by gauge-safe response tests.
 - Deleted files: none; this slice thinned duplicated implementations in place.
 - Gross legacy LOC removed/thinned: 186.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
+### prune_devtool_runtime_selectors
+
+- Removed unused band-window selector helpers from the devtool runtime module while preserving JSON, CSV, complex-pair, and login-node guard utilities used by tracked devtools.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 38.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
 ## Top 30 Python files under `src`

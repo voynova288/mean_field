@@ -419,6 +419,14 @@
       "legacy_lines_removed_gross": 186,
       "slice": "thin_slg_toy_point_reference",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Removed unused band-window selector helpers from the devtool runtime module while preserving JSON, CSV, complex-pair, and login-node guard utilities used by tracked devtools.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 38,
+      "slice": "prune_devtool_runtime_selectors",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -794,7 +802,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 191,
-  "src_python_lines": 60995,
+  "src_python_lines": 60955,
   "top_30_files": [
     {
       "lines": 2361,
@@ -918,6 +926,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 67122,
-  "tracked_text_lines": 71115
+  "tracked_python_lines": 67082,
+  "tracked_text_lines": 71090
 }
