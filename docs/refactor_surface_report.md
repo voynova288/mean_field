@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 71426
-- Tracked Python lines: 67497
+- Tracked text lines: 71360
+- Tracked Python lines: 67416
 - Tracked Julia lines: 826
-- `src` Python files: 193
-- `src` Python lines: 61370
+- `src` Python files: 192
+- `src` Python lines: 61289
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -327,6 +327,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Retired the tMBG Fig. 2-like multi-panel paper-band composer and panel dataclass while keeping ordinary band, lattice, Berry-curvature, and flat-band-index plot helpers.
 - Deleted files: none; this slice thinned duplicated implementations in place.
 - Gross legacy LOC removed/thinned: 159.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
+### retire_htqg_private_plot_helpers
+
+- Deleted the unexported HTQG private plotting helper module; reusable plotting remains in mean_field.core.plotting and active system plot adapters.
+- Deleted files: `src/mean_field/systems/htqg/plot.py`.
+- Gross legacy LOC removed/thinned: 81.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
 ## Top 30 Python files under `src`

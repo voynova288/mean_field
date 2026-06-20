@@ -391,6 +391,16 @@
       "legacy_lines_removed_gross": 159,
       "slice": "retire_tmbg_paper_band_figure_writer",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Deleted the unexported HTQG private plotting helper module; reusable plotting remains in mean_field.core.plotting and active system plot adapters.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 81,
+      "slice": "retire_htqg_private_plot_helpers",
+      "tracked_files_deleted": [
+        "src/mean_field/systems/htqg/plot.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -765,8 +775,8 @@
     ]
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
-  "src_python_files": 193,
-  "src_python_lines": 61370,
+  "src_python_files": 192,
+  "src_python_lines": 61289,
   "top_30_files": [
     {
       "lines": 2361,
@@ -890,6 +900,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 67497,
-  "tracked_text_lines": 71426
+  "tracked_python_lines": 67416,
+  "tracked_text_lines": 71360
 }
