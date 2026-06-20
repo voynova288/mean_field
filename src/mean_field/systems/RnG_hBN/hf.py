@@ -9,6 +9,7 @@ import numpy as np
 
 from ...core.lattice import KPath
 from ...core.hf import (
+    average_reference_density as core_average_reference_density,
     DensityUpdateResult,
     HartreeFockKernel,
     HartreeFockProblem,
@@ -26,6 +27,7 @@ from ...core.hf import (
     find_chemical_potential,
     occupied_state_mask,
     run_hartree_fock_problem,
+    shift_wavefunction_grid,
 )
 from .hamiltonian import build_hamiltonian, diagonalize_hamiltonian, valence_band_count
 from .interaction import RLGhBNInteractionParams, VALID_INTERACTION_SCHEMES, layer_coulomb_matrix_mev_nm2
@@ -327,15 +329,7 @@ def active_band_indices_for_interaction(
 
 
 def rlg_hbn_average_reference_density(nt: int, nk: int) -> np.ndarray:
-    nt = int(nt)
-    nk = int(nk)
-    if nt <= 0 or nk <= 0:
-        raise ValueError(f"Expected positive nt and nk, got nt={nt}, nk={nk}")
-    reference = np.zeros((nt, nt, nk), dtype=np.complex128)
-    eye = 0.5 * np.eye(nt, dtype=np.complex128)
-    for ik in range(nk):
-        reference[:, :, ik] = eye
-    return reference
+    return core_average_reference_density(int(nt), int(nk), value=0.5)
 
 
 def _infer_rlg_hbn_band_count(nt: int, *, n_spin: int = 2, n_eta: int = 2) -> int:
@@ -812,8 +806,6 @@ def _remote_average_density_delta(remote_basis_data: RLGhBNProjectedBasisData, w
 
 def _prepare_remote_average_source(
     source_basis_data: RLGhBNProjectedBasisData,
-    *,
-    shifts: tuple[tuple[int, int], ...] | None = None,
 ) -> _RLGhBNRemoteAverageSource | None:
     if source_basis_data.interaction.scheme != "average":
         return None
@@ -917,7 +909,7 @@ def _layer_traces_for_diagonal_band_weights(
             order="F",
         )
         raw_m, raw_n = _raw_overlap_shift_for_physical_g((m, n), valley=int(valley))
-        shifted = _source_grid_shift_without_wrap(source_grid, raw_m, raw_n)
+        shifted = shift_wavefunction_grid(source_grid, -raw_m, -raw_n, boundary_mode="zero_fill", grid_axes=(1, 2))
         for layer in range(layer_count):
             layer_indices = _rlg_hbn_layer_local_indices(basis, layer, layer_count=layer_count)
             diagonal = np.sum(
@@ -1024,7 +1016,7 @@ def build_rlg_hbn_remote_average_hamiltonian(
     beta: float = 1.0,
 ) -> np.ndarray:
     source_basis = target_basis_data if source_basis_data is None else source_basis_data
-    remote_source = _prepare_remote_average_source(source_basis, shifts=shifts)
+    remote_source = _prepare_remote_average_source(source_basis)
     return _remote_average_hamiltonian_from_source(
         target_basis_data,
         source_basis,
@@ -1174,22 +1166,6 @@ def _rlg_hbn_layer_local_indices(
     return component_group_indices(basis, ComponentGroup(group_name, np.asarray([2 * layer_index, 2 * layer_index + 1])))
 
 
-def _source_grid_shift_without_wrap(source_grid: np.ndarray, m: int, n: int) -> np.ndarray:
-    if source_grid.ndim != 4:
-        raise ValueError(f"Expected source grid shape (local, nx, ny, states), got {source_grid.shape}")
-    shifted = np.zeros_like(source_grid)
-    _, nx, ny, _ = source_grid.shape
-    for ix in range(nx):
-        src_ix = ix + int(m)
-        if src_ix < 0 or src_ix >= nx:
-            continue
-        for iy in range(ny):
-            src_iy = iy + int(n)
-            if src_iy < 0 or src_iy >= ny:
-                continue
-            shifted[:, ix, iy, :] = source_grid[:, src_ix, src_iy, :]
-    return shifted
-
 
 def calculate_layer_projected_overlap_between(
     target: ProjectedWavefunctionBasis,
@@ -1251,7 +1227,7 @@ def calculate_layer_projected_overlap_between(
             order="F",
         )
         raw_m, raw_n = _raw_overlap_shift_for_physical_g((m, n), valley=int(valley))
-        shifted = _source_grid_shift_without_wrap(source_grid, raw_m, raw_n)
+        shifted = shift_wavefunction_grid(source_grid, -raw_m, -raw_n, boundary_mode="zero_fill", grid_axes=(1, 2))
         for layer in range(layer_count):
             target_layer_indices = _rlg_hbn_layer_local_indices(target, layer, layer_count=layer_count)
             source_layer_indices = _rlg_hbn_layer_local_indices(source, layer, layer_count=layer_count)
@@ -1327,53 +1303,7 @@ def build_rlg_hbn_layer_overlap_blocks(
     *,
     shifts: tuple[tuple[int, int], ...] | None = None,
 ) -> RLGhBNLayerOverlapBlockSet:
-    resolved_shifts = shifts if shifts is not None else interaction_shifts_for_cutoff(basis_data.basis_model.lattice, basis_data.interaction)
-    resolved_shifts = tuple((int(m), int(n)) for m, n in resolved_shifts)
-    gvecs = np.asarray(
-        [m * basis_data.basis_model.lattice.g_m1 + n * basis_data.basis_model.lattice.g_m2 for m, n in resolved_shifts],
-        dtype=np.complex128,
-    )
-
-    layer_overlaps: dict[tuple[int, int], np.ndarray] = {}
-    layer_diagonal_overlaps: dict[tuple[int, int], np.ndarray] = {}
-    hartree_layer_coulomb: dict[tuple[int, int], np.ndarray] = {}
-    fock_layer_coulomb: dict[tuple[int, int], np.ndarray] = {}
-    layer_count = basis_data.basis_model.params.layer_count
-    layer_spacing = basis_data.basis_model.params.layer_spacing_nm
-
-    for shift, gvec in zip(resolved_shifts, gvecs, strict=True):
-        overlap = calculate_layer_projected_overlap_between(
-            basis_data.basis,
-            basis_data.basis,
-            shift[0],
-            shift[1],
-            layer_count=layer_count,
-            valleys=basis_data.valleys,
-        )
-        layer_overlaps[shift] = overlap
-        layer_diagonal_overlaps[shift] = diagonal_layer_overlap_blocks(overlap)
-        hartree_layer_coulomb[shift] = layer_coulomb_matrix_mev_nm2(
-            abs(complex(gvec)),
-            layer_count,
-            basis_data.interaction,
-            layer_spacing_nm=layer_spacing,
-        )
-        qvals = basis_data.kvec[:, None] - basis_data.kvec[None, :] + complex(gvec)
-        fock_layer_coulomb[shift] = _layer_coulomb_tensor_for_qvals(
-            qvals,
-            layer_count=layer_count,
-            interaction=basis_data.interaction,
-            layer_spacing_nm=layer_spacing,
-        )
-
-    return RLGhBNLayerOverlapBlockSet(
-        shifts=resolved_shifts,
-        gvecs=gvecs,
-        layer_overlaps=layer_overlaps,
-        layer_diagonal_overlaps=layer_diagonal_overlaps,
-        hartree_layer_coulomb=hartree_layer_coulomb,
-        fock_layer_coulomb=fock_layer_coulomb,
-    )
+    return build_rlg_hbn_layer_overlap_blocks_between(basis_data, basis_data, shifts=shifts)
 
 
 def build_rlg_hbn_layer_overlap_blocks_between(
@@ -1658,10 +1588,7 @@ def evaluate_rlg_hbn_hf_path(
     source_overlap_blocks = run.overlap_blocks
     density = np.asarray(run.state.density, dtype=np.complex128)
     kvec = np.asarray(path.kvec, dtype=np.complex128)
-    remote_source = _prepare_remote_average_source(
-        source_basis_data,
-        shifts=source_overlap_blocks.shifts,
-    )
+    remote_source = _prepare_remote_average_source(source_basis_data)
 
     hamiltonian_chunks: list[np.ndarray] = []
     energy_chunks: list[np.ndarray] = []
@@ -1912,20 +1839,6 @@ def rlg_hbn_flavor_occupation_counts_for_init_mode(
     return tuple(int(value) for value in counts.reshape(-1, order="C"))
 
 
-def _apply_random_rotation(
-    density: np.ndarray,
-    *,
-    reference_density: np.ndarray,
-    alpha: float,
-    seed: int,
-) -> None:
-    apply_random_projector_rotation(
-        density,
-        reference_density=reference_density,
-        alpha=alpha,
-        seed=seed,
-    )
-
 def initialize_rlg_hbn_density(
     h0: np.ndarray,
     *,
@@ -2010,7 +1923,12 @@ def initialize_rlg_hbn_density(
                 )
 
     if init_mode == "perturbed":
-        _apply_random_rotation(density, reference_density=reference_density, alpha=0.05, seed=seed)
+        apply_random_projector_rotation(
+            density,
+            reference_density=reference_density,
+            alpha=0.05,
+            seed=seed,
+        )
     return density
 
 
