@@ -23,7 +23,6 @@ MODULE_COMMANDS = {
     "compare_tbg_crpa_fig1e": ("mean_field.devtools.compare_tbg_crpa_fig1e", ()),
 
     "merge_tbg_crpa_chunks": ("mean_field.devtools.merge_tbg_crpa_chunks", ()),
-    "prepare_tbg_crpa_bm": ("mean_field.devtools.prepare_tbg_crpa_bm", ()),
     "run_rlg_hbn_tdhf_q0": ("mean_field.devtools.run_rlg_hbn_tdhf_q0", ()),
     "run_tbg_crpa_chunk": ("mean_field.devtools.run_tbg_crpa_chunk", ()),
     "sync_benchmarks": ("mean_field.devtools.sync_benchmarks", ()),
@@ -31,7 +30,6 @@ MODULE_COMMANDS = {
     "sync_b0_benchmarks": ("mean_field.devtools.sync_benchmarks", ("b0",)),
     "sync_bm_unstrained_benchmark": ("mean_field.devtools.sync_benchmarks", ("bm-unstrained",)),
     "validate_rlg_hbn_fig6_prereqs": ("mean_field.devtools.validate_rlg_hbn_fig6_prereqs", ()),
-    "validate_tbg_crpa_artifact": ("mean_field.devtools.validate_tbg_crpa_artifact", ()),
 }
 
 
