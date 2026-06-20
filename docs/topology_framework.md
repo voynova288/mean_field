@@ -110,11 +110,9 @@ The following system modules now delegate their Berry geometry to `analysis.topo
 - `mean_field.systems.tdbg.topology` via `make_topology_adapter` (TDBG `topology_on_grid` uses q-site boundary sewing by default; pass `boundary_sewing=False` only for diagnostics)
 - `mean_field.systems.atmg.topology` via `make_topology_adapter`
 - `mean_field.systems.RnG_hBN.topology` via `make_topology_adapter` while keeping RnG/hBN reciprocal-shift sewing and paper-orientation choice system-local
-- `mean_field.systems.tmbg.topology_sewn`
 - `mean_field.systems.htg.topology` for HTG central-pair / supercell-HF wavefunction selection with HTG boundary sewing
-- `mean_field.systems.htqg.topology` for HTQG pilot central-pair Chern-basis and isolated-band adapters with HTQG boundary sewing
 
-The historical API is preserved: each system still returns its existing `TopologyResult` or `ChernBasisResult` shape where applicable.  New fields such as `berry_connection`, `min_link_magnitude`, and `index_metadata` are added to compatible dataclasses when practical.  Adapter listing means the code path delegates Berry links, plaquette flux, and Chern integration to `analysis.topology`; it is not by itself a production-level paper-reproduction validation.
+The maintained historical API is preserved for the remaining system adapters: each system still returns its existing `TopologyResult` or `ChernBasisResult` shape where applicable.  New fields such as `berry_connection`, `min_link_magnitude`, and `index_metadata` are added to compatible dataclasses when practical.  Adapter listing means the code path delegates Berry links, plaquette flux, and Chern integration to `analysis.topology`; it is not by itself a production-level paper-reproduction validation. Retired pilot/sewn adapters should stay in git history or ignored analysis workspaces rather than the public package surface.
 
 ## Validation scope
 
@@ -125,7 +123,6 @@ Local/internal validation coverage for this framework includes:
 - invariance under local single-band phase changes;
 - invariance under local multi-band unitary frame rotations;
 - explicit boundary sewing on a toy line bundle;
-- tMBG sewn topology smoke test;
 - compatibility wrappers for tMBG, TDBG, ATMG, and RnG/hBN;
 - HTG Chern-basis link calculations;
 Paper-specific saved-artifact mismatches and dated Slurm/test logs are kept in ignored local reports rather than this public framework contract.

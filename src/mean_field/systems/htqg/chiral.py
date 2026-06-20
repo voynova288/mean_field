@@ -11,7 +11,6 @@ from .domains import HTQGDomain, canonical_domain_key
 from .hamiltonian import build_hamiltonian
 from .lattice import HTQGLattice, build_htqg_lattice
 from .params import HTQGParams, theta_deg_from_alpha
-from .topology import sublattice_sigma_z
 
 PAPER_MAGIC_ALPHA: dict[str, tuple[float, ...]] = {
     "alpha_beta_gamma": (0.322, 0.931, 1.30, 2.12, 2.39, 3.09, 3.45, 4.18),
@@ -48,6 +47,13 @@ def build_chiral_lattice_from_alpha(
         n_shells=n_shells,
         graphene_lattice_constant_nm=resolved.graphene_lattice_constant_nm,
     )
+
+
+def sublattice_sigma_z(lattice: HTQGLattice) -> np.ndarray:
+    """Layer-resolved graphene sublattice operator in the HTQG basis."""
+
+    pattern = np.asarray([1.0, -1.0, 1.0, -1.0, 1.0, -1.0, 1.0, -1.0], dtype=float)
+    return np.diag(np.tile(pattern, lattice.n_g)).astype(np.complex128)
 
 
 def chiral_symmetry_residual(
@@ -165,4 +171,5 @@ __all__ = [
     "locate_magic_angle",
     "paper_magic_alpha",
     "scan_magic_bandwidths",
+    "sublattice_sigma_z",
 ]

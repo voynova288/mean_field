@@ -443,6 +443,17 @@
       "legacy_lines_removed_gross": 22,
       "slice": "prune_unused_lattice_path_helpers",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Retired unexported HTQG pilot topology and tMBG sewn topology adapter modules from the public package surface after owner approval; maintained topology wrappers still delegate to analysis.topology.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 537,
+      "slice": "retire_topology_pilot_sewn_adapters",
+      "tracked_files_deleted": [
+        "src/mean_field/systems/htqg/topology.py",
+        "src/mean_field/systems/tmbg/topology_sewn.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -517,10 +528,6 @@
           "path": "src/mean_field/systems/htg/topology.py"
         },
         {
-          "lines": 304,
-          "path": "src/mean_field/systems/htqg/topology.py"
-        },
-        {
           "lines": 167,
           "path": "src/mean_field/systems/tdbg/topology.py"
         },
@@ -533,7 +540,7 @@
           "path": "src/mean_field/systems/atmg/topology.py"
         }
       ],
-      "total_lines": 1362
+      "total_lines": 1058
     },
     "validation.py": {
       "files": [
@@ -638,22 +645,6 @@
     ],
     "topology.py": [
       {
-        "count": 2,
-        "paths": [
-          "src/mean_field/systems/htg/topology.py",
-          "src/mean_field/systems/htqg/topology.py"
-        ],
-        "symbol": "ChernBasisResult"
-      },
-      {
-        "count": 2,
-        "paths": [
-          "src/mean_field/systems/htg/topology.py",
-          "src/mean_field/systems/htqg/topology.py"
-        ],
-        "symbol": "_central_eigensystem"
-      },
-      {
         "count": 4,
         "paths": [
           "src/mean_field/systems/RnG_hBN/topology.py",
@@ -682,29 +673,12 @@
         "symbol": "_topology_adapters"
       },
       {
-        "count": 3,
+        "count": 2,
         "paths": [
           "src/mean_field/systems/RnG_hBN/topology.py",
-          "src/mean_field/systems/htg/topology.py",
-          "src/mean_field/systems/htqg/topology.py"
+          "src/mean_field/systems/htg/topology.py"
         ],
         "symbol": "apply"
-      },
-      {
-        "count": 2,
-        "paths": [
-          "src/mean_field/systems/htqg/topology.py",
-          "src/mean_field/systems/tdbg/topology.py"
-        ],
-        "symbol": "boundary_sewing_transforms"
-      },
-      {
-        "count": 2,
-        "paths": [
-          "src/mean_field/systems/htg/topology.py",
-          "src/mean_field/systems/htqg/topology.py"
-        ],
-        "symbol": "compute_chern_basis_on_grid"
       },
       {
         "count": 4,
@@ -749,38 +723,6 @@
       {
         "count": 2,
         "paths": [
-          "src/mean_field/systems/htg/topology.py",
-          "src/mean_field/systems/htqg/topology.py"
-        ],
-        "symbol": "integer_residual_a"
-      },
-      {
-        "count": 2,
-        "paths": [
-          "src/mean_field/systems/htg/topology.py",
-          "src/mean_field/systems/htqg/topology.py"
-        ],
-        "symbol": "integer_residual_b"
-      },
-      {
-        "count": 2,
-        "paths": [
-          "src/mean_field/systems/htg/topology.py",
-          "src/mean_field/systems/htqg/topology.py"
-        ],
-        "symbol": "sublattice_sigma_z"
-      },
-      {
-        "count": 2,
-        "paths": [
-          "src/mean_field/systems/htg/topology.py",
-          "src/mean_field/systems/htqg/topology.py"
-        ],
-        "symbol": "to_dict"
-      },
-      {
-        "count": 2,
-        "paths": [
           "src/mean_field/systems/RnG_hBN/topology.py",
           "src/mean_field/systems/tdbg/topology.py"
         ],
@@ -817,8 +759,8 @@
     ]
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
-  "src_python_files": 191,
-  "src_python_lines": 60854,
+  "src_python_files": 189,
+  "src_python_lines": 60324,
   "top_30_files": [
     {
       "lines": 2361,
@@ -942,6 +884,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 66981,
-  "tracked_text_lines": 71004
+  "tracked_python_lines": 66451,
+  "tracked_text_lines": 70486
 }
