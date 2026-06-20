@@ -331,6 +331,14 @@
       "tracked_files_deleted": [
         "src/mean_field/systems/tmbg/cross_check.py"
       ]
+    },
+    {
+      "description": "Retired the optional tMBG node-exchange and C3 diagnostic branches from validate_physics while keeping compatibility kwargs and skipped report entries.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 50,
+      "slice": "retire_tmbg_optional_validation_diagnostics",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -426,7 +434,7 @@
     "validation.py": {
       "files": [
         {
-          "lines": 227,
+          "lines": 201,
           "path": "src/mean_field/systems/tmbg/validation.py"
         },
         {
@@ -450,7 +458,7 @@
           "path": "src/mean_field/systems/htg/validation.py"
         }
       ],
-      "total_lines": 949
+      "total_lines": 923
     }
   },
   "phase2_targets": {
@@ -706,7 +714,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 195,
-  "src_python_lines": 64098,
+  "src_python_lines": 64072,
   "top_30_files": [
     {
       "lines": 2361,
@@ -830,6 +838,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 70225,
-  "tracked_text_lines": 74061
+  "tracked_python_lines": 70199,
+  "tracked_text_lines": 74052
 }

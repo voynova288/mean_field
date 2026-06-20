@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 74061
-- Tracked Python lines: 70225
+- Tracked text lines: 74052
+- Tracked Python lines: 70199
 - Tracked Julia lines: 826
 - `src` Python files: 195
-- `src` Python lines: 64098
+- `src` Python lines: 64072
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -280,6 +280,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 345.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### retire_tmbg_optional_validation_diagnostics
+
+- Retired the optional tMBG node-exchange and C3 diagnostic branches from validate_physics while keeping compatibility kwargs and skipped report entries.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 50.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -342,11 +349,11 @@ Total lines: 691
 
 ### `validation.py`
 
-Total lines: 949
+Total lines: 923
 
 | Lines | Path |
 |---:|---|
-| 227 | `src/mean_field/systems/tmbg/validation.py` |
+| 201 | `src/mean_field/systems/tmbg/validation.py` |
 | 193 | `src/mean_field/systems/htqg/validation.py` |
 | 156 | `src/mean_field/systems/RnG_hBN/validation.py` |
 | 138 | `src/mean_field/systems/atmg/validation.py` |

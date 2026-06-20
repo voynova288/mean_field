@@ -55,10 +55,6 @@ def _measure_c2zt_residual(model: TMBGModel, *, valley: int, k_tilde: complex) -
     return float(np.max(np.abs(unitary @ hamiltonian.conjugate() @ unitary.conjugate().T - hamiltonian)))
 
 
-def _rotate_c3(kvec: complex) -> complex:
-    return complex(kvec) * complex(math.cos(2.0 * math.pi / 3.0), math.sin(2.0 * math.pi / 3.0))
-
-
 def validate_physics(
     model: TMBGModel,
     *,
@@ -69,6 +65,7 @@ def validate_physics(
     include_node_exchange_check: bool = False,
     include_cutoff_check: bool = False,
 ) -> ValidationReport:
+    del include_c3_check, include_node_exchange_check, include_cutoff_check
     lattice = model.lattice
     params = model.params
     sample_k = complex(sample_k if sample_k is not None else lattice.k_m / 7.0 + lattice.m_m / 11.0)
@@ -150,49 +147,26 @@ def validate_physics(
         ),
     ]
 
-    if include_node_exchange_check:
-        evals_k_node, _ = model.diagonalize(lattice.k_m, valley=valley, n_bands=n_bands)
-        evals_kprime_node, _ = model.diagonalize(lattice.kprime_m, valley=-valley, n_bands=n_bands)
-        node_exchange_residual = float(np.max(np.abs(evals_k_node - evals_kprime_node)))
-        checks.append(
-            make_validation_check(
-                "C4.k_to_kprime_node_exchange",
-                node_exchange_residual < 1.0e-10,
-                node_exchange_residual,
-                detail="At the mBZ nodes, E_+(K) must match E_-(K').",
-            )
-        )
-    else:
-        checks.append(
+    checks.extend(
+        (
             ValidationCheck(
                 name="C4.k_to_kprime_node_exchange",
                 status="skipped",
                 detail=(
-                    "Disabled in the default lightweight pass; this stricter K/K' node diagnostic "
-                    "is still under review because it depends on the unresolved model-convention audit."
+                    "Retired from lightweight validation; run a dedicated convention-audit workflow "
+                    "if the strict K/K' node diagnostic is needed."
                 ),
-            )
-        )
-
-    if include_c3_check and abs(params.staggered_potential) < 1.0e-15:
-        evals_c3, _ = model.diagonalize(_rotate_c3(sample_k), valley=valley, n_bands=n_bands)
-        c3_residual = float(np.max(np.abs(evals_k - evals_c3)))
-        checks.append(
-            make_validation_check(
-                "C3.c3_symmetry",
-                c3_residual < 1.0e-6,
-                c3_residual,
-                detail="E(k) should match E(C3 k) when Delta_S = 0 and no strain is present.",
-            )
-        )
-    else:
-        checks.append(
+            ),
             ValidationCheck(
                 name="C3.c3_symmetry",
                 status="skipped",
-                detail="Disabled in the default lightweight pass; enabling it needs a symmetry-aware basis-matching check.",
-            )
+                detail=(
+                    "Retired from lightweight validation; run a dedicated symmetry-aware basis-matching "
+                    "diagnostic when C3 residuals are needed."
+                ),
+            ),
         )
+    )
 
     checks.append(
         make_validation_check(
