@@ -500,6 +500,14 @@
         "src/mean_field/systems/atmg/validation.py",
         "src/mean_field/systems/tdbg/validation.py"
       ]
+    },
+    {
+      "description": "Thinned RnG/hBN HF helper code after old-vs-new characterization: the self-overlap block builder now delegates to the between-basis builder, zero-fill grid shifts use the core HF helper, and average reference density uses the core density helper.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 84,
+      "slice": "thin_rlg_hbn_hf_overlap_density_helpers",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -761,17 +769,17 @@
     ],
     "validation.py": []
   },
-  "root": "/data/home/ziyuzhu/Mean_Field",
+  "root": "/data/home/ziyuzhu/tmp/mean_field_report_rlg_hbn_hf_20260620_205254",
   "src_python_files": 179,
-  "src_python_lines": 57755,
+  "src_python_lines": 57673,
   "top_30_files": [
-    {
-      "lines": 2361,
-      "path": "src/mean_field/systems/RnG_hBN/hf.py"
-    },
     {
       "lines": 2305,
       "path": "src/mean_field/systems/htg/mean_field_adapter.py"
+    },
+    {
+      "lines": 2279,
+      "path": "src/mean_field/systems/RnG_hBN/hf.py"
     },
     {
       "lines": 1640,
@@ -887,6 +895,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 63882,
-  "tracked_text_lines": 67881
+  "tracked_python_lines": 63866,
+  "tracked_text_lines": 67861
 }
