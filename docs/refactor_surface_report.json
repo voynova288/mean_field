@@ -153,21 +153,19 @@
       "legacy_lines_removed_gross": 6,
       "slice": "lazy_load_rlg_hbn_q0_tdhf_devtool",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Removed direct RnG/hBN system imports from the canonical sidecar backfill defaults; write-mode loaders/adapters are now imported lazily via import_module.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 7,
+      "legacy_lines_removed_gross": 2,
+      "slice": "lazy_load_rlg_hbn_backfill_adapters",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
-    "count": 7,
+    "count": 5,
     "items": [
-      {
-        "line": 1141,
-        "path": "src/mean_field/devtools/backfill_canonical_hf_sidecars.py",
-        "text": "from mean_field.systems.RnG_hBN.tdhf import load_rlg_hbn_tdhf_run_from_archive"
-      },
-      {
-        "line": 1146,
-        "path": "src/mean_field/devtools/backfill_canonical_hf_sidecars.py",
-        "text": "from mean_field.systems.RnG_hBN.hf_contracts import rlg_hbn_hf_run_to_hf_run_result"
-      },
       {
         "line": 9,
         "path": "src/mean_field/devtools/prepare_tbg_crpa_bm.py",
@@ -538,7 +536,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 200,
-  "src_python_lines": 68370,
+  "src_python_lines": 68369,
   "top_30_files": [
     {
       "lines": 2361,
@@ -557,7 +555,7 @@
       "path": "src/mean_field/systems/RnG_hBN/tdhf.py"
     },
     {
-      "lines": 1567,
+      "lines": 1566,
       "path": "src/mean_field/devtools/backfill_canonical_hf_sidecars.py"
     },
     {

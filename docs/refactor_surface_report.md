@@ -5,9 +5,9 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 ## Summary
 
 - `src` Python files: 200
-- `src` Python lines: 68370
+- `src` Python lines: 68369
 - Files over 1000 lines: 15
-- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 7
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
 ## Completed cleanup slices
 
@@ -137,6 +137,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 6.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 8 -> 7.
 
+### lazy_load_rlg_hbn_backfill_adapters
+
+- Removed direct RnG/hBN system imports from the canonical sidecar backfill defaults; write-mode loaders/adapters are now imported lazily via import_module.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 2.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 7 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -145,7 +152,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 2305 | `src/mean_field/systems/htg/mean_field_adapter.py` |
 | 2151 | `src/mean_field/systems/tmbg/polshyn_supercell.py` |
 | 1640 | `src/mean_field/systems/RnG_hBN/tdhf.py` |
-| 1567 | `src/mean_field/devtools/backfill_canonical_hf_sidecars.py` |
+| 1566 | `src/mean_field/devtools/backfill_canonical_hf_sidecars.py` |
 | 1563 | `src/mean_field/devtools/run_rlg_hbn_paper_hf.py` |
 | 1348 | `src/mean_field/systems/tbg/zero_field/runners.py` |
 | 1347 | `src/mean_field/systems/htg/supercell.py` |
@@ -176,8 +183,6 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 | Path | Line | Import |
 |---|---:|---|
-| `src/mean_field/devtools/backfill_canonical_hf_sidecars.py` | 1141 | `from mean_field.systems.RnG_hBN.tdhf import load_rlg_hbn_tdhf_run_from_archive` |
-| `src/mean_field/devtools/backfill_canonical_hf_sidecars.py` | 1146 | `from mean_field.systems.RnG_hBN.hf_contracts import rlg_hbn_hf_run_to_hf_run_result` |
 | `src/mean_field/devtools/prepare_tbg_crpa_bm.py` | 9 | `from mean_field.systems.tbg.params import TBGParameters` |
 | `src/mean_field/devtools/run_rlg_hbn_paper_hf.py` | 35 | `from mean_field.systems.RnG_hBN import (` |
 | `src/mean_field/devtools/run_rlg_hbn_paper_hf.py` | 50 | `from mean_field.systems.RnG_hBN.hf import RLG_HBN_FORM_FACTOR_CONVENTION_VERSION` |

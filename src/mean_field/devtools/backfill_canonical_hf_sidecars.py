@@ -18,6 +18,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 import hashlib
+from importlib import import_module
 import json
 from pathlib import Path
 from typing import Any
@@ -1138,14 +1139,12 @@ def plan_backfill_writes(
     }
 
 def _default_rlg_hbn_loader(archive_path: str | Path) -> object:
-    from mean_field.systems.RnG_hBN.tdhf import load_rlg_hbn_tdhf_run_from_archive
-
-    return load_rlg_hbn_tdhf_run_from_archive(archive_path)
+    module = import_module("mean_field.systems.RnG_hBN.tdhf")
+    return module.load_rlg_hbn_tdhf_run_from_archive(archive_path)
 
 def _default_rlg_hbn_adapter(run: object, *, archive_manifest: dict[str, object]) -> object:
-    from mean_field.systems.RnG_hBN.hf_contracts import rlg_hbn_hf_run_to_hf_run_result
-
-    return rlg_hbn_hf_run_to_hf_run_result(run, archive_manifest=archive_manifest)  # type: ignore[arg-type]
+    module = import_module("mean_field.systems.RnG_hBN.hf_contracts")
+    return module.rlg_hbn_hf_run_to_hf_run_result(run, archive_manifest=archive_manifest)  # type: ignore[arg-type]
 
 def _default_canonical_sidecar_builder(canonical_run_result: object) -> dict[str, object]:
     from mean_field.api.hf import _canonical_hf_run_result_sidecar
