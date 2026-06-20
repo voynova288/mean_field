@@ -233,6 +233,16 @@
       "legacy_lines_removed_gross": 7,
       "slice": "dedupe_rlg_hbn_validation_checks",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Retired the unexported Hipolito 2016 shift-current paper-audit toy model from the public analysis package; reusable shift-current math and the lightweight SLG toy benchmark remain in analysis.shift_current.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 778,
+      "slice": "retire_hipolito_shift_current_audit_model",
+      "tracked_files_deleted": [
+        "src/analysis/shift_current/toy_models/hipolito2016.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -615,8 +625,8 @@
     ]
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
-  "src_python_files": 200,
-  "src_python_lines": 68289,
+  "src_python_files": 199,
+  "src_python_lines": 67511,
   "top_30_files": [
     {
       "lines": 2361,
@@ -699,10 +709,6 @@
       "path": "src/mean_field/systems/RnG_hBN/cache.py"
     },
     {
-      "lines": 778,
-      "path": "src/analysis/shift_current/toy_models/hipolito2016.py"
-    },
-    {
       "lines": 772,
       "path": "src/analysis/shift_current/core.py"
     },
@@ -737,6 +743,10 @@
     {
       "lines": 627,
       "path": "src/mean_field/benchmarks.py"
+    },
+    {
+      "lines": 617,
+      "path": "src/mean_field/core/hf/overlap.py"
     }
   ]
 }

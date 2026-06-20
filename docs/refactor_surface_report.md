@@ -4,8 +4,8 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- `src` Python files: 200
-- `src` Python lines: 68289
+- `src` Python files: 199
+- `src` Python lines: 67511
 - Files over 1000 lines: 15
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -207,6 +207,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 7.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### retire_hipolito_shift_current_audit_model
+
+- Retired the unexported Hipolito 2016 shift-current paper-audit toy model from the public analysis package; reusable shift-current math and the lightweight SLG toy benchmark remain in analysis.shift_current.
+- Deleted files: `src/analysis/shift_current/toy_models/hipolito2016.py`.
+- Gross legacy LOC removed/thinned: 778.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -231,7 +238,6 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 873 | `src/analysis/topology/quantum_geometry.py` |
 | 805 | `src/analysis/response_derivative_gauge.py` |
 | 786 | `src/mean_field/systems/RnG_hBN/cache.py` |
-| 778 | `src/analysis/shift_current/toy_models/hipolito2016.py` |
 | 772 | `src/analysis/shift_current/core.py` |
 | 735 | `src/mean_field/systems/tbg/zero_field/hf_contracts.py` |
 | 733 | `src/mean_field/systems/tbg/chaudhary2021_hartree.py` |
@@ -241,6 +247,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 683 | `src/mean_field/systems/tbg/chaudhary2021.py` |
 | 643 | `src/mean_field/systems/htg/supercell_contracts.py` |
 | 627 | `src/mean_field/benchmarks.py` |
+| 617 | `src/mean_field/core/hf/overlap.py` |
 
 ## Direct private-system imports in workflow surfaces
 
