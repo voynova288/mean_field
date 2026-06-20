@@ -116,6 +116,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 8.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 9 -> 9.
 
+### dedupe_htqg_validation_check_helper
+
+- Reused core.validation.make_validation_check from HTQG validation while preserving its system-specific detail strings and tolerance payloads.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 2.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 9 -> 9.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |

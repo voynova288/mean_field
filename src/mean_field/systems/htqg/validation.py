@@ -5,7 +5,7 @@ import math
 
 import numpy as np
 
-from ...core.validation import ValidationCheck, ValidationReport, status_from_bool
+from ...core.validation import ValidationCheck, ValidationReport, make_validation_check
 from .chiral import chiral_symmetry_residual
 from .domains import all_domains, domain_displacements
 from .hamiltonian import build_coupling_table, build_hamiltonian, layer_k_offset, moire_coupling_matrix
@@ -15,7 +15,7 @@ from .symmetry import validate_internal_unitarity
 
 
 def _check(name: str, condition: bool, value: float | int | str | None, detail: str, tolerance: float | None = None) -> ValidationCheck:
-    return ValidationCheck(name=name, status=status_from_bool(condition), value=value, detail=detail, tolerance=tolerance)
+    return make_validation_check(name, condition, value, detail=detail, tolerance=tolerance)
 
 
 def _g_closure_residual(lattice: HTQGLattice, angle_rad: float) -> float:

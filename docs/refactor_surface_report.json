@@ -129,6 +129,14 @@
       "legacy_lines_removed_gross": 8,
       "slice": "dedupe_htg_validation_check_helper",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Reused core.validation.make_validation_check from HTQG validation while preserving its system-specific detail strings and tolerance payloads.",
+      "direct_mean_field_systems_imports_after": 9,
+      "direct_mean_field_systems_imports_before": 9,
+      "legacy_lines_removed_gross": 2,
+      "slice": "dedupe_htqg_validation_check_helper",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
