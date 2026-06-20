@@ -40,6 +40,7 @@ class ValidationCheck:
     status: ValidationStatus
     detail: str
     value: ValidationValue = None
+    tolerance: float | None = None
 
     def __init__(
         self,
@@ -49,6 +50,7 @@ class ValidationCheck:
         value: ValidationValue = None,
         *,
         val: ValidationValue = None,
+        tolerance: float | None = None,
     ) -> None:
         if value is not None and val is not None:
             raise ValueError("Pass either value= or val=, not both.")
@@ -56,6 +58,7 @@ class ValidationCheck:
         object.__setattr__(self, "status", status)
         object.__setattr__(self, "detail", str(detail))
         object.__setattr__(self, "value", val if value is None else value)
+        object.__setattr__(self, "tolerance", None if tolerance is None else float(tolerance))
 
     @property
     def val(self) -> ValidationValue:
@@ -71,6 +74,7 @@ class ValidationCheck:
             "status": self.status,
             "detail": self.detail,
             "value": self.value,
+            "tolerance": self.tolerance,
             "passed": self.passed,
         }
 
@@ -117,7 +121,8 @@ class ValidationReport:
         lines = [f"# {self.title}", ""]
         for check in self.checks:
             value_text = format_validation_value(check.value)
-            suffix = f" ({value_text})" if value_text else ""
+            tolerance_text = f", tol={check.tolerance:.3e}" if isinstance(check.tolerance, float) else ""
+            suffix = f" ({value_text}{tolerance_text})" if value_text or tolerance_text else ""
             lines.append(f"- [{check.status}] {check.name}{suffix}: {check.detail}")
         lines.append("")
         lines.append(f"- failures: {self.failure_count}")

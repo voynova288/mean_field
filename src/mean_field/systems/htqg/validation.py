@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import replace
 import math
 
 import numpy as np
 
+from ...core.validation import ValidationCheck, ValidationReport, status_from_bool
 from .chiral import chiral_symmetry_residual
 from .domains import all_domains, domain_displacements
 from .hamiltonian import build_coupling_table, build_hamiltonian, layer_k_offset, moire_coupling_matrix
@@ -13,64 +14,8 @@ from .params import HTQGParams
 from .symmetry import validate_internal_unitarity
 
 
-@dataclass(frozen=True)
-class ValidationCheck:
-    name: str
-    status: str
-    value: float | int | str | None
-    detail: str
-    tolerance: float | None = None
-
-    @property
-    def passed(self) -> bool:
-        return self.status == "pass"
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "name": self.name,
-            "status": self.status,
-            "value": self.value,
-            "detail": self.detail,
-            "tolerance": self.tolerance,
-            "passed": self.passed,
-        }
-
-
-@dataclass(frozen=True)
-class ValidationReport:
-    title: str
-    checks: tuple[ValidationCheck, ...]
-
-    @property
-    def failure_count(self) -> int:
-        return sum(check.status == "fail" for check in self.checks)
-
-    @property
-    def skipped_count(self) -> int:
-        return sum(check.status == "skipped" for check in self.checks)
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "title": self.title,
-            "failure_count": int(self.failure_count),
-            "skipped_count": int(self.skipped_count),
-            "checks": [check.to_dict() for check in self.checks],
-        }
-
-    def to_markdown(self) -> str:
-        lines = [f"# {self.title}", ""]
-        for check in self.checks:
-            tol = f", tol={check.tolerance:.3e}" if isinstance(check.tolerance, float) else ""
-            lines.append(f"- [{check.status}] {check.name}: {check.value} ({check.detail}{tol})")
-        lines.append("")
-        lines.append(f"failures: {self.failure_count}")
-        if self.skipped_count:
-            lines.append(f"skipped: {self.skipped_count}")
-        return "\n".join(lines)
-
-
 def _check(name: str, condition: bool, value: float | int | str | None, detail: str, tolerance: float | None = None) -> ValidationCheck:
-    return ValidationCheck(name=name, status="pass" if bool(condition) else "fail", value=value, detail=detail, tolerance=tolerance)
+    return ValidationCheck(name=name, status=status_from_bool(condition), value=value, detail=detail, tolerance=tolerance)
 
 
 def _g_closure_residual(lattice: HTQGLattice, angle_rad: float) -> float:

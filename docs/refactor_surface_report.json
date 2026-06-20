@@ -81,6 +81,14 @@
       "legacy_lines_removed_gross": 8,
       "slice": "dedupe_rlg_hbn_band_diagonalizer",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Reused core ValidationCheck/ValidationReport for HTQG validation, adding optional tolerance support to the core validation record instead of maintaining a second local dataclass pair.",
+      "direct_mean_field_systems_imports_after": 9,
+      "direct_mean_field_systems_imports_before": 9,
+      "legacy_lines_removed_gross": 49,
+      "slice": "dedupe_htqg_validation_types",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -200,7 +208,7 @@
           "path": "src/mean_field/systems/tmbg/validation.py"
         },
         {
-          "lines": 248,
+          "lines": 193,
           "path": "src/mean_field/systems/htqg/validation.py"
         },
         {
@@ -220,7 +228,7 @@
           "path": "src/mean_field/systems/htg/validation.py"
         }
       ],
-      "total_lines": 1932
+      "total_lines": 1877
     }
   },
   "phase2_targets": {
@@ -493,7 +501,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 199,
-  "src_python_lines": 68411,
+  "src_python_lines": 68361,
   "top_30_files": [
     {
       "lines": 2361,

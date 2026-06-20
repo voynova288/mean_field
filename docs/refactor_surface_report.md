@@ -5,7 +5,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 ## Summary
 
 - `src` Python files: 199
-- `src` Python lines: 68411
+- `src` Python lines: 68361
 - Files over 1000 lines: 15
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 9
 
@@ -74,6 +74,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 8.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 9 -> 9.
 
+### dedupe_htqg_validation_types
+
+- Reused core ValidationCheck/ValidationReport for HTQG validation, adding optional tolerance support to the core validation record instead of maintaining a second local dataclass pair.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 49.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 9 -> 9.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -140,12 +147,12 @@ Total lines: 745
 
 ### `validation.py`
 
-Total lines: 1932
+Total lines: 1877
 
 | Lines | Path |
 |---:|---|
 | 1104 | `src/mean_field/systems/tmbg/validation.py` |
-| 248 | `src/mean_field/systems/htqg/validation.py` |
+| 193 | `src/mean_field/systems/htqg/validation.py` |
 | 164 | `src/mean_field/systems/atmg/validation.py` |
 | 163 | `src/mean_field/systems/RnG_hBN/validation.py` |
 | 129 | `src/mean_field/systems/tdbg/validation.py` |
