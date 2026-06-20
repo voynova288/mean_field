@@ -263,6 +263,16 @@
       "tracked_files_deleted": [
         "src/mean_field/systems/tdbg/hf_plotting.py"
       ]
+    },
+    {
+      "description": "Retired the unexported Polshyn full-flavor IVC array-contract scaffold; no tracked production code imports it and the maintained Polshyn/Wang HF adapter remains in tmbg.polshyn_supercell.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 687,
+      "slice": "retire_tmbg_full_flavor_ivc_scaffold",
+      "tracked_files_deleted": [
+        "src/mean_field/systems/tmbg/full_flavor_ivc.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -645,8 +655,8 @@
     ]
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
-  "src_python_files": 197,
-  "src_python_lines": 66429,
+  "src_python_files": 196,
+  "src_python_lines": 65742,
   "top_30_files": [
     {
       "lines": 2361,
@@ -741,10 +751,6 @@
       "path": "src/mean_field/core/hf/tdhf.py"
     },
     {
-      "lines": 687,
-      "path": "src/mean_field/systems/tmbg/full_flavor_ivc.py"
-    },
-    {
       "lines": 686,
       "path": "src/mean_field/systems/RnG_hBN/hf_contracts.py"
     },
@@ -767,6 +773,10 @@
     {
       "lines": 565,
       "path": "src/analysis/topology/core.py"
+    },
+    {
+      "lines": 528,
+      "path": "src/mean_field/systems/tbg/zero_field/artifacts.py"
     }
   ]
 }

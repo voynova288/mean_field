@@ -4,8 +4,8 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- `src` Python files: 197
-- `src` Python lines: 66429
+- `src` Python files: 196
+- `src` Python lines: 65742
 - Files over 1000 lines: 15
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -228,6 +228,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 349.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### retire_tmbg_full_flavor_ivc_scaffold
+
+- Retired the unexported Polshyn full-flavor IVC array-contract scaffold; no tracked production code imports it and the maintained Polshyn/Wang HF adapter remains in tmbg.polshyn_supercell.
+- Deleted files: `src/mean_field/systems/tmbg/full_flavor_ivc.py`.
+- Gross legacy LOC removed/thinned: 687.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -255,13 +262,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 772 | `src/analysis/shift_current/core.py` |
 | 735 | `src/mean_field/systems/tbg/zero_field/hf_contracts.py` |
 | 710 | `src/mean_field/core/hf/tdhf.py` |
-| 687 | `src/mean_field/systems/tmbg/full_flavor_ivc.py` |
 | 686 | `src/mean_field/systems/RnG_hBN/hf_contracts.py` |
 | 683 | `src/mean_field/systems/tbg/chaudhary2021.py` |
 | 643 | `src/mean_field/systems/htg/supercell_contracts.py` |
 | 627 | `src/mean_field/benchmarks.py` |
 | 617 | `src/mean_field/core/hf/overlap.py` |
 | 565 | `src/analysis/topology/core.py` |
+| 528 | `src/mean_field/systems/tbg/zero_field/artifacts.py` |
 
 ## Direct private-system imports in workflow surfaces
 
