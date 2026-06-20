@@ -105,6 +105,14 @@
       "legacy_lines_removed_gross": 3,
       "slice": "drop_tmbg_validation_status_alias",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Removed the RnG/hBN local status alias and call core status_from_bool directly, without touching dirty HF/TDHF implementation files.",
+      "direct_mean_field_systems_imports_after": 9,
+      "direct_mean_field_systems_imports_before": 9,
+      "legacy_lines_removed_gross": 3,
+      "slice": "drop_rlg_hbn_validation_status_alias",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -228,12 +236,12 @@
           "path": "src/mean_field/systems/htqg/validation.py"
         },
         {
-          "lines": 163,
-          "path": "src/mean_field/systems/RnG_hBN/validation.py"
-        },
-        {
           "lines": 161,
           "path": "src/mean_field/systems/atmg/validation.py"
+        },
+        {
+          "lines": 160,
+          "path": "src/mean_field/systems/RnG_hBN/validation.py"
         },
         {
           "lines": 126,
@@ -244,7 +252,7 @@
           "path": "src/mean_field/systems/htg/validation.py"
         }
       ],
-      "total_lines": 1868
+      "total_lines": 1865
     }
   },
   "phase2_targets": {
@@ -500,7 +508,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 199,
-  "src_python_lines": 68352,
+  "src_python_lines": 68349,
   "top_30_files": [
     {
       "lines": 2361,

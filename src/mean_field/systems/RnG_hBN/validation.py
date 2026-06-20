@@ -16,9 +16,6 @@ from .params import (
 
 
 
-def _status_from_bool(condition: bool) -> ValidationStatus:
-    return status_from_bool(condition)
-
 
 
 
@@ -79,7 +76,7 @@ def validate_physics(model: RLGhBNModel) -> ValidationReport:
     checks = [
         ValidationCheck(
             name="parameter_table",
-            status=_status_from_bool(
+            status=status_from_bool(
                 np.isclose(model.params.fermi_velocity_mev_nm, DEFAULT_FERMI_VELOCITY_MEV_NM)
                 and np.isclose(model.params.v3_mev_nm, DEFAULT_REMOTE_VELOCITY_MEV_NM)
                 and np.isclose(model.params.v4_mev_nm, DEFAULT_REMOTE_VELOCITY_MEV_NM)
@@ -94,43 +91,43 @@ def validate_physics(model: RLGhBNModel) -> ValidationReport:
         ),
         ValidationCheck(
             name="default_g_basis_size",
-            status=_status_from_bool(model.lattice.shell_count != 4 or model.lattice.n_g == 19),
+            status=status_from_bool(model.lattice.shell_count != 4 or model.lattice.n_g == 19),
             detail="The paper default shell_count=4 keeps N_G=19 reciprocal vectors.",
             value=model.lattice.n_g,
         ),
         ValidationCheck(
             name="q_c3_norms",
-            status=_status_from_bool(q_norm_residual < 1.0e-12 and g_norm_residual < 1.0e-12),
+            status=status_from_bool(q_norm_residual < 1.0e-12 and g_norm_residual < 1.0e-12),
             detail="The three q vectors and three moire reciprocal vectors have equal norms.",
             value=max(q_norm_residual, g_norm_residual),
         ),
         ValidationCheck(
             name="hermiticity",
-            status=_status_from_bool(hermiticity_residual < 1.0e-10),
+            status=status_from_bool(hermiticity_residual < 1.0e-10),
             detail="The RLG/hBN single-particle Hamiltonian is Hermitian at a generic moire momentum.",
             value=hermiticity_residual,
         ),
         ValidationCheck(
             name="moire_bottom_layer_only",
-            status=_status_from_bool(moire_bottom_residual < 1.0e-12),
+            status=status_from_bool(moire_bottom_residual < 1.0e-12),
             detail="Subtracting the no-moire Hamiltonian leaves moire terms only in layer l=0 blocks.",
             value=moire_bottom_residual,
         ),
         ValidationCheck(
             name="time_reversal",
-            status=_status_from_bool(time_reversal_residual < 1.0e-10),
+            status=status_from_bool(time_reversal_residual < 1.0e-10),
             detail="The K and Kprime spectra satisfy E_K(k)=E_Kprime(-k).",
             value=time_reversal_residual,
         ),
         ValidationCheck(
             name="c3_spectrum",
-            status=_status_from_bool(c3_residual < 1.0e-8),
+            status=status_from_bool(c3_residual < 1.0e-8),
             detail="The finite reciprocal-vector shell preserves the single-valley C3 spectrum.",
             value=c3_residual,
         ),
         ValidationCheck(
             name="flat_band_indices",
-            status=_status_from_bool(flat_valence == model.params.layer_count * model.lattice.n_g - 1 and flat_conduction == flat_valence + 1),
+            status=status_from_bool(flat_valence == model.params.layer_count * model.lattice.n_g - 1 and flat_conduction == flat_valence + 1),
             detail="The central valence and conduction bands use the L*N_G valence-count convention.",
             value=f"{flat_valence},{flat_conduction}",
         ),
