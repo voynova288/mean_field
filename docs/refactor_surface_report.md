@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 67845
-- Tracked Python lines: 63835
+- Tracked text lines: 67485
+- Tracked Python lines: 63454
 - Tracked Julia lines: 826
-- `src` Python files: 179
-- `src` Python lines: 57642
+- `src` Python files: 178
+- `src` Python lines: 57261
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -420,6 +420,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 31.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### archive_retire_htg_topology_surface
+
+- Archived system topology files to ignored local_archive and retired the tracked HTG topology surface; kept only the HTG sublattice basis operator in the Hamiltonian layer and thinned ATMG/TMBG topology wrappers to direct generic-adapter calls.
+- Deleted files: `src/mean_field/systems/htg/topology.py`.
+- Gross legacy LOC removed/thinned: 401.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -491,15 +498,14 @@ Total lines: 349
 
 ### `topology.py`
 
-Total lines: 1058
+Total lines: 685
 
 | Lines | Path |
 |---:|---|
 | 380 | `src/mean_field/systems/RnG_hBN/topology.py` |
-| 338 | `src/mean_field/systems/htg/topology.py` |
 | 167 | `src/mean_field/systems/tdbg/topology.py` |
-| 96 | `src/mean_field/systems/tmbg/topology.py` |
-| 77 | `src/mean_field/systems/atmg/topology.py` |
+| 69 | `src/mean_field/systems/atmg/topology.py` |
+| 69 | `src/mean_field/systems/tmbg/topology.py` |
 
 ## Repeated symbol names
 
@@ -522,10 +528,8 @@ No repeated class/function names across this family.
 
 | Symbol | Count | Paths |
 |---|---:|---|
-| `_normalize_band_indices` | 4 | `src/mean_field/systems/RnG_hBN/topology.py`, `src/mean_field/systems/atmg/topology.py`, `src/mean_field/systems/tdbg/topology.py`, `src/mean_field/systems/tmbg/topology.py` |
-| `_reciprocal_translation` | 2 | `src/mean_field/systems/RnG_hBN/topology.py`, `src/mean_field/systems/htg/topology.py` |
-| `_topology_adapters` | 4 | `src/mean_field/systems/RnG_hBN/topology.py`, `src/mean_field/systems/atmg/topology.py`, `src/mean_field/systems/tdbg/topology.py`, `src/mean_field/systems/tmbg/topology.py` |
-| `apply` | 2 | `src/mean_field/systems/RnG_hBN/topology.py`, `src/mean_field/systems/htg/topology.py` |
+| `_normalize_band_indices` | 2 | `src/mean_field/systems/RnG_hBN/topology.py`, `src/mean_field/systems/tdbg/topology.py` |
+| `_topology_adapters` | 2 | `src/mean_field/systems/RnG_hBN/topology.py`, `src/mean_field/systems/tdbg/topology.py` |
 | `compute_topology_from_eigenvectors` | 4 | `src/mean_field/systems/RnG_hBN/topology.py`, `src/mean_field/systems/atmg/topology.py`, `src/mean_field/systems/tdbg/topology.py`, `src/mean_field/systems/tmbg/topology.py` |
 | `compute_topology_from_grid_result` | 4 | `src/mean_field/systems/RnG_hBN/topology.py`, `src/mean_field/systems/atmg/topology.py`, `src/mean_field/systems/tdbg/topology.py`, `src/mean_field/systems/tmbg/topology.py` |
 | `compute_topology_on_grid` | 4 | `src/mean_field/systems/RnG_hBN/topology.py`, `src/mean_field/systems/atmg/topology.py`, `src/mean_field/systems/tdbg/topology.py`, `src/mean_field/systems/tmbg/topology.py` |

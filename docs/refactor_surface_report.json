@@ -516,6 +516,16 @@
       "legacy_lines_removed_gross": 31,
       "slice": "inline_rlg_hbn_hf_problem_callables",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Archived system topology files to ignored local_archive and retired the tracked HTG topology surface; kept only the HTG sublattice basis operator in the Hamiltonian layer and thinned ATMG/TMBG topology wrappers to direct generic-adapter calls.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 401,
+      "slice": "archive_retire_htg_topology_surface",
+      "tracked_files_deleted": [
+        "src/mean_field/systems/htg/topology.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -586,23 +596,19 @@
           "path": "src/mean_field/systems/RnG_hBN/topology.py"
         },
         {
-          "lines": 338,
-          "path": "src/mean_field/systems/htg/topology.py"
-        },
-        {
           "lines": 167,
           "path": "src/mean_field/systems/tdbg/topology.py"
         },
         {
-          "lines": 96,
-          "path": "src/mean_field/systems/tmbg/topology.py"
+          "lines": 69,
+          "path": "src/mean_field/systems/atmg/topology.py"
         },
         {
-          "lines": 77,
-          "path": "src/mean_field/systems/atmg/topology.py"
+          "lines": 69,
+          "path": "src/mean_field/systems/tmbg/topology.py"
         }
       ],
-      "total_lines": 1058
+      "total_lines": 685
     },
     "validation.py": {
       "files": [
@@ -691,12 +697,10 @@
     ],
     "topology.py": [
       {
-        "count": 4,
+        "count": 2,
         "paths": [
           "src/mean_field/systems/RnG_hBN/topology.py",
-          "src/mean_field/systems/atmg/topology.py",
-          "src/mean_field/systems/tdbg/topology.py",
-          "src/mean_field/systems/tmbg/topology.py"
+          "src/mean_field/systems/tdbg/topology.py"
         ],
         "symbol": "_normalize_band_indices"
       },
@@ -704,27 +708,9 @@
         "count": 2,
         "paths": [
           "src/mean_field/systems/RnG_hBN/topology.py",
-          "src/mean_field/systems/htg/topology.py"
-        ],
-        "symbol": "_reciprocal_translation"
-      },
-      {
-        "count": 4,
-        "paths": [
-          "src/mean_field/systems/RnG_hBN/topology.py",
-          "src/mean_field/systems/atmg/topology.py",
-          "src/mean_field/systems/tdbg/topology.py",
-          "src/mean_field/systems/tmbg/topology.py"
+          "src/mean_field/systems/tdbg/topology.py"
         ],
         "symbol": "_topology_adapters"
-      },
-      {
-        "count": 2,
-        "paths": [
-          "src/mean_field/systems/RnG_hBN/topology.py",
-          "src/mean_field/systems/htg/topology.py"
-        ],
-        "symbol": "apply"
       },
       {
         "count": 4,
@@ -777,9 +763,9 @@
     ],
     "validation.py": []
   },
-  "root": "/data/home/ziyuzhu/tmp/mean_field_report_rlg_hbn_classes_20260620_205746",
-  "src_python_files": 179,
-  "src_python_lines": 57642,
+  "root": "/data/home/ziyuzhu/tmp/mean_field_report_topology_archive_20260620_220249",
+  "src_python_files": 178,
+  "src_python_lines": 57261,
   "top_30_files": [
     {
       "lines": 2305,
@@ -903,6 +889,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 63835,
-  "tracked_text_lines": 67845
+  "tracked_python_lines": 63454,
+  "tracked_text_lines": 67485
 }
