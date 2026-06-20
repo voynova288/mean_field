@@ -5,7 +5,6 @@ from .bands import (
     PathBandsResult,
     compute_bands_along_path,
     compute_bands_on_grid,
-    neutrality_energy_mev,
 )
 from .charge_background import ChargeBackgroundResult, compute_valence_charge_background
 from .hamiltonian import (
@@ -242,7 +241,6 @@ __all__ = [
     "moire_coupling_matrix",
     "moire_cell_area_nm2",
     "moire_potential",
-    "neutrality_energy_mev",
     "normalize_rlg_hbn_init_mode",
     "evaluate_rlg_hbn_hf_path",
     "load_rlg_hbn_tdhf_run_from_archive",
