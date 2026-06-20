@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from mean_field.core.validation import ValidationCheck, ValidationReport, status_from_bool
+from mean_field.core.validation import ValidationCheck, ValidationReport, make_validation_check, status_from_bool
 
 
 def test_validation_check_accepts_value_and_val_aliases() -> None:
@@ -19,6 +19,15 @@ def test_validation_check_accepts_value_and_val_aliases() -> None:
     assert not with_val.passed
     assert with_val.value == 2.5
     assert with_val.val == 2.5
+
+
+def test_make_validation_check_formats_default_detail_and_tolerance() -> None:
+    check = make_validation_check("demo", False, 0.2, tolerance=0.1)
+
+    assert check.status == "fail"
+    assert check.value == 0.2
+    assert check.tolerance == 0.1
+    assert check.detail == "value=0.2, tolerance=0.1"
 
 
 def test_validation_check_rejects_double_payload_alias() -> None:

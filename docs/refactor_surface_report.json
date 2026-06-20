@@ -121,6 +121,14 @@
       "legacy_lines_removed_gross": 3,
       "slice": "drop_htg_validation_status_alias",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Moved HTG's generic condition/value/tolerance ValidationCheck constructor into core.validation.make_validation_check and kept HTG output detail strings compatible.",
+      "direct_mean_field_systems_imports_after": 9,
+      "direct_mean_field_systems_imports_before": 9,
+      "legacy_lines_removed_gross": 8,
+      "slice": "dedupe_htg_validation_check_helper",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -256,11 +264,11 @@
           "path": "src/mean_field/systems/tdbg/validation.py"
         },
         {
-          "lines": 121,
+          "lines": 109,
           "path": "src/mean_field/systems/htg/validation.py"
         }
       ],
-      "total_lines": 1862
+      "total_lines": 1850
     }
   },
   "phase2_targets": {
@@ -516,7 +524,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 199,
-  "src_python_lines": 68346,
+  "src_python_lines": 68356,
   "top_30_files": [
     {
       "lines": 2361,

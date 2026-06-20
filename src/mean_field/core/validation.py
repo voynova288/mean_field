@@ -26,6 +26,27 @@ def format_validation_value(value: object | None) -> str:
     return str(value)
 
 
+def make_validation_check(
+    name: str,
+    condition: bool,
+    value: ValidationValue,
+    *,
+    detail: str | None = None,
+    tolerance: float | None = None,
+) -> "ValidationCheck":
+    """Build a ValidationCheck from a boolean condition and diagnostic value."""
+
+    resolved_detail = f"value={value}" if detail is None else str(detail)
+    if detail is None and tolerance is not None:
+        resolved_detail += f", tolerance={tolerance}"
+    return ValidationCheck(
+        name=name,
+        status=status_from_bool(condition),
+        detail=resolved_detail,
+        value=value,
+        tolerance=tolerance,
+    )
+
 @dataclass(frozen=True, init=False)
 class ValidationCheck:
     """Status/detail validation record shared by system validation modules.
@@ -137,6 +158,7 @@ __all__ = [
     "ValidationStatus",
     "ValidationValue",
     "format_validation_value",
+    "make_validation_check",
     "validate_valley",
     "status_from_bool",
 ]

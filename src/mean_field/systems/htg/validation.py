@@ -4,7 +4,7 @@ import math
 
 import numpy as np
 
-from mean_field.core.validation import ValidationCheck, ValidationReport, status_from_bool
+from mean_field.core.validation import ValidationCheck, ValidationReport, make_validation_check
 
 from .hamiltonian import build_hamiltonian, moire_coupling_matrix
 from .lattice import HTGLattice, dot_2d
@@ -20,20 +20,8 @@ from .mean_field_adapter import (
 
 
 
-def _detail(value: float | str, tolerance: float | None = None) -> str:
-    detail = f"value={value}"
-    if tolerance is not None:
-        detail += f", tolerance={tolerance}"
-    return detail
-
-
 def _check(name: str, condition: bool, value: float | str, tolerance: float | None = None) -> ValidationCheck:
-    return ValidationCheck(
-        name=name,
-        status=status_from_bool(condition),
-        detail=_detail(value, tolerance),
-        value=value,
-    )
+    return make_validation_check(name, condition, value, tolerance=tolerance)
 
 
 def htg_validation_report(title: str, checks: tuple[ValidationCheck, ...]) -> ValidationReport:
