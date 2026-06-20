@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 67485
-- Tracked Python lines: 63454
+- Tracked text lines: 67394
+- Tracked Python lines: 63373
 - Tracked Julia lines: 826
-- `src` Python files: 178
-- `src` Python lines: 57261
+- `src` Python files: 179
+- `src` Python lines: 57180
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -427,6 +427,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 401.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### thin_rlg_hbn_topology_sewing_adapter
+
+- Archived the original RnG/hBN topology module and split HF microstate sewing into a small system gauge bridge, leaving topology.py as a thin boundary-sewing adapter around analysis.topology.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 81.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -498,12 +505,12 @@ Total lines: 349
 
 ### `topology.py`
 
-Total lines: 685
+Total lines: 469
 
 | Lines | Path |
 |---:|---|
-| 380 | `src/mean_field/systems/RnG_hBN/topology.py` |
 | 167 | `src/mean_field/systems/tdbg/topology.py` |
+| 164 | `src/mean_field/systems/RnG_hBN/topology.py` |
 | 69 | `src/mean_field/systems/atmg/topology.py` |
 | 69 | `src/mean_field/systems/tmbg/topology.py` |
 
@@ -528,13 +535,10 @@ No repeated class/function names across this family.
 
 | Symbol | Count | Paths |
 |---|---:|---|
-| `_normalize_band_indices` | 2 | `src/mean_field/systems/RnG_hBN/topology.py`, `src/mean_field/systems/tdbg/topology.py` |
-| `_topology_adapters` | 2 | `src/mean_field/systems/RnG_hBN/topology.py`, `src/mean_field/systems/tdbg/topology.py` |
 | `compute_topology_from_eigenvectors` | 4 | `src/mean_field/systems/RnG_hBN/topology.py`, `src/mean_field/systems/atmg/topology.py`, `src/mean_field/systems/tdbg/topology.py`, `src/mean_field/systems/tmbg/topology.py` |
 | `compute_topology_from_grid_result` | 4 | `src/mean_field/systems/RnG_hBN/topology.py`, `src/mean_field/systems/atmg/topology.py`, `src/mean_field/systems/tdbg/topology.py`, `src/mean_field/systems/tmbg/topology.py` |
 | `compute_topology_on_grid` | 4 | `src/mean_field/systems/RnG_hBN/topology.py`, `src/mean_field/systems/atmg/topology.py`, `src/mean_field/systems/tdbg/topology.py`, `src/mean_field/systems/tmbg/topology.py` |
 | `grid_builder` | 4 | `src/mean_field/systems/RnG_hBN/topology.py`, `src/mean_field/systems/atmg/topology.py`, `src/mean_field/systems/tdbg/topology.py`, `src/mean_field/systems/tmbg/topology.py` |
-| `transform` | 2 | `src/mean_field/systems/RnG_hBN/topology.py`, `src/mean_field/systems/tdbg/topology.py` |
 
 ## Phase 2 cleanup gates
 
