@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 
-import numpy as np
-
 from .hamiltonian import build_coupling_table, centered_band_indices, diagonalize_hamiltonian
-from ...core.bands import GridBandsResult, PathBandsResult, compute_grid_bands, compute_path_bands
+from ...core.bands import (
+    GridBandsResult,
+    PathBandsResult,
+    compute_grid_bands,
+    compute_path_bands,
+    estimate_central_pair_metrics,
+)
 from .lattice import HTGLattice, KPath, build_moire_k_grid
 from .params import HTGParams
 
@@ -126,25 +130,11 @@ def compute_bands_on_grid(
 
 
 def estimate_central_band_metrics(result: PathBandsResult, matrix_dim: int) -> dict[str, float | None]:
-    band_indices = tuple(int(index) for index in result.band_indices)
-    positions = {band_index: pos for pos, band_index in enumerate(band_indices)}
-    valence = matrix_dim // 2 - 1
-    conduction = matrix_dim // 2
-    lower_remote = valence - 1
-    upper_remote = conduction + 1
-    if valence not in positions or conduction not in positions:
+    metrics = estimate_central_pair_metrics(result, matrix_dim)
+    if metrics["central_bandwidth_ev"] is None:
         return {"central_bandwidth_ev": None, "remote_gap_ev": None}
-
-    central = result.energies[:, [positions[valence], positions[conduction]]]
-    span = float(np.max(central) - np.min(central))
-    bandwidth = 0.5 * span
-    remote_gap: float | None = None
-    if lower_remote in positions and upper_remote in positions:
-        lower_gap = central[:, 0] - result.energies[:, positions[lower_remote]]
-        upper_gap = result.energies[:, positions[upper_remote]] - central[:, 1]
-        remote_gap = float(min(np.min(lower_gap), np.min(upper_gap)))
     return {
-        "central_bandwidth_ev": bandwidth,
-        "central_manifold_span_ev": span,
-        "remote_gap_ev": remote_gap,
+        "central_bandwidth_ev": metrics["central_bandwidth_ev"],
+        "central_manifold_span_ev": metrics["central_manifold_span_ev"],
+        "remote_gap_ev": metrics["remote_gap_ev"],
     }

@@ -5,7 +5,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 ## Summary
 
 - `src` Python files: 199
-- `src` Python lines: 68429
+- `src` Python lines: 68440
 - Files over 1000 lines: 15
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 9
 
@@ -15,36 +15,43 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 - Moved reusable build_khalaf_fig3_path helper from one-off devtool to systems/atmg/bands.py, removed run_atmg_fig3_band_plot dispatcher command, and deleted tracked paper-panel devtool.
 - Deleted files: `src/mean_field/devtools/run_atmg_fig3_band_plot.py`.
-- Gross legacy LOC removed: 665.
+- Gross legacy LOC removed/thinned: 665.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 20 -> 18.
 
 ### remove_rlg_hbn_band_plot_devtool
 
 - Moved reusable RnG/hBN Fig.6 HF path and band-plot manifest helpers into systems/RnG_hBN/bands.py, removed plot_rlg_hbn_paper_hf_bands dispatcher command, and deleted tracked paper-panel plotting devtool.
 - Deleted files: `src/mean_field/devtools/plot_rlg_hbn_paper_hf_bands.py`.
-- Gross legacy LOC removed: 739.
+- Gross legacy LOC removed/thinned: 739.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 18 -> 17.
 
 ### remove_htqg_fig1_bands_devtool
 
 - Removed one-off HTQG Fig.1 first-pass band plotting devtool from tracked command surface. The reusable HTQG band/path/domain APIs remain in systems/htqg.
 - Deleted files: `src/mean_field/devtools/run_htqg_fig1_bands.py`.
-- Gross legacy LOC removed: 213.
+- Gross legacy LOC removed/thinned: 213.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 17 -> 13.
 
 ### remove_htqg_projected_hf_devtool
 
 - Removed HTQG projected-HF paper-scan CLI glue from tracked devtools. The core HTQG projected-HF solver remains in systems/htqg/hf.py; future durable reproduction should be reintroduced under workflows with explicit validation gates.
 - Deleted files: `src/mean_field/devtools/run_htqg_projected_hf.py`.
-- Gross legacy LOC removed: 400.
+- Gross legacy LOC removed/thinned: 400.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 13 -> 10.
 
 ### remove_htg_hf_devtool
 
 - Removed duplicate HTG projected-HF CLI glue from devtools after the public API gained explicit HTGRunHFConfig dispatch and the system runner remains available in systems/htg.
 - Deleted files: `src/mean_field/devtools/run_htg_hf.py`.
-- Gross legacy LOC removed: 463.
+- Gross legacy LOC removed/thinned: 463.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 10 -> 9.
+
+### dedupe_htg_htqg_central_band_metrics
+
+- Moved shared central two-band bandwidth/gap diagnostics into mean_field.core.bands. HTG and HTQG keep stable estimate_central_band_metrics wrappers but no longer duplicate the metric implementation.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 49.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 9 -> 9.
 
 ## Top 30 Python files under `src`
 
@@ -99,14 +106,14 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ### `bands.py`
 
-Total lines: 820
+Total lines: 787
 
 | Lines | Path |
 |---:|---|
 | 190 | `src/mean_field/systems/atmg/bands.py` |
-| 176 | `src/mean_field/systems/htqg/bands.py` |
 | 173 | `src/mean_field/systems/RnG_hBN/bands.py` |
-| 150 | `src/mean_field/systems/htg/bands.py` |
+| 153 | `src/mean_field/systems/htqg/bands.py` |
+| 140 | `src/mean_field/systems/htg/bands.py` |
 | 74 | `src/mean_field/systems/tmbg/bands.py` |
 | 57 | `src/mean_field/systems/tdbg/bands.py` |
 

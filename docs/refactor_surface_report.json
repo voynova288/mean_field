@@ -49,6 +49,14 @@
       "tracked_files_deleted": [
         "src/mean_field/devtools/run_htg_hf.py"
       ]
+    },
+    {
+      "description": "Moved shared central two-band bandwidth/gap diagnostics into mean_field.core.bands. HTG and HTQG keep stable estimate_central_band_metrics wrappers but no longer duplicate the metric implementation.",
+      "direct_mean_field_systems_imports_after": 9,
+      "direct_mean_field_systems_imports_before": 9,
+      "legacy_lines_removed_gross": 49,
+      "slice": "dedupe_htg_htqg_central_band_metrics",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -110,15 +118,15 @@
           "path": "src/mean_field/systems/atmg/bands.py"
         },
         {
-          "lines": 176,
-          "path": "src/mean_field/systems/htqg/bands.py"
-        },
-        {
           "lines": 173,
           "path": "src/mean_field/systems/RnG_hBN/bands.py"
         },
         {
-          "lines": 150,
+          "lines": 153,
+          "path": "src/mean_field/systems/htqg/bands.py"
+        },
+        {
+          "lines": 140,
           "path": "src/mean_field/systems/htg/bands.py"
         },
         {
@@ -130,7 +138,7 @@
           "path": "src/mean_field/systems/tdbg/bands.py"
         }
       ],
-      "total_lines": 820
+      "total_lines": 787
     },
     "topology.py": {
       "files": [
@@ -459,7 +467,7 @@
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
   "src_python_files": 199,
-  "src_python_lines": 68429,
+  "src_python_lines": 68440,
   "top_30_files": [
     {
       "lines": 2361,

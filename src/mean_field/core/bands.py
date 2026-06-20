@@ -131,11 +131,55 @@ def compute_grid_bands(
     )
 
 
+def estimate_central_pair_metrics(result: PathBandsResult | GridBandsResult, matrix_dim: int) -> dict[str, float | None]:
+    """Estimate bandwidth/gap diagnostics for the two central bands."""
+
+    band_indices = tuple(int(index) for index in result.band_indices)
+    positions = {band_index: pos for pos, band_index in enumerate(band_indices)}
+    valence = int(matrix_dim) // 2 - 1
+    conduction = int(matrix_dim) // 2
+    missing = {
+        "valence_bandwidth_ev": None,
+        "conduction_bandwidth_ev": None,
+        "mean_flat_bandwidth_ev": None,
+        "central_bandwidth_ev": None,
+        "central_manifold_span_ev": None,
+        "central_gap_ev": None,
+        "remote_gap_ev": None,
+    }
+    if valence not in positions or conduction not in positions:
+        return missing
+
+    energies = np.asarray(result.energies, dtype=float)
+    val = energies[..., positions[valence]]
+    con = energies[..., positions[conduction]]
+    val_bw = float(np.max(val) - np.min(val))
+    con_bw = float(np.max(con) - np.min(con))
+    central = energies[..., [positions[valence], positions[conduction]]]
+    span = float(np.max(central) - np.min(central))
+    remote_gap: float | None = None
+    lower_remote = valence - 1
+    upper_remote = conduction + 1
+    if lower_remote in positions and upper_remote in positions:
+        lower_gap = val - energies[..., positions[lower_remote]]
+        upper_gap = energies[..., positions[upper_remote]] - con
+        remote_gap = float(min(np.min(lower_gap), np.min(upper_gap)))
+    return {
+        "valence_bandwidth_ev": val_bw,
+        "conduction_bandwidth_ev": con_bw,
+        "mean_flat_bandwidth_ev": 0.5 * (val_bw + con_bw),
+        "central_bandwidth_ev": 0.5 * span,
+        "central_manifold_span_ev": span,
+        "central_gap_ev": float(np.min(con - val)),
+        "remote_gap_ev": remote_gap,
+    }
+
 __all__ = [
     "DiagonalizeCallback",
     "GridBandsResult",
     "PathBandsResult",
     "compute_grid_bands",
     "compute_path_bands",
+    "estimate_central_pair_metrics",
     "resolve_n_bands",
 ]

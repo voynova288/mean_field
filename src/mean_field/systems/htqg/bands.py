@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-import numpy as np
-
-from ...core.bands import GridBandsResult, PathBandsResult, compute_grid_bands, compute_path_bands
+from ...core.bands import (
+    GridBandsResult,
+    PathBandsResult,
+    compute_grid_bands,
+    compute_path_bands,
+    estimate_central_pair_metrics,
+)
 from .domains import HTQGDomain
 from .hamiltonian import build_coupling_table, centered_band_indices, diagonalize_hamiltonian
 from .lattice import HTQGLattice, KPath, build_moire_k_grid
@@ -129,41 +133,14 @@ def estimate_central_band_metrics(result: PathBandsResult | GridBandsResult, mat
     paper metrics require a sufficiently dense path/grid and cutoff convergence.
     """
 
-    band_indices = tuple(int(index) for index in result.band_indices)
-    positions = {band_index: pos for pos, band_index in enumerate(band_indices)}
-    valence = int(matrix_dim) // 2 - 1
-    conduction = int(matrix_dim) // 2
-    lower_remote = valence - 1
-    upper_remote = conduction + 1
-    if valence not in positions or conduction not in positions:
-        return {
-            "valence_bandwidth_ev": None,
-            "conduction_bandwidth_ev": None,
-            "mean_flat_bandwidth_ev": None,
-            "central_manifold_span_ev": None,
-            "remote_gap_ev": None,
-        }
-
-    energies = np.asarray(result.energies, dtype=float)
-    val = energies[..., positions[valence]]
-    con = energies[..., positions[conduction]]
-    val_bw = float(np.max(val) - np.min(val))
-    con_bw = float(np.max(con) - np.min(con))
-    central_gap = float(np.min(con - val))
-    central = energies[..., [positions[valence], positions[conduction]]]
-    span = float(np.max(central) - np.min(central))
-    remote_gap: float | None = None
-    if lower_remote in positions and upper_remote in positions:
-        lower_gap = val - energies[..., positions[lower_remote]]
-        upper_gap = energies[..., positions[upper_remote]] - con
-        remote_gap = float(min(np.min(lower_gap), np.min(upper_gap)))
+    metrics = estimate_central_pair_metrics(result, matrix_dim)
     return {
-        "valence_bandwidth_ev": val_bw,
-        "conduction_bandwidth_ev": con_bw,
-        "mean_flat_bandwidth_ev": 0.5 * (val_bw + con_bw),
-        "central_manifold_span_ev": span,
-        "central_gap_ev": central_gap,
-        "remote_gap_ev": remote_gap,
+        "valence_bandwidth_ev": metrics["valence_bandwidth_ev"],
+        "conduction_bandwidth_ev": metrics["conduction_bandwidth_ev"],
+        "mean_flat_bandwidth_ev": metrics["mean_flat_bandwidth_ev"],
+        "central_manifold_span_ev": metrics["central_manifold_span_ev"],
+        "central_gap_ev": metrics["central_gap_ev"],
+        "remote_gap_ev": metrics["remote_gap_ev"],
     }
 
 
