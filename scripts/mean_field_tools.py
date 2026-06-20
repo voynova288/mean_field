@@ -25,7 +25,6 @@ MODULE_COMMANDS = {
 
     "merge_tbg_crpa_chunks": ("mean_field.devtools.merge_tbg_crpa_chunks", ()),
     "prepare_tbg_crpa_bm": ("mean_field.devtools.prepare_tbg_crpa_bm", ()),
-    "run_rlg_hbn_paper_hf": ("mean_field.devtools.run_rlg_hbn_paper_hf", ()),
     "run_rlg_hbn_tdhf_q0": ("mean_field.devtools.run_rlg_hbn_tdhf_q0", ()),
     "run_rlg_hbn_tdhf_finite_q": ("mean_field.devtools.run_rlg_hbn_tdhf_finite_q", ()),
     "run_tbg_crpa_chunk": ("mean_field.devtools.run_tbg_crpa_chunk", ()),

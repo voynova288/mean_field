@@ -72,7 +72,7 @@ Implemented in the RLG/hBN system adapter:
 - q=0 particle-hole pair construction with particle and hole constrained to the same mBZ grid point;
 - on-demand `V_hf(a,b,c,d)` backed by layer-resolved form factors and the full transfer-momentum Coulomb tensor stored in `RLGhBNLayerOverlapBlockSet`;
 - dense q=0 TDHF matrix construction for small smoke tests and guarded checkpoint pilots;
-- loading HF archives written by `run_rlg_hbn_paper_hf` through `load_rlg_hbn_tdhf_run_from_archive(...)`, using cached projected basis / layer-overlap blocks rather than rerunning HF, and rejecting archives marked with the diagnostic `MEAN_FIELD_RLG_HBN_ZERO_LITERAL_Q0_FOCK=1` convention;
+- loading historical HF archives formerly written by the retired `run_rlg_hbn_paper_hf` workflow through `load_rlg_hbn_tdhf_run_from_archive(...)`, using cached projected basis / layer-overlap blocks rather than rerunning HF, and rejecting archives marked with the diagnostic `MEAN_FIELD_RLG_HBN_ZERO_LITERAL_Q0_FOCK=1` convention;
 - command-surface access via `python scripts/mean_field_tools.py run_rlg_hbn_tdhf_q0 --hf-archive ...`, with login-node guard for the actual dense TDHF solve and `--dry-run` for configuration validation;
 - vectorized q=0 dense assembly via `build_rlg_hbn_tdhf_q0_matrices_from_pairs(..., assembly="vectorized")`, grouping ph pairs by k and using NumPy/BLAS compiled kernels for layer form-factor contractions instead of calling `V_hf` element-by-element in Python;
 - q=0 runner dense-memory guard (`--max-pairs`, `--max-dense-memory-gb`) and shortcut guard so the fully polarized simplification is not applied to mixed `--channel all` blocks;
