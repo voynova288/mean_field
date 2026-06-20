@@ -321,6 +321,16 @@
       "legacy_lines_removed_gross": 27,
       "slice": "retire_atmg_khalaf_checkpoint_helper",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Retired the unexported tMBG duplicate Hamiltonian cross-check builder and removed the C11 validation hook; direct Hamiltonian tests and lightweight validate_physics remain.",
+      "direct_mean_field_systems_imports_after": 5,
+      "direct_mean_field_systems_imports_before": 5,
+      "legacy_lines_removed_gross": 345,
+      "slice": "retire_tmbg_duplicate_hamiltonian_cross_check",
+      "tracked_files_deleted": [
+        "src/mean_field/systems/tmbg/cross_check.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -416,7 +426,7 @@
     "validation.py": {
       "files": [
         {
-          "lines": 308,
+          "lines": 227,
           "path": "src/mean_field/systems/tmbg/validation.py"
         },
         {
@@ -440,7 +450,7 @@
           "path": "src/mean_field/systems/htg/validation.py"
         }
       ],
-      "total_lines": 1030
+      "total_lines": 949
     }
   },
   "phase2_targets": {
@@ -695,8 +705,8 @@
     ]
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
-  "src_python_files": 196,
-  "src_python_lines": 64475,
+  "src_python_files": 195,
+  "src_python_lines": 64098,
   "top_30_files": [
     {
       "lines": 2361,
@@ -820,6 +830,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 70602,
-  "tracked_text_lines": 74423
+  "tracked_python_lines": 70225,
+  "tracked_text_lines": 74061
 }

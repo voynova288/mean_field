@@ -5,11 +5,6 @@ import math
 import numpy as np
 
 from ...core.validation import ValidationCheck, ValidationReport, make_validation_check
-from .cross_check import (
-    build_coupling_table as build_cross_coupling_table,
-    build_hamiltonian_tmbg as build_cross_check_hamiltonian,
-    generate_g_vectors,
-)
 from .hamiltonian import build_diagonal_block
 from .model import TMBGModel
 
@@ -60,44 +55,6 @@ def _measure_c2zt_residual(model: TMBGModel, *, valley: int, k_tilde: complex) -
     return float(np.max(np.abs(unitary @ hamiltonian.conjugate() @ unitary.conjugate().T - hamiltonian)))
 
 
-def cross_check_hamiltonian(model: TMBGModel, *, valley: int = 1) -> dict[str, float]:
-    lattice = model.lattice
-    generated_g = generate_g_vectors(
-        lattice.g_m1,
-        lattice.g_m2,
-        n_shells=lattice.n_shells,
-        g_cutoff=lattice.g_cutoff,
-    )
-    if generated_g.shape != lattice.g_vectors.shape:
-        raise ValueError(
-            "Independent G-vector generation does not match the primary lattice basis size: "
-            f"{generated_g.shape} vs {lattice.g_vectors.shape}."
-        )
-
-    g_vector_residual = float(np.max(np.abs(generated_g - lattice.g_vectors))) if generated_g.size else 0.0
-    coupling_table = build_cross_coupling_table(
-        generated_g,
-        q0=lattice.q0,
-        q_plus=lattice.q_plus,
-        q_minus=lattice.q_minus,
-        valley=valley,
-    )
-    diffs = {"G_vectors": g_vector_residual}
-    for label, k_tilde in (("Gamma", lattice.gamma_m), ("K", lattice.k_m), ("M", lattice.m_m)):
-        h_main = model.build_hamiltonian(complex(k_tilde), valley=valley)
-        h_cross = build_cross_check_hamiltonian(
-            complex(k_tilde),
-            generated_g,
-            coupling_table,
-            lattice.q0,
-            lattice.theta_rad,
-            model.params,
-            valley=valley,
-        )
-        diffs[label] = float(np.max(np.abs(h_main - h_cross)))
-    return diffs
-
-
 def _rotate_c3(kvec: complex) -> complex:
     return complex(kvec) * complex(math.cos(2.0 * math.pi / 3.0), math.sin(2.0 * math.pi / 3.0))
 
@@ -135,19 +92,6 @@ def validate_physics(
     evals_kprime, _ = model.diagonalize(-sample_k, valley=-valley, n_bands=n_bands)
     time_reversal_residual = float(np.max(np.abs(evals_k - evals_kprime)))
     c2zt_residual = _measure_c2zt_residual(model, valley=valley, k_tilde=lattice.k_m)
-
-    cross_check_error: str | None = None
-    cross_check_diffs: dict[str, float] = {}
-    try:
-        cross_check_diffs = cross_check_hamiltonian(model, valley=valley)
-    except ValueError as exc:
-        cross_check_error = str(exc)
-
-    cross_check_max = (
-        float(max(cross_check_diffs.values()))
-        if cross_check_error is None and cross_check_diffs
-        else float("inf")
-    )
 
     checks: list[ValidationCheck] = [
         make_validation_check(
@@ -262,30 +206,6 @@ def validate_physics(
         )
     )
 
-    if cross_check_error is None:
-        checks.append(
-            make_validation_check(
-                "C11.hamiltonian_cross_check",
-                cross_check_max < 1.0e-12,
-                cross_check_max,
-                detail=(
-                    "Independent cross-check builder should reproduce the primary Hamiltonian at Γ, K̃, and M̃. "
-                    f"G-set={cross_check_diffs['G_vectors']:.2e}, "
-                    f"Γ={cross_check_diffs['Gamma']:.2e}, "
-                    f"K̃={cross_check_diffs['K']:.2e}, "
-                    f"M̃={cross_check_diffs['M']:.2e}."
-                ),
-            )
-        )
-    else:
-        checks.append(
-            ValidationCheck(
-                name="C11.hamiltonian_cross_check",
-                status="fail",
-                detail=f"Independent Hamiltonian cross-check failed to run: {cross_check_error}",
-            )
-        )
-
     checks.append(
         ValidationCheck(
             name="C9.cutoff_convergence",
@@ -303,6 +223,5 @@ __all__ = [
     "ValidationCheck",
     "ValidationReport",
     "build_c2zt_unitary",
-    "cross_check_hamiltonian",
     "validate_physics",
 ]

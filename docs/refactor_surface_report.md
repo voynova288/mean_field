@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 74423
-- Tracked Python lines: 70602
+- Tracked text lines: 74061
+- Tracked Python lines: 70225
 - Tracked Julia lines: 826
-- `src` Python files: 196
-- `src` Python lines: 64475
+- `src` Python files: 195
+- `src` Python lines: 64098
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -273,6 +273,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 27.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### retire_tmbg_duplicate_hamiltonian_cross_check
+
+- Retired the unexported tMBG duplicate Hamiltonian cross-check builder and removed the C11 validation hook; direct Hamiltonian tests and lightweight validate_physics remain.
+- Deleted files: `src/mean_field/systems/tmbg/cross_check.py`.
+- Gross legacy LOC removed/thinned: 345.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -335,11 +342,11 @@ Total lines: 691
 
 ### `validation.py`
 
-Total lines: 1030
+Total lines: 949
 
 | Lines | Path |
 |---:|---|
-| 308 | `src/mean_field/systems/tmbg/validation.py` |
+| 227 | `src/mean_field/systems/tmbg/validation.py` |
 | 193 | `src/mean_field/systems/htqg/validation.py` |
 | 156 | `src/mean_field/systems/RnG_hBN/validation.py` |
 | 138 | `src/mean_field/systems/atmg/validation.py` |
