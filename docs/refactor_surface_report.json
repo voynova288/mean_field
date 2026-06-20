@@ -21,7 +21,7 @@
       ]
     },
     {
-      "description": "Removed one-off HTQG Fig.1 first-pass band plotting devtool from tracked command surface. The reusable HTQG band/path/domain APIs remain in systems/htqg; projected-HF workflow is intentionally kept for pending validation.",
+      "description": "Removed one-off HTQG Fig.1 first-pass band plotting devtool from tracked command surface. The reusable HTQG band/path/domain APIs remain in systems/htqg.",
       "direct_mean_field_systems_imports_after": 13,
       "direct_mean_field_systems_imports_before": 17,
       "legacy_lines_removed_gross": 213,
@@ -29,10 +29,20 @@
       "tracked_files_deleted": [
         "src/mean_field/devtools/run_htqg_fig1_bands.py"
       ]
+    },
+    {
+      "description": "Removed HTQG projected-HF paper-scan CLI glue from tracked devtools. The core HTQG projected-HF solver remains in systems/htqg/hf.py; future durable reproduction should be reintroduced under workflows with explicit validation gates.",
+      "direct_mean_field_systems_imports_after": 10,
+      "direct_mean_field_systems_imports_before": 13,
+      "legacy_lines_removed_gross": 400,
+      "slice": "remove_htqg_projected_hf_devtool",
+      "tracked_files_deleted": [
+        "src/mean_field/devtools/run_htqg_projected_hf.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
-    "count": 13,
+    "count": 10,
     "items": [
       {
         "line": 1141,
@@ -53,21 +63,6 @@
         "line": 21,
         "path": "src/mean_field/devtools/run_htg_hf.py",
         "text": "from mean_field.systems.htg import ("
-      },
-      {
-        "line": 12,
-        "path": "src/mean_field/devtools/run_htqg_projected_hf.py",
-        "text": "from mean_field.systems.htqg.domains import domain_displacements"
-      },
-      {
-        "line": 13,
-        "path": "src/mean_field/devtools/run_htqg_projected_hf.py",
-        "text": "from mean_field.systems.htqg.hf import ("
-      },
-      {
-        "line": 22,
-        "path": "src/mean_field/devtools/run_htqg_projected_hf.py",
-        "text": "from mean_field.systems.htqg.params import DEFAULT_THETA_DEG, HTQGParams"
       },
       {
         "line": 35,
@@ -458,8 +453,8 @@
     ]
   },
   "root": "/data/home/ziyuzhu/Mean_Field",
-  "src_python_files": 201,
-  "src_python_lines": 69292,
+  "src_python_files": 200,
+  "src_python_lines": 68892,
   "top_30_files": [
     {
       "lines": 2361,

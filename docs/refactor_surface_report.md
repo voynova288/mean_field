@@ -4,10 +4,10 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- `src` Python files: 201
-- `src` Python lines: 69292
+- `src` Python files: 200
+- `src` Python lines: 68892
 - Files over 1000 lines: 15
-- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 13
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 10
 
 ## Completed cleanup slices
 
@@ -27,10 +27,17 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ### remove_htqg_fig1_bands_devtool
 
-- Removed one-off HTQG Fig.1 first-pass band plotting devtool from tracked command surface. The reusable HTQG band/path/domain APIs remain in systems/htqg; projected-HF workflow is intentionally kept for pending validation.
+- Removed one-off HTQG Fig.1 first-pass band plotting devtool from tracked command surface. The reusable HTQG band/path/domain APIs remain in systems/htqg.
 - Deleted files: `src/mean_field/devtools/run_htqg_fig1_bands.py`.
 - Gross legacy LOC removed: 213.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 17 -> 13.
+
+### remove_htqg_projected_hf_devtool
+
+- Removed HTQG projected-HF paper-scan CLI glue from tracked devtools. The core HTQG projected-HF solver remains in systems/htqg/hf.py; future durable reproduction should be reintroduced under workflows with explicit validation gates.
+- Deleted files: `src/mean_field/devtools/run_htqg_projected_hf.py`.
+- Gross legacy LOC removed: 400.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 13 -> 10.
 
 ## Top 30 Python files under `src`
 
@@ -75,9 +82,6 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | `src/mean_field/devtools/backfill_canonical_hf_sidecars.py` | 1146 | `from mean_field.systems.RnG_hBN.hf_contracts import rlg_hbn_hf_run_to_hf_run_result` |
 | `src/mean_field/devtools/prepare_tbg_crpa_bm.py` | 9 | `from mean_field.systems.tbg.params import TBGParameters` |
 | `src/mean_field/devtools/run_htg_hf.py` | 21 | `from mean_field.systems.htg import (` |
-| `src/mean_field/devtools/run_htqg_projected_hf.py` | 12 | `from mean_field.systems.htqg.domains import domain_displacements` |
-| `src/mean_field/devtools/run_htqg_projected_hf.py` | 13 | `from mean_field.systems.htqg.hf import (` |
-| `src/mean_field/devtools/run_htqg_projected_hf.py` | 22 | `from mean_field.systems.htqg.params import DEFAULT_THETA_DEG, HTQGParams` |
 | `src/mean_field/devtools/run_rlg_hbn_paper_hf.py` | 35 | `from mean_field.systems.RnG_hBN import (` |
 | `src/mean_field/devtools/run_rlg_hbn_paper_hf.py` | 50 | `from mean_field.systems.RnG_hBN.hf import RLG_HBN_FORM_FACTOR_CONVENTION_VERSION` |
 | `src/mean_field/devtools/run_rlg_hbn_tdhf_finite_q.py` | 16 | `from mean_field.systems.RnG_hBN import (` |
