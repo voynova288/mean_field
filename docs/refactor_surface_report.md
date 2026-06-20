@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 70486
-- Tracked Python lines: 66451
+- Tracked text lines: 69398
+- Tracked Python lines: 65426
 - Tracked Julia lines: 826
-- `src` Python files: 189
-- `src` Python lines: 60324
+- `src` Python files: 187
+- `src` Python lines: 59299
 - Files over 1000 lines: 13
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5
 
@@ -378,6 +378,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 537.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
 
+### retire_shift_current_paper_adapters
+
+- Retired the Chaudhary b0 TBG and hTG legacy shift-current paper-adapter modules after owner approval; maintained response math remains in analysis.shift_current and response_derivative_gauge, with TDBG/Joya as the active system adapter.
+- Deleted files: `src/mean_field/systems/htg/shift_current.py`, `src/mean_field/systems/tbg/chaudhary2021.py`.
+- Gross legacy LOC removed/thinned: 1025.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 5 -> 5.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -404,7 +411,6 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 735 | `src/mean_field/systems/tbg/zero_field/hf_contracts.py` |
 | 710 | `src/mean_field/core/hf/tdhf.py` |
 | 686 | `src/mean_field/systems/RnG_hBN/hf_contracts.py` |
-| 683 | `src/mean_field/systems/tbg/chaudhary2021.py` |
 | 643 | `src/mean_field/systems/htg/supercell_contracts.py` |
 | 627 | `src/mean_field/benchmarks.py` |
 | 617 | `src/mean_field/core/hf/overlap.py` |
@@ -412,6 +418,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 528 | `src/mean_field/systems/tbg/zero_field/artifacts.py` |
 | 498 | `src/mean_field/crpa/validation.py` |
 | 492 | `src/mean_field/systems/RnG_hBN/screening.py` |
+| 456 | `src/mean_field/systems/tbg/zero_field/model.py` |
 
 ## Direct private-system imports in workflow surfaces
 

@@ -46,14 +46,11 @@ Current lightweight system/workflow adapters:
   `dH/dk`, zero `d2H/dk2`, one-k gauge data, full tiny-k tensors,
   selected-pair kernels, Gamma-centered cell helpers, and K- mirror-x
   tensor-sign helpers.
-- Chaudhary b0 TBG: `mean_field.systems.tbg.chaudhary2021` exposes
-  `b0_shift_current_point_data`, `b0_shift_current_tensors_at_k`, and
-  `b0_component_kernel_at_k` around the old b0 model.  Chaudhary audit docs
-  stay in ignored local reports/internal workspaces.
-- hTG/Mao: `mean_field.systems.htg.shift_current` preserves the hTG legacy
-  response surface as wrappers around this generic API; `mean_field.systems.htg.mao2025`
-  owns Mao-specific model parameters, stacking phases, sublattice mass, and
-  `dH/dk` validation helpers.  Mao paper figures are still not reproduced.
+
+Retired Chaudhary b0 TBG and hTG legacy shift-current wrappers should stay in
+ignored local reports/internal workspaces or git history. New system-specific
+response work should connect Hamiltonians and derivatives directly to this
+common API instead of restoring those paper-audit surfaces.
 
 ## Named conventions
 
