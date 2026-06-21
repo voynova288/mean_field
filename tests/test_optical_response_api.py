@@ -4,11 +4,16 @@ import numpy as np
 
 from analysis import response_derivative_gauge as old_gauge
 from analysis.optical_response import (
+    JOYA_EQ7_GEOMETRIC_CONVENTION,
     ShiftCurrentComponent,
     berry_connection_generalized_derivative,
+    degenerate_band_groups,
     fermi_occupation,
+    link_shift_vector,
     parse_component,
     positive_transition_pairs,
+    random_block_unitary,
+    wannierberri_shift_current_group_trace,
 )
 from analysis.optical_response import shift_current as new_shift
 from analysis.shift_current import core as old_shift
@@ -34,6 +39,17 @@ def test_optical_response_reexports_gauge_and_shift_current_api() -> None:
         energies, np.asarray([1.0, 0.0])
     )
     assert new_shift.ShiftCurrentTensors is old_shift.ShiftCurrentTensors
+
+
+def test_optical_response_package_exports_split_module_symbols() -> None:
+    energies = np.asarray([0.0, 1.0, 1.0 + 1.0e-6], dtype=float)
+    assert degenerate_band_groups(energies, threshold=1.0e-4) == [(0, 1), (1, 3)]
+    gauge = random_block_unitary([(0, 1), (1, 3)], 3, rng=123)
+    np.testing.assert_allclose(gauge.conjugate().T @ gauge, np.eye(3), atol=1.0e-12)
+    assert JOYA_EQ7_GEOMETRIC_CONVENTION.normalized_lorentzian is False
+    imn = np.ones((3, 3, 2, 2, 2), dtype=float)
+    np.testing.assert_allclose(wannierberri_shift_current_group_trace(imn, [0], [1, 2]), np.full((2, 2, 2), 2.0))
+    assert callable(link_shift_vector)
 
 
 def test_tdbg_shift_current_adapter_uses_new_optical_response_path() -> None:
