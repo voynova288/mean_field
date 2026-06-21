@@ -80,6 +80,6 @@ The following local directories are ignored by design:
 - `reference/`
 - `reports/`
 - `plan/`
-- `tests/` for broad/internal regression suites; only small public contract tests are force-tracked
+- `tests/local/`, `tests/internal/`, `tests/slow/`, generated test data, and generated arrays under `tests/`; public contract tests under bare `tests/` are source-controlled by default
 - Python/Jupyter/cache artifacts
 - task-specific work documents and temporary handoff notes
