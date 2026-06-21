@@ -1541,3 +1541,40 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 ```
 
 Result: `215 passed`.
+
+## Update: HTG supercell metadata-only HF save/load gate
+
+Commit in this continuation:
+
+- `834b132 Test HTG supercell metadata-only HF save`
+
+### Current summary after this continuation
+
+- Tracked text lines: 66547
+- Tracked Python lines: 62008
+- Tracked Julia lines: 826
+- `src` Python files: 275
+- `src` Python lines: 55205
+- Files over 1000 lines: 0
+
+### HTG supercell canonical sidecar acceptance
+
+Extended the explicit HTG supercell public `run_hf(...)` gate to save the result with `canonical_payload="metadata_only"`, reload it through `mean_field.api.load_result(...)`, and verify that no dense `canonical_hf_arrays.npz` payload is produced.
+
+Focused validation:
+
+```bash
+PYTHONPATH=src python -m compileall -q src/mean_field/api src/mean_field/systems/htg tests/test_api_hf_adapters.py
+PYTHONPATH=src pytest -q tests/test_api_hf_adapters.py
+```
+
+Result: `16 passed`.
+
+Full gate on `test001` after this slice:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+```
+
+Result: `215 passed`.
