@@ -1141,3 +1141,54 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 ```
 
 Result: `210 passed`.
+
+## Update: optical-response shift-current module split
+
+Commit in this continuation:
+
+- `1139cfa Split optical response shift-current modules`
+
+### Current summary after this continuation
+
+- Tracked text lines: 65931
+- Tracked Python lines: 61863
+- Tracked Julia lines: 826
+- `src` Python files: 270
+- `src` Python lines: 55140
+- Files over 1000 lines: 0
+
+### Shift-current module split
+
+After moving the implementation into `analysis.optical_response`, the shift-current implementation was split so the package module names now match their responsibilities:
+
+- `components.py`: component/axis parsing and labels.
+- `conventions.py`: response convention bundles and physical constants.
+- `occupations.py`: Fermi occupation helper.
+- `heatmap.py`: Lorentzian broadening, spectrum accumulation, and Fermi/omega heatmap helpers.
+- `shift_current.py`: tensor precomputation and transition/pair kernel aggregation; still re-exports the public symbols for compatibility.
+
+Line counts after split:
+
+- `shift_current.py`: 523
+- `components.py`: 86
+- `conventions.py`: 76
+- `occupations.py`: 22
+- `heatmap.py`: 158
+
+Focused validation:
+
+```bash
+PYTHONPATH=src python -m compileall -q src/analysis/optical_response src/analysis/shift_current tests/test_optical_response_api.py
+PYTHONPATH=src pytest -q tests/test_optical_response_api.py tests/test_api_imports.py tests/test_api_bands.py
+```
+
+Result: `15 passed`.
+
+Full gate on `test001` after this slice:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+```
+
+Result: `210 passed`.
