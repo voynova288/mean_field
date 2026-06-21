@@ -6,13 +6,14 @@ The stable model entrypoint is:
 from mean_field.api import make_model, model_record, component_group_records
 ```
 
-`make_model(system_name, **kwargs)` normalizes public names and aliases, then delegates to existing system model constructors.  It does not move Hamiltonian logic out of system modules.
+`make_model(system_name, **kwargs)` normalizes public names and aliases through a small model adapter registry, then delegates to existing system model constructors.  It does not move Hamiltonian logic out of system modules.  Registry helpers are available as `list_model_adapters()`, `get_model_adapter_info(name)`, and `resolve_model_adapter(name)`.
 
 ## Supported public names
 
 Current façade names:
 
 - `htg`
+- `htqg`
 - `rlg_hbn`
 - `tbg` (`variant="zero_field_bm"` only; BM single-particle bands)
 - `tdbg`

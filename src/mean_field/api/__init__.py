@@ -13,7 +13,18 @@ from .artifacts import (
 from .bands import BandBundle, KGrid, KPath, band_bundle_from_result, compute_bands
 from .crpa import CRPAAdapterInfo, CRPAConfig, compute_crpa, get_crpa_adapter_info, list_crpa_adapters, resolve_crpa_adapter
 from .hf import HFConfig, HFResult, HFState, WavefunctionBundle, reconstruct_canonical_hf_run_result, run_hf
-from .models import BandEigenResult, ContinuumModel, component_group_records, component_groups, make_model, model_record
+from .models import (
+    BandEigenResult,
+    ContinuumModel,
+    ModelAdapterInfo,
+    component_group_records,
+    component_groups,
+    get_model_adapter_info,
+    list_model_adapters,
+    make_model,
+    model_record,
+    resolve_model_adapter,
+)
 from .tdhf import TDHFAdapterInfo, TDHFConfig, get_tdhf_adapter_info, list_tdhf_adapters, resolve_tdhf_adapter, run_tdhf
 from .validation import validate_fig6_screening_checkpoints
 
@@ -30,6 +41,7 @@ __all__ = [
     "HFState",
     "KGrid",
     "KPath",
+    "ModelAdapterInfo",
     "ModelRecord",
     "ResultDirectory",
     "TDHFAdapterInfo",
@@ -41,15 +53,18 @@ __all__ = [
     "component_group_records",
     "component_groups",
     "get_crpa_adapter_info",
+    "get_model_adapter_info",
     "get_tdhf_adapter_info",
     "load_result",
     "list_crpa_adapters",
+    "list_model_adapters",
     "list_tdhf_adapters",
     "make_model",
     "model_record",
     "reconstruct_canonical_hf_run_result",
     "required_artifact_files",
     "resolve_crpa_adapter",
+    "resolve_model_adapter",
     "resolve_tdhf_adapter",
     "run_hf",
     "run_tdhf",
