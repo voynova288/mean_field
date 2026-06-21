@@ -998,3 +998,55 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 ```
 
 Result: `210 passed`.
+
+## Update: retired RLG/hBN devtool helper extraction
+
+Commit in this continuation:
+
+- `6414558 Move retired RLG hBN helpers to workflows`
+
+### Current summary after this continuation
+
+- Tracked text lines: 65745
+- Tracked Python lines: 61836
+- Tracked Julia lines: 826
+- `src` Python files: 266
+- `src` Python lines: 55113
+- Files over 1000 lines: 0
+
+### Devtool surface change
+
+Moved lightweight compatibility helpers from retired command-surface modules into `src/mean_field/workflows/rlg_hbn.py` and updated tests to import the workflow helpers directly.
+
+Deleted retired tracked command files:
+
+- `src/mean_field/devtools/run_rlg_hbn_paper_hf.py`
+- `src/mean_field/devtools/merge_rlg_hbn_parallel_hf.py`
+- `src/mean_field/devtools/run_rlg_hbn_tdhf_q0.py`
+
+Preserved helper functionality under explicit workflow names:
+
+- `write_rlg_hbn_paper_hf_contract_sidecars`
+- `save_rlg_hbn_paper_hf_state_archive`
+- `load_rlg_hbn_paper_hf_archive_density`
+- `write_rlg_hbn_parallel_hf_merge_contract_sidecars`
+- `rlg_hbn_tdhf_q0_shortcut_decision`
+- `write_rlg_hbn_tdhf_q0_contract_sidecars`
+
+Focused validation:
+
+```bash
+PYTHONPATH=src python -m compileall -q src/mean_field/workflows src/mean_field/devtools tests/test_artifact_schema.py tests/test_rlg_hbn_tdhf_adapter.py
+PYTHONPATH=src pytest -q tests/test_artifact_schema.py tests/test_rlg_hbn_tdhf_adapter.py
+```
+
+Result: `43 passed`.
+
+Full gate on `test001` after this slice:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+```
+
+Result: `210 passed`.
