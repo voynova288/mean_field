@@ -5,8 +5,8 @@
 这个库应被维护成“通用框架 + 体系适配层 + 分析工作区”：
 
 - 通用 Hartree-Fock 框架在 `src/mean_field/core/hf`。SCF/ODA/占据/投影重叠/相互作用拼装等可复用逻辑应留在这里，不要写进某个具体体系。
-- 通用量子几何分析框架在 `src/analysis`：`topology` 负责 Berry connection、plaquette flux、Chern；`response_derivative_gauge.py` 是按 WannierBerri 约定整理的规范安全求导器，可被不同响应/量子几何问题复用。
-- `src/analysis/shift_current/` 是通用 shift-current API；旧的 `src/analysis/shift_current_htg` / `src/analysis/shift_current_tbg` 工作区已清理。体系相关适配应放在 `src/mean_field/systems/<system>`，历史复现/audit 文档留在 ignored local reports/internal workspace，不要把图像复现状态当成通用公式已经验证完成。
+- 通用量子几何分析框架在 `src/analysis`：`topology` 负责 Berry connection、plaquette flux、Chern；`optical_response/` 负责按 WannierBerri 约定整理的规范安全响应求导与 shift-current API。旧 `response_derivative_gauge.py` 和 `shift_current/core.py` 只保留兼容 re-export。
+- 旧的 `src/analysis/shift_current_htg` / `src/analysis/shift_current_tbg` 工作区已清理。体系相关适配应放在 `src/mean_field/systems/<system>`，历史复现/audit 文档留在 ignored local reports/internal workspace，不要把图像复现状态当成通用公式已经验证完成。
 - 不同物理体系应在 `src/mean_field/systems/<system>` 中接入通用 HF 框架和通用分析框架。体系目录负责 Hamiltonian、基底/规范、参数、sewing、投影窗口、历史 API 适配；不要在体系目录重复实现通用 SCF loop、FHS plaquette 或 WannierBerri generalized-derivative 公式。
 
 ## 复杂逻辑必须先理解
@@ -24,7 +24,7 @@
 - 修改 `src/mean_field/core/hf` 前先读 `docs/architecture.md`，并确认变更不引入体系依赖。
 - 修改拓扑/Berry 几何前先读 `docs/topology_framework.md`，优先扩展 `src/analysis/topology`，不要在体系目录复制 `_unit_link`、determinant-link、plaquette loop 或 Chern 积分。
 - 修改响应求导、shift vector、Berry connection generalized derivative 前先读 `src/analysis/RESPONSE_DERIVATIVE_GAUGE.md`。不要对原始本征矢相位或 `np.angle(A_mn)` 做裸差分；使用 WannierBerri-style covariant/generalized derivative 或 Wilson-link 检查。
-- 新体系应先实现 `src/mean_field/systems/<system>` 的物理层和适配层，再接入 `core/hf`、`analysis/topology`、`analysis/response_derivative_gauge.py`。只有通用能力不足时才修改通用框架。
+- 新体系应先实现 `src/mean_field/systems/<system>` 的物理层和适配层，再接入 `core/hf`、`analysis/topology`、`analysis/optical_response`。只有通用能力不足时才修改通用框架。
 - 不要为每次诊断、每张 paper panel 或每组参数新增一个 tracked 脚本。优先使用/扩展 `scripts/mean_field_tools.py`、`scripts/mean_field_tools.jl`、`scripts/submit_mean_field.sbatch`、`src/mean_field/cli.py` 和已有 devtool；详细规则见 `docs/script_surface_policy.md`。
 
 ## 验证与集群安全

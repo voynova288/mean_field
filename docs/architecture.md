@@ -86,10 +86,11 @@ System plot modules should import generic helpers such as `load_plot_backend`, `
 Gauge-safe Berry-connection generalized derivatives and shift-vector helpers are centralized in:
 
 ```text
-src/analysis/response_derivative_gauge.py
+src/analysis/optical_response/gauge.py
+src/analysis/optical_response/gauge_*.py
 ```
 
-This module mirrors the WannierBerri/Wannier90 covariant-derivative convention for Hamiltonian-gauge matrices and is reusable beyond the current shift-current workspaces.  It should be the common place for:
+The historical `src/analysis/response_derivative_gauge.py` path is a compatibility shim.  The optical-response gauge modules mirror the WannierBerri/Wannier90 covariant-derivative convention for Hamiltonian-gauge matrices and are reusable beyond the current shift-current workspaces.  They should be the common place for:
 
 - Hamiltonian-gauge derivative ingredients;
 - Berry-connection generalized derivatives;
@@ -97,11 +98,11 @@ This module mirrors the WannierBerri/Wannier90 covariant-derivative convention f
 - Wilson-link validation of shift vectors;
 - random phase/block-unitary gauge-covariance tests.
 
-Do not implement response derivatives by differentiating raw eigenvector phases or raw `np.angle(A_mn)` in a system module.  If a response calculation needs more common derivative capability, extend `analysis.response_derivative_gauge` first and then call it from the system or analysis adapter.  See `src/analysis/RESPONSE_DERIVATIVE_GAUGE.md` for the local contract and validation notes.
+Do not implement response derivatives by differentiating raw eigenvector phases or raw `np.angle(A_mn)` in a system module.  If a response calculation needs more common derivative capability, extend `analysis.optical_response` first and then call it from the system or analysis adapter.  See `src/analysis/RESPONSE_DERIVATIVE_GAUGE.md` for the local contract and validation notes.
 
 ## Shift-current workspace status
 
-The old directories `src/analysis/shift_current_htg` and `src/analysis/shift_current_tbg` have been retired.  Reusable response mathematics lives in `src/analysis/response_derivative_gauge.py` and `src/analysis/shift_current/`; reference/toy benchmarks live under `src/analysis/shift_current/toy_models/`; physical-system Hamiltonians, derivatives, basis/gauge conventions, and paper compatibility adapters belong under `src/mean_field/systems/<system>/`.  Historical audits and reproduction notes should stay in ignored local reports/internal workspaces rather than the public docs surface.
+The old directories `src/analysis/shift_current_htg` and `src/analysis/shift_current_tbg` have been retired.  Reusable response mathematics lives in `src/analysis/optical_response/`; compatibility import paths remain under `src/analysis/response_derivative_gauge.py` and `src/analysis/shift_current/`; physical-system Hamiltonians, derivatives, basis/gauge conventions, and paper compatibility adapters belong under `src/mean_field/systems/<system>/`.  Historical audits and reproduction notes should stay in ignored local reports/internal workspaces rather than the public docs surface.
 
 When future systems need optical-response or shift-current analysis, connect the system model through a thin adapter that supplies Hamiltonians, derivatives, energies/eigenvectors, occupation data, units, and conventions to the common analysis helpers.  Keep paper-specific scans, plotting, and unresolved reproduction diagnostics out of the common framework until the relevant formula and convention gates have passed.
 

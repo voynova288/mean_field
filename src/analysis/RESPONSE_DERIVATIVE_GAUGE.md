@@ -4,6 +4,19 @@ This note records the local derivative module introduced for response calculatio
 
 ## Local implementation
 
+Implementation lives under the optical-response package:
+
+```text
+src/analysis/optical_response/gauge.py
+src/analysis/optical_response/gauge_data.py
+src/analysis/optical_response/gauge_primitives.py
+src/analysis/optical_response/gauge_hamiltonian.py
+src/analysis/optical_response/gauge_derivatives.py
+src/analysis/optical_response/gauge_shift.py
+```
+
+The historical path remains a compatibility shim only:
+
 ```text
 src/analysis/response_derivative_gauge.py
 ```
@@ -11,8 +24,10 @@ src/analysis/response_derivative_gauge.py
 The higher-level reusable shift-current API that consumes this derivative layer is:
 
 ```text
-src/analysis/shift_current/
+src/analysis/optical_response/shift_current.py
 ```
+
+Historical `src/analysis/shift_current/` paths re-export the common API for compatibility.
 
 Main derivative API:
 
@@ -110,14 +125,13 @@ rather than the shift vector alone.
 
 ## Validation
 
-Focused validation lives in:
+Tracked lightweight validation currently lives in:
 
 ```text
-tests/test_response_derivative_gauge.py
-tests/test_shift_current_generic.py
+tests/test_optical_response_api.py
 ```
 
-The generic shift-current module adds system-facing helpers for component parsing, named WannierBerri/Joya conventions, Fermi occupations, Lorentzian conventions, transition tables, heatmap accumulation, and selected-pair/full-tensor transition weights. Paper-specific workspaces should call `analysis.shift_current` rather than reimplementing these pieces.
+The generic shift-current module adds system-facing helpers for component parsing, named WannierBerri/Joya conventions, Fermi occupations, Lorentzian conventions, transition tables, heatmap accumulation, and selected-pair/full-tensor transition weights. Paper-specific workspaces should call `analysis.optical_response` (or compatibility `analysis.shift_current`) rather than reimplementing these pieces.
 
 Current validation checks:
 
@@ -131,16 +145,12 @@ Current validation checks:
 8. Wilson-link phase derivative test: `link_shift_vector` agrees with the covariant derivative shift vector on a smooth nondegenerate point.
 9. Ported WannierBerri `ShiftCurrentFormula` internal-term integrand matches the existing SLG reference-formula audit and exposes group-trace helpers.
 10. Historical Chaudhary b0 and hTG legacy wrapper gates were retired with those paper-audit surfaces; their durable convention lessons are kept in the common API and this note.
-11. Generic `analysis.shift_current` gates: `JOYA_EQ7_GEOMETRIC_CONVENTION` matches the ordered pair integrand/no-`1/pi` Lorentzian, `WANNIERBERRI_INTERNAL_IMN_CONVENTION` matches upstream internal `Imn`, and selected-pair kernels agree with their full-tensor forms.
+11. Generic `analysis.optical_response` gates: public re-exports match compatibility shims, TDBG one-point adapter import path remains valid, and selected API smoke tests cover gauge/shift-current helpers.
 
-Command used:
+Current tracked lightweight command:
 
 ```bash
-PYTHONPATH=src pytest -q tests/test_tdbg_shift_current_adapter.py tests/test_shift_current_generic.py tests/test_response_derivative_gauge.py
+PYTHONPATH=src pytest -q tests/test_optical_response_api.py
 ```
 
-Result:
-
-```text
-24 passed
-```
+Latest result in this cleanup worktree: `2 passed` as part of the focused optical-response gates.
