@@ -1314,3 +1314,42 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 ```
 
 Result: `212 passed`.
+
+## Update: production validation backfill CLI examples
+
+Commit in this continuation:
+
+- `4382dc1 Fix backfill validation runbook CLI examples`
+
+### Current summary after this continuation
+
+- Tracked text lines: 66216
+- Tracked Python lines: 61970
+- Tracked Julia lines: 826
+- `src` Python files: 275
+- `src` Python lines: 55205
+- Files over 1000 lines: 0
+
+### Runbook/API mismatch fixed
+
+`docs/production_validation_backlog.md` now matches the current canonical sidecar backfill CLI: roots are positional arguments, not `--root`.  The runbook also includes an explicit `--no-archives` dry-run example for fast metadata-only inventory.
+
+A regression test covers the documented positional-root plus `--no-archives` dry-run shape and verifies report files are written without historical mutation.
+
+Focused validation:
+
+```bash
+PYTHONPATH=src python -m compileall -q src/mean_field/devtools/canonical_hf_backfill tests/test_backfill_canonical_hf_sidecars.py
+PYTHONPATH=src pytest -q tests/test_backfill_canonical_hf_sidecars.py
+```
+
+Result: `16 passed`.
+
+Full gate on `test001` after this slice:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+```
+
+Result: `213 passed`.
