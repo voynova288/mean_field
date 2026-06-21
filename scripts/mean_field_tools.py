@@ -20,7 +20,7 @@ CLI_ALIASES = {
 }
 MODULE_COMMANDS = {
     "backfill_canonical_hf_sidecars": ("mean_field.devtools.backfill_canonical_hf_sidecars", ()),
-    "compare_tbg_crpa_fig1e": ("mean_field.devtools.compare_tbg_crpa_fig1e", ()),
+
 
     "merge_tbg_crpa_chunks": ("mean_field.devtools.merge_tbg_crpa_chunks", ()),
     "run_rlg_hbn_tdhf_q0": ("mean_field.devtools.run_rlg_hbn_tdhf_q0", ()),
@@ -29,7 +29,7 @@ MODULE_COMMANDS = {
     "sync_b0_benchmark": ("mean_field.devtools.sync_benchmarks", ("b0",)),
     "sync_b0_benchmarks": ("mean_field.devtools.sync_benchmarks", ("b0",)),
     "sync_bm_unstrained_benchmark": ("mean_field.devtools.sync_benchmarks", ("bm-unstrained",)),
-    "validate_rlg_hbn_fig6_prereqs": ("mean_field.devtools.validate_rlg_hbn_fig6_prereqs", ()),
+
 }
 
 
