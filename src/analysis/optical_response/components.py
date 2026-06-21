@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from analysis.shift_current.core import (
+from .shift_current import (
     ShiftCurrentComponent,
     axis_index,
     component_from_any,

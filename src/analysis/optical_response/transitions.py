@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from analysis.shift_current.core import (
+from .shift_current import (
     PairTransitionKernel,
     PairTransitionWeight,
     component_transition_weight,
