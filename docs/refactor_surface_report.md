@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 62527
-- Tracked Python lines: 58288
+- Tracked text lines: 62546
+- Tracked Python lines: 58292
 - Tracked Julia lines: 826
 - `src` Python files: 169
-- `src` Python lines: 52185
+- `src` Python lines: 52189
 - Files over 1000 lines: 12
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0
 
@@ -548,7 +548,14 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ### resolve_rlg_hbn_intraflavor_finite_q_tdhf_lane
 
-- Resolved the RnG/hBN TDHF dirty lane by adding intraflavor finite-q assembly, overlap-shift closure helper, q/-q partner-structure residual reporting, package exports, and focused adapter tests; unrelated RnG/hBN HF ODA-control hunks remain unstaged.
+- Resolved the RnG/hBN TDHF dirty lane by adding intraflavor finite-q assembly, overlap-shift closure helper, q/-q partner-structure residual reporting, package exports, and focused adapter tests; unrelated RnG/hBN HF ODA-control hunks were kept for a separate slice.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 0.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
+
+### resolve_rlg_hbn_oda_lambda_cap_lane
+
+- Resolved the remaining RnG/hBN HF dirty lane by threading optional max_oda_lambda through run_rlg_hbn_hartree_fock and scan_rlg_hbn_ground_state into the shared core HF runner.
 - Deleted files: none; this slice thinned duplicated implementations in place.
 - Gross legacy LOC removed/thinned: 0.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
@@ -558,7 +565,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | Lines | Path |
 |---:|---|
 | 2305 | `src/mean_field/systems/htg/mean_field_adapter.py` |
-| 2252 | `src/mean_field/systems/RnG_hBN/hf.py` |
+| 2256 | `src/mean_field/systems/RnG_hBN/hf.py` |
 | 2058 | `src/mean_field/systems/RnG_hBN/tdhf.py` |
 | 1566 | `src/mean_field/devtools/backfill_canonical_hf_sidecars.py` |
 | 1348 | `src/mean_field/systems/tbg/zero_field/runners.py` |

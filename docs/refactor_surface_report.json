@@ -683,11 +683,19 @@
       ]
     },
     {
-      "description": "Resolved the RnG/hBN TDHF dirty lane by adding intraflavor finite-q assembly, overlap-shift closure helper, q/-q partner-structure residual reporting, package exports, and focused adapter tests; unrelated RnG/hBN HF ODA-control hunks remain unstaged.",
+      "description": "Resolved the RnG/hBN TDHF dirty lane by adding intraflavor finite-q assembly, overlap-shift closure helper, q/-q partner-structure residual reporting, package exports, and focused adapter tests; unrelated RnG/hBN HF ODA-control hunks were kept for a separate slice.",
       "direct_mean_field_systems_imports_after": 0,
       "direct_mean_field_systems_imports_before": 0,
       "legacy_lines_removed_gross": 0,
       "slice": "resolve_rlg_hbn_intraflavor_finite_q_tdhf_lane",
+      "tracked_files_deleted": []
+    },
+    {
+      "description": "Resolved the remaining RnG/hBN HF dirty lane by threading optional max_oda_lambda through run_rlg_hbn_hartree_fock and scan_rlg_hbn_ground_state into the shared core HF runner.",
+      "direct_mean_field_systems_imports_after": 0,
+      "direct_mean_field_systems_imports_before": 0,
+      "legacy_lines_removed_gross": 0,
+      "slice": "resolve_rlg_hbn_oda_lambda_cap_lane",
       "tracked_files_deleted": []
     }
   ],
@@ -877,16 +885,16 @@
       }
     ]
   },
-  "root": "/data/home/ziyuzhu/tmp/mean_field_report_rlg_finiteq_20260621_124228",
+  "root": "/data/home/ziyuzhu/tmp/mean_field_report_rlg_oda_20260621_125708",
   "src_python_files": 169,
-  "src_python_lines": 52185,
+  "src_python_lines": 52189,
   "top_30_files": [
     {
       "lines": 2305,
       "path": "src/mean_field/systems/htg/mean_field_adapter.py"
     },
     {
-      "lines": 2252,
+      "lines": 2256,
       "path": "src/mean_field/systems/RnG_hBN/hf.py"
     },
     {
@@ -1003,6 +1011,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 58288,
-  "tracked_text_lines": 62527
+  "tracked_python_lines": 58292,
+  "tracked_text_lines": 62546
 }
