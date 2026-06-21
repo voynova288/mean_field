@@ -1435,3 +1435,32 @@ workflow metadata: tmbg.polshyn_wang.explicit_config
 ```
 
 This is software/API readiness evidence only, not paper-level production validation.
+
+## Update: HTG and HTQG software validation gates
+
+Commit in this continuation:
+
+- `9195526 Record HTG and HTQG software gates`
+
+### Current summary after this continuation
+
+- Tracked text lines: 66329
+- Tracked Python lines: 61970
+- Tracked Julia lines: 826
+- `src` Python files: 275
+- `src` Python lines: 55205
+- Files over 1000 lines: 0
+
+### Software gates recorded
+
+Non-TDHF/non-cRPA lightweight gates run on `test001`:
+
+```text
+pytest -q tests/test_htg_supercell.py tests/test_htg_supercell_contract_adapter.py
+# 10 passed
+
+pytest -q tests/test_htqg_model.py tests/test_api_imports.py
+# 14 passed
+```
+
+These are software/API readiness gates only, not production/paper-level validation.
