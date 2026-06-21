@@ -162,6 +162,15 @@ command: pytest -q tests/test_htg_supercell.py tests/test_htg_supercell_contract
 result: 10 passed
 ```
 
+Additional public-HF gate:
+
+```text
+commit: 4ce02cb
+command: pytest -q tests/test_api_hf_adapters.py
+result: 16 passed
+coverage added: explicit HTG supercell `run_hf(...)` metadata-only save/load writes `canonical_hf_run_result.json`, remains loadable via `mean_field.api.load_result(...)`, and does not write `canonical_hf_arrays.npz`.
+```
+
 This is software readiness only, not a converged fractional-filling production run.
 
 Production acceptance:

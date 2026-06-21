@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 import mean_field.api.hf as hf_api
-from mean_field.api import HFConfig, HFResult, make_model, run_hf
+from mean_field.api import HFConfig, HFResult, load_result, make_model, run_hf
 from mean_field.api.hf import get_hf_adapter_info, list_hf_adapters, resolve_hf_adapter
 from mean_field.core.contracts import HFRunResult as ContractHFRunResult
 from mean_field.systems import tdbg as tdbg_system
@@ -360,7 +360,7 @@ def test_public_run_hf_htg_primitive_explicit_config_attaches_canonical_contract
     assert result.canonical_run_result.final_state.hamiltonian.metadata["supports_crpa"] is False
 
 
-def test_public_run_hf_htg_supercell_explicit_config_attaches_canonical_contract_result() -> None:
+def test_public_run_hf_htg_supercell_explicit_config_attaches_canonical_contract_result(tmp_path) -> None:
     model = make_model("htg", theta_deg=1.8, n_shells=0)
     interaction = InteractionParams(n_k=1, g_shells=0)
     cfg = HFConfig(
@@ -394,6 +394,15 @@ def test_public_run_hf_htg_supercell_explicit_config_attaches_canonical_contract
     assert result.observables["public_run_hf_adapter"].endswith("run_htg_supercell_hf_config_adapter")
     assert result.canonical_run_result.final_state.density.reference.metadata["raw_density_convention"] == "stored_delta"
     assert result.canonical_run_result.final_state.hamiltonian.metadata["supports_crpa"] is False
+
+    manifest_path = result.save(tmp_path / "htg_supercell_hf", canonical_payload="metadata_only")
+    loaded = load_result(manifest_path.parent)
+    assert loaded.model is not None
+    assert loaded.model["system_name"] == "htg_supercell"
+    assert loaded.canonical_hf_run_result is not None
+    assert loaded.manifest["files"]["canonical_hf_run_result"] == "canonical_hf_run_result.json"
+    assert "canonical_hf_arrays" not in loaded.manifest["files"]
+    assert not (manifest_path.parent / "canonical_hf_arrays.npz").exists()
 
 
 def test_public_run_hf_tdbg_explicit_config_dispatches_without_guessing(monkeypatch: pytest.MonkeyPatch) -> None:
