@@ -8,6 +8,10 @@ from ....core.hf import (
     empty_overlap_block_set,
 )
 from ._hf_basis_overlap import (
+    _hex_shell_contains,
+    _precompute_overlap_screening,
+    _screened_coulomb_matrix,
+    _with_tbg_overlap_screening,
     RestrictedHartreeFockRun,
     RestrictedHartreeFockState,
     build_h0_from_bm,
@@ -52,6 +56,10 @@ from ._hf_diagnostics import (
 )
 
 __all__ = [
+    "_hex_shell_contains",
+    "_precompute_overlap_screening",
+    "_screened_coulomb_matrix",
+    "_with_tbg_overlap_screening",
     "HFOverlapBlockSet",
     "RestrictedHartreeFockRun",
     "RestrictedHartreeFockState",
