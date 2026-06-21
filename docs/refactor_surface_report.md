@@ -4,12 +4,12 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 61951
-- Tracked Python lines: 58663
+- Tracked text lines: 62076
+- Tracked Python lines: 58781
 - Tracked Julia lines: 826
-- `src` Python files: 201
-- `src` Python lines: 52560
-- Files over 1000 lines: 7
+- `src` Python files: 206
+- `src` Python lines: 52678
+- Files over 1000 lines: 6
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0
 
 ## Completed cleanup slices
@@ -602,6 +602,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 1121.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
 
+### split_tbg_zero_field_hf_helper_surface
+
+- Split the TBG zero-field HF helper into basis/overlap, restricted, full, and diagnostics modules while keeping zero_field.hf as the public facade and leaving finite-field code untouched.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 1249.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -610,7 +617,6 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 2058 | `src/mean_field/systems/RnG_hBN/tdhf.py` |
 | 1347 | `src/mean_field/systems/htg/supercell.py` |
 | 1267 | `src/mean_field/crpa/hf_interface.py` |
-| 1258 | `src/mean_field/systems/tbg/zero_field/hf.py` |
 | 1149 | `src/mean_field/core/hf/finite_field.py` |
 | 1012 | `src/mean_field/systems/tbg/finite_field/spectrum.py` |
 | 873 | `src/analysis/topology/quantum_geometry.py` |
@@ -636,6 +642,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 445 | `src/mean_field/systems/tdbg/projected_hf_state.py` |
 | 435 | `src/mean_field/systems/tmbg/_polshyn_wang.py` |
 | 434 | `src/mean_field/crpa/diagnostics.py` |
+| 431 | `src/mean_field/systems/htg/_hf_initialization.py` |
 
 ## Direct private-system imports in workflow surfaces
 
