@@ -537,6 +537,24 @@ def test_backfill_inventory_report_renders_empty_dry_run(tmp_path: Path) -> None
     assert payload["historical_results_mutated"] is False
 
 
+def test_backfill_cli_accepts_positional_root_with_no_archives(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    status = main(
+        [
+            str(tmp_path / "empty_results"),
+            "--no-archives",
+            "--report-json",
+            str(tmp_path / "inventory.json"),
+            "--report-md",
+            str(tmp_path / "inventory.md"),
+        ]
+    )
+    captured = capsys.readouterr()
+    assert status == 0
+    assert "candidate_count: `0`" in captured.out
+    assert (tmp_path / "inventory.json").is_file()
+    assert (tmp_path / "inventory.md").is_file()
+
+
 def test_backfill_cli_write_path_returns_zero_for_staged_full_archive(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     archive_path = _write_minimal_eligible_htg_primitive_archive(tmp_path)
     target_root = tmp_path / "cli_staged"

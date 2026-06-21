@@ -29,20 +29,30 @@ Status after the current cleanup:
 - HTG primitive/supercell: eligible only when full raw state/basis archives and exact model/interaction metadata satisfy the loader contract.
 - Summary-only archives remain blocked; do not fabricate micro-wavefunctions, model objects, or run history.
 
-Dry-run inventory example:
+Dry-run inventory example (roots are positional; no historical mutation):
 
 ```bash
 python -m mean_field.devtools.backfill_canonical_hf_sidecars \
-  --root results \
+  results \
   --report-json tmp/backfill_inventory.json \
   --report-md tmp/backfill_inventory.md
+```
+
+Fast metadata-only dry-run when you do not want NPZ archive scanning:
+
+```bash
+python -m mean_field.devtools.backfill_canonical_hf_sidecars \
+  results \
+  --no-archives \
+  --report-json tmp/backfill_inventory_no_archives.json \
+  --report-md tmp/backfill_inventory_no_archives.md
 ```
 
 Staged write example (no historical mutation):
 
 ```bash
 python -m mean_field.devtools.backfill_canonical_hf_sidecars \
-  --root results \
+  results \
   --write \
   --target-root tmp/staged_canonical_backfill \
   --allow-target-root tmp \
