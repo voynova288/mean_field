@@ -1,13 +1,14 @@
 # Production validation backlog runbook
 
-This runbook is for the post-cleanup validation backlog.  It distinguishes software/API readiness from numerical or paper-level validation.  Do **not** submit Slurm jobs from this checklist without explicit authorization.
+This runbook is for the post-cleanup validation backlog.  It distinguishes software/API readiness from numerical or paper-level validation.  Non-TDHF/non-cRPA validation may proceed after local self-checks; TDHF and cRPA work still requires a separate explicit request.
 
 ## Common rules
 
 - Run heavy HF, topology, TDHF, response, or eigensolver workloads on a compute node or via Slurm, not on login nodes.
 - Keep runs self-describing: save config, exact command, git commit, environment variables, stdout/stderr, manifest, and summary JSON/MD.
 - A passing unit test is software validation only.  Paper-level validation requires saved artifacts and a quantitative comparison to the target panel/quantity.
-- Do not modify `src/mean_field/crpa/*` for these gates unless the cRPA bug is explicitly in scope.
+- TDHF and cRPA validation/code paths remain out of scope unless explicitly requested; do not modify `src/mean_field/crpa/*` or TDHF modules while advancing the other gates.
+- Non-TDHF/non-cRPA validation and cleanup gates may proceed after local self-checks of command, output path, and expected runtime.
 
 Recommended lightweight gate before production jobs:
 
@@ -95,6 +96,17 @@ config = HFConfig(
     precision=polshyn.precision,
 )
 result = run_hf(model, config, tmbg_polshyn_config=polshyn)
+```
+
+Latest software preflight (not paper-level validation):
+
+```text
+commit: 92f4e98
+output: /data/home/ziyuzhu/tmp/mean_field_validation_tmbg_polshyn_92f4e98_20260622_003023/summary.json
+result_model: tmbg_polshyn
+has_canonical_run_result: true
+best_seed: 5
+workflow metadata: tmbg.polshyn_wang.explicit_config
 ```
 
 Production-scale validation still needs explicit physics choices:

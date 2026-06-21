@@ -6,7 +6,8 @@ This plan tracks the next cleanup pass after the large-file/facade split work th
 
 - Preserve system-specific physics. In particular, keep RnG/hBN layer-dependent Coulomb, layer-dependent form factors, q=0 internal screening, and average/CN schemes in system code.
 - Preserve cRPA/HF conventions: `D = P - 1/2 I`, `Delta_HI` uses bare Coulomb, dynamic flat-band self-energy uses cRPA, and ODA delta-H on `delta_D` must not add `+1/2 I`.
-- Do not run heavy HF/topology/response numerics on login nodes. Use the test node or Slurm only after explicit authorization.
+- Do not modify TDHF or cRPA code/validation flows without a separate explicit instruction; these remain out of scope for the current cleanup/validation continuation.
+- Do not run heavy HF/topology/response numerics on login nodes. Use a compute node or Slurm after checking command/output paths and excluding TDHF/cRPA work.
 - Do not mutate historical `results/` without explicit approval. Canonical backfill staging remains under allowlisted `/data/home/ziyuzhu/tmp` unless separately approved.
 - Keep package code/tests/scripts/docs independent of ignored `local_archive/`.
 
