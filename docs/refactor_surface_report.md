@@ -1623,3 +1623,44 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 ```
 
 Result: `215 passed`.
+
+## Update: HF API docs for Polshyn and sidecar payloads
+
+Commit in this continuation:
+
+- `1ee5b1b Update HF API docs for Polshyn and sidecars`
+
+### Current summary after this continuation
+
+- Tracked text lines: 66651
+- Tracked Python lines: 62016
+- Tracked Julia lines: 826
+- `src` Python files: 275
+- `src` Python lines: 55205
+- Files over 1000 lines: 0
+
+### HF API documentation sync
+
+Updated `docs/api/hf_api.md` to match the current public HF surface:
+
+- added `htqg` to the model-facade list while preserving the explicit missing-HF-adapter boundary;
+- documented `run_hf(..., tmbg_polshyn_config=PolshynRunHFConfig(...))` and `tmbg_polshyn_explicit_run_hf`;
+- documented TMBG Polshyn `HFResult` semantics;
+- clarified that `HFResult.save(...)` defaults to `canonical_payload="metadata_only"`, does not write `canonical_hf_arrays.npz`, and writes dense canonical arrays only with explicit `canonical_payload="arrays"`.
+
+Focused validation:
+
+```bash
+PYTHONPATH=src pytest -q tests/test_api_hf_adapters.py tests/test_api_imports.py tests/test_tmbg_polshyn_hf_readiness.py
+```
+
+Result: `36 passed`.
+
+Full gate on `test001` after this slice:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+```
+
+Result: `215 passed`.
