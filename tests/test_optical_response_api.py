@@ -16,7 +16,9 @@ from analysis.optical_response import (
     wannierberri_shift_current_group_trace,
 )
 from analysis.optical_response import shift_current as new_shift
+from analysis.optical_response.toy_models import GappedSLGParams as NewGappedSLGParams, hamiltonian as new_slg_hamiltonian
 from analysis.shift_current import core as old_shift
+from analysis.shift_current.toy_models import GappedSLGParams as OldGappedSLGParams, hamiltonian as old_slg_hamiltonian
 from mean_field.systems.tdbg import TDBGModel, TDBGParameters
 from mean_field.systems.tdbg.shift_current import model_shift_current_point_data
 
@@ -50,6 +52,12 @@ def test_optical_response_package_exports_split_module_symbols() -> None:
     imn = np.ones((3, 3, 2, 2, 2), dtype=float)
     np.testing.assert_allclose(wannierberri_shift_current_group_trace(imn, [0], [1, 2]), np.full((2, 2, 2), 2.0))
     assert callable(link_shift_vector)
+
+
+def test_optical_response_toy_model_owns_old_import_path() -> None:
+    params = NewGappedSLGParams(mass_ev=0.012)
+    assert OldGappedSLGParams is NewGappedSLGParams
+    np.testing.assert_allclose(new_slg_hamiltonian((0.1, -0.2), params), old_slg_hamiltonian((0.1, -0.2), params))
 
 
 def test_tdbg_shift_current_adapter_uses_new_optical_response_path() -> None:

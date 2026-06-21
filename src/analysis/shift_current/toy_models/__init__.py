@@ -1,5 +1,6 @@
-"""Reference benchmarks and toy models for the generic shift-current API."""
+from __future__ import annotations
 
-from .slg_toy import GappedSLGParams
+"""Compatibility shims for historical shift-current toy-model imports."""
 
-__all__ = ["GappedSLGParams"]
+from analysis.optical_response.toy_models import *  # noqa: F401,F403
+from analysis.optical_response.toy_models import __all__
