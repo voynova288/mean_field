@@ -4,12 +4,12 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 61871
-- Tracked Python lines: 58590
+- Tracked text lines: 61951
+- Tracked Python lines: 58663
 - Tracked Julia lines: 826
-- `src` Python files: 196
-- `src` Python lines: 52487
-- Files over 1000 lines: 8
+- `src` Python files: 201
+- `src` Python lines: 52560
+- Files over 1000 lines: 7
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0
 
 ## Completed cleanup slices
@@ -595,6 +595,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 1274.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
 
+### split_tmbg_polshyn_hf_helper_surface
+
+- Split the TMBG Polshyn doubled-cell HF helper into typed, canonical-contract, filling, and Wang-engine modules while keeping polshyn_supercell.py as the registered public facade.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 1121.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -605,7 +612,6 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 1267 | `src/mean_field/crpa/hf_interface.py` |
 | 1258 | `src/mean_field/systems/tbg/zero_field/hf.py` |
 | 1149 | `src/mean_field/core/hf/finite_field.py` |
-| 1127 | `src/mean_field/systems/tmbg/polshyn_supercell.py` |
 | 1012 | `src/mean_field/systems/tbg/finite_field/spectrum.py` |
 | 873 | `src/analysis/topology/quantum_geometry.py` |
 | 805 | `src/analysis/response_derivative_gauge.py` |
@@ -628,6 +634,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 456 | `src/mean_field/systems/tbg/zero_field/model.py` |
 | 454 | `src/mean_field/crpa/workflow.py` |
 | 445 | `src/mean_field/systems/tdbg/projected_hf_state.py` |
+| 435 | `src/mean_field/systems/tmbg/_polshyn_wang.py` |
 | 434 | `src/mean_field/crpa/diagnostics.py` |
 
 ## Direct private-system imports in workflow surfaces
