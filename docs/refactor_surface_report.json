@@ -652,6 +652,17 @@
       "legacy_lines_removed_gross": 277,
       "slice": "thin_system_validation_adapters",
       "tracked_files_deleted": []
+    },
+    {
+      "description": "Archived and removed leftover one-off cRPA comparison and RLG/hBN Fig.6 prerequisite devtools from the tracked command surface; maintained tested chunk/merge and sidecar tools remain.",
+      "direct_mean_field_systems_imports_after": 0,
+      "direct_mean_field_systems_imports_before": 0,
+      "legacy_lines_removed_gross": 308,
+      "slice": "archive_retire_misc_devtools",
+      "tracked_files_deleted": [
+        "src/mean_field/devtools/compare_tbg_crpa_fig1e.py",
+        "src/mean_field/devtools/validate_rlg_hbn_fig6_prereqs.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -840,9 +851,9 @@
       }
     ]
   },
-  "root": "/data/home/ziyuzhu/tmp/mean_field_report_thin_validation_20260621_113530",
-  "src_python_files": 172,
-  "src_python_lines": 52426,
+  "root": "/data/home/ziyuzhu/tmp/mean_field_report_misc_devtools_20260621_113827",
+  "src_python_files": 170,
+  "src_python_lines": 52120,
   "top_30_files": [
     {
       "lines": 2305,
@@ -966,6 +977,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 58474,
-  "tracked_text_lines": 62637
+  "tracked_python_lines": 58168,
+  "tracked_text_lines": 62357
 }
