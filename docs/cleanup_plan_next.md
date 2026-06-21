@@ -14,7 +14,7 @@ This plan tracks the next cleanup pass after the large-file/facade split work th
 
 - Phase 0 git hygiene: completed in `ddebb13`.
 - Phase 1 common order-parameter module: completed in `ddebb13`.
-- Phase 2 optical-response package boundary/facade: completed in `9b374cc`, then implementation moved into `analysis.optical_response` in the current continuation.
+- Phase 2 optical-response package boundary/facade: completed in `9b374cc`; implementation moved into `analysis.optical_response`; shift-current and gauge derivative implementations split into package-local modules in the current continuation.
 - Phase 3 cRPA/HF bridge split: completed in `ef8ba6f`.
 - Phase 4 public API registries and workflow extraction: completed across `e6eab50`, `a00803f`, `9b8202a`, and `faa706e`.
 - Devtools cleanup follow-up: RLG/hBN retired sidecar/archive helpers moved to `src/mean_field/workflows/rlg_hbn.py`; retired command files deleted; canonical HF backfill scanner split into smaller modules.

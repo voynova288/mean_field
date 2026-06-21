@@ -1192,3 +1192,48 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 ```
 
 Result: `210 passed`.
+
+## Update: optical-response gauge derivative module split
+
+Commit in this continuation:
+
+- `18e12d7 Split optical response gauge derivative modules`
+
+### Current summary after this continuation
+
+- Tracked text lines: 66073
+- Tracked Python lines: 61970
+- Tracked Julia lines: 826
+- `src` Python files: 275
+- `src` Python lines: 55247
+- Files over 1000 lines: 0
+
+### Gauge derivative module split
+
+`analysis.optical_response.gauge` was reduced from an 805-line implementation module to a 43-line public facade/re-export module.  The implementation now lives in smaller package-local modules:
+
+- `gauge_data.py`: dataclasses for Hamiltonian-gauge and generalized-derivative payloads.
+- `gauge_primitives.py`: energy denominators, degeneracy groups, random block gauges, covariant gauge rotations, subspace trace, eigenbasis rotation.
+- `gauge_hamiltonian.py`: Hamiltonian-gauge ingredient construction.
+- `gauge_derivatives.py`: covariant/generalized derivative formulas and WannierBerri internal `Imn` port.
+- `gauge_shift.py`: shift-vector/integrand and Wilson-link phase derivative helpers.
+
+No formulas, signs, cutoffs, or denominator policies were changed; this was a mechanical module-boundary split.  Historical `analysis.response_derivative_gauge` remains a shim through `analysis.optical_response.gauge`.
+
+Focused validation:
+
+```bash
+PYTHONPATH=src python -m compileall -q src/analysis/optical_response src/analysis/response_derivative_gauge.py src/analysis/shift_current tests/test_optical_response_api.py tests/test_api_imports.py tests/test_api_bands.py tests/test_rlg_hbn_tdhf_adapter.py
+PYTHONPATH=src pytest -q tests/test_optical_response_api.py tests/test_api_imports.py tests/test_api_bands.py tests/test_rlg_hbn_tdhf_adapter.py
+```
+
+Result: `37 passed`.
+
+Full gate on `test001` after this slice:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+```
+
+Result: `210 passed`.
