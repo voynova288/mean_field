@@ -24,4 +24,15 @@ cRPA must not blindly reinterpret a saved HF density.  Convert through `mean_fie
 
 ## Current status
 
-The façade currently raises `NotImplementedError` unless the object supplies `compute_crpa(config)`.  This is intentional: API shape is frozen before moving existing chunk/merge code behind it.
+The façade now has an explicit adapter registry:
+
+```python
+from mean_field.api import list_crpa_adapters, compute_crpa
+```
+
+The first registered adapter is `adapter="tbg_workflow"`, which delegates to
+`mean_field.crpa.workflow.compute_crpa` only when the caller supplies explicit
+TBG inputs (`theta_deg`/`params` via a `TBGZeroFieldBMModel` or kwargs, plus
+runtime mesh/cutoff kwargs).  Without an explicit adapter, the façade still only
+calls objects that provide `compute_crpa(config)`; it does not infer production
+cRPA settings silently.

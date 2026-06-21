@@ -24,4 +24,14 @@ TDHF uses a converged HF basis/eigenvalue set and HF-basis two-body matrix eleme
 
 ## Current status
 
-The façade raises `NotImplementedError` unless the input object supplies `run_tdhf(config)`.  This prevents scripts from silently treating a partially migrated dense pilot as a complete public TDHF implementation.
+The façade now has an explicit adapter registry:
+
+```python
+from mean_field.api import list_tdhf_adapters, run_tdhf
+```
+
+The first registered adapters are `rlg_hbn_q0` and `rlg_hbn_finite_q`.  They
+wrap the existing RLG/hBN TDHF assembly helpers but still require explicit raw
+HF run and canonical HF state/result inputs; the public API will not infer or
+load archives implicitly.  Without an explicit adapter, `run_tdhf` still only
+calls objects that provide `run_tdhf(config)`.
