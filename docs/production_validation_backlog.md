@@ -67,6 +67,17 @@ Current staged sidecars note:
 - A self-check found all 48 written entries are `rlg_hbn_archive` and use the existing `mean_field.systems.RnG_hBN.tdhf.load_rlg_hbn_tdhf_run_from_archive` reconstruction path.
 - Because TDHF remains out of scope, these stay staged and are not applied to historical `results/` in the current continuation.
 
+Public HF metadata-only sidecar coverage:
+
+```text
+coverage: tests/test_api_hf_adapters.py
+adapters covered: tbg_zero_field, tdbg, htg, htg_supercell, rlg_hbn
+validation: 16 passed on test001
+assertion shape: HFResult.save(..., canonical_payload="metadata_only") writes canonical_hf_run_result.json, remains loadable via mean_field.api.load_result(...), and does not write canonical_hf_arrays.npz.
+```
+
+TMBG Polshyn has the same metadata-only sidecar coverage in `tests/test_tmbg_polshyn_hf_readiness.py`.
+
 Acceptance:
 
 - `historical_results_mutated` is `false`.

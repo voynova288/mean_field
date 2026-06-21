@@ -143,6 +143,17 @@ def test_public_run_hf_htqg_requires_explicit_adapter_before_projected_hf_claims
         run_hf(model, cfg)
 
 
+def _assert_metadata_only_hf_save_load(result: HFResult, tmp_path, *, system_name: str) -> None:
+    manifest_path = result.save(tmp_path / f"{system_name}_hf", canonical_payload="metadata_only")
+    loaded = load_result(manifest_path.parent)
+    assert loaded.model is not None
+    assert loaded.model["system_name"] == system_name
+    assert loaded.canonical_hf_run_result is not None
+    assert loaded.manifest["files"]["canonical_hf_run_result"] == "canonical_hf_run_result.json"
+    assert "canonical_hf_arrays" not in loaded.manifest["files"]
+    assert not (manifest_path.parent / "canonical_hf_arrays.npz").exists()
+
+
 def test_public_run_hf_tbg_bm_requires_explicit_system_workflow() -> None:
     model = make_model("tbg", variant="zero_field_bm", theta_deg=1.2, lg=1)
     cfg = HFConfig(filling=0, mesh=(1, 1), max_iter=1)
@@ -151,7 +162,7 @@ def test_public_run_hf_tbg_bm_requires_explicit_system_workflow() -> None:
         run_hf(model, cfg)
 
 
-def test_public_run_hf_tbg_zero_field_explicit_config_attaches_canonical_contract_result() -> None:
+def test_public_run_hf_tbg_zero_field_explicit_config_attaches_canonical_contract_result(tmp_path) -> None:
     grid_solution = _tiny_tbg_grid_solution(theta_deg=1.05)
     model = make_model("tbg", variant="zero_field_bm", theta_deg=1.05, lg=1)
     screening_lm = float(np.sqrt(abs(grid_solution.params.a1) * abs(grid_solution.params.a2)))
@@ -185,6 +196,7 @@ def test_public_run_hf_tbg_zero_field_explicit_config_attaches_canonical_contrac
     assert result.canonical_run_result.final_state.observables["grid_lk"] == 1
     assert result.canonical_run_result.final_state.density.reference.metadata["raw_density_convention"] == "stored_delta"
     assert result.canonical_run_result.final_state.hamiltonian.metadata["supports_crpa"] is False
+    _assert_metadata_only_hf_save_load(result, tmp_path, system_name="tbg_zero_field")
 
 
 def test_public_run_hf_tbg_zero_field_rejects_missing_grid_contract() -> None:
@@ -256,7 +268,7 @@ def test_public_run_hf_rlg_hbn_requires_explicit_system_config() -> None:
         run_hf(model, cfg)
 
 
-def test_public_run_hf_rlg_hbn_explicit_config_attaches_canonical_contract_result() -> None:
+def test_public_run_hf_rlg_hbn_explicit_config_attaches_canonical_contract_result(tmp_path) -> None:
     model = make_model("rlg_hbn", layer_count=3, xi=1, theta_deg=0.77, displacement_field_mev=24.0, shell_count=1)
     interaction = RLGhBNInteractionParams(
         active_valence_bands=1,
@@ -296,6 +308,7 @@ def test_public_run_hf_rlg_hbn_explicit_config_attaches_canonical_contract_resul
     assert result.observables["public_run_hf_adapter"].endswith("run_rlg_hbn_hf_config_adapter")
     assert result.canonical_run_result.final_state.density.reference.metadata["raw_density_convention"] == "stored_delta"
     assert result.canonical_run_result.final_state.hamiltonian.metadata["supports_crpa"] is False
+    _assert_metadata_only_hf_save_load(result, tmp_path, system_name="rlg_hbn")
 
 
 def test_public_run_hf_rlg_hbn_rejects_mismatched_generic_config() -> None:
@@ -325,7 +338,7 @@ def test_public_run_hf_rlg_hbn_rejects_mismatched_generic_config() -> None:
         run_hf(model, cfg, rlg_hbn_config=rlg_cfg)
 
 
-def test_public_run_hf_htg_primitive_explicit_config_attaches_canonical_contract_result() -> None:
+def test_public_run_hf_htg_primitive_explicit_config_attaches_canonical_contract_result(tmp_path) -> None:
     model = make_model("htg", theta_deg=1.8, n_shells=0)
     interaction = InteractionParams(n_k=1, g_shells=0)
     cfg = HFConfig(
@@ -358,6 +371,7 @@ def test_public_run_hf_htg_primitive_explicit_config_attaches_canonical_contract
     assert result.observables["public_run_hf_adapter"].endswith("run_htg_hf_config_adapter")
     assert result.canonical_run_result.final_state.density.reference.metadata["raw_density_convention"] == "stored_delta"
     assert result.canonical_run_result.final_state.hamiltonian.metadata["supports_crpa"] is False
+    _assert_metadata_only_hf_save_load(result, tmp_path, system_name="htg")
 
 
 def test_public_run_hf_htg_supercell_explicit_config_attaches_canonical_contract_result(tmp_path) -> None:
@@ -395,14 +409,7 @@ def test_public_run_hf_htg_supercell_explicit_config_attaches_canonical_contract
     assert result.canonical_run_result.final_state.density.reference.metadata["raw_density_convention"] == "stored_delta"
     assert result.canonical_run_result.final_state.hamiltonian.metadata["supports_crpa"] is False
 
-    manifest_path = result.save(tmp_path / "htg_supercell_hf", canonical_payload="metadata_only")
-    loaded = load_result(manifest_path.parent)
-    assert loaded.model is not None
-    assert loaded.model["system_name"] == "htg_supercell"
-    assert loaded.canonical_hf_run_result is not None
-    assert loaded.manifest["files"]["canonical_hf_run_result"] == "canonical_hf_run_result.json"
-    assert "canonical_hf_arrays" not in loaded.manifest["files"]
-    assert not (manifest_path.parent / "canonical_hf_arrays.npz").exists()
+    _assert_metadata_only_hf_save_load(result, tmp_path, system_name="htg_supercell")
 
 
 def test_public_run_hf_tdbg_explicit_config_dispatches_without_guessing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -450,7 +457,7 @@ def test_public_run_hf_tdbg_explicit_config_dispatches_without_guessing(monkeypa
     assert result.canonical_run_result is None
 
 
-def test_public_run_hf_tdbg_explicit_config_attaches_canonical_contract_result() -> None:
+def test_public_run_hf_tdbg_explicit_config_attaches_canonical_contract_result(tmp_path) -> None:
     model = make_model("tdbg", theta_deg=1.38, cut=1.0)
     cfg = HFConfig(filling=2, mesh=(1, 1), max_iter=1, precision=1.0e-7, density_convention="projector")
 
@@ -464,6 +471,7 @@ def test_public_run_hf_tdbg_explicit_config_attaches_canonical_contract_result()
         result.state.run.state.density,
     )
     assert result.canonical_run_result.final_state.hamiltonian.metadata["supports_crpa"] is False
+    _assert_metadata_only_hf_save_load(result, tmp_path, system_name="tdbg")
 
 
 def test_public_run_hf_tdbg_rejects_mismatched_generic_config() -> None:
