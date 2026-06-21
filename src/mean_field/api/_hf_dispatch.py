@@ -150,6 +150,7 @@ def run_hf(model: object, config: HFConfig, **kwargs: Any) -> HFResult:
         "htg_explicit_supercell_run_hf",
         "rlg_hbn_explicit_run_hf",
         "tbg_zero_field_explicit_run_hf",
+        "tmbg_polshyn_explicit_run_hf",
     ):
         explicit_result = _run_registered_hf_config_adapter_if_explicit(adapter_name, model, config, kwargs)
         if explicit_result is not None:

@@ -2,6 +2,253 @@ from __future__ import annotations
 
 from ._polshyn_shared import *  # noqa: F401,F403
 from ._polshyn_types import *  # noqa: F401,F403
+from ._polshyn_basis import build_polshyn_projected_basis
+from ._polshyn_filling import cdw_density_blocks, polshyn_nu_7over2_filling_summary
+from ._polshyn_wang import run_projected_hf_scf_wang, translation_order_parameters, wang_sector_density_blocks
+from .model import TMBGModel
+
+
+@dataclass(frozen=True)
+class PolshynRunHFConfig:
+    """Explicit TMBG Polshyn public ``run_hf`` adapter config.
+
+    This adapter deliberately requires system-specific inputs: the projected
+    primitive band indices, target primitive band, supercell mesh, interaction
+    shifts, and Coulomb parameters.  Generic ``HFConfig -> Polshyn`` inference
+    is not implemented because the paper target depends on topology/window
+    choices that must be explicit.
+    """
+
+    mesh_size: int
+    projected_indices: tuple[int, ...]
+    target_band_index: int
+    shifts: tuple[tuple[int, int], ...] = ()
+    v0: float = 0.0
+    epsilon_r: float = 10.0
+    d_sc_nm: float = 10.0
+    max_iter: int = 80
+    precision: float = 1.0e-6
+    seed: int = 0
+    oda_stall_threshold: float = 1.0e-4
+    frac_shift: tuple[float, float] = (0.0, 0.0)
+    init_mode: str = "bm_wang"
+    hartree_scale: float = 1.0
+    fock_scale: float = 1.0
+    zero_hartree_q0: bool = False
+    basis: PolshynProjectedBasis | None = None
+
+    def __post_init__(self) -> None:
+        if int(self.mesh_size) <= 0:
+            raise ValueError(f"mesh_size must be positive, got {self.mesh_size}")
+        indices = tuple(int(value) for value in self.projected_indices)
+        if not indices:
+            raise ValueError("projected_indices must not be empty")
+        if int(self.target_band_index) not in indices:
+            raise ValueError(
+                f"target_band_index={self.target_band_index} is not present in projected_indices={indices}"
+            )
+        if int(self.max_iter) <= 0:
+            raise ValueError("max_iter must be positive")
+        if float(self.precision) <= 0.0:
+            raise ValueError("precision must be positive")
+        if float(self.oda_stall_threshold) <= 0.0:
+            raise ValueError("oda_stall_threshold must be positive")
+        if len(self.frac_shift) != 2:
+            raise ValueError(f"frac_shift must be a length-2 tuple, got {self.frac_shift}")
+        normalized_shifts = tuple((int(m), int(n)) for m, n in self.shifts)
+        object.__setattr__(self, "projected_indices", indices)
+        object.__setattr__(self, "shifts", normalized_shifts)
+        object.__setattr__(self, "frac_shift", (float(self.frac_shift[0]), float(self.frac_shift[1])))
+        init_mode = str(self.init_mode)
+        if init_mode not in {"bm_wang", "cdw"}:
+            raise ValueError("PolshynRunHFConfig.init_mode must be 'bm_wang' or 'cdw'")
+        object.__setattr__(self, "init_mode", init_mode)
+
+def _polshyn_gvecs_for_shifts(basis: PolshynProjectedBasis, shifts: tuple[tuple[int, int], ...]) -> np.ndarray:
+    return np.asarray(
+        [int(m) * complex(basis.super_b1) + int(n) * complex(basis.super_b2) for m, n in shifts],
+        dtype=np.complex128,
+    )
+
+
+def _validate_polshyn_public_hf_config(config: "HFConfig", polshyn_config: PolshynRunHFConfig) -> None:
+    mesh = (int(polshyn_config.mesh_size), int(polshyn_config.mesh_size))
+    if (int(config.mesh[0]), int(config.mesh[1])) != mesh:
+        raise ValueError(f"TMBG Polshyn public run_hf requires HFConfig.mesh={mesh}, got {config.mesh}")
+    filling = polshyn_nu_7over2_filling_summary(
+        polshyn_config.projected_indices,
+        target_band_index=int(polshyn_config.target_band_index),
+    ).primitive_nu
+    if not np.isclose(float(config.filling), float(filling)):
+        raise ValueError(f"TMBG Polshyn public run_hf requires HFConfig.filling={filling}, got {config.filling}")
+    if int(config.max_iter) != int(polshyn_config.max_iter):
+        raise ValueError(
+            f"TMBG Polshyn public run_hf requires HFConfig.max_iter={polshyn_config.max_iter}, "
+            f"got {config.max_iter}"
+        )
+    if not np.isclose(float(config.precision), float(polshyn_config.precision)):
+        raise ValueError(
+            f"TMBG Polshyn public run_hf requires HFConfig.precision={polshyn_config.precision}, "
+            f"got {config.precision}"
+        )
+    if config.density_convention != "stored_delta":
+        raise ValueError(
+            "TMBG Polshyn Wang HF stores density as a Wang/Xiaoyu stored delta; "
+            "set HFConfig.density_convention='stored_delta'"
+        )
+    if config.interaction_scheme != "average":
+        raise ValueError("TMBG Polshyn public run_hf currently supports HFConfig.interaction_scheme='average' only")
+    if config.coulomb_kernel != "2d_gate":
+        raise ValueError("TMBG Polshyn public run_hf currently supports HFConfig.coulomb_kernel='2d_gate' only")
+    if not np.isclose(float(config.epsilon_r), float(polshyn_config.epsilon_r)):
+        raise ValueError(
+            f"TMBG Polshyn public run_hf requires HFConfig.epsilon_r={polshyn_config.epsilon_r}, "
+            f"got {config.epsilon_r}"
+        )
+    if not np.isclose(float(config.dsc_nm), float(polshyn_config.d_sc_nm)):
+        raise ValueError(
+            f"TMBG Polshyn public run_hf requires HFConfig.dsc_nm={polshyn_config.d_sc_nm}, got {config.dsc_nm}"
+        )
+    if config.active_window is not None:
+        raise NotImplementedError("TMBG Polshyn public run_hf uses explicit projected_indices; leave active_window unset")
+    if config.active_band_indices is not None and tuple(int(v) for v in config.active_band_indices) != polshyn_config.projected_indices:
+        raise ValueError(
+            "HFConfig.active_band_indices must be unset or match "
+            f"polshyn_config.projected_indices={polshyn_config.projected_indices}"
+        )
+
+
+def run_tmbg_polshyn_hf_config_adapter(model: object, config: "HFConfig", **kwargs: Any) -> "HFResult | None":
+    """Run TMBG Polshyn-Wang HF from an explicit system config.
+
+    The raw ``(basis, state, info)`` bundle remains the source of truth and is
+    wrapped by the existing canonical Polshyn-Wang post-run adapter.  This does
+    not infer paper/topology windows from generic ``HFConfig``.
+    """
+
+    if not isinstance(model, TMBGModel):
+        return None
+    if "tmbg_polshyn_config" not in kwargs:
+        raise NotImplementedError(
+            "Unified run_hf has a TMBG Polshyn adapter only for explicit "
+            "tmbg_polshyn_config=PolshynRunHFConfig(...); generic HFConfig -> Polshyn mapping is not implemented"
+        )
+    polshyn_config = kwargs.pop("tmbg_polshyn_config")
+    if not isinstance(polshyn_config, PolshynRunHFConfig):
+        raise TypeError(
+            f"tmbg_polshyn_config must be PolshynRunHFConfig, got {type(polshyn_config).__name__}"
+        )
+    if kwargs:
+        raise TypeError(f"Unsupported TMBG Polshyn run_hf kwargs: {sorted(kwargs)}")
+    _validate_polshyn_public_hf_config(config, polshyn_config)
+
+    basis = polshyn_config.basis
+    if basis is None:
+        basis = build_polshyn_projected_basis(
+            model,
+            mesh_size=int(polshyn_config.mesh_size),
+            projected_indices=polshyn_config.projected_indices,
+            target_band_index=int(polshyn_config.target_band_index),
+            frac_shift=polshyn_config.frac_shift,
+        )
+    elif basis.model is not model and getattr(basis.model, "lattice", None) != getattr(model, "lattice", None):
+        raise ValueError("PolshynRunHFConfig.basis does not match the supplied TMBGModel")
+    shifts = tuple(polshyn_config.shifts)
+    gvecs = _polshyn_gvecs_for_shifts(basis, shifts)
+    filling = polshyn_nu_7over2_filling_summary(
+        polshyn_config.projected_indices,
+        target_band_index=int(polshyn_config.target_band_index),
+    )
+    initial_density = None
+    if polshyn_config.init_mode == "cdw":
+        initial_density = cdw_density_blocks(
+            projected_indices=polshyn_config.projected_indices,
+            target_band_index=int(polshyn_config.target_band_index),
+            n_spin=basis.n_spin,
+            n_eta=basis.n_eta,
+            nb=basis.nb,
+            nk=basis.nk,
+            reference_diagonal=basis.reference_diagonal,
+        )
+    state, overlap_blocks, info = run_projected_hf_scf_wang(
+        basis,
+        occupation_counts=filling.occupation_counts,
+        shifts=shifts,
+        gvecs=gvecs,
+        v0=float(polshyn_config.v0),
+        epsilon_r=float(polshyn_config.epsilon_r),
+        d_sc_nm=float(polshyn_config.d_sc_nm),
+        max_iter=int(polshyn_config.max_iter),
+        precision=float(polshyn_config.precision),
+        initial_density_blocks=initial_density,
+        oda_stall_threshold=float(polshyn_config.oda_stall_threshold),
+        seed=int(polshyn_config.seed),
+        hartree_scale=float(polshyn_config.hartree_scale),
+        fock_scale=float(polshyn_config.fock_scale),
+        zero_hartree_q0=bool(polshyn_config.zero_hartree_q0),
+    )
+    canonical = polshyn_wang_hf_bundle_to_hf_run_result(
+        basis,
+        state,
+        info,
+        seed=int(polshyn_config.seed),
+        archive_manifest={
+            "source": "fresh_run_hf",
+            "adapter": "mean_field.systems.tmbg.polshyn_supercell.run_tmbg_polshyn_hf_config_adapter",
+            "projected_indices": [int(value) for value in polshyn_config.projected_indices],
+            "target_band_index": int(polshyn_config.target_band_index),
+            "shifts": [[int(m), int(n)] for m, n in shifts],
+        },
+    )
+    density_blocks = wang_sector_density_blocks(state, basis)
+    target_order = translation_order_parameters(
+        density_blocks,
+        projected_indices=polshyn_config.projected_indices,
+        target_band_index=int(polshyn_config.target_band_index),
+    )
+    from pathlib import Path
+    from mean_field.api.artifacts import ArtifactManifest, ConventionBundle
+    from mean_field.api.hf import HFResult
+    from mean_field.api.models import model_record
+
+    record = model_record(model, system_name="tmbg_polshyn")
+    observables: dict[str, object] = {
+        "public_run_hf_adapter": "mean_field.systems.tmbg.polshyn_supercell.run_tmbg_polshyn_hf_config_adapter",
+        "explicit_config_type": "PolshynRunHFConfig",
+        "primitive_nu": float(filling.primitive_nu),
+        "occupation_counts": filling.occupation_counts.astype(int).tolist(),
+        "target_translation_order_x2_mean": float(target_order["target_x2_mean"]),
+        "all_translation_order_x2_mean": float(target_order["all_x2_mean"]),
+        **_info_scalar_summary(info),
+    }
+    return HFResult(
+        model=record,
+        config=config,
+        state={"basis": basis, "state": state, "info": dict(info), "overlap_blocks": overlap_blocks},
+        observables=observables,
+        artifacts=ArtifactManifest(
+            root=Path("."),
+            model=record,
+            conventions=ConventionBundle(
+                energy_unit="eV",
+                density_convention="stored_delta",
+                density_axis_order="abk",
+                hamiltonian_axis_order="abk",
+                wavefunction_axis_order="basis,band,flavor,k",
+                gauge="tmbg_polshyn_doubled_cell_system_defined",
+            ),
+            metadata={
+                "schema_version": 1,
+                "workflow": "tmbg.polshyn_wang.explicit_config",
+                "system_name": "tmbg_polshyn",
+                "adapter": "mean_field.systems.tmbg.polshyn_supercell.run_tmbg_polshyn_hf_config_adapter",
+                "canonical_adapter": "mean_field.systems.tmbg.polshyn_supercell.polshyn_wang_hf_bundle_to_hf_run_result",
+                "raw_state_type": "PolshynWangHFState",
+            },
+        ),
+        canonical_run_result=canonical,
+    )
+
 
 def _unavailable_polshyn_hamiltonian_builder(_kvec: np.ndarray) -> np.ndarray:
     raise NotImplementedError(

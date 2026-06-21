@@ -3,6 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from mean_field.api import HFConfig, run_hf
+from mean_field.api.hf import list_hf_adapters
 from mean_field.core.contracts import (
     HFRunResult as ContractHFRunResult,
     assert_density_state_consistent,
@@ -19,7 +21,9 @@ from mean_field.systems.tmbg import TMBGModel, TMBGParameters
 from mean_field.systems.tmbg.polshyn_supercell import (
     PolshynDoubledCell,
     PolshynProjectedBasis,
+    PolshynRunHFConfig,
     PolshynWangHFState,
+    build_polshyn_projected_basis,
     build_wang_hf_problem,
     cdw_density_blocks,
     flatten_sector_blocks,
@@ -255,3 +259,57 @@ def test_polshyn_wang_bundle_adapter_refuses_to_invent_seed() -> None:
 
     with pytest.raises(ValueError, match="seed"):
         polshyn_wang_hf_bundle_to_hf_run_result(basis, state, info)
+
+
+def test_polshyn_projected_basis_builder_embeds_doubled_cell_shapes() -> None:
+    model = TMBGModel.from_config(1.25, n_shells=0, params=TMBGParameters.minimal())
+    basis = build_polshyn_projected_basis(
+        model,
+        mesh_size=1,
+        projected_indices=(2,),
+        target_band_index=2,
+    )
+    assert basis.nk == 1
+    assert basis.n_spin == 2
+    assert basis.n_eta == 2
+    assert basis.nb == 2
+    assert basis.wavefunctions.shape == (12, 2, 2, 1)
+    assert basis.h0_blocks.shape == (2, 2, 2, 2, 1)
+    assert np.count_nonzero(np.abs(basis.h0_blocks[:, :, 0, 1, :])) == 0
+    np.testing.assert_allclose(basis.reference_diagonal, [0.0, 0.0])
+
+
+def test_polshyn_public_run_hf_explicit_config_smoke_attaches_canonical_result() -> None:
+    adapters = list_hf_adapters(system_name="tmbg_polshyn", adapter_type="run_hf")
+    assert any(adapter.name == "tmbg_polshyn_explicit_run_hf" for adapter in adapters)
+    model = TMBGModel.from_config(1.25, n_shells=0, params=TMBGParameters.minimal())
+    polshyn_config = PolshynRunHFConfig(
+        mesh_size=1,
+        projected_indices=(2,),
+        target_band_index=2,
+        shifts=(),
+        v0=0.0,
+        epsilon_r=9.0,
+        d_sc_nm=12.0,
+        max_iter=1,
+        precision=1.0e-7,
+        seed=5,
+    )
+    cfg = HFConfig(
+        filling=3.5,
+        mesh=(1, 1),
+        active_band_indices=(2,),
+        density_convention="stored_delta",
+        epsilon_r=9.0,
+        dsc_nm=12.0,
+        max_iter=1,
+        precision=1.0e-7,
+    )
+    result = run_hf(model, cfg, tmbg_polshyn_config=polshyn_config)
+    assert result.model.system_name == "tmbg_polshyn"
+    assert result.canonical_run_result is not None
+    assert result.canonical_run_result.best_seed == 5
+    assert result.observables["explicit_config_type"] == "PolshynRunHFConfig"
+    assert result.observables["primitive_nu"] == pytest.approx(3.5)
+    assert result.artifacts is not None
+    assert result.artifacts.metadata["workflow"] == "tmbg.polshyn_wang.explicit_config"

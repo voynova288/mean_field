@@ -152,7 +152,17 @@ _HF_ADAPTER_REGISTRY: tuple[HFAdapterInfo, ...] = (
         import_path="mean_field.systems.tmbg.polshyn_supercell:polshyn_wang_hf_bundle_to_hf_run_result",
         description="Post-run canonical HFRunResult view for an explicit TMBG Polshyn-Wang (basis, state, info) bundle.",
         requires_explicit_inputs=("PolshynProjectedBasis", "PolshynWangHFState", "info"),
-        run_hf_config_reason="Post-run bundle converter only; basis/state/info must be explicit and are not inferred from HFConfig.",
+        run_hf_config_reason="Post-run bundle converter only; use tmbg_polshyn_explicit_run_hf for explicit Polshyn config dispatch.",
+    ),
+    HFAdapterInfo(
+        name="tmbg_polshyn_explicit_run_hf",
+        system_name="tmbg_polshyn",
+        adapter_type="run_hf",
+        import_path="mean_field.systems.tmbg.polshyn_supercell:run_tmbg_polshyn_hf_config_adapter",
+        description="Public run_hf dispatch for an explicit TMBG Polshyn-Wang configuration.",
+        supports_run_hf_config=True,
+        requires_explicit_inputs=("tmbg_polshyn_config=PolshynRunHFConfig",),
+        run_hf_config_reason="Requires explicit PolshynRunHFConfig with projected_indices, target_band_index, mesh, and interaction shifts; generic HFConfig inference is not implemented.",
     ),
 )
 _HF_ADAPTERS_BY_NAME: dict[str, HFAdapterInfo] = {info.name: info for info in _HF_ADAPTER_REGISTRY}

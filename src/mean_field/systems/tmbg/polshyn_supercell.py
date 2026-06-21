@@ -9,7 +9,8 @@ from ._polshyn_types import (
     PolshynWangHFState,
     polshyn_doubled_cell,
 )
-from ._polshyn_contracts import polshyn_wang_hf_bundle_to_hf_run_result
+from ._polshyn_basis import build_polshyn_projected_basis
+from ._polshyn_contracts import PolshynRunHFConfig, polshyn_wang_hf_bundle_to_hf_run_result, run_tmbg_polshyn_hf_config_adapter
 from ._polshyn_filling import (
     cdw_density_blocks,
     occupation_counts_nu_7over2,
@@ -41,7 +42,9 @@ __all__ = [
     "PolshynDoubledCell",
     "PolshynFillingSummary",
     "PolshynProjectedBasis",
+    "PolshynRunHFConfig",
     "PolshynWangHFState",
+    "build_polshyn_projected_basis",
     "build_wang_hf_problem",
     "build_wang_overlap_blocks",
     "cdw_density_blocks",
@@ -56,6 +59,7 @@ __all__ = [
     "primitive_nu_from_counts",
     "reference_diagonal_for_projected_indices",
     "run_projected_hf_scf_wang",
+    "run_tmbg_polshyn_hf_config_adapter",
     "scaled_overlap_blocks",
     "translation_order_parameters",
     "unflatten_sector_blocks",
