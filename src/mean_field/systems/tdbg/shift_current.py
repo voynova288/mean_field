@@ -5,8 +5,8 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.linalg import eigh
 
-from analysis.response_derivative_gauge import HamiltonianGaugeData, hamiltonian_gauge_data
-from analysis.shift_current import (
+from analysis.optical_response.gauge import HamiltonianGaugeData, hamiltonian_gauge_data
+from analysis.optical_response.shift_current import (
     JOYA_EQ7_GEOMETRIC_CONVENTION,
     PairTransitionKernel,
     ShiftCurrentComponent,
