@@ -895,3 +895,65 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 ```
 
 Result on `test001`: `206 passed`.
+
+## Update: model registry and TDBG workflow extraction
+
+Commits in this continuation:
+
+- `a00803f Convert model API to adapter registry`
+- `9b8202a Extract TDBG projected HF CLI workflow`
+
+### Current summary after this continuation
+
+- Tracked text lines: 65532
+- Tracked Python lines: 61735
+- Tracked Julia lines: 826
+- `src` Python files: 268
+- `src` Python lines: 55058
+- Files over 1000 lines: 0
+
+### Model API registry
+
+- Converted `mean_field.api.models.make_model` from one long hard-coded branch list into a small adapter registry.
+- Added public registry helpers:
+  - `ModelAdapterInfo`
+  - `list_model_adapters`
+  - `get_model_adapter_info`
+  - `resolve_model_adapter`
+- Preserved existing public names/aliases and constructor defaults for HTG, HTQG, RLG/hBN, TBG, TDBG, tMBG, and ATMG.
+- Updated `docs/api/model_api.md` and `tests/test_public_api_registries.py`.
+
+Focused validation:
+
+```bash
+PYTHONPATH=src python -m compileall -q src/mean_field/api tests/test_public_api_registries.py
+PYTHONPATH=src pytest -q tests/test_public_api_registries.py tests/test_api_imports.py tests/test_api_hf_adapters.py
+```
+
+Result: `30 passed`.
+
+### TDBG projected-HF workflow extraction
+
+- Moved TDBG projected-HF JSON parsing, validation, dry-run normalization, output freshness check, run dispatch, and artifact save logic from `src/mean_field/cli.py` to `src/mean_field/workflows/tdbg_projected_hf.py`.
+- `cli.py` now keeps the command-line parser and a thin `cmd_tdbg_projected_hf(...)` delegating to `run_tdbg_projected_hf_workflow(...)`.
+- The CLI still dependency-injects `make_model`, `run_hf`, and the compute guard so existing tests and monkeypatches remain compatible.
+
+Focused validation:
+
+```bash
+PYTHONPATH=src python -m compileall -q src/mean_field/cli.py src/mean_field/workflows tests/test_cli_tdbg_projected_hf.py
+PYTHONPATH=src pytest -q tests/test_cli_tdbg_projected_hf.py tests/test_api_imports.py
+```
+
+Result: `15 passed`.
+
+### Full gate
+
+After the workflow extraction slice:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+```
+
+Result on `test001`: `207 passed`.
