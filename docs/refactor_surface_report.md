@@ -1286,11 +1286,11 @@ Commit in this continuation:
 
 ### Current summary after this continuation
 
-- Tracked text lines: 66119
+- Tracked text lines: 66151
 - Tracked Python lines: 61952
 - Tracked Julia lines: 826
 - `src` Python files: 275
-- `src` Python lines: 55213
+- `src` Python lines: 55205
 - Files over 1000 lines: 0
 
 ### Toy-model boundary update
