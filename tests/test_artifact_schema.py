@@ -556,7 +556,7 @@ def test_update_artifact_manifest_preserves_contract_sidecars(tmp_path) -> None:
 
 
 def test_rlg_hbn_tdhf_contract_sidecars_are_metadata_only(tmp_path) -> None:
-    from mean_field.devtools.run_rlg_hbn_tdhf_q0 import _write_contract_sidecars
+    from mean_field.workflows.rlg_hbn import write_rlg_hbn_tdhf_q0_contract_sidecars as _write_contract_sidecars
 
     spectrum_path = tmp_path / "tdhf_q0_spectrum.npz"
     np.savez(spectrum_path, energies_mev=np.asarray([1.0, 2.0]), A=np.eye(2), B=np.zeros((2, 2)))
@@ -602,7 +602,7 @@ def test_rlg_hbn_tdhf_contract_sidecars_are_metadata_only(tmp_path) -> None:
 
 
 def test_rlg_hbn_paper_hf_contract_sidecars_are_metadata_only(tmp_path) -> None:
-    from mean_field.devtools.run_rlg_hbn_paper_hf import _write_contract_sidecars
+    from mean_field.workflows.rlg_hbn import write_rlg_hbn_paper_hf_contract_sidecars as _write_contract_sidecars
 
     config = {
         "paper_target": "fig5",
@@ -662,7 +662,7 @@ def test_rlg_hbn_paper_hf_contract_sidecars_are_metadata_only(tmp_path) -> None:
 
 
 def test_rlg_hbn_parallel_merge_contract_sidecars_are_metadata_only(tmp_path) -> None:
-    from mean_field.devtools.merge_rlg_hbn_parallel_hf import _write_contract_sidecars
+    from mean_field.workflows.rlg_hbn import write_rlg_hbn_parallel_hf_merge_contract_sidecars as _write_contract_sidecars
 
     config = {
         "paper_target": "fig5",
@@ -708,7 +708,7 @@ def test_rlg_hbn_hf_archive_records_density_convention_metadata(tmp_path) -> Non
     from types import SimpleNamespace
 
     from mean_field.core.hf import summarize_hf_state_archive
-    from mean_field.devtools.run_rlg_hbn_paper_hf import _save_state_archive
+    from mean_field.workflows.rlg_hbn import save_rlg_hbn_paper_hf_state_archive as _save_state_archive
 
     state = SimpleNamespace(
         density=np.zeros((2, 2, 1), dtype=np.complex128),

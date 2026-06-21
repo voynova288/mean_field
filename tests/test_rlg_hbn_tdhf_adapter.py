@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from mean_field.core.hf import ParticleHolePair, split_pair_indices_by_flavor_channel
-from mean_field.devtools.run_rlg_hbn_tdhf_q0 import _shortcut_decision
+from mean_field.workflows.rlg_hbn import rlg_hbn_tdhf_q0_shortcut_decision
 from mean_field.systems.RnG_hBN import (
     RLGhBNHartreeFockRun,
     RLGhBNHartreeFockState,
@@ -667,6 +667,6 @@ def test_rlg_hbn_tdhf_runner_does_not_apply_single_flavor_shortcut_to_all_channe
         n_spin=2,
         n_eta=2,
     )
-    allowed, reason = _shortcut_decision(state, "auto", "all")
+    allowed, reason = rlg_hbn_tdhf_q0_shortcut_decision(state, "auto", "all")
     assert not allowed
     assert "all-channel" in reason

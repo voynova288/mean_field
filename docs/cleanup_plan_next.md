@@ -10,6 +10,15 @@ This plan tracks the next cleanup pass after the large-file/facade split work th
 - Do not mutate historical `results/` without explicit approval. Canonical backfill staging remains under allowlisted `/data/home/ziyuzhu/tmp` unless separately approved.
 - Keep package code/tests/scripts/docs independent of ignored `local_archive/`.
 
+## Completed status
+
+- Phase 0 git hygiene: completed in `ddebb13`.
+- Phase 1 common order-parameter module: completed in `ddebb13`.
+- Phase 2 optical-response package boundary/facade: completed in `9b374cc`.
+- Phase 3 cRPA/HF bridge split: completed in `ef8ba6f`.
+- Phase 4 public API registries and workflow extraction: completed across `e6eab50`, `a00803f`, `9b8202a`, and `faa706e`.
+- Devtools cleanup follow-up: RLG/hBN retired sidecar/archive helpers moved to `src/mean_field/workflows/rlg_hbn.py` and retired command files deleted in the current continuation.
+
 ## Phase 0 — git surface hygiene
 
 1. Stop ignoring the entire `tests/` tree. Public contract tests must be tracked by default.
@@ -89,4 +98,4 @@ Acceptance:
 ## Lower priority
 
 - Bands/topology wrappers are already thin enough; do not spend the next pass there unless a concrete duplicate blocks the above phases.
-- Devtools cleanup (RLG/hBN retired runner helper extraction, canonical backfill scan split) should follow after Phase 0/1 unless it blocks tests or source-control hygiene.
+- Devtools cleanup: RLG/hBN retired runner helper extraction is complete; canonical backfill scan split remains a possible later cleanup if it blocks maintainability.
