@@ -25,10 +25,10 @@ MODULE_COMMANDS = {
     "merge_tbg_crpa_chunks": ("mean_field.devtools.merge_tbg_crpa_chunks", ()),
 
     "run_tbg_crpa_chunk": ("mean_field.devtools.run_tbg_crpa_chunk", ()),
-    "sync_benchmarks": ("mean_field.devtools.sync_benchmarks", ()),
-    "sync_b0_benchmark": ("mean_field.devtools.sync_benchmarks", ("b0",)),
-    "sync_b0_benchmarks": ("mean_field.devtools.sync_benchmarks", ("b0",)),
-    "sync_bm_unstrained_benchmark": ("mean_field.devtools.sync_benchmarks", ("bm-unstrained",)),
+
+
+
+
 
 }
 
