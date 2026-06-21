@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 63287
-- Tracked Python lines: 59158
+- Tracked text lines: 62825
+- Tracked Python lines: 58679
 - Tracked Julia lines: 826
-- `src` Python files: 173
-- `src` Python lines: 53089
+- `src` Python files: 172
+- `src` Python lines: 52631
 - Files over 1000 lines: 12
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0
 
@@ -511,6 +511,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 972.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
 
+### archive_retire_tdbg_hf_facade
+
+- Archived and removed the legacy TDBG hf.py facade after projected-HF functionality had been split into maintained projected_hf_* modules; package exports now point directly at the maintained split facade.
+- Deleted files: `src/mean_field/systems/tdbg/hf.py`.
+- Gross legacy LOC removed/thinned: 480.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -544,7 +551,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 492 | `src/mean_field/systems/RnG_hBN/screening.py` |
 | 456 | `src/mean_field/systems/tbg/zero_field/model.py` |
 | 454 | `src/mean_field/crpa/workflow.py` |
-| 446 | `src/mean_field/systems/tdbg/hf.py` |
+| 445 | `src/mean_field/systems/tdbg/projected_hf_state.py` |
 
 ## Direct private-system imports in workflow surfaces
 

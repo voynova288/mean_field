@@ -634,6 +634,16 @@
       "tracked_files_deleted": [
         "src/mean_field/systems/htqg/hf.py"
       ]
+    },
+    {
+      "description": "Archived and removed the legacy TDBG hf.py facade after projected-HF functionality had been split into maintained projected_hf_* modules; package exports now point directly at the maintained split facade.",
+      "direct_mean_field_systems_imports_after": 0,
+      "direct_mean_field_systems_imports_before": 0,
+      "legacy_lines_removed_gross": 480,
+      "slice": "archive_retire_tdbg_hf_facade",
+      "tracked_files_deleted": [
+        "src/mean_field/systems/tdbg/hf.py"
+      ]
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -813,9 +823,9 @@
     ],
     "validation.py": []
   },
-  "root": "/data/home/ziyuzhu/tmp/mean_field_report_htqg_hf_20260620_235114",
-  "src_python_files": 173,
-  "src_python_lines": 53089,
+  "root": "/data/home/ziyuzhu/tmp/mean_field_report_tdbg_hf_facade_20260621_095541",
+  "src_python_files": 172,
+  "src_python_lines": 52631,
   "top_30_files": [
     {
       "lines": 2305,
@@ -934,11 +944,11 @@
       "path": "src/mean_field/crpa/workflow.py"
     },
     {
-      "lines": 446,
-      "path": "src/mean_field/systems/tdbg/hf.py"
+      "lines": 445,
+      "path": "src/mean_field/systems/tdbg/projected_hf_state.py"
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 59158,
-  "tracked_text_lines": 63287
+  "tracked_python_lines": 58679,
+  "tracked_text_lines": 62825
 }
