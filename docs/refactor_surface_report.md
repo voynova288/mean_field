@@ -752,3 +752,146 @@ Total lines: 172
 - Each slice must update this report with before/after LOC and remaining old entry points.
 - Physics-heavy migrations require focused parity tests before deleting old implementations.
 - cRPA/HF bridge changes are deferred until the known cRPA bug is isolated.
+
+## Update: cleanup plan / order-parameter / optical-response / cRPA bridge / API registry pass
+
+Commits in this pass:
+
+- `ddebb13 Extract common order-parameter helpers`
+- `9b374cc Add optical response package facade`
+- `ef8ba6f Split cRPA HF bridge surface`
+- `e6eab50 Add explicit CRPA and TDHF adapter registries`
+
+### Current summary after this pass
+
+- Tracked text lines: 65236
+- Tracked Python lines: 61583
+- Tracked Julia lines: 826
+- `src` Python files: 267
+- `src` Python lines: 54917
+- Files over 1000 lines: 0
+
+### git hygiene / examples policy
+
+- Removed the dangerous bare `tests/` ignore rule from `.gitignore`.
+- Public tests are now trackable by default.
+- Ignored only local/generated test payloads: `tests/local/`, `tests/internal/`, `tests/slow/`, `tests/data/generated/`, `tests/**/*.npz`, `tests/**/*.npy`.
+- Added local examples ignores: `examples/local/`, `examples/scratch/`, `examples/oneoff/`.
+- No tracked `examples/` directory exists in this worktree, so no examples inventory was generated in this slice.
+
+### Order-parameter extraction
+
+Added common package:
+
+- `src/analysis/order_parameters/`
+  - `schema.py`
+  - `density.py`
+  - `flavor.py`
+  - `coherence.py`
+  - `translation.py`
+  - `classification.py`
+  - `adapters.py`
+
+Routed existing wrappers through the common helpers while preserving import paths:
+
+- `mean_field.systems.tdbg.projected_hf_state._numeric_order_parameters`
+- `mean_field.systems.tdbg.projected_hf_state.tdbg_order_parameters`
+- `mean_field.systems.tmbg._polshyn_wang.translation_order_parameters`
+- `mean_field.core.hf._finite_field_kernel.calculate_valley_spin_order_parameters`
+
+Equivalence validation:
+
+- `tests/test_order_parameters.py`
+- focused gate: `25 passed` for order-parameter/TDBG/tMBG/API tests.
+
+### Optical-response package boundary
+
+Added forward-facing package:
+
+- `src/analysis/optical_response/`
+  - `gauge.py`
+  - `components.py`
+  - `conventions.py`
+  - `occupations.py`
+  - `transitions.py`
+  - `shift_current.py`
+  - `heatmap.py`
+  - `toy_models/`
+
+Compatibility status:
+
+- Historical paths `analysis.response_derivative_gauge` and `analysis.shift_current` remain valid.
+- TDBG shift-current adapter now imports the common API through `analysis.optical_response.*`.
+- Retired hTG/TBG paper response workspaces were not restored.
+
+Validation:
+
+- `tests/test_optical_response_api.py`
+- focused gate: `13 passed` for optical-response/TDBG/API tests.
+
+### cRPA/HF bridge split
+
+Split the only remaining >1000-line tracked Python file:
+
+| Before | After |
+|---:|---:|
+| `src/mean_field/crpa/hf_interface.py`: 1267 lines | `src/mean_field/crpa/hf_interface.py`: 15-line compatibility facade |
+
+New implementation modules:
+
+- `src/mean_field/crpa/hf_bridge/density.py`
+- `src/mean_field/crpa/hf_bridge/split_scheme.py`
+- `src/mean_field/crpa/hf_bridge/kernels.py`
+- `src/mean_field/crpa/hf_bridge/energy.py`
+- `src/mean_field/crpa/hf_bridge/runner.py`
+
+Compatibility helpers restored in the TBG zero-field facade for cRPA imports:
+
+- `_hex_shell_contains`
+- `_precompute_overlap_screening`
+- `_screened_coulomb_matrix`
+- `_with_tbg_overlap_screening`
+
+Convention validation added:
+
+- `tests/test_crpa_hf_bridge_split.py`
+- verifies `D = P - 1/2 I` roundtrip and bare component sum identity against the generic projected interaction builder with tolerance `1e-12`.
+- focused gate: `28 passed` for cRPA bridge/API tests.
+
+### Public API registry connections
+
+cRPA:
+
+- Added `CRPAAdapterInfo` and registry helpers:
+  - `list_crpa_adapters`
+  - `get_crpa_adapter_info`
+  - `resolve_crpa_adapter`
+- Registered `tbg_workflow`, delegating to `mean_field.crpa.workflow.compute_crpa` only when caller provides explicit TBG inputs.
+- `compute_crpa(...)` still preserves object-hook dispatch and refuses silent production parameter inference.
+
+TDHF:
+
+- Added `TDHFAdapterInfo` and registry helpers:
+  - `list_tdhf_adapters`
+  - `get_tdhf_adapter_info`
+  - `resolve_tdhf_adapter`
+- Registered RLG/hBN adapters:
+  - `rlg_hbn_q0`
+  - `rlg_hbn_finite_q`
+- `run_tdhf(...)` requires explicit raw HF run + canonical HF state/result for RLG/hBN adapters; it does not load archives implicitly.
+
+Validation:
+
+- `tests/test_public_api_registries.py`
+- focused gate: `29 passed` for API registry tests.
+
+### Full gate
+
+After the API registry slice:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+```
+
+Result on `test001`: `206 passed`.
