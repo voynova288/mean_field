@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ._shared import *  # noqa: F401,F403
+from ._scan import _contract_metadata, _mapping
 
 def backfill_strategy() -> dict[str, object]:
     return {
@@ -8,8 +9,8 @@ def backfill_strategy() -> dict[str, object]:
         "safe_write_policy": [
             "Never fabricate canonical HF physics from summary-only artifacts.",
             "Write-mode requires --write, --target-root, and at least one --allow-target-root allowlist entry.",
-            "Only eligible RLG/hBN archives are materialized through the existing archive loader and canonical adapter.",
-            "TDBG/HTG remain blocked until archive loaders restore their raw run objects without recomputing physics.",
+            "Eligible RLG/hBN, TDBG, and HTG full raw archives are materialized only through existing archive loaders and canonical adapters.",
+            "Summary-only TDBG/HTG archives remain blocked; loaders require raw run objects without recomputing physics.",
             "TDBG/HTG diagnostics list the precise missing raw files/fields so future runs can save a loader-compatible archive contract.",
             "Staged writes produce sidecars, manifest patches, and audit manifests under the caller-specified target root only.",
         ],

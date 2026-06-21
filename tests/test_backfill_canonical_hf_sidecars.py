@@ -9,7 +9,9 @@ import pytest
 from mean_field.devtools.backfill_canonical_hf_sidecars import (
     build_parser,
     execute_backfill_writes,
+    inventory_payload,
     plan_backfill_writes,
+    render_markdown_inventory,
     scan_backfill_candidates,
 )
 
@@ -522,3 +524,13 @@ def test_scanner_identifies_tdbg_full_archive_with_existing_loader(tmp_path: Pat
     assert record.decision == "eligible_with_existing_archive_loader"
     assert record.can_backfill_now is True
     assert "load_tdbg_projected_hf_result_from_archive" in " ".join(record.adapters)
+
+
+def test_backfill_inventory_report_renders_empty_dry_run(tmp_path: Path) -> None:
+    records = scan_backfill_candidates([tmp_path / "empty_results"])
+    payload = inventory_payload(records, roots=[tmp_path / "empty_results"])
+    markdown = render_markdown_inventory(payload)
+    assert "Historical Canonical HF Sidecar Backfill Dry Run" in markdown
+    assert "candidate_count" in markdown
+    assert "TDBGProjectedHFResult" in markdown
+    assert payload["historical_results_mutated"] is False
