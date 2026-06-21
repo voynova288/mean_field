@@ -4,12 +4,12 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 62456
-- Tracked Python lines: 59140
+- Tracked text lines: 62671
+- Tracked Python lines: 59348
 - Tracked Julia lines: 826
-- `src` Python files: 227
-- `src` Python lines: 53037
-- Files over 1000 lines: 3
+- `src` Python files: 238
+- `src` Python lines: 53245
+- Files over 1000 lines: 1
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0
 
 ## Completed cleanup slices
@@ -630,13 +630,25 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 2029.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
 
+### route_finite_field_hf_through_projected_core_apis
+
+- Adapted full finite-B magnetic overlaps to generic HFOverlapBlockSet/build_projected_interaction_hamiltonian and build_projected_hf_kernel, then split finite_field.py into focused core finite-field modules while preserving the public facade.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 1106.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
+
+### split_tbg_finite_field_spectrum_surface
+
+- Reused the core magnetic_r_orbit_positions helper for magnetic-translation orbit bookkeeping and split the TBG finite-field spectrum adapter into parameter, sweep, LL-matrix, Hamiltonian, and overlap modules while preserving spectrum.py facade imports.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 983.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
 |---:|---|
 | 1267 | `src/mean_field/crpa/hf_interface.py` |
-| 1149 | `src/mean_field/core/hf/finite_field.py` |
-| 1012 | `src/mean_field/systems/tbg/finite_field/spectrum.py` |
 | 873 | `src/analysis/topology/quantum_geometry.py` |
 | 805 | `src/analysis/response_derivative_gauge.py` |
 | 788 | `src/mean_field/devtools/canonical_hf_backfill/_scan.py` |
@@ -664,6 +676,8 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 445 | `src/mean_field/systems/tdbg/projected_hf_state.py` |
 | 435 | `src/mean_field/systems/tmbg/_polshyn_wang.py` |
 | 434 | `src/mean_field/crpa/diagnostics.py` |
+| 431 | `src/mean_field/systems/htg/_hf_initialization.py` |
+| 427 | `src/mean_field/systems/tbg/zero_field/_hf_full.py` |
 
 ## Direct private-system imports in workflow surfaces
 
