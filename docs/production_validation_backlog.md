@@ -139,6 +139,16 @@ Software gate:
 pytest -q tests/test_htg_supercell.py tests/test_htg_supercell_contract_adapter.py
 ```
 
+Latest software-gate result on `test001`:
+
+```text
+commit: 9d045c5
+command: pytest -q tests/test_htg_supercell.py tests/test_htg_supercell_contract_adapter.py
+result: 10 passed
+```
+
+This is software readiness only, not a converged fractional-filling production run.
+
 Production acceptance:
 
 - self-consistent run converges for relevant candidate states;
@@ -183,6 +193,16 @@ Software gates:
 ```bash
 pytest -q tests/test_htqg_model.py tests/test_api_imports.py
 ```
+
+Latest software-gate result on `test001`:
+
+```text
+commit: 9d045c5
+command: pytest -q tests/test_htqg_model.py tests/test_api_imports.py
+result: 14 passed
+```
+
+This is band/model API readiness only; projected-HF production validation still needs the explicit HTQG HF adapter or workflow described below.
 
 Production acceptance:
 
