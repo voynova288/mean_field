@@ -4,12 +4,12 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 62358
-- Tracked Python lines: 59049
+- Tracked text lines: 62456
+- Tracked Python lines: 59140
 - Tracked Julia lines: 826
-- `src` Python files: 218
-- `src` Python lines: 52946
-- Files over 1000 lines: 4
+- `src` Python files: 227
+- `src` Python lines: 53037
+- Files over 1000 lines: 3
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0
 
 ## Completed cleanup slices
@@ -623,11 +623,17 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 2211.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
 
+### split_rlg_hbn_tdhf_surface
+
+- Split the RnG/hBN TDHF adapter into support/type/orbital/pair/archive/q0/finite-q/dispatch modules while preserving tdhf.py public facade imports for package exports and archive loaders.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 2029.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
 |---:|---|
-| 2058 | `src/mean_field/systems/RnG_hBN/tdhf.py` |
 | 1267 | `src/mean_field/crpa/hf_interface.py` |
 | 1149 | `src/mean_field/core/hf/finite_field.py` |
 | 1012 | `src/mean_field/systems/tbg/finite_field/spectrum.py` |
@@ -652,6 +658,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 528 | `src/mean_field/systems/tbg/zero_field/artifacts.py` |
 | 498 | `src/mean_field/crpa/validation.py` |
 | 492 | `src/mean_field/systems/RnG_hBN/screening.py` |
+| 485 | `src/mean_field/systems/RnG_hBN/_tdhf_finite_q.py` |
 | 456 | `src/mean_field/systems/tbg/zero_field/model.py` |
 | 454 | `src/mean_field/crpa/workflow.py` |
 | 445 | `src/mean_field/systems/tdbg/projected_hf_state.py` |
