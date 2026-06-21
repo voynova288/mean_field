@@ -2116,6 +2116,7 @@ def run_rlg_hbn_hartree_fock(
     max_iter: int = 80,
     precision: float = 1.0e-6,
     oda_stall_threshold: float = 1.0e-3,
+    max_oda_lambda: float | None = None,
     occupation_counts: tuple[int, ...] | None = None,
     initial_density: np.ndarray | None = None,
     step_callback: Callable[[RLGhBNHartreeFockState, HartreeFockStepResult], None] | None = None,
@@ -2152,6 +2153,7 @@ def run_rlg_hbn_hartree_fock(
         seed=seed,
         max_iter=max_iter,
         oda_stall_threshold=oda_stall_threshold,
+        max_oda_lambda=max_oda_lambda,
     )
     _update_rlg_hbn_diagnostics_from_density(state)
     return RLGhBNHartreeFockRun(
@@ -2179,6 +2181,7 @@ def scan_rlg_hbn_ground_state(
     max_iter: int = 80,
     precision: float = 1.0e-6,
     oda_stall_threshold: float = 1.0e-3,
+    max_oda_lambda: float | None = None,
     mesh_size: int | None = None,
     screening_mesh_size: int | None = None,
     run_callback: Callable[[RLGhBNHartreeFockRun], None] | None = None,
@@ -2203,6 +2206,7 @@ def scan_rlg_hbn_ground_state(
                 max_iter=max_iter,
                 precision=precision,
                 oda_stall_threshold=oda_stall_threshold,
+                max_oda_lambda=max_oda_lambda,
             )
             runs.append(run)
             if run_callback is not None:
