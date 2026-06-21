@@ -1502,3 +1502,42 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 ```
 
 Result: `214 passed`.
+
+## Update: HTQG explicit missing-HF-adapter gate
+
+Commit in this continuation:
+
+- `d325acf Document HTQG missing HF adapter gate`
+
+### Current summary after this continuation
+
+- Tracked text lines: 66490
+- Tracked Python lines: 61999
+- Tracked Julia lines: 826
+- `src` Python files: 275
+- `src` Python lines: 55205
+- Files over 1000 lines: 0
+
+### HTQG public HF boundary
+
+Added a public HF-adapter gate that documents the current HTQG state: `HTQGModel` has no registered HF adapter, and `run_hf(HTQGModel, HFConfig(...))` must fail explicitly with the frozen public-API message instead of inferring projected-HF physics.
+
+This preserves the boundary until an explicit HTQG projected-HF adapter/workflow is designed with target Hamiltonian parameters, projected band/subspace, reference density, and path convention.
+
+Focused validation:
+
+```bash
+PYTHONPATH=src python -m compileall -q src/mean_field/api src/mean_field/systems/htqg tests/test_api_hf_adapters.py tests/test_htqg_model.py
+PYTHONPATH=src pytest -q tests/test_api_hf_adapters.py tests/test_htqg_model.py
+```
+
+Result: `20 passed`.
+
+Full gate on `test001` after this slice:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+```
+
+Result: `215 passed`.
