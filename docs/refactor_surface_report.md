@@ -1237,3 +1237,43 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 ```
 
 Result: `210 passed`.
+
+## Update: optical-response package exports and breadcrumbs
+
+Commits in this continuation:
+
+- `59cf51e Update optical response breadcrumbs`
+- `d11a3f9 Complete optical response package exports`
+
+### Current summary after this continuation
+
+- Tracked text lines: 66112
+- Tracked Python lines: 61915
+- Tracked Julia lines: 826
+- `src` Python files: 275
+- `src` Python lines: 55192
+- Files over 1000 lines: 0
+
+### Breadcrumb and export updates
+
+- Updated root and `src/analysis/` AGENTS breadcrumbs plus architecture/response docs to name `analysis.optical_response` as the implementation owner and old `response_derivative_gauge.py` / `shift_current/` paths as compatibility shims.
+- Expanded `analysis.optical_response.__all__` to aggregate public symbols from split component, convention, gauge, heatmap, occupation, and shift-current modules.
+- Added smoke coverage for split-module package exports including degeneracy grouping, random block gauges, WannierBerri group trace, and named conventions.
+
+Focused validation:
+
+```bash
+PYTHONPATH=src python -m compileall -q src/analysis/optical_response tests/test_optical_response_api.py
+PYTHONPATH=src pytest -q tests/test_optical_response_api.py tests/test_api_imports.py tests/test_api_bands.py
+```
+
+Result: `16 passed`.
+
+Full gate on `test001` after this slice:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+```
+
+Result: `211 passed`.
