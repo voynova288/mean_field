@@ -1392,3 +1392,46 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 ```
 
 Result: `213 passed`.
+
+## Update: non-TDHF/cRPA validation boundary and TMBG Polshyn preflight
+
+Commit in this continuation:
+
+- `c89fafc Record non TDHF CRPA validation boundary`
+
+### Current summary after this continuation
+
+- Tracked text lines: 66312
+- Tracked Python lines: 61970
+- Tracked Julia lines: 826
+- `src` Python files: 275
+- `src` Python lines: 55205
+- Files over 1000 lines: 0
+
+### Validation boundary update
+
+The active validation boundary is now documented as:
+
+- TDHF and cRPA validation/code paths remain out of scope unless explicitly requested.
+- Non-TDHF/non-cRPA validation and cleanup gates may proceed after local self-checks of command, output path, and expected runtime.
+
+### TMBG Polshyn software preflight
+
+A 1x1 explicit-config TMBG Polshyn public `run_hf(...)` preflight was run on `test001` with no writes to historical `results/`.
+
+Output:
+
+```text
+/data/home/ziyuzhu/tmp/mean_field_validation_tmbg_polshyn_92f4e98_20260622_003023/summary.json
+```
+
+Summary:
+
+```text
+result_model: tmbg_polshyn
+has_canonical_run_result: true
+best_seed: 5
+workflow metadata: tmbg.polshyn_wang.explicit_config
+```
+
+This is software/API readiness evidence only, not paper-level production validation.
