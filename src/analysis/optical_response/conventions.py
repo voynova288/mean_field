@@ -11,7 +11,7 @@ class ShiftCurrentConvention:
     """Response-layer convention bundle.
 
     The derivative route is *not* configurable here: reusable code uses
-    ``analysis.response_derivative_gauge`` and its WannierBerri Hamiltonian-gauge
+    ``analysis.optical_response.gauge`` and its WannierBerri Hamiltonian-gauge
     convention.  This dataclass records only response/plotting choices that
     differ between references: ordered vs symmetrized optical indices, the sign
     of the local geometric kernel, and whether the optical Lorentzian includes

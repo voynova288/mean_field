@@ -157,14 +157,14 @@ def precompute_shift_current_tensors(
 
     A system only provides eigenpairs and Hamiltonian derivatives.  The
     Hamiltonian-gauge rotation and generalized derivative are delegated to
-    ``analysis.response_derivative_gauge``.
+    ``analysis.optical_response.gauge``.
     """
 
     if external_connection is not None:
         raise NotImplementedError(
             "external_connection is not supported in analysis.shift_current yet: "
             "the generalized derivative of external position/Berry terms must be implemented first. "
-            "Use response_derivative_gauge directly for audited external_terms work."
+            "Use analysis.optical_response.gauge directly for audited external_terms work."
         )
     raw_dh = _operator_array(dhdk, name="dhdk")
     raw_d2 = None if d2hdk is None else _operator_array(d2hdk, name="d2hdk")

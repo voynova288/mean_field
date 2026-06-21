@@ -10,11 +10,13 @@ d2hdk = optional_second_derivatives      # shape (ndim,ndim,basis,basis)
 ```
 
 The derivative calculation is not reimplemented here: all Berry connection and
-generalized-derivative work is delegated to `analysis.response_derivative_gauge`,
-which follows the WannierBerri Hamiltonian-gauge convention.
+generalized-derivative work is delegated to `analysis.optical_response.gauge`,
+which follows the WannierBerri Hamiltonian-gauge convention. This
+`analysis.shift_current` package is a compatibility path that re-exports the
+common optical-response API.
 
 ```python
-from analysis.shift_current import (
+from analysis.optical_response import (
     JOYA_EQ7_GEOMETRIC_CONVENTION,
     parse_component,
     positive_transition_terms,
