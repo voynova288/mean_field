@@ -345,3 +345,180 @@ def test_write_mode_refuses_existing_staged_sidecar_without_overwrite(tmp_path: 
     assert payload["summary"]["written_count"] == 0
     assert payload["entries"][0]["status"] == "skipped_existing_output"
     assert "--overwrite" in payload["entries"][0]["skipped_reason"]
+
+
+def _write_minimal_eligible_htg_primitive_archive(tmp_path: Path) -> Path:
+    root = tmp_path / "htg_full_archive"
+    root.mkdir()
+    nt = 8
+    nk = 1
+    h0 = np.zeros((nt, nt, nk), dtype=np.complex128)
+    density = np.zeros_like(h0)
+    sigma_z = np.zeros_like(h0)
+    model_params = {
+        "theta_deg": 1.0,
+        "n_shells": 0,
+        "params": {
+            "graphene_lattice_constant_nm": 0.246,
+            "fermi_velocity_m_per_s": 1.03e6,
+            "w_ev": 0.105,
+            "kappa": 0.7,
+            "zeta_rad": None,
+            "model_name": "default",
+        },
+    }
+    interaction_params = {
+        "epsilon_r": 8.0,
+        "d_sc_nm": 25.0,
+        "U_ev": 0.0,
+        "subtraction": "average",
+        "n_k": 1,
+        "g_shells": 0,
+        "finite_zero_limit": False,
+        "zero_cutoff_nm_inv": 1.0e-12,
+    }
+    np.savez(
+        root / "hf_ground_state.npz",
+        density=density,
+        hamiltonian=h0,
+        h0=h0,
+        energies_ev=np.zeros((nt, nk), dtype=float),
+        kvec_nm_inv=np.asarray([0.0 + 0.0j], dtype=np.complex128),
+        k_grid_frac=np.zeros((1, 2), dtype=float),
+        iter_energy_ev=np.asarray([0.0], dtype=float),
+        iter_err=np.asarray([0.0], dtype=float),
+        iter_oda=np.asarray([1.0], dtype=float),
+        mu=np.asarray(0.0),
+        nu=np.asarray(0.0),
+        precision=np.asarray(1.0e-8),
+        v0=np.asarray(1.0),
+        sigma_z=sigma_z,
+        converged=np.asarray(True),
+        exit_reason=np.asarray("converged"),
+        init_mode=np.asarray("archive"),
+        seed=np.asarray(7),
+    )
+    np.savez(
+        root / "hf_projected_basis.npz",
+        wavefunctions=np.zeros((6, 2, 2, 1), dtype=np.complex128),
+        projected_band_indices=np.asarray([0, 1], dtype=int),
+        central_band_indices=np.asarray([0, 1], dtype=int),
+        band_sigma_z=np.zeros((2, 1), dtype=float),
+        reciprocal_grid_shape=np.asarray([1, 1], dtype=int),
+        reciprocal_grid_origin=np.asarray([0, 0], dtype=int),
+        moire_cell_area_nm2=np.asarray(1.0),
+        model_params=np.asarray(json.dumps(model_params)),
+        interaction_params=np.asarray(json.dumps(interaction_params)),
+    )
+    return root / "hf_ground_state.npz"
+
+
+def test_write_mode_stages_htg_primitive_full_archive_with_existing_loader(tmp_path: Path) -> None:
+    archive_path = _write_minimal_eligible_htg_primitive_archive(tmp_path)
+    records = scan_backfill_candidates([archive_path])
+    assert len(records) == 1
+    record = records[0]
+    assert record.kind == "htg_primitive_archive"
+    assert record.decision == "eligible_with_existing_archive_loader"
+    assert record.can_backfill_now is True
+    assert "load_htg_hf_run_from_archive" in " ".join(record.adapters)
+
+    target_root = tmp_path / "staged_backfill"
+    payload = execute_backfill_writes(
+        records,
+        roots=[archive_path],
+        target_root=target_root,
+        allow_target_roots=[tmp_path],
+    )
+    assert payload["historical_results_mutated"] is False
+    assert payload["summary"]["written_count"] == 1
+    sidecar_path = Path(payload["entries"][0]["planned_files"]["canonical_hf_run_result"])
+    sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    assert sidecar["contract_type"] == "mean_field.core.contracts.HFRunResult"
+    assert sidecar["final_state"]["density"]["metadata"]["adapter"] == "mean_field.systems.htg.mean_field_adapter"
+
+
+def _write_minimal_eligible_tdbg_archive(tmp_path: Path) -> Path:
+    root = tmp_path / "tdbg_full_archive"
+    root.mkdir()
+    nt = 2
+    nk = 1
+    matrix = np.zeros((nt, nt, nk), dtype=np.complex128)
+    np.savez(
+        root / "hf_state.npz",
+        density=matrix,
+        hamiltonian=matrix,
+        h0=matrix,
+        energies=np.zeros((nt, nk), dtype=float),
+        k_grid_frac=np.zeros((nk, 2), dtype=float),
+        kvec_nm_inv=np.asarray([0.0 + 0.0j], dtype=np.complex128),
+        band_indices=np.asarray([0, 1], dtype=int),
+        reference_density=matrix,
+        mu=np.asarray(0.0),
+        iter_energy=np.asarray([0.0], dtype=float),
+        iter_err=np.asarray([0.0], dtype=float),
+        iter_oda=np.asarray([1.0], dtype=float),
+        n_occupied_per_k=np.asarray(1),
+        lower_band_count=np.asarray(0),
+    )
+    np.savez(
+        root / "projected_basis.npz",
+        wavefunctions=np.zeros((nt, nk, 1, 4), dtype=np.complex128),
+        moire_area_nm2=np.asarray(1.0),
+        shifts=np.zeros((0, 2), dtype=int),
+        shift_gvecs=np.zeros((0,), dtype=np.complex128),
+        shift_srcmaps=np.zeros((0, 1), dtype=int),
+        valley_params=np.asarray(json.dumps({})),
+    )
+    (root / "state_labels.json").write_text(
+        json.dumps(
+            [
+                {"index": 0, "spin": "up", "valley": 1, "band_position": 0, "band_index": 0},
+                {"index": 1, "spin": "up", "valley": 1, "band_position": 1, "band_index": 1},
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (root / "projected_hf_summary.json").write_text(
+        json.dumps(
+            {
+                "init_mode": "archive",
+                "seed": 2,
+                "converged": True,
+                "exit_reason": "converged",
+                "order_parameters": {},
+                "energy_components_ev": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (root / "config.json").write_text(
+        json.dumps(
+            {
+                "theta_deg": 1.38,
+                "cut": 1.0,
+                "mesh_size": 1,
+                "paper_ud_ev": 0.09,
+                "stacking": "AB-BA",
+                "window": {"name": "two_flat", "band_indices": None},
+                "filling": 1,
+                "interaction": {},
+                "precision": 1.0e-7,
+                "max_iter": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (root / "model.json").write_text(json.dumps({"theta_deg": 1.38, "cut": 1.0}), encoding="utf-8")
+    return root / "hf_state.npz"
+
+
+def test_scanner_identifies_tdbg_full_archive_with_existing_loader(tmp_path: Path) -> None:
+    archive_path = _write_minimal_eligible_tdbg_archive(tmp_path)
+    records = scan_backfill_candidates([archive_path])
+    assert len(records) == 1
+    record = records[0]
+    assert record.kind == "tdbg_archive"
+    assert record.decision == "eligible_with_existing_archive_loader"
+    assert record.can_backfill_now is True
+    assert "load_tdbg_projected_hf_result_from_archive" in " ".join(record.adapters)

@@ -43,6 +43,7 @@ from ._supercell_runner import (
     run_htg_supercell_hf,
     scan_htg_supercell_ground_state,
 )
+from ._supercell_archive import load_htg_supercell_hf_run_from_archive
 from ._supercell_path_io import (
     build_htg_supercell_gamma_path,
     evaluate_htg_supercell_hf_path,
@@ -82,6 +83,7 @@ __all__ = [
     "htg_supercell_reference_diagonal",
     "htg_tripled_fractional_supercell",
     "initialize_htg_supercell_density",
+    "load_htg_supercell_hf_run_from_archive",
     "run_htg_supercell_hf",
     "save_htg_supercell_path_npz",
     "save_htg_supercell_run_npz",

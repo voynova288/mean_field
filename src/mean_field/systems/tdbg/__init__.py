@@ -32,6 +32,7 @@ from .projected_hf import (
     validate_tdbg_interaction_settings,
     validate_tdbg_projected_hf_config,
 )
+from .projected_hf_archive import load_tdbg_projected_hf_result_from_archive
 from .shift_current import (
     JOYA_GAMMA_CENTERED_FRAC_SHIFT,
     TDBGShiftCurrentPoint,
@@ -89,6 +90,7 @@ __all__ = [
     'joya_gamma_centered_frac_shift',
     'joya_gamma_centered_k_grid',
     'layer_potentials_from_delta',
+    'load_tdbg_projected_hf_result_from_archive',
     'mirror_x_tensor_component_sign',
     'model_shift_current_point_data',
     'moire_coupling_matrix',

@@ -150,9 +150,8 @@ def _tdbg_contract_blockers(root: Path, files: Mapping[str, Any]) -> tuple[tuple
             blockers.extend(_missing_key_blockers(basis_path, _TDBG_PROJECTED_BASIS_CONTRACT_KEYS.difference(keys), role="TDBGProjectedHFData exact projected basis"))
     if not (root / "model.json").is_file() and not _mapping(files).get("model"):
         blockers.append("missing raw field: TDBGProjectedHFData.model / model.json with exact TDBGModel parameters")
-    if not (root / "config.yaml").is_file() and not _mapping(files).get("config"):
-        blockers.append("missing raw field: TDBGProjectedHFData.config / config.yaml with exact TDBGProjectedHFConfig")
-    blockers.append("no repository archive loader currently materializes TDBGProjectedHFResult from historical files without recomputing physics")
+    if not (root / "config.json").is_file() and not _mapping(files).get("config"):
+        blockers.append("missing raw field: TDBGProjectedHFData.config / config.json with exact TDBGProjectedHFConfig")
     return tuple(blockers), metadata
 
 
@@ -196,9 +195,8 @@ def _htg_primitive_contract_blockers(root: Path, files: Mapping[str, Any], *, ar
         else:
             metadata["projected_basis_keys"] = sorted(keys)
             blockers.extend(_missing_key_blockers(basis_path, _HTG_PRIMITIVE_BASIS_CONTRACT_KEYS.difference(keys), role="HTGProjectedBasisData exact projected basis"))
-    if not params_path.is_file():
+    if not params_path.is_file() and not ("model_params" in metadata.get("projected_basis_keys", []) and "interaction_params" in metadata.get("projected_basis_keys", [])):
         blockers.append(_missing_file_blocker(params_path, role="HTG model/interaction/config metadata"))
-    blockers.append("no repository archive loader currently materializes HTGHartreeFockRun from historical files without recomputing physics")
     return tuple(blockers), metadata
 
 
@@ -242,9 +240,8 @@ def _htg_supercell_contract_blockers(root: Path, files: Mapping[str, Any], *, ar
         else:
             metadata["projected_basis_keys"] = sorted(keys)
             blockers.extend(_missing_key_blockers(basis_path, _HTG_SUPERCELL_BASIS_CONTRACT_KEYS.difference(keys), role="HTGSupercellProjectedBasisData exact projected basis"))
-    if not summary_path.is_file():
+    if not summary_path.is_file() and not ("model_params" in metadata.get("projected_basis_keys", []) and "interaction_params" in metadata.get("projected_basis_keys", [])):
         blockers.append(_missing_file_blocker(summary_path, role="HTG supercell run summary/model metadata"))
-    blockers.append("no repository archive loader currently materializes HTGSupercellHartreeFockRun from historical files without recomputing physics")
     return tuple(blockers), metadata
 
 
@@ -524,6 +521,7 @@ def _classify_tdbg_archive(archive_path: Path) -> BackfillCandidate:
         f"archive={archive_path}",
         "header-only TDBG archive inspection; arrays are not materialized for physics",
     ]
+    eligible = len(blockers) == 0
     return BackfillCandidate(
         kind="tdbg_archive",
         root=str(root),
@@ -531,16 +529,20 @@ def _classify_tdbg_archive(archive_path: Path) -> BackfillCandidate:
         target_root=str(root),
         system_name="tdbg",
         workflow="tdbg.projected_hf.archive",
-        decision="requires_archive_loader",
-        can_backfill_now=False,
+        decision="eligible_with_existing_archive_loader" if eligible else "requires_archive_loader",
+        can_backfill_now=eligible,
         would_write=False,
-        reason="TDBG projected-HF archive cannot be backfilled until a loader restores the exact TDBGProjectedHFResult raw object",
+        reason=(
+            "TDBG projected-HF archive satisfies the complete raw TDBGProjectedHFResult loader contract"
+            if eligible
+            else "TDBG projected-HF archive cannot be backfilled until it satisfies the exact TDBGProjectedHFResult raw-object loader contract"
+        ),
         evidence=tuple(evidence),
-        adapters=(_TDBG_ADAPTER,),
+        adapters=(_TDBG_ARCHIVE_LOADER, _TDBG_ADAPTER),
         blockers=blockers,
         uncertainty=(
             "Do not fabricate projected micro-wavefunctions or raw run history from final matrices.",
-            "If a future archive satisfies the listed contract, add an explicit loader test before enabling write-mode.",
+            "Eligible records are still staged-only; applying sidecars to historical roots requires a separate approval step.",
         ),
         metadata=archive_metadata,
     )
@@ -555,12 +557,14 @@ def _classify_htg_archive(archive_path: Path) -> BackfillCandidate:
         system_name = "htg_supercell"
         workflow = "htg.supercell_hf.archive"
         adapter = _HTG_ADAPTER
+        loader = _HTG_ARCHIVE_LOADER
         raw_name = "HTGSupercellHartreeFockRun"
     else:
         blockers, archive_metadata = _htg_primitive_contract_blockers(root, {"hf_ground_state": archive_path.name}, archive_name=archive_path.name)
         system_name = "htg"
         workflow = "htg.primitive_hf.archive"
         adapter = _HTG_PRIMITIVE_ADAPTER
+        loader = _HTG_PRIMITIVE_ARCHIVE_LOADER
         raw_name = "HTGHartreeFockRun"
     evidence = [
         f"archive={archive_path}",
@@ -568,6 +572,7 @@ def _classify_htg_archive(archive_path: Path) -> BackfillCandidate:
     ]
     if key_error is not None:
         evidence.append(f"npz_header_error={key_error}")
+    eligible = len(blockers) == 0
     return BackfillCandidate(
         kind="htg_supercell_archive" if is_supercell else "htg_primitive_archive",
         root=str(root),
@@ -575,16 +580,20 @@ def _classify_htg_archive(archive_path: Path) -> BackfillCandidate:
         target_root=str(root),
         system_name=system_name,
         workflow=workflow,
-        decision="requires_archive_loader",
-        can_backfill_now=False,
+        decision="eligible_with_existing_archive_loader" if eligible else "requires_archive_loader",
+        can_backfill_now=eligible,
         would_write=False,
-        reason=f"HTG archive cannot be backfilled until a loader restores the exact {raw_name} raw object",
+        reason=(
+            f"HTG archive satisfies the complete raw {raw_name} loader contract"
+            if eligible
+            else f"HTG archive cannot be backfilled until it satisfies the exact {raw_name} raw-object loader contract"
+        ),
         evidence=tuple(evidence),
-        adapters=(adapter,),
+        adapters=(loader, adapter),
         blockers=blockers,
         uncertainty=(
             "Do not fabricate projected micro-wavefunctions/model/interaction metadata from final matrices.",
-            "If a future archive satisfies the listed contract, add an explicit loader test before enabling write-mode.",
+            "Eligible records are still staged-only; applying sidecars to historical roots requires a separate approval step.",
         ),
         metadata=archive_metadata,
     )

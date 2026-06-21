@@ -70,7 +70,7 @@ def _manifest_patch_for_record(record: BackfillCandidate) -> dict[str, object]:
 def _candidate_is_write_eligible(record: BackfillCandidate) -> bool:
     return bool(
         record.can_backfill_now
-        and record.kind == "rlg_hbn_archive"
+        and record.kind in {"rlg_hbn_archive", "tdbg_archive", "htg_primitive_archive", "htg_supercell_archive"}
         and record.decision == "eligible_with_existing_archive_loader"
         and record.archive_path
     )
@@ -152,6 +152,36 @@ def _default_rlg_hbn_adapter(run: object, *, archive_manifest: dict[str, object]
     module = import_module("mean_field.systems.RnG_hBN.hf_contracts")
     return module.rlg_hbn_hf_run_to_hf_run_result(run, archive_manifest=archive_manifest)  # type: ignore[arg-type]
 
+def _default_tdbg_loader(archive_path: str | Path) -> object:
+    module = import_module("mean_field.systems.tdbg.projected_hf_archive")
+    return module.load_tdbg_projected_hf_result_from_archive(archive_path)
+
+
+def _default_tdbg_adapter(run: object, *, archive_manifest: dict[str, object]) -> object:
+    module = import_module("mean_field.systems.tdbg.projected_hf_contracts")
+    return module.tdbg_projected_hf_result_to_hf_run_result(run, archive_manifest=archive_manifest)  # type: ignore[arg-type]
+
+
+def _default_htg_loader(archive_path: str | Path) -> object:
+    module = import_module("mean_field.systems.htg.mean_field_adapter")
+    return module.load_htg_hf_run_from_archive(archive_path)
+
+
+def _default_htg_adapter(run: object, *, archive_manifest: dict[str, object]) -> object:
+    module = import_module("mean_field.systems.htg.mean_field_adapter")
+    return module.htg_hf_run_to_hf_run_result(run, archive_manifest=archive_manifest)  # type: ignore[arg-type]
+
+
+def _default_htg_supercell_loader(archive_path: str | Path) -> object:
+    module = import_module("mean_field.systems.htg.supercell")
+    return module.load_htg_supercell_hf_run_from_archive(archive_path)
+
+
+def _default_htg_supercell_adapter(run: object, *, archive_manifest: dict[str, object]) -> object:
+    module = import_module("mean_field.systems.htg.supercell_contracts")
+    return module.htg_supercell_hf_run_to_hf_run_result(run, archive_manifest=archive_manifest)  # type: ignore[arg-type]
+
+
 def _default_canonical_sidecar_builder(canonical_run_result: object) -> dict[str, object]:
     from mean_field.api.hf import _canonical_hf_run_result_sidecar
 
@@ -172,9 +202,15 @@ def execute_backfill_writes(
     overwrite: bool = False,
     rlg_hbn_loader: Callable[[str | Path], object] | None = None,
     rlg_hbn_adapter: Callable[..., object] | None = None,
+    tdbg_loader: Callable[[str | Path], object] | None = None,
+    tdbg_adapter: Callable[..., object] | None = None,
+    htg_loader: Callable[[str | Path], object] | None = None,
+    htg_adapter: Callable[..., object] | None = None,
+    htg_supercell_loader: Callable[[str | Path], object] | None = None,
+    htg_supercell_adapter: Callable[..., object] | None = None,
     canonical_sidecar_builder: Callable[[object], dict[str, object]] | None = None,
 ) -> dict[str, object]:
-    """Materialize eligible RLG/hBN canonical sidecars into a staging root.
+    """Materialize eligible canonical HF sidecars into a staging root.
 
     This is an explicit write path, but it is *not* a historical mutation path:
     outputs are written only below the allowlisted ``target_root``.  Ineligible
@@ -193,8 +229,18 @@ def execute_backfill_writes(
     if manifest_path.exists() and not bool(overwrite):
         raise FileExistsError(f"refusing to overwrite existing write manifest: {manifest_path}")
 
-    loader = _default_rlg_hbn_loader if rlg_hbn_loader is None else rlg_hbn_loader
-    adapter = _default_rlg_hbn_adapter if rlg_hbn_adapter is None else rlg_hbn_adapter
+    loaders: dict[str, Callable[[str | Path], object]] = {
+        "rlg_hbn_archive": _default_rlg_hbn_loader if rlg_hbn_loader is None else rlg_hbn_loader,
+        "tdbg_archive": _default_tdbg_loader if tdbg_loader is None else tdbg_loader,
+        "htg_primitive_archive": _default_htg_loader if htg_loader is None else htg_loader,
+        "htg_supercell_archive": _default_htg_supercell_loader if htg_supercell_loader is None else htg_supercell_loader,
+    }
+    adapters: dict[str, Callable[..., object]] = {
+        "rlg_hbn_archive": _default_rlg_hbn_adapter if rlg_hbn_adapter is None else rlg_hbn_adapter,
+        "tdbg_archive": _default_tdbg_adapter if tdbg_adapter is None else tdbg_adapter,
+        "htg_primitive_archive": _default_htg_adapter if htg_adapter is None else htg_adapter,
+        "htg_supercell_archive": _default_htg_supercell_adapter if htg_supercell_adapter is None else htg_supercell_adapter,
+    }
     sidecar_builder = _default_canonical_sidecar_builder if canonical_sidecar_builder is None else canonical_sidecar_builder
 
     entries = list(payload["entries"])
@@ -218,6 +264,12 @@ def execute_backfill_writes(
         for key, path_text in planned_files.items():
             _require_within(Path(str(path_text)), resolved_target, label=f"execute_planned_file[{key}]")
         try:
+            kind = str(source.get("kind"))
+            try:
+                loader = loaders[kind]
+                adapter = adapters[kind]
+            except KeyError as exc:
+                raise ValueError(f"unsupported eligible backfill kind: {kind}") from exc
             run = loader(archive_path)
             canonical_run_result = adapter(run, archive_manifest=archive_manifest)
             sidecar = sidecar_builder(canonical_run_result)

@@ -37,8 +37,11 @@ _BACKFILL_AUDIT_FILE = "canonical_hf_backfill_audit.json"
 _MANIFEST_PATCH_FILE = "canonical_hf_manifest_patch.json"
 
 _TDBG_ADAPTER = "mean_field.systems.tdbg.projected_hf_contracts.tdbg_projected_hf_result_to_hf_run_result"
+_TDBG_ARCHIVE_LOADER = "mean_field.systems.tdbg.projected_hf_archive.load_tdbg_projected_hf_result_from_archive"
 _HTG_PRIMITIVE_ADAPTER = "mean_field.systems.htg.mean_field_adapter.htg_hf_run_to_hf_run_result"
+_HTG_PRIMITIVE_ARCHIVE_LOADER = "mean_field.systems.htg.mean_field_adapter.load_htg_hf_run_from_archive"
 _HTG_ADAPTER = "mean_field.systems.htg.supercell_contracts.htg_supercell_hf_run_to_hf_run_result"
+_HTG_ARCHIVE_LOADER = "mean_field.systems.htg.supercell.load_htg_supercell_hf_run_from_archive"
 _RLG_HBN_ARCHIVE_LOADER = "mean_field.systems.RnG_hBN.tdhf.load_rlg_hbn_tdhf_run_from_archive"
 _RLG_HBN_ADAPTER = "mean_field.systems.RnG_hBN.hf_contracts.rlg_hbn_hf_run_to_hf_run_result"
 

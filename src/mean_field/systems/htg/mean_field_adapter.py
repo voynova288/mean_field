@@ -9,5 +9,6 @@ from ._hf_basis import *  # noqa: F401,F403
 from ._hf_interaction_path import *  # noqa: F401,F403
 from ._hf_runner import *  # noqa: F401,F403
 from ._hf_contracts import *  # noqa: F401,F403
+from ._hf_archive import *  # noqa: F401,F403
 
 __all__ = [name for name in globals() if not name.startswith("__")]

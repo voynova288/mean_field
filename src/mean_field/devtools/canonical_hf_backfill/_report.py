@@ -16,10 +16,11 @@ def backfill_strategy() -> dict[str, object]:
         "systems": [
             {
                 "system": "tdbg",
-                "current_status": "needs_archive_loader_for_historical_roots",
+                "current_status": "eligible_when_full_raw_state_basis_and_metadata_archives_are_present",
+                "existing_loader": _TDBG_ARCHIVE_LOADER,
                 "existing_adapter": _TDBG_ADAPTER,
-                "safe_now": False,
-                "blocker": "Historical hf_state.npz roots do not contain full TDBGProjectedHFResult/TDBGProjectedHFData, especially projected micro_wavefunctions, raw run history/mu, and exact config/model fields.",
+                "safe_now": True,
+                "blocker": "Summary-only TDBG archives remain blocked; full raw state, projected-basis micro-wavefunctions, labels, run history, and exact config/model fields are required.",
                 "archive_format_contract": _contract_metadata(
                     raw_object="mean_field.systems.tdbg.projected_hf_state.TDBGProjectedHFResult",
                     state_keys=_TDBG_HF_STATE_CONTRACT_KEYS,
@@ -28,10 +29,11 @@ def backfill_strategy() -> dict[str, object]:
             },
             {
                 "system": "htg",
-                "current_status": "needs_archive_loader_for_historical_roots",
+                "current_status": "eligible_when_full_raw_state_basis_and_metadata_archives_are_present",
+                "existing_loader": _HTG_PRIMITIVE_ARCHIVE_LOADER,
                 "existing_adapter": _HTG_PRIMITIVE_ADAPTER,
-                "safe_now": False,
-                "blocker": "Saved primitive HTG hf_ground_state.npz archives are not full HTGHartreeFockRun archives with basis wavefunctions/model/interaction objects.",
+                "safe_now": True,
+                "blocker": "Summary-only primitive HTG archives remain blocked; full raw state, projected-basis wavefunctions, and exact model/interaction metadata are required.",
                 "archive_format_contract": _contract_metadata(
                     raw_object="mean_field.systems.htg.mean_field_adapter.HTGHartreeFockRun",
                     state_keys=_HTG_PRIMITIVE_STATE_CONTRACT_KEYS,
@@ -40,10 +42,11 @@ def backfill_strategy() -> dict[str, object]:
             },
             {
                 "system": "htg_supercell",
-                "current_status": "needs_archive_loader_for_historical_roots",
+                "current_status": "eligible_when_full_raw_state_basis_and_metadata_archives_are_present",
+                "existing_loader": _HTG_ARCHIVE_LOADER,
                 "existing_adapter": _HTG_ADAPTER,
-                "safe_now": False,
-                "blocker": "Saved supercell HTG NPZ archives are not full HTGSupercellHartreeFockRun archives with basis wavefunctions/model/interaction objects.",
+                "safe_now": True,
+                "blocker": "Summary-only HTG supercell archives remain blocked; full raw state, projected-basis wavefunctions, and exact model/interaction metadata are required.",
                 "archive_format_contract": _contract_metadata(
                     raw_object="mean_field.systems.htg.supercell.HTGSupercellHartreeFockRun",
                     state_keys=_HTG_SUPERCELL_STATE_CONTRACT_KEYS,
