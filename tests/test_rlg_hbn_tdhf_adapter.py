@@ -19,6 +19,7 @@ from mean_field.systems.RnG_hBN import (
     build_rlg_hbn_layer_overlap_blocks,
     build_rlg_hbn_projected_basis,
     build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs,
+    build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs,
     build_rlg_hbn_tdhf_interaction,
     build_rlg_hbn_tdhf_orbitals,
     build_rlg_hbn_tdhf_orbitals_from_canonical_hf,
@@ -37,7 +38,12 @@ from mean_field.systems.RnG_hBN import (
 )
 
 
-def _tiny_flavor_polarized_run(*, k_mesh_size: int = 1, mesh_size: int = 1) -> RLGhBNHartreeFockRun:
+def _tiny_flavor_polarized_run(
+    *,
+    k_mesh_size: int = 1,
+    mesh_size: int = 1,
+    active_conduction_bands: int = 1,
+) -> RLGhBNHartreeFockRun:
     model = RLGhBNModel.from_config(
         layer_count=3,
         xi=1,
@@ -47,7 +53,7 @@ def _tiny_flavor_polarized_run(*, k_mesh_size: int = 1, mesh_size: int = 1) -> R
     )
     interaction = RLGhBNInteractionParams(
         active_valence_bands=0,
-        active_conduction_bands=1,
+        active_conduction_bands=int(active_conduction_bands),
         k_mesh_size=int(k_mesh_size),
         interaction_cutoff_q1=1.0,
         use_screened_basis=False,
@@ -254,6 +260,57 @@ def test_rlg_hbn_tdhf_finite_q_exchange_shortcut_reduces_to_q0_shortcut() -> Non
     np.testing.assert_allclose(finite_q0.B, q0.B, rtol=1e-12, atol=1e-12)
 
 
+def test_rlg_hbn_tdhf_finite_q_intraflavor_reduces_to_q0_full_ab() -> None:
+    run = _tiny_flavor_polarized_run(k_mesh_size=2, mesh_size=2, active_conduction_bands=2)
+    orbitals = build_rlg_hbn_tdhf_orbitals(run.state)
+    q0_pairs = build_rlg_hbn_tdhf_q0_pairs(orbitals)
+    indices = split_pair_indices_by_flavor_channel(q0_pairs)["intraflavor"]
+    pairs = tuple(q0_pairs[int(index)] for index in indices)
+    assert len(pairs) == 4
+
+    q0 = build_rlg_hbn_tdhf_q0_matrices_from_pairs(
+        run,
+        orbitals,
+        pairs,
+        include_direct_terms=True,
+        include_exchange_terms=True,
+        include_b_terms=True,
+        assembly="vectorized",
+    )
+    finite_q0 = build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs(
+        run,
+        orbitals,
+        pairs,
+        (0, 0),
+        require_complete_umklapp=True,
+    )
+
+    np.testing.assert_allclose(finite_q0.A, q0.A, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(finite_q0.B, q0.B, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(finite_q0.L, q0.L, rtol=1e-12, atol=1e-12)
+    assert finite_q0.structure.ok
+
+
+def test_rlg_hbn_tdhf_finite_q_intraflavor_full_ab_smoke() -> None:
+    run = _tiny_flavor_polarized_run(k_mesh_size=2, mesh_size=2, active_conduction_bands=2)
+    orbitals = build_rlg_hbn_tdhf_orbitals(run.state)
+    all_pairs = build_rlg_hbn_tdhf_q_pairs(orbitals, run.basis_data, (1, 0))
+    indices = split_pair_indices_by_flavor_channel(all_pairs)["intraflavor"]
+    pairs = tuple(all_pairs[int(index)] for index in indices)
+    matrices = build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs(
+        run,
+        orbitals,
+        pairs,
+        (1, 0),
+        physical_shifts=((0, 0),),
+    )
+
+    assert matrices.A.shape == (4, 4)
+    assert matrices.B.shape == (4, 4)
+    assert not np.allclose(matrices.B, 0.0)
+    assert matrices.structure.ok
+
+
 def test_rlg_hbn_tdhf_finite_q_matrices_from_canonical_hf_matches_legacy_shortcut() -> None:
     run = _canonical_ready_tiny_run(k_mesh_size=2, mesh_size=2)
     canonical = rlg_hbn_hf_run_to_hf_run_result(run)
@@ -303,11 +360,11 @@ def test_rlg_hbn_tdhf_finite_q_support_introspection_documents_canonical_scope()
     assert payload["supported"] is True
     assert "finite_q_A_direct" in payload["unsupported_terms"]
 
-    blocked = rlg_hbn_tdhf_finite_q_mode_support("intraflavor", canonical_boundary=True)
-    assert not blocked.supported
-    assert "direct terms and B terms" in " ".join(blocked.blockers)
-    assert "q/-q" in blocked.reason
-    assert "not implemented" in blocked.reason
+    intraflavor = rlg_hbn_tdhf_finite_q_mode_support("intraflavor", canonical_boundary=True)
+    assert intraflavor.supported
+    assert "finite_q_B_exchange" in intraflavor.supported_terms
+    assert "q/-q" in intraflavor.reason
+    assert intraflavor.unsupported_terms == ()
 
 
 def test_rlg_hbn_tdhf_finite_q_canonical_bridge_rejects_flavor_mixed_hamiltonian() -> None:
@@ -329,8 +386,6 @@ def test_rlg_hbn_tdhf_finite_q_canonical_bridge_rejects_flavor_mixed_hamiltonian
 
 def test_rlg_hbn_tdhf_q_matrices_reports_precise_blockers_for_unsupported_finite_q_modes() -> None:
     run = _tiny_flavor_polarized_run(k_mesh_size=2, mesh_size=2)
-    with pytest.raises(NotImplementedError, match="intraflavor finite-q TDHF requires direct terms and B terms"):
-        build_rlg_hbn_tdhf_q_matrices(run, (1, 0), channel="intraflavor")  # type: ignore[arg-type]
     with pytest.raises(NotImplementedError, match="shortcut_exchange_only=False requests full finite-q direct/B"):
         build_rlg_hbn_tdhf_q_matrices_from_canonical_hf(
             run,
