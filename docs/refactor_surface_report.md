@@ -1578,3 +1578,48 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 ```
 
 Result: `215 passed`.
+
+## Update: public HF metadata-only sidecar coverage
+
+Commit in this continuation:
+
+- `f094c75 Cover public HF metadata-only sidecars`
+
+### Current summary after this continuation
+
+- Tracked text lines: 66603
+- Tracked Python lines: 62016
+- Tracked Julia lines: 826
+- `src` Python files: 275
+- `src` Python lines: 55205
+- Files over 1000 lines: 0
+
+### Metadata-only sidecar coverage
+
+Extended the public HF adapter tests to reuse one metadata-only save/load assertion across explicit non-TDHF/non-cRPA `run_hf(...)` adapters:
+
+- `tbg_zero_field`
+- `tdbg`
+- `htg`
+- `htg_supercell`
+- `rlg_hbn`
+
+The shared assertion verifies that `HFResult.save(..., canonical_payload="metadata_only")` writes `canonical_hf_run_result.json`, remains loadable via `mean_field.api.load_result(...)`, and does not write `canonical_hf_arrays.npz`.
+
+Focused validation:
+
+```bash
+PYTHONPATH=src python -m compileall -q src/mean_field/api tests/test_api_hf_adapters.py
+PYTHONPATH=src pytest -q tests/test_api_hf_adapters.py
+```
+
+Result: `16 passed`.
+
+Full gate on `test001` after this slice:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+```
+
+Result: `215 passed`.
