@@ -4,12 +4,12 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 62204
-- Tracked Python lines: 58902
+- Tracked text lines: 62358
+- Tracked Python lines: 59049
 - Tracked Julia lines: 826
-- `src` Python files: 212
-- `src` Python lines: 52799
-- Files over 1000 lines: 5
+- `src` Python files: 218
+- `src` Python lines: 52946
+- Files over 1000 lines: 4
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0
 
 ## Completed cleanup slices
@@ -616,11 +616,17 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 1342.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
 
+### split_rlg_hbn_hf_surface
+
+- Split the RnG/hBN projected-HF surface into shared, typed, reference-density, basis/remote-average, interaction/path, and runner modules while preserving hf.py public facade imports for HF, cache, contracts, and TDHF adapters.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 2211.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
 |---:|---|
-| 2256 | `src/mean_field/systems/RnG_hBN/hf.py` |
 | 2058 | `src/mean_field/systems/RnG_hBN/tdhf.py` |
 | 1267 | `src/mean_field/crpa/hf_interface.py` |
 | 1149 | `src/mean_field/core/hf/finite_field.py` |
@@ -633,6 +639,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 736 | `src/mean_field/cli.py` |
 | 735 | `src/mean_field/systems/tbg/zero_field/hf_contracts.py` |
 | 710 | `src/mean_field/core/hf/tdhf.py` |
+| 699 | `src/mean_field/systems/RnG_hBN/_hf_basis.py` |
 | 686 | `src/mean_field/systems/RnG_hBN/hf_contracts.py` |
 | 684 | `src/mean_field/api/_hf_sidecars.py` |
 | 643 | `src/mean_field/systems/htg/supercell_contracts.py` |
@@ -640,6 +647,8 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 617 | `src/mean_field/core/hf/overlap.py` |
 | 590 | `src/mean_field/systems/htg/_hf_contracts.py` |
 | 565 | `src/analysis/topology/core.py` |
+| 553 | `src/mean_field/systems/RnG_hBN/_hf_interaction_path.py` |
+| 543 | `src/mean_field/systems/RnG_hBN/_hf_runner.py` |
 | 528 | `src/mean_field/systems/tbg/zero_field/artifacts.py` |
 | 498 | `src/mean_field/crpa/validation.py` |
 | 492 | `src/mean_field/systems/RnG_hBN/screening.py` |
@@ -648,8 +657,6 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 445 | `src/mean_field/systems/tdbg/projected_hf_state.py` |
 | 435 | `src/mean_field/systems/tmbg/_polshyn_wang.py` |
 | 434 | `src/mean_field/crpa/diagnostics.py` |
-| 431 | `src/mean_field/systems/htg/_hf_initialization.py` |
-| 427 | `src/mean_field/systems/tbg/zero_field/_hf_full.py` |
 
 ## Direct private-system imports in workflow surfaces
 
