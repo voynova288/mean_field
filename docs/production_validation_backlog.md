@@ -118,9 +118,9 @@ workflow metadata: tmbg.polshyn_wang.explicit_config
 Latest software-gate result on `test001`:
 
 ```text
-commit: 8f86abe
-command: pytest -q tests/test_tmbg_polshyn_hf_readiness.py
-result: 10 passed
+coverage commit: e308aa0
+validation: pytest -q tests/test_tmbg_polshyn_hf_readiness.py
+result: 10 passed on test001
 coverage added: metadata-only `HFResult.save(...)` writes `canonical_hf_run_result.json`, remains loadable via `mean_field.api.load_result(...)`, and does not write `canonical_hf_arrays.npz`.
 ```
 
@@ -165,9 +165,9 @@ result: 10 passed
 Additional public-HF gate:
 
 ```text
-commit: 4ce02cb
-command: pytest -q tests/test_api_hf_adapters.py
-result: 16 passed
+coverage commit: 834b132
+validation: pytest -q tests/test_api_hf_adapters.py
+result: 16 passed on test001
 coverage added: explicit HTG supercell `run_hf(...)` metadata-only save/load writes `canonical_hf_run_result.json`, remains loadable via `mean_field.api.load_result(...)`, and does not write `canonical_hf_arrays.npz`.
 ```
 
