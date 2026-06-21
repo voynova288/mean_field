@@ -217,6 +217,13 @@ command: pytest -q tests/test_htqg_model.py tests/test_api_imports.py
 result: 14 passed
 ```
 
+Current public-HF status:
+
+```text
+HTQG has no registered HF adapter yet.
+`run_hf(HTQGModel, HFConfig(...))` is tested to fail explicitly with "no run_hf(config) adapter yet" instead of inferring projected-HF physics.
+```
+
 This is band/model API readiness only; projected-HF production validation still needs the explicit HTQG HF adapter or workflow described below.
 
 Production acceptance:

@@ -12,6 +12,7 @@ from mean_field.core.contracts import HFRunResult as ContractHFRunResult
 from mean_field.systems import tdbg as tdbg_system
 from mean_field.systems.RnG_hBN import RLGhBNInteractionParams, RLGhBNRunHFConfig
 from mean_field.systems.htg import HTGRunHFConfig, HTGSupercellRunHFConfig, InteractionParams
+from mean_field.systems.htqg import HTQGModel, HTQGParams
 from mean_field.systems.tbg.params import TBGParameters
 from mean_field.systems.tbg.zero_field import BMSolution, TBGZeroFieldRunHFConfig, build_b0_uniform_lattice
 from mean_field.systems.tdbg import TDBGInteractionSettings, TDBGProjectedHFConfig, TDBGProjectedWindow
@@ -130,6 +131,16 @@ def test_public_hf_adapter_registry_filters_and_resolves_existing_helpers() -> N
 
     with pytest.raises(KeyError, match="Unknown HF adapter"):
         get_hf_adapter_info("not_a_registered_hf_adapter")
+
+
+def test_public_run_hf_htqg_requires_explicit_adapter_before_projected_hf_claims() -> None:
+    params = HTQGParams.default(kappa=0.6, lambda_mdt_nm=0.0, include_dirac_rotation=False)
+    model = HTQGModel.default(theta_deg=2.25, n_shells=0, params=params)
+    cfg = HFConfig(filling=0.0, mesh=(1, 1), max_iter=1)
+
+    assert list_hf_adapters(system_name="htqg") == ()
+    with pytest.raises(NotImplementedError, match="no run_hf\\(config\\) adapter yet"):
+        run_hf(model, cfg)
 
 
 def test_public_run_hf_tbg_bm_requires_explicit_system_workflow() -> None:
