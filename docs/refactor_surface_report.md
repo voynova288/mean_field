@@ -4,12 +4,12 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 62076
-- Tracked Python lines: 58781
+- Tracked text lines: 62204
+- Tracked Python lines: 58902
 - Tracked Julia lines: 826
-- `src` Python files: 206
-- `src` Python lines: 52678
-- Files over 1000 lines: 6
+- `src` Python files: 212
+- `src` Python lines: 52799
+- Files over 1000 lines: 5
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0
 
 ## Completed cleanup slices
@@ -609,13 +609,19 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 1249.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
 
+### split_htg_supercell_hf_surface
+
+- Split the HTG folded-supercell HF helper into typed, geometry, basis/overlap, runner, and path I/O modules while preserving the supercell.py public facade and contract imports.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 1342.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
 |---:|---|
 | 2256 | `src/mean_field/systems/RnG_hBN/hf.py` |
 | 2058 | `src/mean_field/systems/RnG_hBN/tdhf.py` |
-| 1347 | `src/mean_field/systems/htg/supercell.py` |
 | 1267 | `src/mean_field/crpa/hf_interface.py` |
 | 1149 | `src/mean_field/core/hf/finite_field.py` |
 | 1012 | `src/mean_field/systems/tbg/finite_field/spectrum.py` |
@@ -643,6 +649,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 435 | `src/mean_field/systems/tmbg/_polshyn_wang.py` |
 | 434 | `src/mean_field/crpa/diagnostics.py` |
 | 431 | `src/mean_field/systems/htg/_hf_initialization.py` |
+| 427 | `src/mean_field/systems/tbg/zero_field/_hf_full.py` |
 
 ## Direct private-system imports in workflow surfaces
 
