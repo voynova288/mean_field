@@ -644,6 +644,14 @@
       "tracked_files_deleted": [
         "src/mean_field/systems/tdbg/hf.py"
       ]
+    },
+    {
+      "description": "Archived historical system validation bodies and thinned tracked HTQG/RLG-hBN validation modules to cheap structural/Hermitian smoke checks only, avoiding grid/HF/paper-checkpoint recomputation in system surface.",
+      "direct_mean_field_systems_imports_after": 0,
+      "direct_mean_field_systems_imports_before": 0,
+      "legacy_lines_removed_gross": 277,
+      "slice": "thin_system_validation_adapters",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -705,15 +713,15 @@
     "validation.py": {
       "files": [
         {
-          "lines": 193,
+          "lines": 93,
           "path": "src/mean_field/systems/htqg/validation.py"
         },
         {
-          "lines": 156,
+          "lines": 51,
           "path": "src/mean_field/systems/RnG_hBN/validation.py"
         }
       ],
-      "total_lines": 349
+      "total_lines": 144
     }
   },
   "phase2_targets": {
@@ -821,11 +829,20 @@
         "symbol": "grid_builder"
       }
     ],
-    "validation.py": []
+    "validation.py": [
+      {
+        "count": 2,
+        "paths": [
+          "src/mean_field/systems/RnG_hBN/validation.py",
+          "src/mean_field/systems/htqg/validation.py"
+        ],
+        "symbol": "_finite"
+      }
+    ]
   },
-  "root": "/data/home/ziyuzhu/tmp/mean_field_report_tdbg_hf_facade_20260621_095541",
+  "root": "/data/home/ziyuzhu/tmp/mean_field_report_thin_validation_20260621_113530",
   "src_python_files": 172,
-  "src_python_lines": 52631,
+  "src_python_lines": 52426,
   "top_30_files": [
     {
       "lines": 2305,
@@ -949,6 +966,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 58679,
-  "tracked_text_lines": 62825
+  "tracked_python_lines": 58474,
+  "tracked_text_lines": 62637
 }

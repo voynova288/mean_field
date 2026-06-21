@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 62825
-- Tracked Python lines: 58679
+- Tracked text lines: 62637
+- Tracked Python lines: 58474
 - Tracked Julia lines: 826
 - `src` Python files: 172
-- `src` Python lines: 52631
+- `src` Python lines: 52426
 - Files over 1000 lines: 12
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0
 
@@ -518,6 +518,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 480.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
 
+### thin_system_validation_adapters
+
+- Archived historical system validation bodies and thinned tracked HTQG/RLG-hBN validation modules to cheap structural/Hermitian smoke checks only, avoiding grid/HF/paper-checkpoint recomputation in system surface.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 277.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -575,12 +582,12 @@ Total lines: 178
 
 ### `validation.py`
 
-Total lines: 349
+Total lines: 144
 
 | Lines | Path |
 |---:|---|
-| 193 | `src/mean_field/systems/htqg/validation.py` |
-| 156 | `src/mean_field/systems/RnG_hBN/validation.py` |
+| 93 | `src/mean_field/systems/htqg/validation.py` |
+| 51 | `src/mean_field/systems/RnG_hBN/validation.py` |
 
 ### `topology.py`
 
@@ -607,7 +614,9 @@ Total lines: 172
 
 ### `validation.py`
 
-No repeated class/function names across this family.
+| Symbol | Count | Paths |
+|---|---:|---|
+| `_finite` | 2 | `src/mean_field/systems/RnG_hBN/validation.py`, `src/mean_field/systems/htqg/validation.py` |
 
 ### `topology.py`
 
