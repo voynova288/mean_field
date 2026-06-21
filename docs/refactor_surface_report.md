@@ -1096,3 +1096,48 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 ```
 
 Result: `210 passed`.
+
+## Update: optical-response implementation move
+
+Commit in this continuation:
+
+- `b9c92aa Move optical response implementations into package`
+
+### Current summary after this continuation
+
+- Tracked text lines: 65870
+- Tracked Python lines: 61863
+- Tracked Julia lines: 826
+- `src` Python files: 270
+- `src` Python lines: 55140
+- Files over 1000 lines: 0
+
+### Optical-response implementation move
+
+The earlier `analysis.optical_response` package was upgraded from facade-only to owning the implementations:
+
+- `src/analysis/optical_response/gauge.py` now contains the gauge-safe derivative implementation formerly in `src/analysis/response_derivative_gauge.py`.
+- `src/analysis/optical_response/shift_current.py` now contains the common shift-current implementation formerly in `src/analysis/shift_current/core.py`.
+- Historical import paths remain as compatibility shims:
+  - `src/analysis/response_derivative_gauge.py`
+  - `src/analysis/shift_current/core.py`
+
+No formulas were changed; this was a mechanical import-boundary migration.  `analysis.optical_response` internal submodules now import the package-local implementation rather than routing through the old shims.
+
+Focused validation:
+
+```bash
+PYTHONPATH=src python -m compileall -q src/analysis/optical_response src/analysis/response_derivative_gauge.py src/analysis/shift_current tests/test_optical_response_api.py
+PYTHONPATH=src pytest -q tests/test_optical_response_api.py tests/test_api_imports.py tests/test_api_bands.py
+```
+
+Result: `15 passed`.
+
+Full gate on `test001` after this slice:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+```
+
+Result: `210 passed`.
