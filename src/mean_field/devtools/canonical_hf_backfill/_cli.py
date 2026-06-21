@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ._shared import *  # noqa: F401,F403
-from ._scan import scan_backfill_candidates
+from ._scan import _mapping, scan_backfill_candidates
 from ._write import execute_backfill_writes, plan_backfill_writes
 from ._report import inventory_payload, render_markdown_inventory
 

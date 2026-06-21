@@ -10,6 +10,7 @@ from mean_field.devtools.backfill_canonical_hf_sidecars import (
     build_parser,
     execute_backfill_writes,
     inventory_payload,
+    main,
     plan_backfill_writes,
     render_markdown_inventory,
     scan_backfill_candidates,
@@ -534,3 +535,29 @@ def test_backfill_inventory_report_renders_empty_dry_run(tmp_path: Path) -> None
     assert "candidate_count" in markdown
     assert "TDBGProjectedHFResult" in markdown
     assert payload["historical_results_mutated"] is False
+
+
+def test_backfill_cli_write_path_returns_zero_for_staged_full_archive(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    archive_path = _write_minimal_eligible_htg_primitive_archive(tmp_path)
+    target_root = tmp_path / "cli_staged"
+    status = main(
+        [
+            str(archive_path),
+            "--write",
+            "--target-root",
+            str(target_root),
+            "--allow-target-root",
+            str(tmp_path),
+            "--report-json",
+            str(target_root / "inventory.json"),
+            "--report-md",
+            str(target_root / "inventory.md"),
+        ]
+    )
+    captured = capsys.readouterr()
+    assert status == 0
+    assert "written_count: `1`" in captured.out
+    with (target_root / "inventory.json").open(encoding="utf-8") as fh:
+        payload = json.load(fh)
+    assert Path(payload["write_plan"]["write_manifest_path"]).is_file()
+    assert (target_root / "inventory.json").is_file()
