@@ -20,7 +20,7 @@ model = make_model(
 )
 ```
 
-Supported façade names currently include `htg`, `htqg`, `rlg_hbn`, `tdbg`, `tmbg`, and `atmg`.
+Supported façade names currently include `htg`, `htqg`, `rlg_hbn`, `tbg`, `tdbg`, `tmbg`, and `atmg`.
 
 ## HFConfig
 
