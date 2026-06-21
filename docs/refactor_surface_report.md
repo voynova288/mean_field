@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 62033
-- Tracked Python lines: 57811
+- Tracked text lines: 62527
+- Tracked Python lines: 58288
 - Tracked Julia lines: 826
 - `src` Python files: 169
-- `src` Python lines: 51763
+- `src` Python lines: 52185
 - Files over 1000 lines: 12
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0
 
@@ -546,13 +546,20 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 55.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
 
+### resolve_rlg_hbn_intraflavor_finite_q_tdhf_lane
+
+- Resolved the RnG/hBN TDHF dirty lane by adding intraflavor finite-q assembly, overlap-shift closure helper, q/-q partner-structure residual reporting, package exports, and focused adapter tests; unrelated RnG/hBN HF ODA-control hunks remain unstaged.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 0.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
 |---:|---|
 | 2305 | `src/mean_field/systems/htg/mean_field_adapter.py` |
 | 2252 | `src/mean_field/systems/RnG_hBN/hf.py` |
-| 1640 | `src/mean_field/systems/RnG_hBN/tdhf.py` |
+| 2058 | `src/mean_field/systems/RnG_hBN/tdhf.py` |
 | 1566 | `src/mean_field/devtools/backfill_canonical_hf_sidecars.py` |
 | 1348 | `src/mean_field/systems/tbg/zero_field/runners.py` |
 | 1347 | `src/mean_field/systems/htg/supercell.py` |

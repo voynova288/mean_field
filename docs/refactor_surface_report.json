@@ -681,6 +681,14 @@
       "tracked_files_deleted": [
         "src/mean_field/devtools/sync_benchmarks.py"
       ]
+    },
+    {
+      "description": "Resolved the RnG/hBN TDHF dirty lane by adding intraflavor finite-q assembly, overlap-shift closure helper, q/-q partner-structure residual reporting, package exports, and focused adapter tests; unrelated RnG/hBN HF ODA-control hunks remain unstaged.",
+      "direct_mean_field_systems_imports_after": 0,
+      "direct_mean_field_systems_imports_before": 0,
+      "legacy_lines_removed_gross": 0,
+      "slice": "resolve_rlg_hbn_intraflavor_finite_q_tdhf_lane",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -869,9 +877,9 @@
       }
     ]
   },
-  "root": "/data/home/ziyuzhu/tmp/mean_field_report_sync_devtool_20260621_114703",
+  "root": "/data/home/ziyuzhu/tmp/mean_field_report_rlg_finiteq_20260621_124228",
   "src_python_files": 169,
-  "src_python_lines": 51763,
+  "src_python_lines": 52185,
   "top_30_files": [
     {
       "lines": 2305,
@@ -882,7 +890,7 @@
       "path": "src/mean_field/systems/RnG_hBN/hf.py"
     },
     {
-      "lines": 1640,
+      "lines": 2058,
       "path": "src/mean_field/systems/RnG_hBN/tdhf.py"
     },
     {
@@ -995,6 +1003,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 57811,
-  "tracked_text_lines": 62033
+  "tracked_python_lines": 58288,
+  "tracked_text_lines": 62527
 }
