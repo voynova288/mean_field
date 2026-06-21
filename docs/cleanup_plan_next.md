@@ -17,7 +17,7 @@ This plan tracks the next cleanup pass after the large-file/facade split work th
 - Phase 2 optical-response package boundary/facade: completed in `9b374cc`.
 - Phase 3 cRPA/HF bridge split: completed in `ef8ba6f`.
 - Phase 4 public API registries and workflow extraction: completed across `e6eab50`, `a00803f`, `9b8202a`, and `faa706e`.
-- Devtools cleanup follow-up: RLG/hBN retired sidecar/archive helpers moved to `src/mean_field/workflows/rlg_hbn.py` and retired command files deleted in the current continuation.
+- Devtools cleanup follow-up: RLG/hBN retired sidecar/archive helpers moved to `src/mean_field/workflows/rlg_hbn.py`; retired command files deleted; canonical HF backfill scanner split into smaller modules.
 
 ## Phase 0 — git surface hygiene
 
@@ -98,4 +98,4 @@ Acceptance:
 ## Lower priority
 
 - Bands/topology wrappers are already thin enough; do not spend the next pass there unless a concrete duplicate blocks the above phases.
-- Devtools cleanup: RLG/hBN retired runner helper extraction is complete; canonical backfill scan split remains a possible later cleanup if it blocks maintainability.
+- Devtools cleanup: RLG/hBN retired runner helper extraction and canonical backfill scanner split are complete. Remaining future work should be driven by concrete API/validation needs rather than file-size cleanup alone.

@@ -1050,3 +1050,49 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 ```
 
 Result: `210 passed`.
+
+## Update: canonical HF backfill scanner split
+
+Commit in this continuation:
+
+- `abc1d94 Split canonical HF backfill scanner`
+
+### Current summary after this continuation
+
+- Tracked text lines: 65824
+- Tracked Python lines: 61863
+- Tracked Julia lines: 826
+- `src` Python files: 270
+- `src` Python lines: 55140
+- Files over 1000 lines: 0
+
+### Scanner split
+
+`src/mean_field/devtools/canonical_hf_backfill/_scan.py` was reduced from a 797-line implementation module to a 54-line compatibility facade plus public `scan_backfill_candidates(...)` entrypoint.
+
+New split modules:
+
+- `src/mean_field/devtools/canonical_hf_backfill/_scan_utils.py`
+- `src/mean_field/devtools/canonical_hf_backfill/_scan_contracts.py`
+- `src/mean_field/devtools/canonical_hf_backfill/_scan_discovery.py`
+- `src/mean_field/devtools/canonical_hf_backfill/_scan_classify.py`
+
+This was a mechanical no-algorithm-change refactor.  Existing imports from `_scan`, including `_mapping` used by `_cli.py`, remain supported.
+
+Focused validation:
+
+```bash
+PYTHONPATH=src python -m compileall -q src/mean_field/devtools/canonical_hf_backfill tests/test_backfill_canonical_hf_sidecars.py
+PYTHONPATH=src pytest -q tests/test_backfill_canonical_hf_sidecars.py
+```
+
+Result: `15 passed`.
+
+Full gate on `test001` after this slice:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+```
+
+Result: `210 passed`.
