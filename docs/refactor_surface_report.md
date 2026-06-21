@@ -4,12 +4,12 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 61545
-- Tracked Python lines: 58292
+- Tracked text lines: 61776
+- Tracked Python lines: 58516
 - Tracked Julia lines: 826
-- `src` Python files: 169
-- `src` Python lines: 52189
-- Files over 1000 lines: 12
+- `src` Python files: 190
+- `src` Python lines: 52413
+- Files over 1000 lines: 9
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0
 
 ## Completed cleanup slices
@@ -567,15 +567,33 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 1016.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
 
+### split_canonical_hf_backfill_devtool
+
+- Split the canonical HF sidecar backfill devtool into scan/write/report/CLI modules while keeping the original import path and dispatcher command as a thin compatibility shim.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 1559.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
+
+### split_tbg_zero_field_runner_surface
+
+- Split the TBG zero-field benchmark runner facade into focused helper/BM/B0/artifact/suite modules while preserving the public runners.py API and artifact monkeypatch hooks.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 1345.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
+
+### split_htg_primitive_hf_adapter_surface
+
+- Split the HTG primitive HF adapter facade into typed/reference/initialization/basis/interaction/runner/contract modules while preserving public mean_field_adapter imports and HF adapter registry paths.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 2301.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
 |---:|---|
-| 2305 | `src/mean_field/systems/htg/mean_field_adapter.py` |
 | 2256 | `src/mean_field/systems/RnG_hBN/hf.py` |
 | 2058 | `src/mean_field/systems/RnG_hBN/tdhf.py` |
-| 1566 | `src/mean_field/devtools/backfill_canonical_hf_sidecars.py` |
-| 1348 | `src/mean_field/systems/tbg/zero_field/runners.py` |
 | 1347 | `src/mean_field/systems/htg/supercell.py` |
 | 1306 | `src/mean_field/api/hf.py` |
 | 1267 | `src/mean_field/crpa/hf_interface.py` |
@@ -585,6 +603,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 1012 | `src/mean_field/systems/tbg/finite_field/spectrum.py` |
 | 873 | `src/analysis/topology/quantum_geometry.py` |
 | 805 | `src/analysis/response_derivative_gauge.py` |
+| 788 | `src/mean_field/devtools/canonical_hf_backfill/_scan.py` |
 | 786 | `src/mean_field/systems/RnG_hBN/cache.py` |
 | 772 | `src/analysis/shift_current/core.py` |
 | 736 | `src/mean_field/cli.py` |
@@ -594,6 +613,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 643 | `src/mean_field/systems/htg/supercell_contracts.py` |
 | 627 | `src/mean_field/benchmarks.py` |
 | 617 | `src/mean_field/core/hf/overlap.py` |
+| 590 | `src/mean_field/systems/htg/_hf_contracts.py` |
 | 565 | `src/analysis/topology/core.py` |
 | 528 | `src/mean_field/systems/tbg/zero_field/artifacts.py` |
 | 498 | `src/mean_field/crpa/validation.py` |
@@ -601,6 +621,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 456 | `src/mean_field/systems/tbg/zero_field/model.py` |
 | 454 | `src/mean_field/crpa/workflow.py` |
 | 445 | `src/mean_field/systems/tdbg/projected_hf_state.py` |
+| 434 | `src/mean_field/crpa/diagnostics.py` |
 
 ## Direct private-system imports in workflow surfaces
 
