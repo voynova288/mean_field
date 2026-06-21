@@ -1353,3 +1353,42 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 ```
 
 Result: `213 passed`.
+
+## Update: response compatibility docs
+
+Commit in this continuation:
+
+- `21242f7 Update response compatibility docs`
+
+### Current summary after this continuation
+
+- Tracked text lines: 66216
+- Tracked Python lines: 61970
+- Tracked Julia lines: 826
+- `src` Python files: 275
+- `src` Python lines: 55205
+- Files over 1000 lines: 0
+
+### Compatibility docs update
+
+- Updated README and `src/mean_field/systems/AGENTS.md` to point new response work at `analysis.optical_response`, while documenting `analysis.response_derivative_gauge` / `analysis.shift_current` as compatibility paths.
+- Updated `analysis.shift_current` README and package docstring to describe it as a compatibility re-export surface.
+- Updated optical-response internal docstrings to reference `analysis.optical_response.gauge` directly.
+
+Focused validation:
+
+```bash
+PYTHONPATH=src python -m compileall -q src/analysis src/mean_field/systems tests/test_optical_response_api.py
+PYTHONPATH=src pytest -q tests/test_optical_response_api.py tests/test_api_imports.py
+```
+
+Result: `14 passed`.
+
+Full gate on `test001` after this slice:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+```
+
+Result: `213 passed`.
