@@ -4,7 +4,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 62546
+- Tracked text lines: 61545
 - Tracked Python lines: 58292
 - Tracked Julia lines: 826
 - `src` Python files: 169
@@ -558,6 +558,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Resolved the remaining RnG/hBN HF dirty lane by threading optional max_oda_lambda through run_rlg_hbn_hartree_fock and scan_rlg_hbn_ground_state into the shared core HF runner.
 - Deleted files: none; this slice thinned duplicated implementations in place.
 - Gross legacy LOC removed/thinned: 0.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
+
+### retire_generated_refactor_report_json
+
+- Removed the tracked generated refactor_surface_report.json snapshot; the Markdown report remains the durable tracked status artifact and JSON can be regenerated locally when needed.
+- Deleted files: `docs/refactor_surface_report.json`.
+- Gross legacy LOC removed/thinned: 1016.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
 
 ## Top 30 Python files under `src`
