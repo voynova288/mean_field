@@ -1,10 +1,40 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable, Literal, Mapping, Sequence
-import math
+from typing import Iterable, Sequence
 
 import numpy as np
+
+from .components import (
+    Axis,
+    Component,
+    ShiftCurrentComponent,
+    axis_index,
+    component_from_any,
+    component_label,
+    parse_component,
+)
+from .conventions import (
+    E_CHARGE_C,
+    HBAR_EV_S,
+    HBAR_J_S,
+    HTG_LEGACY_CONVENTION,
+    JOYA_EQ7_GEOMETRIC_CONVENTION,
+    KB_EV_PER_K,
+    OpticalSymmetrization,
+    SHIFT_CURRENT_PREFAC_UA_NM_PER_V2,
+    ShiftCurrentConvention,
+    WANNIERBERRI_INTERNAL_IMN_CONVENTION,
+)
+from .heatmap import (
+    accumulate_fermi_omega_heatmap,
+    add_transitions_to_integral,
+    conductivity_from_integral,
+    fermi_window_indices,
+    lorentzian_delta,
+    spectra_from_transition_table,
+)
+from .occupations import fermi_occupation
 
 from .gauge import (
     GeneralizedDerivativeData,
@@ -17,133 +47,6 @@ from .gauge import (
     matrix_in_eigenbasis,
 )
 
-Axis = int
-Component = tuple[Axis, Axis, Axis]
-OpticalSymmetrization = Literal["none", "sum", "average"]
-
-
-@dataclass(frozen=True)
-class ShiftCurrentConvention:
-    """Response-layer convention bundle.
-
-    The derivative route is *not* configurable here: reusable code uses
-    ``analysis.response_derivative_gauge`` and its WannierBerri Hamiltonian-gauge
-    convention.  This dataclass records only response/plotting choices that
-    differ between references: ordered vs symmetrized optical indices, the sign
-    of the local geometric kernel, and whether the optical Lorentzian includes
-    the normalizing ``1/pi``.
-    """
-
-    name: str
-    optical_symmetrization: OpticalSymmetrization
-    geometric_sign: float = 1.0
-    normalized_lorentzian: bool = True
-    description: str = ""
-
-
-# Joya 2025 point audits showed that this ordered same-polarization kernel
-# matches the explicit paper Eq.(7) c-sum directly, before omitted global
-# conductivity prefactors, spin factor, SI conversion, and final colorbar sign.
-JOYA_EQ7_GEOMETRIC_CONVENTION = ShiftCurrentConvention(
-    name="joya2025_eq7_geometric",
-    optical_symmetrization="none",
-    geometric_sign=1.0,
-    normalized_lorentzian=False,
-    description="Ordered local pair kernel equals Joya 2025 Eq.(7) c-sum; optical Lorentzian has no 1/pi.",
-)
-
-# WannierBerri dynamic.py::ShiftCurrentFormula symmetrizes optical indices and
-# its internal Imn has the opposite sign from the local pair product.  For b==c
-# this is the audited relation Imn = -2 * ordered_pair_kernel.
-WANNIERBERRI_INTERNAL_IMN_CONVENTION = ShiftCurrentConvention(
-    name="wannierberri_internal_imn",
-    optical_symmetrization="sum",
-    geometric_sign=-1.0,
-    normalized_lorentzian=True,
-    description="Line-by-line convention of WannierBerri ShiftCurrentFormula internal Imn.",
-)
-
-HTG_LEGACY_CONVENTION = ShiftCurrentConvention(
-    name="htg_legacy_sum",
-    optical_symmetrization="sum",
-    geometric_sign=1.0,
-    normalized_lorentzian=True,
-    description="Legacy hTG workspace convention: symmetrized optical product before the -i prefactor.",
-)
-
-E_CHARGE_C = 1.602176634e-19
-HBAR_J_S = 1.054571817e-34
-HBAR_EV_S = 6.582119569e-16
-KB_EV_PER_K = 8.617333262145e-5
-SHIFT_CURRENT_PREFAC_UA_NM_PER_V2 = math.pi * E_CHARGE_C**2 / HBAR_J_S * 1.0e6
-
-_AXIS_LABELS: Mapping[Any, int] = {"x": 0, "y": 1, "z": 2, "0": 0, "1": 1, "2": 2, 0: 0, 1: 1, 2: 2}
-_AXIS_NAMES = ("x", "y", "z")
-
-
-@dataclass(frozen=True)
-class ShiftCurrentComponent:
-    """Rank-3 shift-current component ``sigma^a_{bc}``."""
-
-    current_axis: int
-    optical_axis_1: int
-    optical_axis_2: int
-
-    @property
-    def as_tuple(self) -> Component:
-        return (int(self.current_axis), int(self.optical_axis_1), int(self.optical_axis_2))
-
-    @property
-    def compact_label(self) -> str:
-        return "".join(_AXIS_NAMES[i] if 0 <= i < len(_AXIS_NAMES) else str(i) for i in self.as_tuple)
-
-    @property
-    def semicolon_label(self) -> str:
-        a, b, c = self.as_tuple
-        label = lambda i: _AXIS_NAMES[i] if 0 <= i < len(_AXIS_NAMES) else str(i)
-        return f"{label(a)};{label(b)}{label(c)}"
-
-
-def axis_index(axis: str | int) -> int:
-    """Return an integer axis index for ``x/y/z`` or ``0/1/2`` labels."""
-
-    key: str | int = axis.strip().lower() if isinstance(axis, str) else axis
-    try:
-        return int(_AXIS_LABELS[key])
-    except KeyError as exc:
-        raise ValueError(f"Unsupported axis {axis!r}; expected x/y/z or 0/1/2") from exc
-
-
-def component_from_any(component: ShiftCurrentComponent | Sequence[int] | str) -> ShiftCurrentComponent:
-    """Normalize a component label/tuple/dataclass to ``ShiftCurrentComponent``."""
-
-    if isinstance(component, ShiftCurrentComponent):
-        return component
-    if isinstance(component, str):
-        return parse_component(component)
-    if len(component) != 3:  # type: ignore[arg-type]
-        raise ValueError(f"Component must have three axes, got {component!r}")
-    a, b, c = component  # type: ignore[misc]
-    return ShiftCurrentComponent(axis_index(a), axis_index(b), axis_index(c))
-
-
-def parse_component(text: str) -> ShiftCurrentComponent:
-    """Parse labels such as ``'xxx'``, ``'x;yy'``, or ``'x_yy'``."""
-
-    raw = str(text).strip().lower().replace("σ", "").replace("^", "").replace("_", ";").replace(" ", "")
-    if ";" in raw:
-        left, right = raw.split(";", 1)
-        if len(left) != 1 or len(right) != 2:
-            raise ValueError(f"Component must look like 'xxx' or 'x;yy', got {text!r}")
-        return ShiftCurrentComponent(axis_index(left), axis_index(right[0]), axis_index(right[1]))
-    if len(raw) == 3:
-        return ShiftCurrentComponent(axis_index(raw[0]), axis_index(raw[1]), axis_index(raw[2]))
-    raise ValueError(f"Component must look like 'xxx' or 'x;yy', got {text!r}")
-
-
-def component_label(component: ShiftCurrentComponent | Sequence[int] | str, *, style: Literal["compact", "semicolon"] = "semicolon") -> str:
-    comp = component_from_any(component)
-    return comp.compact_label if style == "compact" else comp.semicolon_label
 
 
 def _operator_array(operators: Sequence[np.ndarray] | np.ndarray, *, name: str) -> np.ndarray:
@@ -236,19 +139,6 @@ class ShiftCurrentTensors:
         return self.berry_connection_gen_derivative
 
 
-def fermi_occupation(energies_ev: np.ndarray, *, mu_ev: float = 0.0, temperature_k: float = 0.0) -> np.ndarray:
-    """Fermi occupation for energies in eV."""
-
-    energies = np.asarray(energies_ev, dtype=float)
-    if float(temperature_k) <= 0.0:
-        return (energies < float(mu_ev)).astype(float)
-    beta_arg = (energies - float(mu_ev)) / (KB_EV_PER_K * float(temperature_k))
-    out = np.empty_like(beta_arg, dtype=float)
-    out[beta_arg > 40.0] = 0.0
-    out[beta_arg < -40.0] = 1.0
-    mask = (beta_arg >= -40.0) & (beta_arg <= 40.0)
-    out[mask] = 1.0 / (np.exp(beta_arg[mask]) + 1.0)
-    return out
 
 
 def precompute_shift_current_tensors(
@@ -588,145 +478,6 @@ def positive_transition_terms(
     return np.asarray(transitions, dtype=float), np.asarray(weights, dtype=np.complex128)
 
 
-def lorentzian_delta(
-    photon_energies_ev: np.ndarray,
-    transition_energy_ev: float,
-    eta_ev: float,
-    *,
-    normalized: bool = True,
-    convention: ShiftCurrentConvention | None = None,
-) -> np.ndarray:
-    """Lorentzian delta replacement in eV units.
-
-    ``normalized=True`` returns ``(eta/pi)/(x^2+eta^2)``.  Joya's plotting text
-    uses ``eta/(x^2+eta^2)``; pass ``JOYA_EQ7_GEOMETRIC_CONVENTION`` to make
-    that choice explicit.
-    """
-
-    if convention is not None:
-        normalized = bool(convention.normalized_lorentzian)
-    photon = np.asarray(photon_energies_ev, dtype=float)
-    eta = float(eta_ev)
-    if eta <= 0.0:
-        raise ValueError(f"eta_ev must be positive, got {eta_ev}")
-    diff = photon - float(transition_energy_ev)
-    out = eta / (diff * diff + eta * eta)
-    if normalized:
-        out = out / math.pi
-    return out
-
-
-def add_transitions_to_integral(
-    integral: np.ndarray,
-    photon_energies_ev: np.ndarray,
-    transition_energies_ev: np.ndarray,
-    transition_weights: np.ndarray,
-    *,
-    k_weight_nm_inv_sq: float,
-    eta_ev: float,
-    normalized_lorentzian: bool = True,
-    include_bz_factor: bool = True,
-    convention: ShiftCurrentConvention | None = None,
-) -> None:
-    """Accumulate weighted transitions into a spectrum/integral in-place."""
-
-    if np.asarray(transition_energies_ev).size == 0:
-        return
-    factor = float(k_weight_nm_inv_sq)
-    if include_bz_factor:
-        factor /= (2.0 * math.pi) ** 2
-    for transition_ev, weight in zip(np.asarray(transition_energies_ev, dtype=float), np.asarray(transition_weights, dtype=np.complex128), strict=True):
-        integral += factor * weight * lorentzian_delta(
-            photon_energies_ev,
-            float(transition_ev),
-            eta_ev,
-            normalized=bool(normalized_lorentzian),
-            convention=convention,
-        )
-
-
-def conductivity_from_integral(
-    integral: np.ndarray,
-    *,
-    prefactor: float = SHIFT_CURRENT_PREFAC_UA_NM_PER_V2,
-    phase: complex = -1.0j,
-) -> np.ndarray:
-    """Apply a caller-chosen conductivity prefactor to an integrated kernel."""
-
-    return np.real(complex(phase) * float(prefactor) * np.asarray(integral))
-
-
-def spectra_from_transition_table(
-    photon_energies_ev: np.ndarray,
-    transition_table: Mapping[str, tuple[np.ndarray, np.ndarray]],
-    *,
-    k_weight_nm_inv_sq: float,
-    eta_ev: float,
-    prefactor: float = SHIFT_CURRENT_PREFAC_UA_NM_PER_V2,
-    prefactor_phase: complex = -1.0j,
-    normalized_lorentzian: bool = True,
-    include_bz_factor: bool = True,
-    convention: ShiftCurrentConvention | None = None,
-) -> dict[str, np.ndarray]:
-    """Build spectra for several named components from transition arrays."""
-
-    spectra: dict[str, np.ndarray] = {}
-    for name, (transition_energies, weights) in transition_table.items():
-        integral = np.zeros_like(photon_energies_ev, dtype=np.complex128)
-        add_transitions_to_integral(
-            integral,
-            photon_energies_ev,
-            np.asarray(transition_energies, dtype=float),
-            np.asarray(weights, dtype=np.complex128),
-            k_weight_nm_inv_sq=k_weight_nm_inv_sq,
-            eta_ev=eta_ev,
-            normalized_lorentzian=normalized_lorentzian,
-            include_bz_factor=include_bz_factor,
-            convention=convention,
-        )
-        spectra[name] = conductivity_from_integral(integral, prefactor=prefactor, phase=prefactor_phase)
-    return spectra
-
-
-def fermi_window_indices(fermi_grid_ev: np.ndarray, initial_energy_ev: float, final_energy_ev: float) -> tuple[int, int]:
-    """Return the Fermi-grid interval where ``initial <= E_F < final``."""
-
-    grid = np.asarray(fermi_grid_ev, dtype=float)
-    lo = min(float(initial_energy_ev), float(final_energy_ev))
-    hi = max(float(initial_energy_ev), float(final_energy_ev))
-    start = int(np.searchsorted(grid, lo, side="left"))
-    end = int(np.searchsorted(grid, hi, side="left"))
-    return max(0, min(start, grid.size)), max(0, min(end, grid.size))
-
-
-def accumulate_fermi_omega_heatmap(
-    heatmap: np.ndarray,
-    fermi_grid_ev: np.ndarray,
-    photon_energies_ev: np.ndarray,
-    *,
-    initial_energy_ev: float,
-    final_energy_ev: float,
-    transition_energy_ev: float,
-    amplitude: complex | float,
-    eta_ev: float,
-    k_weight: float = 1.0,
-    normalized_lorentzian: bool = True,
-    convention: ShiftCurrentConvention | None = None,
-) -> bool:
-    """Accumulate one transition into an ``(E_F, omega)`` heatmap."""
-
-    start, end = fermi_window_indices(fermi_grid_ev, initial_energy_ev, final_energy_ev)
-    if start >= end:
-        return False
-    broaden = lorentzian_delta(
-        photon_energies_ev,
-        transition_energy_ev,
-        eta_ev,
-        normalized=normalized_lorentzian,
-        convention=convention,
-    )
-    heatmap[start:end, :] += float(k_weight) * amplitude * broaden[None, :]
-    return True
 
 
 __all__ = [
