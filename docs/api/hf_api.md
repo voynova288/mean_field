@@ -20,7 +20,7 @@ model = make_model(
 )
 ```
 
-Supported façade names currently include `htg`, `rlg_hbn`, `tdbg`, `tmbg`, and `atmg`.
+Supported façade names currently include `htg`, `htqg`, `rlg_hbn`, `tdbg`, `tmbg`, and `atmg`.
 
 ## HFConfig
 
@@ -46,6 +46,7 @@ Current run coverage:
 - HTG folded-supercell HF can be dispatched with `run_hf(model, cfg, htg_supercell_config=HTGSupercellRunHFConfig(...))`.  Fractional filling and the optional explicit supercell remain system-owned inputs; the adapter uses the existing `run_htg_supercell_hf` runner and attaches the canonical post-run contract view.
 - RnG/hBN HF can be dispatched with `run_hf(model, cfg, rlg_hbn_config=RLGhBNRunHFConfig(...))`.  The public `HFConfig` must match the explicit RnG/hBN config for filling, square mesh, iteration limit, precision, interaction scheme, dielectric/gate scalars, Coulomb-kernel family, and `density_convention="stored_delta"`.  Screening, active-window, valley, and projection options remain explicit system-owned inputs and are not inferred from generic `HFConfig` fields.
 - TBG zero-field restricted HF can be dispatched with `run_hf(model, cfg, tbg_zero_field_config=TBGZeroFieldRunHFConfig(grid_solution=...))`.  The matching `BMSolution` is required because the canonical basis needs the exact B0 grid and BM micro-wavefunctions used by SCF.  `HFConfig.mesh` is the B0 grid point count `(lk+1, lk+1)`, `HFConfig.dsc_nm` records the resolved screening length used by the overlap kernel, and no `HFConfig -> BMSolution` inference is performed.
+- TMBG Polshyn-Wang projected HF can be dispatched with `run_hf(model, cfg, tmbg_polshyn_config=PolshynRunHFConfig(...))`.  The projected indices, target primitive band, doubled-cell mesh, interaction shifts, initialization policy, seed, and interaction scalars remain explicit Polshyn config inputs; generic `HFConfig` fields are checked for consistency rather than translated into hidden paper-window choices.
 - Systems without a safe config-to-run adapter still fail explicitly with `Unified run_hf is frozen at the API level, but this model has no run_hf(config) adapter yet` until a system-owned config runner is added.
 
 Existing paper runners remain valid internal workflows, but new public code should target this API.
@@ -70,7 +71,7 @@ Registered boundaries currently cover:
 - HTG folded-supercell HF: `htg_supercell_hf_run_to_hf_run_result(...)` and `htg_supercell_hf_run_to_hf_result(...)` for an existing supercell run; `htg_explicit_supercell_run_hf` records the explicit `HTGSupercellRunHFConfig` run adapter.
 - TBG zero-field HF: `tbg_zero_field_hf_run_to_hf_run_result(..., grid_solution=...)`, `tbg_zero_field_hf_run_to_hf_result(..., grid_solution=...)`, or `b0_hf_benchmark_run_to_hf_run_result(...)`; `tbg_zero_field_explicit_run_hf` records the explicit `TBGZeroFieldRunHFConfig(grid_solution=...)` run adapter.  The grid solution is required and is not fabricated.
 - RnG/hBN HF: `rlg_hbn_hf_run_to_hf_run_result(...)` and `rlg_hbn_hf_run_to_hf_result(...)` for an existing RnG/hBN run; `rlg_hbn_explicit_run_hf` records the explicit `RLGhBNRunHFConfig` run adapter.
-- TMBG Polshyn-Wang bundle: `polshyn_wang_hf_bundle_to_hf_run_result(basis, state, info, ...)` for an explicit saved bundle.
+- TMBG Polshyn-Wang: `polshyn_wang_hf_bundle_to_hf_run_result(basis, state, info, ...)` for an explicit saved bundle; `tmbg_polshyn_explicit_run_hf` records the explicit `PolshynRunHFConfig` run adapter.
 
 Post-run adapters are I/O/public-surface bridges only: they wrap already-computed system artifacts and preserve system density conventions in the canonical contract.  Registered `run_hf` adapters call existing system-owned runners from explicit system configs.  Neither adapter class infers missing configs, touches cRPA, or changes physics.
 
@@ -95,6 +96,8 @@ For TBG zero-field public `run_hf` calls, `HFResult.state` remains the raw `Rest
 
 For HTG folded-supercell HF, `htg_supercell_hf_run_to_hf_run_result(...)` wraps an existing `HTGSupercellHartreeFockRun` as a canonical `HFRunResult`.  HTG supercell densities are already stored as `P-R`, so the adapter uses `density_state_from_delta(...)`, preserves `(n_state,n_state,n_k)` arrays, records folded-basis metadata, and uses collapsed Hamiltonian parts (`fixed=total-h0`, `hartree=fock=0`) unless a future run surface exposes component splits.
 
-`HFResult.save(...)` writes the normal public sidecars plus `canonical_hf_run_result.json` when `canonical_run_result` is present.  This sidecar is metadata/shape-only: it records contract class names, array shapes, the explicit `density_delta_definition="P-R"`, density/reference schemes, Hamiltonian component metadata, iteration count, and manifest keys, but does not serialize large density/Hamiltonian/wavefunction arrays.  Adapter-provided metadata and the last iteration row are sanitized before JSON output: dense arrays are summarized, non-finite values are rejected, and public JSON is written without `NaN`/`Infinity` tokens.  `load_result(...)` reads this sidecar into `ResultDirectory.canonical_hf_run_result` when the manifest references it, and rejects missing or path-escaping referenced sidecars.
+For TMBG Polshyn-Wang public `run_hf` calls, `HFResult.state` remains the explicit `PolshynWangHFState` and `canonical_run_result` is populated by `polshyn_wang_hf_bundle_to_hf_run_result(...)`.  The adapter requires `PolshynRunHFConfig` because the projected indices, target primitive band, doubled-cell embedding, shifts, initialization policy, and interaction values are system-owned physics inputs and must not be inferred from a generic `HFConfig`.
+
+`HFResult.save(...)` writes the normal public sidecars plus `canonical_hf_run_result.json` when `canonical_run_result` is present.  The default `canonical_payload="metadata_only"` sidecar is metadata/shape-only: it records contract class names, array shapes, the explicit `density_delta_definition="P-R"`, density/reference schemes, Hamiltonian component metadata, iteration count, and manifest keys, but does not serialize large density/Hamiltonian/wavefunction arrays or write `canonical_hf_arrays.npz`.  Adapter-provided metadata and the last iteration row are sanitized before JSON output: dense arrays are summarized, non-finite values are rejected, and public JSON is written without `NaN`/`Infinity` tokens.  `load_result(...)` reads this sidecar into `ResultDirectory.canonical_hf_run_result` when the manifest references it, and rejects missing or path-escaping referenced sidecars.  Dense canonical arrays are explicit opt-in only via `canonical_payload="arrays"`, which writes `canonical_hf_arrays.npz` plus `canonical_hf_arrays.schema.json` and records those keys in the manifest.
 
 `HFResult.reconstruct_micro_wavefunctions()` is part of the public contract because topology, shift current, Fubini-Study metric, and TDHF often need microscopic wavefunctions rather than only active-subspace eigenvectors.  System adapters should implement it before claiming those downstream workflows are fully supported.
