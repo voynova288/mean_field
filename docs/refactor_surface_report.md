@@ -4,12 +4,12 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 61776
-- Tracked Python lines: 58516
+- Tracked text lines: 61871
+- Tracked Python lines: 58590
 - Tracked Julia lines: 826
-- `src` Python files: 190
-- `src` Python lines: 52413
-- Files over 1000 lines: 9
+- `src` Python files: 196
+- `src` Python lines: 52487
+- Files over 1000 lines: 8
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0
 
 ## Completed cleanup slices
@@ -588,6 +588,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Gross legacy LOC removed/thinned: 2301.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
 
+### split_public_hf_api_facade
+
+- Split the public HF API module into private type, registry, sidecar, result, and dispatch modules while keeping mean_field.api.hf as the stable facade and preserving lazy adapter import paths.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 1274.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
+
 ## Top 30 Python files under `src`
 
 | Lines | Path |
@@ -595,7 +602,6 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 2256 | `src/mean_field/systems/RnG_hBN/hf.py` |
 | 2058 | `src/mean_field/systems/RnG_hBN/tdhf.py` |
 | 1347 | `src/mean_field/systems/htg/supercell.py` |
-| 1306 | `src/mean_field/api/hf.py` |
 | 1267 | `src/mean_field/crpa/hf_interface.py` |
 | 1258 | `src/mean_field/systems/tbg/zero_field/hf.py` |
 | 1149 | `src/mean_field/core/hf/finite_field.py` |
@@ -610,6 +616,7 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 | 735 | `src/mean_field/systems/tbg/zero_field/hf_contracts.py` |
 | 710 | `src/mean_field/core/hf/tdhf.py` |
 | 686 | `src/mean_field/systems/RnG_hBN/hf_contracts.py` |
+| 684 | `src/mean_field/api/_hf_sidecars.py` |
 | 643 | `src/mean_field/systems/htg/supercell_contracts.py` |
 | 627 | `src/mean_field/benchmarks.py` |
 | 617 | `src/mean_field/core/hf/overlap.py` |
