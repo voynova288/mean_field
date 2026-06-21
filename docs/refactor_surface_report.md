@@ -1664,3 +1664,22 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 ```
 
 Result: `215 passed`.
+
+## Update: HF API model facade list
+
+Commit in this continuation:
+
+- `f1f7172 Fix HF API model facade list`
+
+### Current summary after this continuation
+
+- Tracked text lines: 66692
+- Tracked Python lines: 62016
+- Tracked Julia lines: 826
+- `src` Python files: 275
+- `src` Python lines: 55205
+- Files over 1000 lines: 0
+
+### Documentation consistency
+
+`docs/api/hf_api.md` now lists the public model facades consistently with the model registry, including `tbg` as well as `htqg`.
