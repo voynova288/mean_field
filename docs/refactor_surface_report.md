@@ -1464,3 +1464,41 @@ pytest -q tests/test_htqg_model.py tests/test_api_imports.py
 ```
 
 These are software/API readiness gates only, not production/paper-level validation.
+
+## Update: TMBG Polshyn metadata-only HF save/load gate
+
+Commit in this continuation:
+
+- `e308aa0 Test TMBG Polshyn metadata-only HF save`
+
+### Current summary after this continuation
+
+- Tracked text lines: 66434
+- Tracked Python lines: 61988
+- Tracked Julia lines: 826
+- `src` Python files: 275
+- `src` Python lines: 55205
+- Files over 1000 lines: 0
+
+### TMBG Polshyn acceptance covered
+
+Added a public test that runs the explicit TMBG Polshyn `run_hf(...)` smoke, saves the result with `canonical_payload="metadata_only"`, reloads it through `mean_field.api.load_result(...)`, and verifies that no `canonical_hf_arrays.npz` payload is written.
+
+Also documented the canonical sidecar staging self-check: the existing 48 RLG/hBN staged sidecars rely on the `RnG_hBN.tdhf` archive loader, so they remain staged while TDHF is out of scope.
+
+Focused validation:
+
+```bash
+PYTHONPATH=src pytest -q tests/test_tmbg_polshyn_hf_readiness.py
+```
+
+Result: `10 passed`.
+
+Full gate on `test001` after this slice:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+```
+
+Result: `214 passed`.
