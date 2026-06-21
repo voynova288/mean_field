@@ -1277,3 +1277,40 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 ```
 
 Result: `211 passed`.
+
+## Update: optical-response toy-model ownership
+
+Commit in this continuation:
+
+- `b16e9e5 Move optical toy models into response package`
+
+### Current summary after this continuation
+
+- Tracked text lines: 66119
+- Tracked Python lines: 61952
+- Tracked Julia lines: 826
+- `src` Python files: 275
+- `src` Python lines: 55213
+- Files over 1000 lines: 0
+
+### Toy-model boundary update
+
+The gapped-SLG optical-response toy model implementation now lives under `analysis.optical_response.toy_models`.  Historical `analysis.shift_current.toy_models` paths remain compatibility shims.
+
+Focused validation:
+
+```bash
+PYTHONPATH=src python -m compileall -q src/analysis/optical_response/toy_models src/analysis/shift_current/toy_models tests/test_optical_response_api.py
+PYTHONPATH=src pytest -q tests/test_optical_response_api.py tests/test_api_imports.py
+```
+
+Result: `14 passed`.
+
+Full gate on `test001` after this slice:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+```
+
+Result: `212 passed`.
