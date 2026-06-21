@@ -663,6 +663,14 @@
         "src/mean_field/devtools/compare_tbg_crpa_fig1e.py",
         "src/mean_field/devtools/validate_rlg_hbn_fig6_prereqs.py"
       ]
+    },
+    {
+      "description": "Archived the dense RnG/hBN q=0 TDHF devtool runner and thinned the tracked module to schema sidecar and single-flavor shortcut compatibility helpers only; dispatcher command was removed.",
+      "direct_mean_field_systems_imports_after": 0,
+      "direct_mean_field_systems_imports_before": 0,
+      "legacy_lines_removed_gross": 328,
+      "slice": "archive_retire_rlg_hbn_q0_tdhf_devtool",
+      "tracked_files_deleted": []
     }
   ],
   "direct_mean_field_systems_imports": {
@@ -851,9 +859,9 @@
       }
     ]
   },
-  "root": "/data/home/ziyuzhu/tmp/mean_field_report_misc_devtools_20260621_113827",
+  "root": "/data/home/ziyuzhu/tmp/mean_field_report_q0_tdhf_20260621_114305",
   "src_python_files": 170,
-  "src_python_lines": 52120,
+  "src_python_lines": 51814,
   "top_30_files": [
     {
       "lines": 2305,
@@ -977,6 +985,6 @@
     }
   ],
   "tracked_julia_lines": 826,
-  "tracked_python_lines": 58168,
-  "tracked_text_lines": 62357
+  "tracked_python_lines": 57862,
+  "tracked_text_lines": 62069
 }

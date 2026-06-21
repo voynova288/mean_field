@@ -4,11 +4,11 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 
 ## Summary
 
-- Tracked text lines: 62357
-- Tracked Python lines: 58168
+- Tracked text lines: 62069
+- Tracked Python lines: 57862
 - Tracked Julia lines: 826
 - `src` Python files: 170
-- `src` Python lines: 52120
+- `src` Python lines: 51814
 - Files over 1000 lines: 12
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0
 
@@ -530,6 +530,13 @@ This Phase 2 report measures legacy surface area and tracks cleanup slices that 
 - Archived and removed leftover one-off cRPA comparison and RLG/hBN Fig.6 prerequisite devtools from the tracked command surface; maintained tested chunk/merge and sidecar tools remain.
 - Deleted files: `src/mean_field/devtools/compare_tbg_crpa_fig1e.py`, `src/mean_field/devtools/validate_rlg_hbn_fig6_prereqs.py`.
 - Gross legacy LOC removed/thinned: 308.
+- Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
+
+### archive_retire_rlg_hbn_q0_tdhf_devtool
+
+- Archived the dense RnG/hBN q=0 TDHF devtool runner and thinned the tracked module to schema sidecar and single-flavor shortcut compatibility helpers only; dispatcher command was removed.
+- Deleted files: none; this slice thinned duplicated implementations in place.
+- Gross legacy LOC removed/thinned: 328.
 - Direct `mean_field.systems.*` imports in devtools/scripts/workflows: 0 -> 0.
 
 ## Top 30 Python files under `src`
