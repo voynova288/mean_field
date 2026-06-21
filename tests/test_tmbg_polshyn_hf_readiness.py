@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mean_field.api import HFConfig, run_hf
+from mean_field.api import HFConfig, load_result, run_hf
 from mean_field.api.hf import list_hf_adapters
 from mean_field.core.contracts import (
     HFRunResult as ContractHFRunResult,
@@ -279,9 +279,7 @@ def test_polshyn_projected_basis_builder_embeds_doubled_cell_shapes() -> None:
     np.testing.assert_allclose(basis.reference_diagonal, [0.0, 0.0])
 
 
-def test_polshyn_public_run_hf_explicit_config_smoke_attaches_canonical_result() -> None:
-    adapters = list_hf_adapters(system_name="tmbg_polshyn", adapter_type="run_hf")
-    assert any(adapter.name == "tmbg_polshyn_explicit_run_hf" for adapter in adapters)
+def _minimal_polshyn_public_run_hf_result():
     model = TMBGModel.from_config(1.25, n_shells=0, params=TMBGParameters.minimal())
     polshyn_config = PolshynRunHFConfig(
         mesh_size=1,
@@ -305,7 +303,13 @@ def test_polshyn_public_run_hf_explicit_config_smoke_attaches_canonical_result()
         max_iter=1,
         precision=1.0e-7,
     )
-    result = run_hf(model, cfg, tmbg_polshyn_config=polshyn_config)
+    return run_hf(model, cfg, tmbg_polshyn_config=polshyn_config)
+
+
+def test_polshyn_public_run_hf_explicit_config_smoke_attaches_canonical_result() -> None:
+    adapters = list_hf_adapters(system_name="tmbg_polshyn", adapter_type="run_hf")
+    assert any(adapter.name == "tmbg_polshyn_explicit_run_hf" for adapter in adapters)
+    result = _minimal_polshyn_public_run_hf_result()
     assert result.model.system_name == "tmbg_polshyn"
     assert result.canonical_run_result is not None
     assert result.canonical_run_result.best_seed == 5
@@ -313,3 +317,17 @@ def test_polshyn_public_run_hf_explicit_config_smoke_attaches_canonical_result()
     assert result.observables["primitive_nu"] == pytest.approx(3.5)
     assert result.artifacts is not None
     assert result.artifacts.metadata["workflow"] == "tmbg.polshyn_wang.explicit_config"
+
+
+def test_polshyn_public_run_hf_metadata_only_save_is_cheap_and_loadable(tmp_path: Path) -> None:
+    result = _minimal_polshyn_public_run_hf_result()
+    manifest_path = result.save(tmp_path / "polshyn_hf", canonical_payload="metadata_only")
+    loaded = load_result(manifest_path.parent)
+    assert manifest_path.name == "manifest.json"
+    assert loaded.model is not None
+    assert loaded.model["system_name"] == "tmbg_polshyn"
+    assert loaded.canonical_hf_run_result is not None
+    assert loaded.canonical_hf_run_result["contract_type"] == "mean_field.core.contracts.HFRunResult"
+    assert loaded.manifest["files"]["canonical_hf_run_result"] == "canonical_hf_run_result.json"
+    assert "canonical_hf_arrays" not in loaded.manifest["files"]
+    assert not (manifest_path.parent / "canonical_hf_arrays.npz").exists()

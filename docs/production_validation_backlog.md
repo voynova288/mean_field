@@ -61,6 +61,12 @@ python -m mean_field.devtools.backfill_canonical_hf_sidecars \
   --report-md tmp/backfill_write_inventory.md
 ```
 
+Current staged sidecars note:
+
+- `/data/home/ziyuzhu/tmp/mean_field_canonical_backfill_staged_229e06e_20260621_180741` contains 48 written RLG/hBN sidecars.
+- A self-check found all 48 written entries are `rlg_hbn_archive` and use the existing `mean_field.systems.RnG_hBN.tdhf.load_rlg_hbn_tdhf_run_from_archive` reconstruction path.
+- Because TDHF remains out of scope, these stay staged and are not applied to historical `results/` in the current continuation.
+
 Acceptance:
 
 - `historical_results_mutated` is `false`.
@@ -107,6 +113,15 @@ result_model: tmbg_polshyn
 has_canonical_run_result: true
 best_seed: 5
 workflow metadata: tmbg.polshyn_wang.explicit_config
+```
+
+Latest software-gate result on `test001`:
+
+```text
+commit: 8f86abe
+command: pytest -q tests/test_tmbg_polshyn_hf_readiness.py
+result: 10 passed
+coverage added: metadata-only `HFResult.save(...)` writes `canonical_hf_run_result.json`, remains loadable via `mean_field.api.load_result(...)`, and does not write `canonical_hf_arrays.npz`.
 ```
 
 Production-scale validation still needs explicit physics choices:
