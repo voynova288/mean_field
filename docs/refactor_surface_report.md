@@ -957,3 +957,44 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 ```
 
 Result on `test001`: `207 passed`.
+
+## Update: public bands API KGrid/KPath inputs
+
+Commit in this continuation:
+
+- `faa706e Accept explicit KGrid and KPath band inputs`
+
+### Current summary after this continuation
+
+- Tracked text lines: 65707
+- Tracked Python lines: 61910
+- Tracked Julia lines: 826
+- `src` Python files: 268
+- `src` Python lines: 55147
+- Files over 1000 lines: 0
+
+### Bands API change
+
+- `mean_field.api.compute_bands` now accepts explicit public `KGrid` and `KPath` dataclass inputs.
+- `KGrid` with explicit `kvec`/`frac` is evaluated by direct model `diagonalize(...)`, so non-square explicit grids no longer go through the old square-only `bands_on_grid(mesh_size)` facade path.
+- `KPath` is converted to the core `KPath` shape and evaluated through the generic path-band loop.
+- Existing `grid_mesh=int` and square `grid_mesh=(n,n)` behavior is preserved.
+- Non-square tuple inputs now produce a clear instruction to pass an explicit `KGrid`.
+
+Focused validation:
+
+```bash
+PYTHONPATH=src python -m compileall -q src/mean_field/api/bands.py tests/test_api_bands.py
+PYTHONPATH=src pytest -q tests/test_api_bands.py tests/test_api_imports.py
+```
+
+Result: `13 passed`.
+
+Full gate on `test001` after this slice:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+```
+
+Result: `210 passed`.
