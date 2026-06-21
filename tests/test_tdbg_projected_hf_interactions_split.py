@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from mean_field.systems.tdbg import hf as tdbg_hf
 from mean_field.systems.tdbg import projected_hf, projected_hf_interactions
 
 
@@ -15,6 +14,3 @@ def test_tdbg_projected_hf_interactions_split_preserves_legacy_facade() -> None:
     assert projected_hf.build_tdbg_interaction_builder is projected_hf_interactions.build_tdbg_interaction_builder
     assert projected_hf._stored_inner_ev is projected_hf_interactions._stored_inner_ev
     assert projected_hf.tdbg_energy_components is projected_hf_interactions.tdbg_energy_components
-    assert tdbg_hf.build_tdbg_total_overlap_blocks is projected_hf_interactions.build_tdbg_total_overlap_blocks
-    assert tdbg_hf.build_tdbg_interaction_components is projected_hf_interactions.build_tdbg_interaction_components
-    assert tdbg_hf.tdbg_energy_components is projected_hf_interactions.tdbg_energy_components

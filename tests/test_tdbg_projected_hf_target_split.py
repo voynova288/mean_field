@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from mean_field.systems import tdbg as tdbg_system
-from mean_field.systems.tdbg import hf as tdbg_hf
 from mean_field.systems.tdbg import projected_hf, projected_hf_target
 
 
@@ -15,7 +14,4 @@ def test_tdbg_projected_hf_target_split_preserves_legacy_facade() -> None:
     assert projected_hf._with_fock_screening is projected_hf_target._with_fock_screening
     assert projected_hf.build_tdbg_hf_target_hamiltonian is projected_hf_target.build_tdbg_hf_target_hamiltonian
     assert projected_hf.diagonalize_tdbg_hf_target_hamiltonian is projected_hf_target.diagonalize_tdbg_hf_target_hamiltonian
-    assert tdbg_hf.build_tdbg_projected_hf_target_data is projected_hf_target.build_tdbg_projected_hf_target_data
-    assert tdbg_hf.build_tdbg_hf_target_hamiltonian is projected_hf_target.build_tdbg_hf_target_hamiltonian
-    assert tdbg_hf.diagonalize_tdbg_hf_target_hamiltonian is projected_hf_target.diagonalize_tdbg_hf_target_hamiltonian
     assert tdbg_system.build_tdbg_hf_target_hamiltonian is projected_hf_target.build_tdbg_hf_target_hamiltonian

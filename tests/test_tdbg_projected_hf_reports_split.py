@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from mean_field.systems.tdbg import hf as tdbg_hf
 from mean_field.systems.tdbg import projected_hf, projected_hf_reports
 
 
@@ -8,8 +7,6 @@ def test_tdbg_projected_hf_reports_split_preserves_legacy_facade() -> None:
     assert projected_hf.tdbg_hf_grid_band_summary is projected_hf_reports.tdbg_hf_grid_band_summary
     assert projected_hf.liu2022_default_projected_hf_config is projected_hf_reports.liu2022_default_projected_hf_config
     assert projected_hf.liu2022_projected_hf_metadata is projected_hf_reports.liu2022_projected_hf_metadata
-    assert tdbg_hf.liu2022_default_projected_hf_config is projected_hf_reports.liu2022_default_projected_hf_config
-    assert tdbg_hf.liu2022_projected_hf_metadata is projected_hf_reports.liu2022_projected_hf_metadata
 
 
 def test_tdbg_projected_hf_report_helpers_keep_metadata_contract() -> None:

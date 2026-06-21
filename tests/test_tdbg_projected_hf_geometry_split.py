@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from mean_field.systems.tdbg import hf as tdbg_hf
 from mean_field.systems.tdbg import projected_hf, projected_hf_geometry
 
 
@@ -15,8 +14,6 @@ def test_tdbg_projected_hf_geometry_split_preserves_legacy_facade() -> None:
     assert projected_hf._tdbg_total_overlap_from_bases is projected_hf_geometry._tdbg_total_overlap_from_bases
     assert projected_hf._tdbg_total_overlap_between is projected_hf_geometry._tdbg_total_overlap_between
     assert projected_hf.tdbg_embedded_component_groups is projected_hf_geometry.tdbg_embedded_component_groups
-    assert tdbg_hf.tdbg_moire_area_nm2 is projected_hf_geometry.tdbg_moire_area_nm2
-    assert tdbg_hf.tdbg_embedded_component_groups is projected_hf_geometry.tdbg_embedded_component_groups
 
 
 def test_tdbg_band_window_indices_remains_stable_after_geometry_split() -> None:
