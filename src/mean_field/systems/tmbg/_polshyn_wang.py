@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from analysis.order_parameters import folded_translation_order_parameters
+
 from ._polshyn_shared import *  # noqa: F401,F403
 from ._polshyn_types import *  # noqa: F401,F403
 from ._polshyn_filling import *  # noqa: F401,F403
@@ -375,36 +377,15 @@ def translation_order_parameters(
     spin_index: int = 0,
     valley_index: int = 0,
 ) -> dict[str, np.ndarray | float]:
-    """Fold-off-diagonal CDW order diagnostic for the doubled supercell.
+    """Fold-off-diagonal CDW order diagnostic for the doubled supercell."""
 
-    In the area-2 folded basis, fold 0 and fold 1 differ by the paper's
-    translation-breaking wavevector Q=B1.  The quantity analogous to Polshyn
-    Eq. (1) is therefore the norm of density-matrix elements connecting even
-    and odd folded copies at the same supercell k.  A single target-band state
-    (|fold0>+|fold1>)/sqrt(2) has |rho_01|=1/2, so the reported ``*_x2``
-    values are normalized to have maximal target-band order near one.
-    """
-
-    density = np.asarray(density_blocks, dtype=np.complex128)
-    projected_indices = tuple(int(index) for index in projected_indices)
-    target_pos = projected_indices.index(int(target_band_index))
-    fold0 = np.asarray([2 * iprim for iprim in range(len(projected_indices))], dtype=int)
-    fold1 = fold0 + 1
-    sector = density[int(spin_index), int(valley_index)]
-    target_raw = np.abs(sector[2 * target_pos, 2 * target_pos + 1, :])
-    all_raw = np.sqrt(np.sum(np.abs(sector[np.ix_(fold0, fold1, np.arange(sector.shape[-1]))]) ** 2, axis=(0, 1)))
-    return {
-        "target_raw": np.asarray(target_raw, dtype=float),
-        "all_raw": np.asarray(all_raw, dtype=float),
-        "target_x2": np.asarray(2.0 * target_raw, dtype=float),
-        "all_x2": np.asarray(2.0 * all_raw, dtype=float),
-        "target_x2_min": float(np.min(2.0 * target_raw)),
-        "target_x2_mean": float(np.mean(2.0 * target_raw)),
-        "target_x2_max": float(np.max(2.0 * target_raw)),
-        "all_x2_min": float(np.min(2.0 * all_raw)),
-        "all_x2_mean": float(np.mean(2.0 * all_raw)),
-        "all_x2_max": float(np.max(2.0 * all_raw)),
-    }
+    return folded_translation_order_parameters(
+        density_blocks,
+        projected_indices=projected_indices,
+        target_band_index=int(target_band_index),
+        spin_index=int(spin_index),
+        valley_index=int(valley_index),
+    )
 
 
 def estimate_fermi_level_from_sector_energies(energies: np.ndarray, occupation_counts: np.ndarray) -> float:

@@ -23,13 +23,22 @@ benchmarks/
 results/
 logs/
 reference/
-tests/
+# Public tests are source-controlled. Ignore only local/generated test payloads.
+tests/local/
+tests/internal/
+tests/slow/
+tests/data/generated/
+tests/**/*.npz
+tests/**/*.npy
 path/
 tmp/
 local_archive/
 outputs/
 artifacts/
 checkpoints/
+examples/local/
+examples/scratch/
+examples/oneoff/
 
 # Slurm/runtime artifacts
 .tasque/

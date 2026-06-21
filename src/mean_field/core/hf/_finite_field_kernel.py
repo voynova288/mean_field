@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from analysis.order_parameters import finite_field_valley_spin_order_parameters
+
 from ._finite_field_shared import *  # noqa: F401,F403
 from ._finite_field_types import *  # noqa: F401,F403
 from ._finite_field_initialization import *  # noqa: F401,F403
@@ -50,27 +52,15 @@ def calculate_valley_spin_order_parameters(
 ) -> dict[str, float]:
     """Return ``s_i eta_j`` order parameters in the convention of the Julia code."""
 
-    pauli = [
-        np.array([[1, 0], [0, 1]], dtype=np.complex128),
-        np.array([[0, 1], [1, 0]], dtype=np.complex128),
-        np.array([[0, -1j], [1j, 0]], dtype=np.complex128),
-        np.array([[1, 0], [0, -1]], dtype=np.complex128),
-    ]
-    sub = int(n_band) * int(q)
-    identity_band = np.eye(sub, dtype=np.complex128)
-    h = np.asarray(hamiltonian, dtype=np.complex128)
-    eps = np.asarray(energies, dtype=float)
-    out: dict[str, float] = {}
-    nk = h.shape[2]
-    for ispin, spin_mat in enumerate(pauli):
-        for ieta, eta_mat in enumerate(pauli):
-            op = np.kron(spin_mat, np.kron(eta_mat, identity_band))
-            values = np.zeros_like(eps)
-            for ik in range(nk):
-                _vals, vecs = np.linalg.eigh(h[:, :, ik])
-                values[:, ik] = np.diag(vecs.conj().T @ op @ vecs).real
-            out[f"s{ispin}_eta{ieta}"] = float(values[eps <= float(mu)].sum() / eps.size * 8.0)
-    return out
+    return finite_field_valley_spin_order_parameters(
+        hamiltonian,
+        energies,
+        mu,
+        q=int(q),
+        n_eta=int(n_eta),
+        n_spin=int(n_spin),
+        n_band=int(n_band),
+    )
 
 def _finite_field_density_builder_for_state(
     state: FiniteFieldHartreeFockState,

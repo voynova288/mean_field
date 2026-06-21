@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from analysis.order_parameters import StateLabel, analyze_tdbg_order_parameters
+
 from ...core.hf import (
     DensityConvention,
     DensityUpdateResult,
@@ -360,66 +362,54 @@ def _fock_density_for_policy(data: TDBGProjectedHFData, density: np.ndarray) -> 
         return _reference_subtracted_tdbg_density(data, density)
     raise ValueError(f"Unsupported TDBG Fock density policy: {settings.fock_density!r}")
 
-def _numeric_order_parameters(data: TDBGProjectedHFData, density: np.ndarray) -> dict[str, float]:
-    occ = np.zeros(data.nt, dtype=float)
-    for ik in range(data.nk):
-        projector = _stored_to_conventional(density[:, :, ik])
-        occ += np.real(np.diag(projector))
-    occ /= float(data.nk)
-    spin_pol = 0.0
-    valley_pol = 0.0
-    active_spin_pol = 0.0
-    active_valley_pol = 0.0
+def _tdbg_order_labels(data: TDBGProjectedHFData) -> tuple[StateLabel, ...]:
     active_indices = set(_active_filling_indices(data))
-    for label in data.labels:
-        value = float(occ[label.index])
-        spin_sign = 1.0 if label.spin == "up" else -1.0
-        valley_sign = 1.0 if int(label.valley) == 1 else -1.0
-        spin_pol += spin_sign * value
-        valley_pol += valley_sign * value
-        if label.index in active_indices:
-            active_spin_pol += spin_sign * value
-            active_valley_pol += valley_sign * value
-    ivc = 0.0
+    return tuple(
+        StateLabel(
+            index=int(label.index),
+            spin=str(label.spin),
+            valley=int(label.valley),
+            band=int(label.band_index),
+            active=bool(label.index in active_indices),
+            metadata=label.to_dict(),
+        )
+        for label in data.labels
+    )
+
+
+def _conventional_projector_stack(data: TDBGProjectedHFData, density: np.ndarray) -> np.ndarray:
+    stored = np.asarray(density, dtype=np.complex128)
+    out = np.zeros_like(stored)
     for ik in range(data.nk):
-        projector = _stored_to_conventional(density[:, :, ik])
-        for spin in SPIN_LABELS:
-            k_idx = [label.index for label in data.labels if label.spin == spin and int(label.valley) == 1 and label.index in active_indices]
-            kp_idx = [label.index for label in data.labels if label.spin == spin and int(label.valley) == -1 and label.index in active_indices]
-            if k_idx and kp_idx:
-                ivc += float(np.linalg.norm(projector[np.ix_(k_idx, kp_idx)]))
-    ivc /= float(data.nk)
-    return {
-        "spin_polarization": float(spin_pol),
-        "valley_polarization": float(valley_pol),
-        "active_spin_polarization": float(active_spin_pol),
-        "active_valley_polarization": float(active_valley_pol),
-        # Backward-compatible names for the original nu=+2 conduction-band workflow.
-        "cb_spin_polarization": float(active_spin_pol),
-        "cb_valley_polarization": float(active_valley_pol),
-        "ivc_amplitude": float(ivc),
-    }
+        out[:, :, ik] = _stored_to_conventional(stored[:, :, ik])
+    return out
+
+
+def _numeric_order_parameters(data: TDBGProjectedHFData, density: np.ndarray) -> dict[str, float]:
+    result = analyze_tdbg_order_parameters(_conventional_projector_stack(data, density), _tdbg_order_labels(data))
+    scalars = dict(result.scalars)
+    # Backward-compatible names for the original nu=+2 conduction-band workflow.
+    scalars["cb_spin_polarization"] = float(scalars["active_spin_polarization"])
+    scalars["cb_valley_polarization"] = float(scalars["active_valley_polarization"])
+    return {key: float(value) for key, value in scalars.items()}
+
 
 def tdbg_order_parameters(data: TDBGProjectedHFData, density: np.ndarray) -> dict[str, object]:
-    numeric = _numeric_order_parameters(data, density)
-    occ_by_label: list[dict[str, object]] = []
-    occ = np.zeros(data.nt, dtype=float)
-    for ik in range(data.nk):
-        projector = _stored_to_conventional(density[:, :, ik])
-        occ += np.real(np.diag(projector))
-    occ /= float(data.nk)
-    for label in data.labels:
-        item = label.to_dict()
-        item["occupation"] = float(occ[label.index])
-        occ_by_label.append(item)
-    classification = "mixed"
-    if abs(numeric["ivc_amplitude"]) > 0.15:
-        classification = "IVC_or_valley_coherent"
-    elif abs(numeric["cb_valley_polarization"]) > 1.2:
-        classification = "VP_K" if numeric["cb_valley_polarization"] > 0 else "VP_Kprime"
-    elif abs(numeric["cb_spin_polarization"]) > 1.2:
-        classification = "SP_up" if numeric["cb_spin_polarization"] > 0 else "SP_down"
-    return {**numeric, "classification": classification, "occupations": occ_by_label}
+    result = analyze_tdbg_order_parameters(_conventional_projector_stack(data, density), _tdbg_order_labels(data))
+    numeric = dict(result.scalars)
+    numeric["cb_spin_polarization"] = float(numeric["active_spin_polarization"])
+    numeric["cb_valley_polarization"] = float(numeric["active_valley_polarization"])
+    occupations: list[dict[str, object]] = []
+    for item in result.tables.get("occupations", []):
+        row = dict(item)
+        row.pop("active", None)
+        row.pop("band", None)
+        row.pop("sector", None)
+        row.pop("fold", None)
+        row.pop("layer", None)
+        row.pop("sublattice", None)
+        occupations.append(row)
+    return {**numeric, "classification": result.classification, "occupations": occupations}
 
 __all__ = [
     "TDBGProjectedHFData",
