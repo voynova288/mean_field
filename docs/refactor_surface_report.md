@@ -1908,3 +1908,48 @@ PYTHONPATH=src python -m compileall -q src scripts
 PYTHONPATH=src pytest -q $(git ls-files tests)
 # 55 passed
 ```
+
+## Update: archive zero-reference utility surface after 4w pass
+
+Commit in this continuation:
+
+- pending: archive zero-reference utility surface after `b30adff`
+
+### Scope archived to ignored local surface
+
+After the cRPA/tests/devtools/topology cleanup reached the 4w `src` target, a fresh AST/import audit found a small set of tracked modules with no tracked Python import references. These were copied to ignored local archive before `git rm`:
+
+```text
+local_archive/retired_surface/zero_ref_surface_20260622/
+```
+
+Removed from tracked package surface:
+
+- `src/mean_field/runtime.py`
+- `src/mean_field/paths.py`
+- `src/mean_field/plotting.py`
+- `src/mean_field/core/plotting/`
+- `src/mean_field/systems/tdbg/artifacts.py`
+- `src/mean_field/systems/tbg/zero_field/supercell.py`
+- `src/analysis/optical_response/transitions.py`
+
+Also updated local guidance/docs so the tracked surface no longer points at archived topology or plotting helpers.
+
+### Current summary after this continuation
+
+- Tracked text lines: 45331
+- Tracked Python lines: 40678
+- Tracked Julia lines: 826
+- `src` Python files: 197
+- `src` Python lines: 39136
+- `tests` Python lines: 1481
+- `src/mean_field/systems` Python lines: 27234
+- Files over 1000 lines: 0
+
+Validation:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 55 passed
+```

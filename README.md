@@ -7,10 +7,9 @@ The package started as a benchmark-driven rewrite of a Julia `TBG_HartreeFock` w
 ## Scope
 
 - `mean_field.core.hf`: reusable projected Hartree-Fock machinery, including occupations, ODA iteration, Coulomb kernels, overlap contractions, flavor-sector helpers, and the generic TDHF/RPA core.
-- `mean_field.core.plotting.bands`: shared band/path plotting helpers for future reviewed plot adapters.
-- `mean_field.systems.tbg`: zero-field TBG/BM benchmark and HF adapters.
-- `mean_field.systems.tmbg`: twisted monolayer-bilayer graphene continuum model, validation checks, and topology adapters.
-- `mean_field.systems.tdbg`: twisted double bilayer graphene continuum model and band/topology tools.
+- `mean_field.systems.tbg`: zero-field TBG/BM core model and HF adapters.
+- `mean_field.systems.tmbg`: twisted monolayer-bilayer graphene continuum model and validation checks.
+- `mean_field.systems.tdbg`: twisted double bilayer graphene continuum model and projected-HF helpers.
 - `mean_field.systems.atmg`: alternating-twist multilayer graphene continuum-model utilities.
 - `mean_field.systems.htg`: helical trilayer graphene continuum model and projected-HF adapter for Kwan et al. style calculations.
 - Topology/Berry-geometry helpers are archived out of the tracked public surface for now; recover from `local_archive/retired_surface/topology_untracked_20260622/` only after review.

@@ -212,8 +212,9 @@ def htg_supercell_full_boundary_sewing_transform(basis_data: HTGSupercellProject
 
     This is a system adapter: it expresses how the plane-wave embedding grid is
     relabelled when the supercell crystal momentum crosses a reciprocal-periodic
-    boundary.  The Berry-link and Chern formulas are delegated to
-    :mod:`analysis.topology`.
+    boundary.  Berry-link/Chern helpers are archived out of the tracked public
+    surface for now; this transform remains available for any future reviewed
+    topology API.
     """
 
     n_spin = int(basis_data.basis.n_spin)

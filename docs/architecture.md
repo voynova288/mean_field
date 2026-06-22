@@ -14,7 +14,6 @@ The Julia codebase is optimized around script-driven workflows and shared mutabl
 
 ```text
 src/mean_field/
-  paths.py
   core/
     lattice.py
     hf/
@@ -59,15 +58,9 @@ local_archive/retired_surface/topology_untracked_20260622/
 
 If topology becomes a near-term target again, reintroduce a small reviewed common API rather than restoring all historical wrappers. Do not duplicate `_unit_link`, `_subspace_link`, determinant-link, or plaquette loops in system modules without first deciding the maintained public topology boundary.
 
-## Common plotting surface
+## Plotting status
 
-Shared band/path plotting helpers are exposed under:
-
-```text
-src/mean_field/core/plotting/bands.py
-```
-
-System plot modules should import generic helpers such as `load_plot_backend`, `format_kpath_axis`, `plot_band_columns`, `save_figure_pair`, and k-path TSV writers from this core namespace.  Systems still own paper-specific labels, panel layouts, colors, overlays, and default filenames.
+Shared band/path plotting helpers are archived out of the tracked public surface for now. If plotting becomes a near-term public target again, reintroduce a small reviewed helper API rather than restoring all historical plot adapters.
 
 ## Gauge-safe response derivative layer
 
