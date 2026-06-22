@@ -2038,7 +2038,7 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 
 Commit in this continuation:
 
-- pending: reintroduce minimal topology FHS core
+- `ca92e10 Reintroduce minimal topology FHS core`
 
 ### Scope restored
 
