@@ -1864,7 +1864,7 @@ mean_field.benchmarks absent as expected
 
 Commit in this continuation:
 
-- pending: archive topology/Berry helper surface
+- `edfa818 Archive topology helper surface`
 
 ### Scope archived to ignored local surface
 
