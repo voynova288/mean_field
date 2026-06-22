@@ -317,5 +317,5 @@ Recommended first paper-level candidates, in increasing physics-risk order:
 Blocked or out-of-scope unless separately authorized:
 
 - cRPA validation (tracked surface archived).
-- topology/Chern paper-level validation beyond the small common FHS core; reintroduce reviewed system wrappers/QGT helpers before claiming system or paper reproduction.
+- topology/Chern/QGT paper-level validation beyond the common system-independent core; reintroduce reviewed concrete system wrappers and paper workflows before claiming system or paper reproduction.
 - RLG/hBN finite-q TDHF production maps (TDHF remains a separate scope boundary).

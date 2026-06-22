@@ -2190,3 +2190,59 @@ PYTHONPATH=src pytest -q tests/test_analysis_topology.py
 - `tests` Python lines: 1619
 - `src/mean_field/systems` Python lines: 26070
 - Files over 1000 lines: 0
+
+## Update: restore system-independent quantum-geometry core
+
+Commit in this continuation:
+
+- pending: restore minimal topology quantum-geometry core
+
+### Scope restored
+
+Restored the system-independent projector QGT / quantum metric / Fubini-Study trace helpers:
+
+```text
+src/analysis/topology/quantum_geometry.py
+```
+
+The restored module depends only on already-built wavefunction meshes plus optional boundary sewing transforms and the common FHS core. It provides projector QGT finite differences, metric/Berry decomposition, Fubini-Study trace helpers, normalized map helpers, reciprocal-vector coordinate transforms, and optional FHS comparison through `compute_quantum_geometry(..., include_fhs=True)`.
+
+Still not restored:
+
+- concrete `mean_field.systems.*.topology` wrappers
+- projected-HF microscopic wavefunction reconstruction helpers
+- topology plotting/report workflows
+- paper-level topology/QGT Slurm validation jobs
+
+### Validation
+
+`tests/test_analysis_topology.py` now includes quantum-geometry smoke coverage:
+
+- constant wavefunction has zero QGT/metric/Berry curvature and zero Chern;
+- QWZ two-band model has projector finite-difference Chern consistent with FHS Chern within finite-difference tolerance;
+- Fubini-Study trace and normalized-map helper shape/integration behavior is checked.
+
+Validation on `test001`:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 62 passed
+
+python import-boundary smoke
+# import boundary ok
+
+python -m pip install -e . --dry-run --no-deps --no-build-isolation
+# Would install mean-field-0.1.0
+```
+
+### Current summary after this continuation
+
+- Tracked text lines: 46535
+- Tracked Python lines: 41541
+- Tracked Julia lines: 826
+- `src` Python files: 197
+- `src` Python lines: 39820
+- `tests` Python lines: 1660
+- `src/mean_field/systems` Python lines: 26070
+- Files over 1000 lines: 0

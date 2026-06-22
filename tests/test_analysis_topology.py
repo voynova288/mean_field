@@ -10,9 +10,12 @@ from analysis.topology import (
     WavefunctionLayout,
     canonicalize_wavefunction_grid,
     compute_lattice_topology,
+    compute_quantum_geometry,
     compute_lattice_topology_for_state_groups,
     compute_system_topology_from_eigenvectors,
     compute_system_topology_from_grid_result,
+    fubini_study_trace,
+    normalize_quantum_geometry_maps,
     reshape_flat_mesh_to_grid,
     split_state_indices_by_direct_gaps,
     wavefunction_index_from_state_labels,
@@ -170,3 +173,41 @@ def test_system_topology_adapter_from_grid_result_and_error_path() -> None:
 
     with pytest.raises(ValueError, match="Grid eigenvectors are required"):
         compute_system_topology_from_grid_result(SimpleNamespace(), 0, system="qiwuzhang")
+
+
+def test_quantum_geometry_constant_wavefunction_is_flat() -> None:
+    wavefunctions = np.zeros((4, 5, 2, 1), dtype=np.complex128)
+    wavefunctions[:, :, 0, 0] = 1.0
+
+    result = compute_quantum_geometry(wavefunctions, 0, include_fhs=True)
+
+    assert result.quantum_geometric_tensor.shape == (2, 2, 4, 5)
+    assert result.quantum_metric.shape == (2, 2, 4, 5)
+    assert result.berry_curvature_density.shape == (4, 5)
+    np.testing.assert_allclose(result.quantum_metric, 0.0, atol=1.0e-12)
+    np.testing.assert_allclose(result.berry_curvature_density, 0.0, atol=1.0e-12)
+    assert np.isclose(result.projector_chern_number, 0.0, atol=1.0e-12)
+    assert result.fhs_chern_number == pytest.approx(0.0, abs=1.0e-12)
+    assert result.min_link_magnitude == pytest.approx(1.0, abs=1.0e-12)
+
+
+def test_quantum_geometry_qiwuzhang_matches_fhs_sign_and_metric_shapes() -> None:
+    wavefunctions, _energies = _qiwuzhang_wavefunctions(mesh=21, mass=1.0)
+
+    result = compute_quantum_geometry(wavefunctions, 0, include_fhs=True)
+
+    assert result.fhs_chern_number == pytest.approx(1.0, abs=1.0e-12)
+    assert result.projector_chern_number == pytest.approx(1.0, abs=5.0e-2)
+    assert result.quantum_metric.shape == (2, 2, 21, 21)
+    assert result.berry_curvature_density.shape == (21, 21)
+    np.testing.assert_allclose(fubini_study_trace(result.quantum_metric), result.fubini_study_trace)
+    assert float(np.min(result.trace_metric)) >= -1.0e-12
+
+    normalized = normalize_quantum_geometry_maps(
+        result,
+        bz_area=1.0,
+        metadata={"model": "qiwuzhang"},
+    )
+    assert normalized.integrated_berry_curvature == pytest.approx(result.projector_chern_number, abs=5.0e-2)
+    assert normalized.integrated_fubini_study_trace > 0.0
+    assert normalized.metadata == {"model": "qiwuzhang"}

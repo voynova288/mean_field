@@ -1,8 +1,9 @@
-"""Minimal common topology helpers.
+"""Minimal common topology and quantum-geometry helpers.
 
-This restored public surface intentionally exposes only system-independent
-Fukui-Hatsugai-Suzuki link/plaquette/Chern utilities. System wrappers and
-quantum-metric/QGT helpers remain archived until they are reviewed separately.
+This public surface exposes system-independent FHS link/plaquette/Chern
+utilities, generic wavefunction layout helpers, small system-facing adapters for
+already-built eigenvector grids, and projector-based quantum-geometry maps.
+Concrete system wrappers and paper workflows remain separate reviewed surfaces.
 """
 
 from .core import (
@@ -26,6 +27,25 @@ from .core import (
     split_state_indices_by_direct_gaps,
     wavefunction_index_for_state_group,
 )
+from .quantum_geometry import (
+    CoordinateSystem,
+    NormalizedQuantumGeometryMaps,
+    QuantumGeometryResult,
+    brillouin_zone_area,
+    compute_quantum_geometry,
+    fubini_study_trace,
+    infer_berry_sign_from_chern,
+    integrated_fubini_study_metric,
+    normalize_quantum_geometry_maps,
+    normalized_chern_density,
+    orthonormalize_wavefunction_frames,
+    projector_qgt_central_difference,
+    projector_qgt_forward_difference,
+    qgt_to_metric_and_berry,
+    reciprocal_vectors_to_derivative_transform,
+    trace_condition_violation,
+    transform_quantum_geometric_tensor,
+)
 from .system import (
     TopologyResult,
     compute_system_topology_from_eigenvectors,
@@ -42,31 +62,48 @@ from .wavefunction import (
 
 __all__ = [
     "CanonicalWavefunctionGrid",
+    "CoordinateSystem",
     "DirectBandGapReport",
     "LatticeTopologyResult",
     "LinkMethod",
     "LinkVariables",
+    "NormalizedQuantumGeometryMaps",
+    "QuantumGeometryResult",
     "SewingTransform",
     "TopologyResult",
     "WavefunctionIndex",
     "WavefunctionLayout",
     "adjacent_direct_gap_reports",
     "berry_curvature_from_links",
+    "brillouin_zone_area",
+    "canonicalize_wavefunction_grid",
     "chern_number_from_berry_curvature",
     "compute_lattice_topology",
     "compute_lattice_topology_for_state_groups",
+    "compute_link_variables",
+    "compute_quantum_geometry",
     "compute_system_topology_from_eigenvectors",
     "compute_system_topology_from_grid_result",
-    "compute_link_variables",
-    "canonicalize_wavefunction_grid",
     "default_k_grid_frac",
     "direct_band_gap_report",
+    "fubini_study_trace",
+    "infer_berry_sign_from_chern",
+    "integrated_fubini_study_metric",
     "matrix_sewing_transform",
+    "normalize_quantum_geometry_maps",
     "normalize_state_indices",
+    "normalized_chern_density",
+    "orthonormalize_wavefunction_frames",
+    "projector_qgt_central_difference",
+    "projector_qgt_forward_difference",
+    "qgt_to_metric_and_berry",
+    "reciprocal_vectors_to_derivative_transform",
     "reshape_flat_mesh_to_grid",
     "select_wavefunction_subspace",
     "split_state_indices_by_direct_gaps",
     "topology_result_from_lattice_result",
+    "trace_condition_violation",
+    "transform_quantum_geometric_tensor",
     "wavefunction_index_for_state_group",
     "wavefunction_index_from_state_labels",
 ]

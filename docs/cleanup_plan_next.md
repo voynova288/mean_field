@@ -97,5 +97,5 @@ Acceptance:
 
 ## Lower priority
 
-- Bands wrappers remain. Topology system wrappers/QGT helpers are archived, while the tracked surface now includes only the small common FHS core under `src/analysis/topology`.
+- Bands wrappers remain. Concrete topology system wrappers and paper workflows are archived, while the tracked surface now includes the common FHS/QGT topology core and generic wavefunction/system adapters under `src/analysis/topology`.
 - Devtools cleanup: tracked devtools are archived locally for now; future durable commands should be reintroduced only through a small reviewed public surface.
