@@ -182,6 +182,21 @@ result: 16 passed on test001
 coverage added: explicit HTG supercell `run_hf(...)` metadata-only save/load writes `canonical_hf_run_result.json`, remains loadable via `mean_field.api.load_result(...)`, and does not write `canonical_hf_arrays.npz`.
 ```
 
+Latest software preflight (not production validation):
+
+```text
+commit: 7d8ac74
+output: /data/home/ziyuzhu/tmp/mean_field_validation_htg_supercell_7d8ac74_20260622_100932/summary.json
+result_model: htg_supercell
+has_canonical_run_result: true
+loaded_canonical_sidecar: true
+metadata_only_arrays_absent: true
+primitive_nu: 3.5
+supercell_area_ratio: 2
+filling_from_density: 3.5000000000000018
+workflow metadata: htg.supercell.explicit_config.preflight
+```
+
 This is software readiness only, not a converged fractional-filling production run.
 
 Production acceptance:
