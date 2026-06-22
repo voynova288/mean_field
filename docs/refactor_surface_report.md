@@ -2195,7 +2195,7 @@ PYTHONPATH=src pytest -q tests/test_analysis_topology.py
 
 Commit in this continuation:
 
-- pending: restore minimal topology quantum-geometry core
+- `420e8d7 Restore topology quantum geometry core`
 
 ### Scope restored
 
