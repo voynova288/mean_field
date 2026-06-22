@@ -1731,11 +1731,11 @@ Updated `docs/api/artifact_api.md` to document the `HFResult.save(...)` canonica
 
 Commit in this continuation:
 
-- pending: remove unused HTQG helper modules from tracked package surface
+- `36e655b Untrack unused HTQG system helpers`
 
 ### Current summary after this continuation
 
-- Tracked text lines: 66333
+- Tracked text lines: 66377
 - Tracked Python lines: 61576
 - Tracked Julia lines: 826
 - `src` Python files: 272
