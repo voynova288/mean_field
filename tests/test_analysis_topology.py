@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
+import pytest
 
 from analysis.topology import (
     WavefunctionIndex,
@@ -8,6 +11,8 @@ from analysis.topology import (
     canonicalize_wavefunction_grid,
     compute_lattice_topology,
     compute_lattice_topology_for_state_groups,
+    compute_system_topology_from_eigenvectors,
+    compute_system_topology_from_grid_result,
     reshape_flat_mesh_to_grid,
     split_state_indices_by_direct_gaps,
     wavefunction_index_from_state_labels,
@@ -121,3 +126,47 @@ def test_gap_grouping_and_group_topology_api() -> None:
 
     assert tuple(result.rounded_chern_number for result in results) == (1, -1)
     assert all(result.is_nearly_integer for result in results)
+
+
+def test_system_topology_adapter_attaches_metadata_and_orientation() -> None:
+    wavefunctions, _energies = _qiwuzhang_wavefunctions(mesh=17, mass=1.0)
+
+    result = compute_system_topology_from_eigenvectors(
+        wavefunctions,
+        0,
+        system="qiwuzhang",
+        valley=-1,
+        labels=("lower",),
+        index_metadata={"mesh_source": "unit_test"},
+        orientation_sign=-1.0,
+    )
+
+    assert result.band_indices == (0,)
+    assert result.valley == -1
+    assert result.rounded_chern_number == -1
+    assert result.is_nearly_integer
+    assert result.berry_connection is not None
+    assert result.min_link_magnitude is not None and result.min_link_magnitude > 0.9
+    assert result.index_metadata is not None
+    assert result.index_metadata["system"] == "qiwuzhang"
+    assert result.index_metadata["valley"] == -1
+    assert result.index_metadata["labels"] == ["lower"]
+    assert result.index_metadata["metadata"] == {"mesh_source": "unit_test"}
+
+
+def test_system_topology_adapter_from_grid_result_and_error_path() -> None:
+    wavefunctions, _energies = _qiwuzhang_wavefunctions(mesh=17, mass=-1.0)
+    k_grid_frac = np.stack(
+        np.meshgrid(np.arange(17) / 17.0, np.arange(17) / 17.0, indexing="ij"),
+        axis=-1,
+    )
+    grid = SimpleNamespace(eigenvectors=wavefunctions, k_grid_frac=k_grid_frac)
+
+    result = compute_system_topology_from_grid_result(grid, 0, system="qiwuzhang", valley=1)
+
+    assert result.rounded_chern_number == -1
+    np.testing.assert_allclose(result.k_grid_frac, k_grid_frac)
+    assert result.to_dict()["rounded_chern_number"] == -1
+
+    with pytest.raises(ValueError, match="Grid eigenvectors are required"):
+        compute_system_topology_from_grid_result(SimpleNamespace(), 0, system="qiwuzhang")

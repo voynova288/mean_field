@@ -2145,3 +2145,48 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 - `tests` Python lines: 1570
 - `src/mean_field/systems` Python lines: 26070
 - Files over 1000 lines: 0
+
+## Update: add minimal topology system-facing adapter
+
+Commit in this continuation:
+
+- pending: add minimal topology system adapter
+
+### Scope
+
+Added a small system-facing adapter without restoring concrete `mean_field.systems.*.topology` wrappers:
+
+```text
+src/analysis/topology/system.py
+```
+
+The adapter accepts already-built eigenvector grids or grid-result objects with `eigenvectors` and optional `k_grid_frac`, attaches system/valley/label metadata, delegates all FHS link/plaquette/Chern calculations to `analysis.topology.core`, and returns a compact `TopologyResult` for callers that need a historical-style result shape.
+
+Still not restored:
+
+- concrete system `topology.py` modules
+- retrying grid builders or model methods such as `topology_on_grid(...)`
+- QGT/quantum-metric helpers
+- paper-level topology workflows or Slurm jobs
+
+### Validation
+
+`tests/test_analysis_topology.py` now covers the system adapter with QWZ eigenvector grids, orientation sign, metadata propagation, grid-result input, and the missing-eigenvector error path.
+
+Focused validation on `test001`:
+
+```bash
+PYTHONPATH=src pytest -q tests/test_analysis_topology.py
+# 7 passed
+```
+
+### Current summary after this continuation
+
+- Tracked text lines: 45539
+- Tracked Python lines: 40590
+- Tracked Julia lines: 826
+- `src` Python files: 196
+- `src` Python lines: 38910
+- `tests` Python lines: 1619
+- `src/mean_field/systems` Python lines: 26070
+- Files over 1000 lines: 0

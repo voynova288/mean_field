@@ -5,7 +5,7 @@
 这个库应被维护成“通用框架 + 体系适配层 + 分析工作区”：
 
 - 通用 Hartree-Fock 框架在 `src/mean_field/core/hf`。SCF/ODA/占据/投影重叠/相互作用拼装等可复用逻辑应留在这里，不要写进某个具体体系。
-- 通用分析框架在 `src/analysis`：`optical_response/` 负责按 WannierBerri 约定整理的规范安全响应求导与 shift-current API；`topology/` 当前只恢复了系统无关 FHS link/plaquette/Chern core 和 wavefunction-grid canonicalization helper。旧 `response_derivative_gauge.py` 和 `shift_current/core.py` 只保留兼容 re-export；旧 system topology wrappers 和 QGT/quantum-metric helper 仍在本地 archive 中。
+- 通用分析框架在 `src/analysis`：`optical_response/` 负责按 WannierBerri 约定整理的规范安全响应求导与 shift-current API；`topology/` 当前恢复了系统无关 FHS link/plaquette/Chern core、wavefunction-grid canonicalization helper，以及小型 system-facing adapter。旧 `response_derivative_gauge.py` 和 `shift_current/core.py` 只保留兼容 re-export；具体 system topology wrappers 和 QGT/quantum-metric helper 仍在本地 archive 中。
 - 旧的 `src/analysis/shift_current_htg` / `src/analysis/shift_current_tbg` 工作区已清理。体系相关适配应放在 `src/mean_field/systems/<system>`，历史复现/audit 文档留在 ignored local reports/internal workspace，不要把图像复现状态当成通用公式已经验证完成。
 - 不同物理体系应在 `src/mean_field/systems/<system>` 中接入通用 HF 框架和通用分析框架。体系目录负责 Hamiltonian、基底/规范、参数、sewing、投影窗口、历史 API 适配；不要在体系目录重复实现通用 SCF loop、FHS plaquette 或 WannierBerri generalized-derivative 公式。
 
@@ -22,7 +22,7 @@
 ## 通用框架边界
 
 - 修改 `src/mean_field/core/hf` 前先读 `docs/architecture.md`，并确认变更不引入体系依赖。
-- `src/analysis/topology` 只维护最小 FHS topology core 和 wavefunction-grid canonicalization helper；如需 system wrapper、QGT/quantum metric、projected-HF micro-wavefunction reconstruction 或 paper-specific topology workflow，先从 `local_archive/retired_surface/topology_untracked_20260622/` 审查并设计小型 public API，不要直接恢复旧 wrapper。
+- `src/analysis/topology` 只维护最小 FHS topology core、wavefunction-grid canonicalization helper 和小型 system-facing adapter；如需具体 system wrapper、QGT/quantum metric、projected-HF micro-wavefunction reconstruction 或 paper-specific topology workflow，先从 `local_archive/retired_surface/topology_untracked_20260622/` 审查并设计小型 public API，不要直接恢复旧 wrapper。
 - 修改响应求导、shift vector、Berry connection generalized derivative 前先读 `src/analysis/RESPONSE_DERIVATIVE_GAUGE.md`。不要对原始本征矢相位或 `np.angle(A_mn)` 做裸差分；使用 WannierBerri-style covariant/generalized derivative 或 Wilson-link 检查。
 - 新体系应先实现 `src/mean_field/systems/<system>` 的物理层和适配层，再接入 `core/hf` 和 `analysis/optical_response`。只有通用能力不足时才修改通用框架。
 - 不要为每次诊断、每张 paper panel 或每组参数新增一个 tracked 脚本。当前 public surface 不再跟踪 `src/mean_field/cli.py` 或 `src/mean_field/devtools/`；如需恢复命令面，优先通过小型、经审查的 `scripts/mean_field_tools.py` / `scripts/mean_field_tools.jl` / `scripts/submit_mean_field.sbatch` 入口，详细规则见 `docs/script_surface_policy.md`。

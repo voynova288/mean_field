@@ -26,6 +26,12 @@ from .core import (
     split_state_indices_by_direct_gaps,
     wavefunction_index_for_state_group,
 )
+from .system import (
+    TopologyResult,
+    compute_system_topology_from_eigenvectors,
+    compute_system_topology_from_grid_result,
+    topology_result_from_lattice_result,
+)
 from .wavefunction import (
     CanonicalWavefunctionGrid,
     WavefunctionLayout,
@@ -41,6 +47,7 @@ __all__ = [
     "LinkMethod",
     "LinkVariables",
     "SewingTransform",
+    "TopologyResult",
     "WavefunctionIndex",
     "WavefunctionLayout",
     "adjacent_direct_gap_reports",
@@ -48,6 +55,8 @@ __all__ = [
     "chern_number_from_berry_curvature",
     "compute_lattice_topology",
     "compute_lattice_topology_for_state_groups",
+    "compute_system_topology_from_eigenvectors",
+    "compute_system_topology_from_grid_result",
     "compute_link_variables",
     "canonicalize_wavefunction_grid",
     "default_k_grid_frac",
@@ -57,6 +66,7 @@ __all__ = [
     "reshape_flat_mesh_to_grid",
     "select_wavefunction_subspace",
     "split_state_indices_by_direct_gaps",
+    "topology_result_from_lattice_result",
     "wavefunction_index_for_state_group",
     "wavefunction_index_from_state_labels",
 ]
