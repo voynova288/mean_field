@@ -54,7 +54,7 @@ Heavy self-consistent HF calculations, topology-grid eigensolver recomputations,
 
 The desired public script surface is intentionally small.  Prefer existing dispatchers over adding new standalone scripts; see `docs/script_surface_policy.md`.
 
-- `scripts/mean_field_tools.py`: Python command dispatcher for stable benchmark and reproduction tools.
+- `scripts/mean_field_tools.py`: minimal Python dispatcher placeholder; durable commands should be reintroduced only after review.
 - `scripts/mean_field_tools.jl`: Julia helper dispatcher for benchmark-reference exports.
 - `scripts/submit_mean_field.sbatch`: generic Slurm wrapper for numerical jobs.
 
@@ -62,8 +62,7 @@ Examples:
 
 ```bash
 python scripts/mean_field_tools.py help
-python scripts/mean_field_tools.py hf --help
-sbatch scripts/submit_mean_field.sbatch python scripts/mean_field_tools.py hf --help
+sbatch scripts/submit_mean_field.sbatch python -m compileall -q src scripts
 ```
 
 ## Repository Layout
@@ -80,6 +79,6 @@ The following local directories are ignored by design:
 - `reference/`
 - `reports/`
 - `plan/`
-- `tests/local/`, `tests/internal/`, `tests/slow/`, generated test data, and generated arrays under `tests/`; public contract tests under bare `tests/` are source-controlled by default
+- `tests/local/`, `tests/internal/`, `tests/slow/`, generated test data, generated arrays, and broad local regression tests; only a small smoke/contract subset remains tracked under bare `tests/`
 - Python/Jupyter/cache artifacts
 - task-specific work documents and temporary handoff notes

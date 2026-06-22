@@ -1,14 +1,15 @@
 # Production validation backlog runbook
 
-This runbook is for the post-cleanup validation backlog.  It distinguishes software/API readiness from numerical or paper-level validation.  Non-TDHF/non-cRPA validation may proceed after local self-checks; TDHF and cRPA work still requires a separate explicit request.
+This runbook is for the post-cleanup validation backlog.  It distinguishes software/API readiness from numerical or paper-level validation.  cRPA is archived out of the tracked package surface for now; TDHF work still requires a separate explicit request.
 
 ## Common rules
 
 - Run heavy HF, topology, TDHF, response, or eigensolver workloads on a compute node or via Slurm, not on login nodes.
 - Keep runs self-describing: save config, exact command, git commit, environment variables, stdout/stderr, manifest, and summary JSON/MD.
 - A passing unit test is software validation only.  Paper-level validation requires saved artifacts and a quantitative comparison to the target panel/quantity.
-- TDHF and cRPA validation/code paths remain out of scope unless explicitly requested; do not modify `src/mean_field/crpa/*` or TDHF modules while advancing the other gates.
-- Non-TDHF/non-cRPA validation and cleanup gates may proceed after local self-checks of command, output path, and expected runtime.
+- TDHF validation/code paths remain out of scope unless explicitly requested.
+- cRPA validation is not part of the tracked package surface in this cleanup direction; archived code/docs/tests are under ignored `local_archive/retired_surface/crpa_untracked_20260622/`.
+- Non-TDHF validation and cleanup gates may proceed after local self-checks of command, output path, and expected runtime.
 
 Recommended lightweight gate before production jobs:
 
@@ -30,36 +31,13 @@ Status after the current cleanup:
 - HTG primitive/supercell: eligible only when full raw state/basis archives and exact model/interaction metadata satisfy the loader contract.
 - Summary-only archives remain blocked; do not fabricate micro-wavefunctions, model objects, or run history.
 
-Dry-run inventory example (roots are positional; no historical mutation):
+The backfill scanner/writer devtool is archived out of the tracked package surface for now:
 
-```bash
-python -m mean_field.devtools.backfill_canonical_hf_sidecars \
-  results \
-  --report-json tmp/backfill_inventory.json \
-  --report-md tmp/backfill_inventory.md
+```text
+local_archive/retired_surface/devtools_untracked_20260622/devtools/canonical_hf_backfill/
 ```
 
-Fast metadata-only dry-run when you do not want NPZ archive scanning:
-
-```bash
-python -m mean_field.devtools.backfill_canonical_hf_sidecars \
-  results \
-  --no-archives \
-  --report-json tmp/backfill_inventory_no_archives.json \
-  --report-md tmp/backfill_inventory_no_archives.md
-```
-
-Staged write example (no historical mutation):
-
-```bash
-python -m mean_field.devtools.backfill_canonical_hf_sidecars \
-  results \
-  --write \
-  --target-root tmp/staged_canonical_backfill \
-  --allow-target-root tmp \
-  --report-json tmp/backfill_write_inventory.json \
-  --report-md tmp/backfill_write_inventory.md
-```
+Historical application remains a manual/explicitly authorized operation; do not reintroduce the devtool or mutate `results/` without a separate review of target roots, overwrite policy, and TDHF-boundary implications.
 
 Current staged sidecars note:
 
@@ -162,15 +140,14 @@ Preconditions:
 Software gate:
 
 ```bash
-pytest -q tests/test_htg_supercell.py tests/test_htg_supercell_contract_adapter.py
+pytest -q tests/test_htg_supercell.py tests/test_api_hf_adapters.py -k htg
 ```
 
 Latest software-gate result on `test001`:
 
 ```text
-commit: 9d045c5
-command: pytest -q tests/test_htg_supercell.py tests/test_htg_supercell_contract_adapter.py
-result: 10 passed
+archived historical gate: pytest -q tests/test_htg_supercell.py tests/test_htg_supercell_contract_adapter.py
+current tracked gate: pytest -q tests/test_htg_supercell.py tests/test_api_hf_adapters.py -k htg
 ```
 
 Additional public-HF gate:
@@ -213,7 +190,8 @@ Goal: validate finite-q intraflavor/shortcut TDHF assembly and lowest-branch sta
 Software gates:
 
 ```bash
-pytest -q tests/test_rlg_hbn_tdhf_adapter.py tests/test_rlg_hbn_hf_contract_adapter.py tests/test_api_imports.py
+# TDHF detailed tests are archived locally with the broad test suite.
+pytest -q tests/test_api_imports.py
 ```
 
 Production prerequisites:

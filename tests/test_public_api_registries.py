@@ -3,25 +3,15 @@ from __future__ import annotations
 import pytest
 
 from mean_field.api import (
-    CRPAConfig,
     TDHFConfig,
-    compute_crpa,
-    get_crpa_adapter_info,
     get_model_adapter_info,
     get_tdhf_adapter_info,
-    list_crpa_adapters,
     list_model_adapters,
     list_tdhf_adapters,
-    resolve_crpa_adapter,
     resolve_model_adapter,
     resolve_tdhf_adapter,
     run_tdhf,
 )
-
-
-class _DummyCRPA:
-    def compute_crpa(self, config: CRPAConfig, **kwargs: object) -> tuple[CRPAConfig, dict[str, object]]:
-        return config, dict(kwargs)
 
 
 class _DummyTDHF:
@@ -35,23 +25,6 @@ def test_model_registry_preserves_public_aliases() -> None:
     assert get_model_adapter_info("helical-trilayer-graphene").name == "htg"
     assert get_model_adapter_info("rng-hbn").name == "rlg_hbn"
     assert callable(resolve_model_adapter("twisted_bilayer_graphene"))
-
-
-def test_crpa_registry_exposes_tbg_workflow_adapter() -> None:
-    names = [item.name for item in list_crpa_adapters()]
-    assert "tbg_workflow" in names
-    info = get_crpa_adapter_info("tbg_workflow")
-    assert info.system_name == "tbg"
-    assert callable(resolve_crpa_adapter("tbg_workflow"))
-
-
-def test_crpa_facade_preserves_object_hook_and_requires_explicit_adapter() -> None:
-    cfg = CRPAConfig(q_mesh=3)
-    assert compute_crpa(_DummyCRPA(), cfg, marker="ok") == (cfg, {"marker": "ok"})
-    with pytest.raises(NotImplementedError, match="adapter='tbg_workflow'"):
-        compute_crpa(object(), cfg)
-    with pytest.raises(ValueError, match="params and theta_deg"):
-        compute_crpa(object(), cfg, adapter="tbg_workflow")
 
 
 def test_tdhf_registry_exposes_rlg_hbn_adapters() -> None:

@@ -14,9 +14,7 @@ The Julia codebase is optimized around script-driven workflows and shared mutabl
 
 ```text
 src/mean_field/
-  cli.py
   paths.py
-  benchmarks.py
   core/
     lattice.py
     hf/
@@ -31,10 +29,8 @@ src/mean_field/
         model.py
         overlap.py
         hf.py
-        hf_runners.py
+        hf_contracts.py
         path.py
-        plotting.py
-        runners.py
 ```
 
 ## Layering rules
@@ -44,9 +40,8 @@ src/mean_field/
 - `core/hf/problem.py` owns the reusable HF problem-definition surface: state initialization, interaction builders, projected-density solvers, and run composition.
 - `systems/tbg/` contains TBG-specific physics.
 - `systems/tbg/zero_field/hf.py` owns TBG zero-field state, initialization policy, and Hartree/Fock construction, but should consume reusable helpers from `core/hf/` instead of redefining them.
-- `systems/tbg/zero_field/{hf_runners,path,plotting,runners}.py` is the B0 workflow layer: path reconstruction, artifact export, plotting, and benchmark orchestration.
-- `benchmarks.py` knows how to load benchmark metadata, not how to solve physics.
-- CLI commands call high-level runners, not low-level kernels directly.
+- TBG zero-field benchmark orchestration, artifact export, plotting, and runner helpers are archived out of the tracked public surface. Tracked zero-field TBG keeps the core BM model, overlaps, HF kernels, path helpers, and HF contract adapters.
+- Benchmark metadata loaders and package CLI glue are archived out of the tracked public surface for now.
 
 ## Retirement archive policy
 
@@ -118,15 +113,15 @@ The zero-field TBG port now has three explicit layers instead of one large `hf.p
 - `systems/tbg/finite_field/spectrum.py`: the finite-magnetic-field BM/LL spectrum adapter ported from the author `bmLL*.jl` modules for arXiv:2310.15982v3. It keeps author finite-B parameter conventions, LL translation matrix elements, magnetic-BZ Hamiltonian construction, central `2q` Hofstadter subbands, projected `PΣz`, and optional `Λ_(m,n)` overlaps in the TBG system layer.
 - `core/hf/finite_field.py`: the reusable finite-magnetic-field HF framework. It owns finite-B HF state/input bundles, stored-projector initialization and density updates, screened Coulomb kernels, full magnetic-BZ and magnetic-translation-reduced interaction contractions, SCF problem/run helpers, and summaries. It is system-agnostic: systems provide projected Hofstadter spectra, overlap blocks, k-vectors, normalization counts, and physical parameters.
 - `systems/tbg/finite_field/hf.py`: a thin TBG adapter. It computes/validates TBG K/K′ `MagneticSpectrumResult` objects, expands TBG valley overlaps into the generic spin/valley HF basis, supplies TBG magnetic k-vectors/normalization, and exposes paper/Fig.6 convenience APIs. It must not own the finite-B HF calculation itself; new finite-B HF capabilities should be added to `core/hf/finite_field.py` and then connected here.
-- `systems/tbg/zero_field/runners.py` and `hf_runners.py`: benchmark-facing orchestration and path-band diagnostics.
+- Archived local reference: `local_archive/retired_surface/benchmark_workflow_untracked_20260622/` contains the former benchmark-facing orchestration, path-band diagnostics, plotting, CLI, and workflow helpers.
 
-This is the intended direction for future systems. A new graphene stacking should first try to reuse `core/hf/`, then add its own `systems/<name>/...` physics layer, and only after that add benchmark or CLI workflows.
+This is the intended direction for future systems. A new graphene stacking should first try to reuse `core/hf/`, then add its own `systems/<name>/...` physics layer. Benchmark or CLI workflows should stay local/ignored unless they become reviewed durable public commands.
 
 ## Script and devtool surface
 
-The command surface should stay small.  Use `scripts/mean_field_tools.py`, `scripts/mean_field_tools.jl`, `scripts/submit_mean_field.sbatch`, and package CLI subcommands as the durable entrypoints.  `src/mean_field/devtools` should provide reusable implementation modules behind those entrypoints, not a growing collection of one-off runners.
+The command surface should stay small. Use `scripts/mean_field_tools.py`, `scripts/mean_field_tools.jl`, and `scripts/submit_mean_field.sbatch` as the durable entrypoint placeholders. Package CLI/devtools are archived out of the minimal public surface for now.
 
-Before adding a new tracked script or devtool, try to extend an existing command with an option, subcommand, or config input.  Per-run `.sbatch` files, timestamped launchers, narrow plotting scripts, and temporary parameter sweeps should normally stay in ignored scratch space.  See `script_surface_policy.md` for the detailed policy and cleanup target.
+Before adding a new tracked script or reintroducing devtools, check whether the workflow can remain in ignored local scratch/archive space. Per-run `.sbatch` files, timestamped launchers, narrow plotting scripts, and temporary parameter sweeps should normally stay ignored. See `script_surface_policy.md` for the detailed policy and cleanup target.
 
 ## Performance strategy
 

@@ -11,7 +11,6 @@ from .artifacts import (
     write_contract_artifacts,
 )
 from .bands import BandBundle, KGrid, KPath, band_bundle_from_result, compute_bands
-from .crpa import CRPAAdapterInfo, CRPAConfig, compute_crpa, get_crpa_adapter_info, list_crpa_adapters, resolve_crpa_adapter
 from .hf import HFConfig, HFResult, HFState, WavefunctionBundle, reconstruct_canonical_hf_run_result, run_hf
 from .models import (
     BandEigenResult,
@@ -32,8 +31,6 @@ __all__ = [
     "ArtifactManifest",
     "BandBundle",
     "BandEigenResult",
-    "CRPAAdapterInfo",
-    "CRPAConfig",
     "ContinuumModel",
     "ConventionBundle",
     "HFConfig",
@@ -49,21 +46,17 @@ __all__ = [
     "WavefunctionBundle",
     "band_bundle_from_result",
     "compute_bands",
-    "compute_crpa",
     "component_group_records",
     "component_groups",
-    "get_crpa_adapter_info",
     "get_model_adapter_info",
     "get_tdhf_adapter_info",
     "load_result",
-    "list_crpa_adapters",
     "list_model_adapters",
     "list_tdhf_adapters",
     "make_model",
     "model_record",
     "reconstruct_canonical_hf_run_result",
     "required_artifact_files",
-    "resolve_crpa_adapter",
     "resolve_model_adapter",
     "resolve_tdhf_adapter",
     "run_hf",

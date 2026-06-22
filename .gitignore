@@ -23,7 +23,7 @@ benchmarks/
 results/
 logs/
 reference/
-# Public tests are source-controlled. Ignore only local/generated test payloads.
+# Keep only a minimal tracked smoke/contract subset; broad tests stay local/internal.
 tests/local/
 tests/internal/
 tests/slow/

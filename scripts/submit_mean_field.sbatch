@@ -1,6 +1,6 @@
 #!/bin/bash
 # Usage:
-#   sbatch scripts/submit_mean_field.sbatch python scripts/mean_field_tools.py hf compare-case theta_120_nu_-1_ivc_ground --output-dir results/demo
+#   sbatch scripts/submit_mean_field.sbatch python -m compileall -q src scripts
 #   sbatch -p test -c 8 --mem=32G scripts/submit_mean_field.sbatch julia scripts/mean_field_tools.jl export_b0_parameter_reference_from_julia
 
 #SBATCH -J mean_field

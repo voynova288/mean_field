@@ -14,7 +14,7 @@ Applies to tracked repository entrypoints under `scripts/`.
 ## Local Guidance
 
 - Do not add a new standalone script, timestamped launcher, or one-off `.sbatch` file by default.
-- Prefer extending `mean_field_tools.py`, `mean_field_tools.jl`, `../src/mean_field/cli.py`, or an existing devtool module.
+- Prefer extending `mean_field_tools.py` or `mean_field_tools.jl` only after review; `../src/mean_field/cli.py` and `../src/mean_field/devtools/` are not tracked in the minimal public surface.
 - Use `submit_mean_field.sbatch` for Slurm execution instead of creating a custom wrapper for each parameter set.
 - Put scratch launchers and temporary sweeps in ignored locations such as `../tmp/` or `local/`, not in the tracked script surface.
 

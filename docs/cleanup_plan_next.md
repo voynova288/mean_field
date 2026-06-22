@@ -5,9 +5,9 @@ This plan tracks the next cleanup pass after the large-file/facade split work th
 ## Hard constraints
 
 - Preserve system-specific physics. In particular, keep RnG/hBN layer-dependent Coulomb, layer-dependent form factors, q=0 internal screening, and average/CN schemes in system code.
-- Preserve cRPA/HF conventions: `D = P - 1/2 I`, `Delta_HI` uses bare Coulomb, dynamic flat-band self-energy uses cRPA, and ODA delta-H on `delta_D` must not add `+1/2 I`.
-- Do not modify TDHF or cRPA code/validation flows without a separate explicit instruction; these remain out of scope for the current cleanup/validation continuation.
-- Do not run heavy HF/topology/response numerics on login nodes. Use a compute node or Slurm after checking command/output paths and excluding TDHF/cRPA work.
+- cRPA is no longer part of the tracked package surface for the current cleanup direction; archived cRPA code remains in ignored `local_archive/retired_surface/crpa_untracked_20260622/`.
+- Do not modify TDHF code/validation flows without a separate explicit instruction.
+- Do not run heavy HF/topology/response numerics on login nodes. Use a compute node or Slurm after checking command/output paths.
 - Do not mutate historical `results/` without explicit approval. Canonical backfill staging remains under allowlisted `/data/home/ziyuzhu/tmp` unless separately approved.
 - Keep package code/tests/scripts/docs independent of ignored `local_archive/`.
 
@@ -16,14 +16,14 @@ This plan tracks the next cleanup pass after the large-file/facade split work th
 - Phase 0 git hygiene: completed in `ddebb13`.
 - Phase 1 common order-parameter module: completed in `ddebb13`.
 - Phase 2 optical-response package boundary/facade: completed in `9b374cc`; implementation moved into `analysis.optical_response`; shift-current and gauge derivative implementations split into package-local modules in the current continuation.
-- Phase 3 cRPA/HF bridge split: completed in `ef8ba6f`.
+- Phase 3 cRPA/HF bridge split: completed in `ef8ba6f`, then cRPA was archived/untracked from git in the current simplification pass because it is not a near-term development target.
 - Phase 4 public API registries and workflow extraction: completed across `e6eab50`, `a00803f`, `9b8202a`, and `faa706e`.
-- Devtools cleanup follow-up: RLG/hBN retired sidecar/archive helpers moved to `src/mean_field/workflows/rlg_hbn.py`; retired command files deleted; canonical HF backfill scanner split into smaller modules.
+- Devtools cleanup follow-up: RLG/hBN retired sidecar/archive helpers moved out of command files; canonical HF backfill scanner was split and later archived/untracked with the rest of `src/mean_field/devtools` because devtools are no longer part of the minimal public git surface.
 
 ## Phase 0 — git surface hygiene
 
-1. Stop ignoring the entire `tests/` tree. Public contract tests must be tracked by default.
-2. Ignore only local/generated test payloads:
+1. Keep only minimal smoke/contract tests tracked. Most detailed regression tests are local/internal artifacts and should live in ignored archive/workspaces unless explicitly requested for public git.
+2. Ignore local/generated/internal test payloads:
    - `tests/local/`
    - `tests/internal/`
    - `tests/slow/`
@@ -46,7 +46,7 @@ Add `src/analysis/order_parameters/` with reusable schema and density/coherence/
 
 Acceptance:
 
-- old/new outputs match existing tests and new `tests/test_order_parameters.py` equivalence checks;
+- old/new outputs matched the archived local `tests/test_order_parameters.py` equivalence checks before the broad test suite was untracked;
 - system modules keep only label/adaptation wrappers;
 - no formulas or thresholds are changed except through explicitly tested delegation.
 
@@ -61,32 +61,31 @@ Keep old paths as compatibility shims/re-exports. Keep system adapters thin: the
 
 Acceptance:
 
-- current response/shift-current tests keep passing;
-- new smoke tests cover the new package import path and one TDBG one-k call;
+- response/shift-current behavior was covered by the archived local regression tests before broad tests were untracked;
+- tracked smoke tests keep the public import/API surface alive;
 - retired hTG/TBG paper workspaces remain retired.
 
-## Phase 3 — cRPA/HF bridge split
+## Phase 3 — cRPA archive/untrack
 
-Split `src/mean_field/crpa/hf_interface.py` into:
+Earlier cRPA/HF bridge cleanup split the implementation behind a facade. The current simplification pass retires cRPA from public git because it is not a near-term development target.
 
-- `src/mean_field/crpa/hf_bridge/density.py`
-- `src/mean_field/crpa/hf_bridge/split_scheme.py`
-- `src/mean_field/crpa/hf_bridge/kernels.py`
-- `src/mean_field/crpa/hf_bridge/energy.py`
-- `src/mean_field/crpa/hf_bridge/runner.py`
+Archived local copy:
 
-Keep `crpa/hf_interface.py` as a compatibility re-export facade, target `<180` lines.
+```text
+local_archive/retired_surface/crpa_untracked_20260622/
+```
 
-Acceptance:
+Tracked package policy:
 
-- no algorithmic cRPA change;
-- bare split identity test error `<1e-10`;
-- density and split-scheme conventions explicitly tested.
+- no `src/mean_field/crpa/` package;
+- no `mean_field.api.compute_crpa` facade;
+- no cRPA devtool commands in `scripts/mean_field_tools.py`;
+- no tracked `src/mean_field/devtools/` package in the minimal public surface;
+- cRPA tests/docs remain archived locally, not tracked.
 
 ## Phase 4 — public API registries and workflow extraction
 
-- Replace `api/crpa.py` NotImplemented facade with a registry-based entry to the TBG cRPA workflow.
-- Add TDHF adapter registry in `api/tdhf.py`, initially for RnG/hBN q=0 and finite-q safe adapters.
+- TDHF adapter registry remains in `api/tdhf.py`, initially for RnG/hBN q=0 and finite-q safe adapters.
 - Convert `api/models.py` to a model adapter registry to reduce hard-coded imports.
 - Move TDBG projected-HF config parsing/save workflow out of `cli.py` into `workflows/tdbg_projected_hf.py`.
 
@@ -99,4 +98,4 @@ Acceptance:
 ## Lower priority
 
 - Bands/topology wrappers are already thin enough; do not spend the next pass there unless a concrete duplicate blocks the above phases.
-- Devtools cleanup: RLG/hBN retired runner helper extraction and canonical backfill scanner split are complete. Remaining future work should be driven by concrete API/validation needs rather than file-size cleanup alone.
+- Devtools cleanup: tracked devtools are archived locally for now; future durable commands should be reintroduced only through a small reviewed public surface.

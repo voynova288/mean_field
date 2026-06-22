@@ -1770,3 +1770,92 @@ PYTHONPATH=src python -m compileall -q src scripts
 PYTHONPATH=src pytest -q $(git ls-files tests)
 # 215 passed
 ```
+
+## Update: archive cRPA, broad tests, devtools, and benchmark workflow surface
+
+Commit in this continuation:
+
+- pending: archive current non-near-term maintenance surfaces out of tracked git
+
+### Scope archived to ignored local surface
+
+The user explicitly authorized making cRPA and most tests non-tracked for the current cleanup direction. The following tracked surfaces were copied to ignored local archives before `git rm`:
+
+```text
+local_archive/retired_surface/crpa_untracked_20260622/
+local_archive/retired_surface/tests_untracked_20260622/
+local_archive/retired_surface/devtools_untracked_20260622/
+local_archive/retired_surface/benchmark_workflow_untracked_20260622/
+```
+
+Removed from tracked package/API surface:
+
+- `src/mean_field/crpa/`
+- `src/mean_field/api/crpa.py`
+- `docs/api/crpa_api.md`
+- cRPA chunk/merge devtools
+- `src/mean_field/devtools/`
+- package CLI/workflow/benchmark runner glue:
+  - `src/mean_field/cli.py`
+  - `src/mean_field/benchmarks.py`
+  - `src/mean_field/workflows/`
+- TBG zero-field benchmark runner/artifact/plotting command surface:
+  - `src/mean_field/systems/tbg/zero_field/runners.py`
+  - `src/mean_field/systems/tbg/zero_field/hf_runners.py`
+  - `src/mean_field/systems/tbg/zero_field/artifacts.py`
+  - `src/mean_field/systems/tbg/zero_field/plotting.py`
+  - `src/mean_field/systems/tbg/zero_field/path_advisor.py`
+  - split `_runners_*` helper modules
+- broad local regression tests, keeping only a minimal tracked smoke/contract set.
+
+The remaining tracked tests are:
+
+```text
+tests/test_api_hf_adapters.py
+tests/test_api_imports.py
+tests/test_core_contracts.py
+tests/test_core_hf_layering.py
+tests/test_htg_supercell.py
+tests/test_htqg_model.py
+tests/test_public_api_registries.py
+tests/test_tmbg_polshyn_hf_readiness.py
+```
+
+### Public surface adjustments
+
+- `mean_field.api` no longer exports cRPA facade symbols.
+- `mean_field.crpa`, `mean_field.devtools`, `mean_field.workflows`, `mean_field.cli`, and `mean_field.benchmarks` are absent from the tracked package surface.
+- `scripts/mean_field_tools.py` is a placeholder dispatcher with no Python commands registered.
+- `scripts/mean_field_tools.jl` and `scripts/submit_mean_field.sbatch` remain tracked.
+- `src/mean_field/systems/tbg/zero_field/__init__.py` now exports only core model/HF/path/overlap/adapter helpers rather than benchmark runner/artifact/plotting helpers.
+
+### Current summary after this continuation
+
+- Tracked text lines: 48641
+- Tracked Python lines: 43922
+- Tracked Julia lines: 826
+- `src` Python files: 214
+- `src` Python lines: 42380
+- `tests` Python lines: 1481
+- `src/mean_field/systems` Python lines: 27694
+- Files over 1000 lines: 0
+
+Validation:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 55 passed
+```
+
+Import boundary smoke:
+
+```text
+mean_field imports successfully
+mean_field.api has no compute_crpa export
+mean_field.crpa absent as expected
+mean_field.devtools absent as expected
+mean_field.workflows absent as expected
+mean_field.cli absent as expected
+mean_field.benchmarks absent as expected
+```
