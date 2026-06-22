@@ -2246,3 +2246,62 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 - `tests` Python lines: 1660
 - `src/mean_field/systems` Python lines: 26070
 - Files over 1000 lines: 0
+
+## Update: restore thin TMBG topology wrapper
+
+Commit in this continuation:
+
+- pending: restore thin TMBG topology wrapper
+
+### Scope restored
+
+Restored the first concrete system topology wrapper as a thin delegation layer:
+
+```text
+src/mean_field/systems/tmbg/topology.py
+```
+
+The wrapper exposes `compute_topology_from_eigenvectors`, `compute_topology_from_grid_result`, and `compute_topology_on_grid`. It contains no FHS/link/plaquette implementation and delegates all topology math to `analysis.topology`; the on-grid helper only builds one explicit eigenvector grid through the existing TMBG band API.
+
+Still not restored:
+
+- TDBG/ATMG/RLG-hBN concrete topology wrappers
+- `model.topology_on_grid(...)` package-root convenience exports
+- retrying grid-builder workflows
+- projected-HF microscopic wavefunction reconstruction helpers
+- paper-level topology workflows or Slurm jobs
+
+### Validation
+
+Added:
+
+```text
+tests/test_tmbg_topology.py
+```
+
+The tests use QWZ/fake-grid inputs and monkeypatching to prove metadata/delegation behavior without running TMBG production physics.
+
+Validation on `test001`:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 66 passed
+
+python import-boundary smoke
+# topology wrapper boundary ok
+
+python -m pip install -e . --dry-run --no-deps --no-build-isolation
+# Would install mean-field-0.1.0
+```
+
+### Current summary after this continuation
+
+- Tracked text lines: 46979
+- Tracked Python lines: 41993
+- Tracked Julia lines: 826
+- `src` Python files: 198
+- `src` Python lines: 39914
+- `tests` Python lines: 1813
+- `src/mean_field/systems` Python lines: 26161
+- Files over 1000 lines: 0

@@ -56,7 +56,7 @@ The tracked topology surface is intentionally small:
 src/analysis/topology/
 ```
 
-It exposes only system-independent Fukui-Hatsugai-Suzuki link variables, plaquette fluxes, Chern-number integration, direct-gap grouping helpers, wavefunction-grid canonicalization helpers, a small system-facing adapter for already-built eigenvector grids, projector QGT/quantum-metric helpers, and metadata records for selected wavefunction columns. Concrete system topology wrappers, projected-HF reconstruction helpers, paper-workflow adapters, and plotting/report code remain archived here until they are reviewed separately:
+It exposes system-independent Fukui-Hatsugai-Suzuki link variables, plaquette fluxes, Chern-number integration, direct-gap grouping helpers, wavefunction-grid canonicalization helpers, a small system-facing adapter for already-built eigenvector grids, projector QGT/quantum-metric helpers, and metadata records for selected wavefunction columns. The only restored concrete wrapper is the thin TMBG adapter in `src/mean_field/systems/tmbg/topology.py`; other concrete system topology wrappers, projected-HF reconstruction helpers, paper-workflow adapters, and plotting/report code remain archived here until they are reviewed separately:
 
 ```text
 local_archive/retired_surface/topology_untracked_20260622/
