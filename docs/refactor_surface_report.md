@@ -2033,3 +2033,56 @@ PYTHONPATH=src python -m compileall -q src scripts
 PYTHONPATH=src pytest -q $(git ls-files tests)
 # 53 passed
 ```
+
+## Update: reintroduce minimal common topology FHS core
+
+Commit in this continuation:
+
+- pending: reintroduce minimal topology FHS core
+
+### Scope restored
+
+Topology scope was explicitly reopened by the user. Restored only a small, system-independent common API:
+
+```text
+src/analysis/topology/__init__.py
+src/analysis/topology/core.py
+```
+
+The restored surface provides Fukui-Hatsugai-Suzuki link variables, plaquette Berry flux, Chern integration, state/subspace selection, direct-gap grouping, optional boundary sewing transforms, and metadata records for selected wavefunction columns.
+
+Still archived / not restored:
+
+- system topology wrappers under `src/mean_field/systems/*/topology.py`
+- `analysis.topology.quantum_geometry` QGT/quantum-metric helpers
+- topology workflow/report/plotting adapters
+- paper-level topology validation jobs
+
+### Validation
+
+A small QWZ two-band smoke test was added:
+
+```text
+tests/test_analysis_topology.py
+```
+
+It verifies lower/upper band Chern numbers in topological and trivial mass regions, total two-band subspace Chern cancellation, and direct-gap grouping.
+
+Validation on `test001`:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 56 passed
+```
+
+### Current summary after this continuation
+
+- Tracked text lines: 44916
+- Tracked Python lines: 40076
+- Tracked Julia lines: 826
+- `src` Python files: 194
+- `src` Python lines: 38493
+- `tests` Python lines: 1522
+- `src/mean_field/systems` Python lines: 26070
+- Files over 1000 lines: 0

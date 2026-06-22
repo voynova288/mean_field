@@ -50,13 +50,19 @@ After archival, keep only thin tracked adapters that connect system-owned Hamilt
 
 ## Topology / Berry-geometry status
 
-The previous unified topology/Berry-geometry helper package and system wrappers are archived out of the tracked public surface for now:
+The tracked topology surface is intentionally small:
+
+```text
+src/analysis/topology/
+```
+
+It exposes only system-independent Fukui-Hatsugai-Suzuki link variables, plaquette fluxes, Chern-number integration, direct-gap grouping helpers, and metadata records for selected wavefunction columns. System-specific topology wrappers, quantum-metric/QGT helpers, paper-workflow adapters, and plotting/report code remain archived here until they are reviewed separately:
 
 ```text
 local_archive/retired_surface/topology_untracked_20260622/
 ```
 
-If topology becomes a near-term target again, reintroduce a small reviewed common API rather than restoring all historical wrappers. Do not duplicate `_unit_link`, `_subspace_link`, determinant-link, or plaquette loops in system modules without first deciding the maintained public topology boundary.
+Do not duplicate `_unit_link`, `_subspace_link`, determinant-link, or plaquette loops in system modules; extend the common FHS core or design a reviewed system adapter boundary first. Do not claim paper-level topology validation from the QWZ software smoke test alone.
 
 ## Plotting status
 
