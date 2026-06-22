@@ -1726,3 +1726,47 @@ This is software/API readiness evidence only, not a converged fractional-filling
 ### Artifact payload documentation
 
 Updated `docs/api/artifact_api.md` to document the `HFResult.save(...)` canonical payload modes: `canonical_payload="metadata_only"` is the default and writes only `canonical_hf_run_result.json`, while dense canonical arrays require explicit `canonical_payload="arrays"`.
+
+## Update: untrack unused HTQG system helpers
+
+Commit in this continuation:
+
+- pending: remove unused HTQG helper modules from tracked package surface
+
+### Current summary after this continuation
+
+- Tracked text lines: 66333
+- Tracked Python lines: 61576
+- Tracked Julia lines: 826
+- `src` Python files: 272
+- `src` Python lines: 54765
+- `src/mean_field/systems` Python lines: 30582
+- Files over 1000 lines: 0
+
+### Systems surface cleanup
+
+Removed three HTQG helper modules from the tracked package surface after AST/import audit showed they were not public package dependencies:
+
+- `src/mean_field/systems/htqg/chiral.py`
+- `src/mean_field/systems/htqg/symmetry.py`
+- `src/mean_field/systems/htqg/validation.py`
+
+The removed files were copied to ignored local archive before `git rm`:
+
+```text
+local_archive/retired_surface/htqg_unused_helpers_20260622/
+```
+
+`tests/test_htqg_model.py` now keeps the small Hamiltonian/time-reversal smoke inline instead of importing a package-level validation helper. This preserves public HTQG model coverage without keeping test-only validation code in `systems/`.
+
+Validation:
+
+```bash
+PYTHONPATH=src python -m compileall -q src/mean_field/systems/htqg tests/test_htqg_model.py tests/test_api_hf_adapters.py
+PYTHONPATH=src pytest -q tests/test_htqg_model.py tests/test_api_hf_adapters.py -k "htqg or model_registry"
+# 5 passed, 15 deselected
+
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 215 passed
+```

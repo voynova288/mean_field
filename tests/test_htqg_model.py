@@ -15,8 +15,6 @@ from mean_field.systems.htqg import (
     domain_displacements,
     fujimoto_2025_fig2_checkpoint,
 )
-from mean_field.systems.htqg.validation import run_lightweight_validation
-
 
 def _light_params() -> HTQGParams:
     return HTQGParams.default(kappa=0.6, lambda_mdt_nm=0.0, include_dirac_rotation=False)
@@ -72,8 +70,10 @@ def test_htqg_domain_aliases_and_static_hamiltonian_contract() -> None:
         assert eigenvectors is not None
         assert eigenvectors.shape == hamiltonian.shape
 
-    report = run_lightweight_validation(lattice, params, domain="alpha_beta_alpha")
-    assert report.failure_count == 0
+    h_plus = build_hamiltonian(0.0 + 0.0j, lattice, params, domain="alpha_beta_alpha", valley=1)
+    h_minus = build_hamiltonian(0.0 + 0.0j, lattice, params, domain="alpha_beta_alpha", valley=-1)
+    tr_residual = float(np.max(np.abs(np.linalg.eigvalsh(h_plus) - np.linalg.eigvalsh(h_minus))))
+    assert tr_residual <= 1.0e-8
 
 
 def test_htqg_model_band_helpers_return_central_band_shapes() -> None:
