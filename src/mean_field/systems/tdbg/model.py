@@ -9,7 +9,6 @@ from .bands import GridBandsResult, PathBandsResult, compute_bands_along_path, c
 from .hamiltonian import build_hamiltonian, diagonalize_hamiltonian
 from .lattice import TDBGLattice, build_kpath_from_nodes, build_standard_kpath, build_tdbg_lattice
 from .params import TDBGParameters
-from .topology import TopologyResult, compute_topology_on_grid
 
 
 @dataclass(frozen=True)
@@ -240,26 +239,4 @@ class TDBGModel:
             return_eigenvectors=return_eigenvectors,
             endpoint=endpoint,
             frac_shift=frac_shift,
-        )
-
-    def topology_on_grid(
-        self,
-        mesh_size: int,
-        band_indices: int | tuple[int, ...],
-        *,
-        valley: int | None = None,
-        endpoint: bool = False,
-        n_bands: int | None = None,
-        boundary_sewing: bool = True,
-    ) -> TopologyResult:
-        resolved_valley = self.params.valley if valley is None else int(valley)
-        return compute_topology_on_grid(
-            mesh_size,
-            self.lattice,
-            self.params,
-            band_indices,
-            valley=resolved_valley,
-            endpoint=endpoint,
-            n_bands=n_bands,
-            boundary_sewing=boundary_sewing,
         )

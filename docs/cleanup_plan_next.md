@@ -97,5 +97,5 @@ Acceptance:
 
 ## Lower priority
 
-- Bands/topology wrappers are already thin enough; do not spend the next pass there unless a concrete duplicate blocks the above phases.
+- Bands wrappers remain; topology wrappers/common topology helpers are archived out of the tracked public surface for now.
 - Devtools cleanup: tracked devtools are archived locally for now; future durable commands should be reintroduced only through a small reviewed public surface.

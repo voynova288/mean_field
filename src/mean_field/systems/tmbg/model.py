@@ -10,7 +10,6 @@ from .bands import GridBandsResult, PathBandsResult, compute_bands_along_path, c
 from .hamiltonian import build_hamiltonian, diagonalize_hamiltonian
 from .lattice import TMBGLattice, build_kpath_from_nodes, build_standard_kpath, build_park_fig2_kpath, build_tmbg_lattice
 from .params import TMBGParameters
-from .topology import TopologyResult, compute_topology_on_grid
 
 
 @dataclass(frozen=True)
@@ -142,23 +141,4 @@ class TMBGModel:
             return_eigenvectors=return_eigenvectors,
             endpoint=endpoint,
             frac_shift=frac_shift,
-        )
-
-    def topology_on_grid(
-        self,
-        mesh_size: int,
-        band_indices: int | tuple[int, ...],
-        *,
-        valley: int = 1,
-        endpoint: bool = False,
-        n_bands: int | None = None,
-    ) -> TopologyResult:
-        return compute_topology_on_grid(
-            mesh_size,
-            self.lattice,
-            self.params,
-            band_indices,
-            valley=valley,
-            endpoint=endpoint,
-            n_bands=n_bands,
         )

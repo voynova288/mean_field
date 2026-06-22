@@ -1859,3 +1859,52 @@ mean_field.workflows absent as expected
 mean_field.cli absent as expected
 mean_field.benchmarks absent as expected
 ```
+
+## Update: archive topology/Berry helper surface to reach 4w src target
+
+Commit in this continuation:
+
+- pending: archive topology/Berry helper surface
+
+### Scope archived to ignored local surface
+
+The previous unified topology/Berry-geometry package and remaining system topology convenience wrappers were copied to ignored local archive before `git rm`:
+
+```text
+local_archive/retired_surface/topology_untracked_20260622/
+```
+
+Removed from tracked package/docs surface:
+
+- `src/analysis/topology/`
+- `docs/topology_framework.md`
+- system topology convenience wrappers:
+  - `src/mean_field/systems/RnG_hBN/topology.py`
+  - `src/mean_field/systems/atmg/topology.py`
+  - `src/mean_field/systems/tdbg/topology.py`
+  - `src/mean_field/systems/tmbg/topology.py`
+- `topology_on_grid(...)` model convenience methods and topology re-exports from system facades.
+
+Kept in tracked code:
+
+- RnG/hBN sewing helpers, with a local `SewingTransform` callable type alias instead of importing `analysis.topology`.
+- TDBG projected-HF `translation_srcmap(...)`, moved locally into `projected_hf_geometry.py` because projected-HF geometry still uses that q-site shift map independently of topology/Chern wrappers.
+
+### Current summary after this continuation
+
+- Tracked text lines: 46088
+- Tracked Python lines: 41476
+- Tracked Julia lines: 826
+- `src` Python files: 205
+- `src` Python lines: 39934
+- `tests` Python lines: 1481
+- `src/mean_field/systems` Python lines: 27434
+- Files over 1000 lines: 0
+
+Validation:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 55 passed
+```

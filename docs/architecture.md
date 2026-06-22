@@ -47,24 +47,17 @@ src/mean_field/
 
 Cleanup may retire system-specific implementation surfaces even when they could be useful as debugging references later. Before deleting or replacing substantial system-specific HF, topology, bands, band-plot, or Berry-curvature plotting code, copy the old tracked file or code slice into an ignored local archive such as `local_archive/retired_surface/<date-or-commit>/...`. The archive is intentionally not pushed to git and must not be imported by package code, tests, scripts, or docs examples. It is a recovery/reference stash only; the package surface and LOC metrics count only files tracked by git.
 
-After archival, keep only thin tracked adapters that connect system-owned Hamiltonian/basis/gauge/window choices to generic APIs such as `mean_field.api`, `mean_field.core.hf`, `mean_field.core.bands`, `mean_field.core.plotting`, and `analysis.topology`. Do not keep paper-panel plot writers, duplicated Berry/Chern loops, or system-local SCF/problem loops in tracked code merely as a backup; use the local archive or git history if a retired implementation must be consulted later.
+After archival, keep only thin tracked adapters that connect system-owned Hamiltonian/basis/gauge/window choices to generic APIs such as `mean_field.api`, `mean_field.core.hf`, and `mean_field.core.bands`. Do not keep paper-panel plot writers, duplicated Berry/Chern loops, or system-local SCF/problem loops in tracked code merely as a backup; use the local archive or git history if a retired implementation must be consulted later.
 
-## Unified topology / Berry-geometry layer
+## Topology / Berry-geometry status
 
-Berry connection, Berry curvature / plaquette flux, and Chern-number calculations are unified under:
+The previous unified topology/Berry-geometry helper package and system wrappers are archived out of the tracked public surface for now:
 
 ```text
-src/analysis/topology/
+local_archive/retired_surface/topology_untracked_20260622/
 ```
 
-The architectural rule is that topology is system-independent after wavefunctions have been generated and selected.  System modules should provide:
-
-- a wavefunction mesh with shape `(mesh_1, mesh_2, basis_dim, n_states)`;
-- selected state/subspace indices;
-- `WavefunctionIndex` metadata that labels band, Chern-basis, flavor, valley, and system meaning;
-- optional boundary sewing transforms for non-periodic plane-wave gauges.
-
-The common framework then builds FHS link variables, Berry-connection phases, plaquette flux, and Chern numbers.  Ordinary system topology wrappers should use `analysis.topology.make_topology_adapter(...)` to bind system labels, retry behavior, optional sewing transforms, orientation signs, and metadata while keeping Hamiltonian/grid construction in the system layer.  Do not duplicate `_unit_link`, `_subspace_link`, determinant-link, or plaquette loops in future system modules; extend `analysis.topology` instead.  See `docs/topology_framework.md` for conventions, validation status, and examples.
+If topology becomes a near-term target again, reintroduce a small reviewed common API rather than restoring all historical wrappers. Do not duplicate `_unit_link`, `_subspace_link`, determinant-link, or plaquette loops in system modules without first deciding the maintained public topology boundary.
 
 ## Common plotting surface
 

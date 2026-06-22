@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 import numpy as np
 
-from analysis.topology import SewingTransform
+SewingTransform = Callable[[np.ndarray], np.ndarray]
 
 
 def _shift_rectangular_g_components(

@@ -11,7 +11,6 @@ from .bilayer_map import MappedSpectrumResult, build_atmg_via_tbg_sum
 from .hamiltonian import build_hamiltonian, diagonalize_hamiltonian
 from .lattice import ATMGLattice, build_atmg_lattice, build_kpath_from_nodes, build_standard_kpath
 from .params import ATMGParameters
-from .topology import TopologyResult, compute_topology_on_grid
 
 
 @dataclass(frozen=True)
@@ -148,24 +147,6 @@ class ATMGModel:
             frac_shift=frac_shift,
         )
 
-    def topology_on_grid(
-        self,
-        mesh_size: int,
-        band_indices: int | tuple[int, ...],
-        *,
-        valley: int = 1,
-        endpoint: bool = False,
-        n_bands: int | None = None,
-    ) -> TopologyResult:
-        return compute_topology_on_grid(
-            mesh_size,
-            self.lattice,
-            self.params,
-            band_indices,
-            valley=valley,
-            endpoint=endpoint,
-            n_bands=n_bands,
-        )
 
 
 __all__ = ["ATMGModel"]

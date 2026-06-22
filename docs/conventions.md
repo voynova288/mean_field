@@ -35,8 +35,7 @@ Use `DensityBundle.as_projector()` or `density_to_projector(...)` instead of ope
 ## Gauge and reciprocal-cell conventions
 
 - A model owns its plane-wave basis, reciprocal-cell labels, and boundary sewing convention.
-- `analysis.topology` owns link/plaquette/Chern formulas; systems supply wavefunction meshes and optional sewing transforms.
-- Public topology/Berry artifacts must record whether the wavefunctions are periodic, sewn at the boundary, or represented in a physical Cartesian mBZ.
+- Topology/Berry helpers are archived out of the tracked public surface for now. If reintroduced, the public API must explicitly own link/plaquette/Chern formulas and record whether wavefunctions are periodic, sewn at the boundary, or represented in a physical Cartesian mBZ.
 
 ## Artifact metadata
 

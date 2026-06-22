@@ -48,7 +48,6 @@ from .shift_current import (
     valley_mirror_x_tensor_component_sign,
     zero_second_derivative,
 )
-from .topology import TopologyResult, compute_topology_from_eigenvectors, compute_topology_from_grid_result, compute_topology_on_grid
 
 __all__ = [
     'GridBandsResult',
@@ -65,7 +64,6 @@ __all__ = [
     'TDBGProjectedWindow',
     'JOYA_GAMMA_CENTERED_FRAC_SHIFT',
     'TDBGShiftCurrentPoint',
-    'TopologyResult',
     'build_bilayer_block',
     'build_hamiltonian',
     'build_hamiltonian_d2hdk2',
@@ -82,9 +80,6 @@ __all__ = [
     'component_kernel_at_k',
     'compute_bands_along_path',
     'compute_bands_on_grid',
-    'compute_topology_from_eigenvectors',
-    'compute_topology_from_grid_result',
-    'compute_topology_on_grid',
     'diagonalize_hamiltonian',
     'finite_difference_dhdk',
     'joya_gamma_centered_frac_shift',
