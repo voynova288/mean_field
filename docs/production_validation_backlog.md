@@ -37,13 +37,15 @@ The backfill scanner/writer devtool is archived out of the tracked package surfa
 local_archive/retired_surface/devtools_untracked_20260622/devtools/canonical_hf_backfill/
 ```
 
-Historical application remains a manual/explicitly authorized operation; do not reintroduce the devtool or mutate `results/` without a separate review of target roots, overwrite policy, and TDHF-boundary implications.
+Historical application requires explicit authorization because it mutates `results/` and may cross TDHF-named loader boundaries. Current applied sidecar status:
 
-Current staged sidecars note:
-
-- `/data/home/ziyuzhu/tmp/mean_field_canonical_backfill_staged_229e06e_20260621_180741` contains 48 written RLG/hBN sidecars.
-- A self-check found all 48 written entries are `rlg_hbn_archive` and use the existing `mean_field.systems.RnG_hBN.tdhf.load_rlg_hbn_tdhf_run_from_archive` reconstruction path.
-- Because TDHF remains out of scope, these stay staged and are not applied to historical `results/` in the current continuation.
+- User authorized historical sidecar application on 2026-06-22.
+- Staging root: `/data/home/ziyuzhu/tmp/mean_field_canonical_backfill_staged_229e06e_20260621_180741`.
+- Apply log: `/data/home/ziyuzhu/tmp/mean_field_canonical_backfill_apply_7bede75_20260622.json`.
+- Minimal manifest creation log: `/data/home/ziyuzhu/tmp/mean_field_canonical_backfill_manifest_create_7bede75_20260622.json`.
+- Metadata-only contract audit: `/data/home/ziyuzhu/tmp/mean_field_canonical_backfill_metadata_validation_7bede75_20260622_141528.json`.
+- Result: 48/48 RLG/hBN historical roots have `canonical_hf_run_result.json`, 48/48 have minimal `manifest.json`, 48/48 are discoverable by `mean_field.api.load_result(root)`, 48/48 source archives exist, issue count 0.
+- No dense `canonical_hf_arrays.npz` payload was backfilled; historical sidecars are metadata-only summaries.
 
 Public HF metadata-only sidecar coverage:
 
@@ -56,11 +58,11 @@ assertion shape: HFResult.save(..., canonical_payload="metadata_only") writes ca
 
 TMBG Polshyn has the same metadata-only sidecar coverage in `tests/test_tmbg_polshyn_hf_readiness.py`.
 
-Acceptance:
+Acceptance after authorized application:
 
-- `historical_results_mutated` is `false`.
-- staged sidecars validate with `mean_field.api.load_result(...)` metadata-only loading.
-- manifest patches are reviewed separately before any application to `results/`.
+- `historical_results_mutated` is `true` only for the 48 authorized RLG/hBN sidecar/manifest writes above.
+- Applied sidecars validate with `mean_field.api.load_result(...)` metadata-only loading.
+- No overwrites were performed; future sidecar applications still require separate target-root review.
 
 ## 2. TMBG Polshyn fresh `run_hf(config...)`
 
@@ -258,3 +260,62 @@ Required evidence before claiming reproduction:
 - optional Chern/topology postprocessing only after the target band/subspace is explicitly selected.
 
 Production job template should be created in ignored scratch or a reviewed durable workflow, then submitted only after explicit approval.
+
+## 7. Current non-Slurm metadata-only preflight coverage
+
+These checks were run on `test001` at commit `7bede75` and do not constitute paper-level physics validation.
+
+Historical canonical sidecars:
+
+```text
+summary: /data/home/ziyuzhu/tmp/mean_field_canonical_backfill_metadata_validation_7bede75_20260622_141528.json
+records: 48
+manifest_exists: 48
+sidecar_exists: 48
+source_archive_exists: 48
+load_result_ok: 48
+canonical_loaded: 48
+issue_count: 0
+basis_systems: RnG_hBN
+density_reference_schemes: CN, average
+```
+
+Fresh public HF adapter preflights:
+
+```text
+summary: /data/home/ziyuzhu/tmp/mean_field_production_validation_7bede75_20260622_134024/summary.json
+cases: tmbg_polshyn_mesh1_metadata_only, htg_supercell_primitive_nu_3p333333_mesh1_metadata_only, htg_supercell_primitive_nu_3p666667_mesh1_metadata_only
+all_have_canonical_run_result: true
+all_loaded_canonical_sidecar: true
+all_metadata_only_arrays_absent: true
+```
+
+```text
+summary: /data/home/ziyuzhu/tmp/mean_field_production_validation_followup_7bede75_20260622_134844/summary.json
+cases: tbg_zero_field_explicit_mesh2_metadata_only, rlg_hbn_explicit_mesh1_metadata_only, tdbg_projected_explicit_mesh1_metadata_only
+all_have_canonical_run_result: true
+all_loaded_canonical_sidecar: true
+all_metadata_only_arrays_absent: true
+```
+
+## 8. Prepared but not submitted paper-level Slurm validation plan
+
+No Slurm jobs have been submitted in this continuation. If paper-level validation is requested next, prepare reviewed scratch wrappers that:
+
+1. run on a Slurm CPU partition selected from live `sinfo`/`scontrol` state and account `hmt03`;
+2. save output under a new timestamped result root outside tracked git;
+3. write `manifest.json`, config, environment, validation, observables, and canonical HF sidecars;
+4. compare against an explicit target quantity/panel rather than claiming reproduction from software smoke tests.
+
+Recommended first paper-level candidates, in increasing physics-risk order:
+
+- TMBG Polshyn: choose target band/window and candidate initial states (`bm_wang`, `cdw`, competitors); run convergence/energy comparison before any topology claim.
+- HTG fractional filling: use `HTGSupercellRunHFConfig`, exact SCF-grid path/bands, and document denominator/supercell choice for `3+1/3` and `3+2/3`.
+- RLG/hBN canonical sidecar audit: use the newly discoverable historical sidecars as metadata inputs only; do not run TDHF finite-q validation unless TDHF scope is explicitly reopened.
+- TDBG projected HF: run explicit projected config only after target window/filling/interaction choices are fixed.
+
+Blocked or out-of-scope unless separately authorized:
+
+- cRPA validation (tracked surface archived).
+- topology/Chern validation (tracked topology helpers archived; reintroduce a small reviewed API first).
+- RLG/hBN finite-q TDHF production maps (TDHF remains a separate scope boundary).
