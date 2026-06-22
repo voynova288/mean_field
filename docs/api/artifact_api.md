@@ -25,7 +25,11 @@ Use `write_contract_artifacts(...)` to write these sidecars without rewriting la
 
 For derived postprocessing outputs that share an existing result root, use `update_artifact_manifest(...)` to add files/metadata to `manifest.json` without overwriting the existing sidecars.
 
-Large numerical arrays should be referenced from `manifest.json`, not inlined in JSON.  Public JSON sidecars are written as strict JSON: `NaN`/`Infinity` tokens are rejected rather than emitted.  Use `write_npz_artifact(...)` for new dense-array payloads that need atomic writes; it rejects object-dtype arrays so downstream readers can keep `np.load(..., allow_pickle=False)`.  Recommended names are:
+Large numerical arrays should be referenced from `manifest.json`, not inlined in JSON.  Public JSON sidecars are written as strict JSON: `NaN`/`Infinity` tokens are rejected rather than emitted.
+
+HF workflows that return a canonical `HFRunResult` should save it through `HFResult.save(...)`.  The default `canonical_payload="metadata_only"` writes `canonical_hf_run_result.json` and records it in `manifest.json` without serializing dense density, Hamiltonian, or wavefunction arrays.  Dense canonical arrays are opt-in only with `canonical_payload="arrays"`, which writes `canonical_hf_arrays.npz` and `canonical_hf_arrays.schema.json` alongside the metadata sidecar.
+
+Use `write_npz_artifact(...)` for new dense-array payloads that need atomic writes; it rejects object-dtype arrays so downstream readers can keep `np.load(..., allow_pickle=False)`.  Recommended names are:
 
 ```text
 hf_state.npz
