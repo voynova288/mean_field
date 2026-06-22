@@ -2251,7 +2251,7 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 
 Commit in this continuation:
 
-- pending: restore thin TMBG topology wrapper
+- `1ffe7dd Restore thin TMBG topology wrapper`
 
 ### Scope restored
 
@@ -2297,11 +2297,11 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 
 ### Current summary after this continuation
 
-- Tracked text lines: 46979
-- Tracked Python lines: 41993
+- Tracked text lines: 46815
+- Tracked Python lines: 41765
 - Tracked Julia lines: 826
 - `src` Python files: 198
-- `src` Python lines: 39914
-- `tests` Python lines: 1813
-- `src/mean_field/systems` Python lines: 26161
+- `src` Python lines: 39928
+- `tests` Python lines: 1776
+- `src/mean_field/systems` Python lines: 26178
 - Files over 1000 lines: 0
