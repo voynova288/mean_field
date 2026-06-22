@@ -2150,7 +2150,7 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 
 Commit in this continuation:
 
-- pending: add minimal topology system adapter
+- `b1aca58 Add minimal topology system adapter`
 
 ### Scope
 
