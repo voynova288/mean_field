@@ -25,9 +25,6 @@ perf = [
   "numba>=0.59",
 ]
 
-[project.scripts]
-mean-field = "mean_field.cli:main"
-
 [tool.setuptools]
 package-dir = {"" = "src"}
 
