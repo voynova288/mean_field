@@ -2091,7 +2091,8 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 
 Commit in this continuation:
 
-- pending: remove archived CLI entrypoint and add topology wavefunction helpers
+- `bb1c820 Remove archived CLI console entry point`
+- `8e80c39 Add topology wavefunction layout helpers`
 
 ### Health check finding
 
