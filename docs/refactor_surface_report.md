@@ -1775,7 +1775,7 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 
 Commit in this continuation:
 
-- pending: archive current non-near-term maintenance surfaces out of tracked git
+- `fb2ca54 Archive cRPA tests and workflow surfaces`
 
 ### Scope archived to ignored local surface
 
@@ -1892,13 +1892,13 @@ Kept in tracked code:
 
 ### Current summary after this continuation
 
-- Tracked text lines: 46088
-- Tracked Python lines: 41476
+- Tracked text lines: 46135
+- Tracked Python lines: 41474
 - Tracked Julia lines: 826
 - `src` Python files: 205
-- `src` Python lines: 39934
+- `src` Python lines: 39932
 - `tests` Python lines: 1481
-- `src/mean_field/systems` Python lines: 27434
+- `src/mean_field/systems` Python lines: 27432
 - Files over 1000 lines: 0
 
 Validation:
