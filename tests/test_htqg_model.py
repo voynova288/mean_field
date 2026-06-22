@@ -1,51 +1,20 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from mean_field.systems.htqg import (
     HTQGModel,
     HTQGParams,
-    build_commensurate_geometry,
     build_hamiltonian,
-    commensurate_twist_angles_deg,
     build_htqg_lattice,
     canonical_domain_key,
     diagonalize_hamiltonian,
     domain_displacements,
-    fujimoto_2025_fig2_checkpoint,
 )
+
 
 def _light_params() -> HTQGParams:
     return HTQGParams.default(kappa=0.6, lambda_mdt_nm=0.0, include_dirac_rotation=False)
-
-
-def test_htqg_commensurate_geometry_matches_fujimoto_fig2_checkpoint() -> None:
-    geometry = build_commensurate_geometry(8, 7, 8, 8)
-    np.testing.assert_allclose(geometry.twist_angles_deg, (2.13, 2.27, 2.13), atol=5.0e-3)
-    assert tuple(round(value, 2) for value in geometry.twist_angles_deg) == (2.13, 2.27, 2.13)
-    assert fujimoto_2025_fig2_checkpoint()
-
-
-def test_htqg_commensurate_geometry_public_contract() -> None:
-    geometry = build_commensurate_geometry(8, 7, 8, 8)
-
-    assert geometry.integers == (8, 7, 8, 8)
-    assert geometry.twist_angles_deg == (geometry.theta12_deg, geometry.theta23_deg, geometry.theta34_deg)
-    assert geometry.twist_angles_rad == (geometry.theta12_rad, geometry.theta23_rad, geometry.theta34_rad)
-    np.testing.assert_allclose(geometry.supermoire_period_factor_12, 13.0, atol=1.0e-12)
-    np.testing.assert_allclose(geometry.supermoire_period_factor_23, np.sqrt(192.0), atol=1.0e-12)
-    assert geometry.to_dict()["n12"] == 8
-    assert geometry.to_dict()["theta23_deg"] == pytest.approx(2.2745253413468105)
-
-    signed = commensurate_twist_angles_deg(8, 8, 8, 7, positive=False)
-    positive = commensurate_twist_angles_deg(8, 8, 8, 7, positive=True)
-    assert signed[0] < 0.0
-    assert signed[1] < 0.0
-    np.testing.assert_allclose(positive, tuple(abs(value) for value in signed), atol=1.0e-12)
-
-    with pytest.raises(ValueError, match="must not be"):
-        build_commensurate_geometry(0, 0, 8, 8)
 
 
 def test_htqg_domain_aliases_and_static_hamiltonian_contract() -> None:

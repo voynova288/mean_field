@@ -1,7 +1,6 @@
 """Helical trilayer graphene noninteracting continuum model."""
 
 from .bands import GridBandsResult, PathBandsResult, compute_bands_along_path, compute_bands_on_grid
-from .chiral import MAGIC_ALPHA_ZETA0, build_chiral_lattice_from_alpha
 from .hamiltonian import (
     MoireCouplingEntry,
     build_coupling_table,
@@ -135,10 +134,8 @@ __all__ = [
     'InteractionParams',
     'KWAN_2023_FERMI_VELOCITY_M_PER_S',
     'KWAN_2023_TUNNELING_EV',
-    'MAGIC_ALPHA_ZETA0',
     'MoireCouplingEntry',
     'PathBandsResult',
-    'build_chiral_lattice_from_alpha',
     'build_coupling_table',
     'build_diagonal_block',
     'build_hamiltonian',

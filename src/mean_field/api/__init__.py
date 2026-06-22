@@ -25,7 +25,6 @@ from .models import (
     resolve_model_adapter,
 )
 from .tdhf import TDHFAdapterInfo, TDHFConfig, get_tdhf_adapter_info, list_tdhf_adapters, resolve_tdhf_adapter, run_tdhf
-from .validation import validate_fig6_screening_checkpoints
 
 __all__ = [
     "ArtifactManifest",
@@ -62,6 +61,5 @@ __all__ = [
     "run_hf",
     "run_tdhf",
     "update_artifact_manifest",
-    "validate_fig6_screening_checkpoints",
     "write_contract_artifacts",
 ]

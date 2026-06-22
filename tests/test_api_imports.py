@@ -11,13 +11,10 @@ from mean_field.api import (
     make_model,
     model_record,
     run_hf,
-    validate_fig6_screening_checkpoints,
 )
 
 
 def test_public_api_imports_and_htg_band_smoke() -> None:
-    assert callable(validate_fig6_screening_checkpoints)
-
     model = make_model("htg", theta_deg=1.5, n_shells=0)
     bundle = compute_bands(model, n_bands=2, points_per_segment=2)
 

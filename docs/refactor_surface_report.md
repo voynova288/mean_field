@@ -1953,3 +1953,46 @@ PYTHONPATH=src python -m compileall -q src scripts
 PYTHONPATH=src pytest -q $(git ls-files tests)
 # 55 passed
 ```
+
+## Update: archive facade-only helper surface
+
+Commit in this continuation:
+
+- pending: archive facade-only helper surface
+
+### Scope archived to ignored local surface
+
+A follow-up audit identified helpers that were only re-exported through facades or covered by now-local tests, with no tracked package caller. These were copied to ignored local archive before `git rm`:
+
+```text
+local_archive/retired_surface/facade_only_helpers_20260622/
+```
+
+Removed from tracked package surface:
+
+- `src/mean_field/api/validation.py` (`validate_fig6_screening_checkpoints` heavy RLG/hBN checkpoint helper)
+- `src/mean_field/systems/tdbg/shift_current.py` (TDBG/Joya system response adapter; common `analysis.optical_response` remains tracked)
+- `src/mean_field/systems/htqg/commensurate.py` (paper-local commensurate-geometry helper)
+- `src/mean_field/systems/RnG_hBN/validation.py` (smoke/paper-checkpoint validation facade)
+- `src/mean_field/systems/htg/chiral.py` (small chiral-limit convenience helper)
+
+Updated public/system facades and smoke tests accordingly. HF contracts, explicit `run_hf(...)` adapters, TMBG Polshyn facade, and TDHF/core code were left intact.
+
+### Current summary after this continuation
+
+- Tracked text lines: 44621
+- Tracked Python lines: 39928
+- Tracked Julia lines: 826
+- `src` Python files: 192
+- `src` Python lines: 38420
+- `tests` Python lines: 1447
+- `src/mean_field/systems` Python lines: 26612
+- Files over 1000 lines: 0
+
+Validation:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 53 passed
+```

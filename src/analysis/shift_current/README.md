@@ -42,17 +42,13 @@ tensor and use `component_kernel_from_gauge_pair(...)` or
 `component_transition_weight_from_gauge_pair(...)` for selected transitions.
 This still sums virtual/intermediate bands over the full supplied basis.
 
-Current lightweight system/workflow adapters:
+Current lightweight system/workflow adapters are not tracked in the minimal public surface.
+The former TDBG/Joya system adapter is archived under `local_archive/retired_surface/facade_only_helpers_20260622/`.
 
-- TDBG/Joya: `mean_field.systems.tdbg.shift_current` supplies analytic lab-frame
-  `dH/dk`, zero `d2H/dk2`, one-k gauge data, full tiny-k tensors,
-  selected-pair kernels, Gamma-centered cell helpers, and K- mirror-x
-  tensor-sign helpers.
-
-Retired Chaudhary b0 TBG and hTG legacy shift-current wrappers should stay in
-ignored local reports/internal workspaces or git history. New system-specific
+Retired Chaudhary b0 TBG, hTG legacy, and TDBG/Joya shift-current wrappers should stay in
+ignored local reports/internal workspaces or git history unless a reviewed system adapter is needed again. New system-specific
 response work should connect Hamiltonians and derivatives directly to this
-common API instead of restoring those paper-audit surfaces.
+common API instead of restoring paper-audit surfaces wholesale.
 
 ## Named conventions
 
@@ -79,8 +75,7 @@ common API instead of restoring those paper-audit surfaces.
 
 The common module owns the response math (`JOYA_EQ7_GEOMETRIC_CONVENTION`,
 selected-pair/full-virtual-band kernels, Fermi-window and Lorentzian heatmap
-accumulation).  System adapters, such as `mean_field.systems.tdbg.shift_current`,
-own system data and coordinate conventions: analytic lab-frame `dH/dk`, optional
+accumulation).  Future reviewed system adapters should own system data and coordinate conventions: analytic lab-frame `dH/dk`, optional
 `d2H/dk2`, reciprocal-cell shifts, valley/mirror conventions, and paper-specific
 labels.
 
