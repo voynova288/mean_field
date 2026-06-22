@@ -56,7 +56,7 @@ The tracked topology surface is intentionally small:
 src/analysis/topology/
 ```
 
-It exposes only system-independent Fukui-Hatsugai-Suzuki link variables, plaquette fluxes, Chern-number integration, direct-gap grouping helpers, and metadata records for selected wavefunction columns. System-specific topology wrappers, quantum-metric/QGT helpers, paper-workflow adapters, and plotting/report code remain archived here until they are reviewed separately:
+It exposes only system-independent Fukui-Hatsugai-Suzuki link variables, plaquette fluxes, Chern-number integration, direct-gap grouping helpers, wavefunction-grid canonicalization helpers, and metadata records for selected wavefunction columns. System-specific topology wrappers, quantum-metric/QGT helpers, paper-workflow adapters, and plotting/report code remain archived here until they are reviewed separately:
 
 ```text
 local_archive/retired_surface/topology_untracked_20260622/

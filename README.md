@@ -12,7 +12,7 @@ The package started as a benchmark-driven rewrite of a Julia `TBG_HartreeFock` w
 - `mean_field.systems.tdbg`: twisted double bilayer graphene continuum model and projected-HF helpers.
 - `mean_field.systems.atmg`: alternating-twist multilayer graphene continuum-model utilities.
 - `mean_field.systems.htg`: helical trilayer graphene continuum model and projected-HF adapter for Kwan et al. style calculations.
-- `analysis.topology`: minimal system-independent FHS link/plaquette/Chern helpers. System-specific topology wrappers and QGT/quantum-metric helpers remain archived under `local_archive/retired_surface/topology_untracked_20260622/` until reviewed separately.
+- `analysis.topology`: minimal system-independent FHS link/plaquette/Chern helpers plus wavefunction-grid canonicalization helpers. System-specific topology wrappers and QGT/quantum-metric helpers remain archived under `local_archive/retired_surface/topology_untracked_20260622/` until reviewed separately.
 - `analysis.optical_response`: reusable WannierBerri-style, gauge-safe derivative and shift-current helpers for Berry-connection generalized derivatives, shift vectors, response components, named conventions, occupations, Lorentzian/heatmap accumulation, and one-k-point tensor helpers.
 - `analysis.response_derivative_gauge` and `analysis.shift_current`: historical compatibility import paths that re-export the common optical-response API. System-specific Hamiltonians/derivatives live under `mean_field.systems.*`; historical shift-current audit notes stay in ignored local reports/internal workspaces.
 

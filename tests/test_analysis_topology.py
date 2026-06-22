@@ -4,9 +4,13 @@ import numpy as np
 
 from analysis.topology import (
     WavefunctionIndex,
+    WavefunctionLayout,
+    canonicalize_wavefunction_grid,
     compute_lattice_topology,
     compute_lattice_topology_for_state_groups,
+    reshape_flat_mesh_to_grid,
     split_state_indices_by_direct_gaps,
+    wavefunction_index_from_state_labels,
 )
 
 
@@ -57,6 +61,50 @@ def test_fhs_chern_distinguishes_trivial_and_topological_mass_regions() -> None:
 
     assert compute_lattice_topology(topological, 0).rounded_chern_number == -1
     assert compute_lattice_topology(trivial, 0).rounded_chern_number == 0
+
+
+def test_wavefunction_layout_helpers_flatten_state_axes_with_labels() -> None:
+    raw = np.arange(2 * 3 * 5 * 2 * 2, dtype=float).reshape((2, 3, 5, 2, 2))
+    layout = WavefunctionLayout(
+        basis_axis=2,
+        state_axes=(3, 4),
+        state_axis_names=("band", "flavor"),
+        state_axis_labels={"band": ("v", "c"), "flavor": ("K", "Kprime")},
+    )
+
+    canonical = canonicalize_wavefunction_grid(raw, layout)
+    assert canonical.wavefunctions.shape == (2, 3, 5, 4)
+    assert canonical.state_labels == (
+        {"band": "v", "flavor": "K"},
+        {"band": "v", "flavor": "Kprime"},
+        {"band": "c", "flavor": "K"},
+        {"band": "c", "flavor": "Kprime"},
+    )
+
+    index = canonical.index_for((0, 3), role="band_flavor", system="toy", valley=1)
+    assert index.labels == ("band=v/flavor=K", "band=c/flavor=Kprime")
+    assert index.metadata["selected_state_labels"] == [
+        {"band": "v", "flavor": "K"},
+        {"band": "c", "flavor": "Kprime"},
+    ]
+
+
+def test_flat_mesh_and_state_label_helpers() -> None:
+    values = np.arange(2 * 6 * 3).reshape((2, 6, 3))
+    grid = reshape_flat_mesh_to_grid(values, (2, 3), k_axis=1)
+    assert grid.shape == (2, 3, 2, 3)
+    np.testing.assert_array_equal(grid.reshape(6, 2, 3), np.moveaxis(values, 1, 0))
+
+    index = wavefunction_index_from_state_labels(
+        1,
+        ({"band": "v"}, {"band": "c"}),
+        role="band",
+        system="toy",
+        metadata={"source": "unit-test"},
+    )
+    assert index.indices == (1,)
+    assert index.labels == ("band=c",)
+    assert index.metadata["source"] == "unit-test"
 
 
 def test_gap_grouping_and_group_topology_api() -> None:

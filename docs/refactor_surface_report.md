@@ -2086,3 +2086,61 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 - `tests` Python lines: 1522
 - `src/mean_field/systems` Python lines: 26070
 - Files over 1000 lines: 0
+
+## Update: full health check and topology wavefunction layout helper
+
+Commit in this continuation:
+
+- pending: remove archived CLI entrypoint and add topology wavefunction helpers
+
+### Health check finding
+
+A full code-health pass after the topology core restore found one real packaging issue: `pyproject.toml` still declared the archived console entry point `mean-field = "mean_field.cli:main"` even though `src/mean_field/cli.py` is no longer tracked. The stale console-script entry was removed. Editable metadata dry-run now succeeds with local build isolation disabled:
+
+```bash
+python -m pip install -e . --dry-run --no-deps --no-build-isolation
+# Would install mean-field-0.1.0
+```
+
+Network-isolated build dependency resolution still cannot fetch `setuptools>=69`, so build-isolation dry-run is not a code/package-config signal on the cluster.
+
+### Topology follow-up
+
+Added a generic topology wavefunction layout helper without restoring system wrappers or QGT helpers:
+
+```text
+src/analysis/topology/wavefunction.py
+```
+
+This helper canonicalizes already-built wavefunction arrays to `(mesh_1, mesh_2, basis_dim, n_state)`, preserves flattened state labels, reshapes flat k axes to 2D grids, and builds `WavefunctionIndex` metadata from state labels. It does not reconstruct projected-HF microscopic wavefunctions or infer sewing conventions.
+
+Updated tests:
+
+```text
+tests/test_analysis_topology.py
+```
+
+Validation on `test001`:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 58 passed
+
+python import-boundary smoke
+# import boundary ok
+
+python -m pip install -e . --dry-run --no-deps --no-build-isolation
+# Would install mean-field-0.1.0
+```
+
+### Current summary after this continuation
+
+- Tracked text lines: 45233
+- Tracked Python lines: 40343
+- Tracked Julia lines: 826
+- `src` Python files: 195
+- `src` Python lines: 38712
+- `tests` Python lines: 1570
+- `src/mean_field/systems` Python lines: 26070
+- Files over 1000 lines: 0
