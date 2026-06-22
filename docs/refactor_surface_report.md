@@ -1958,7 +1958,7 @@ PYTHONPATH=src pytest -q $(git ls-files tests)
 
 Commit in this continuation:
 
-- pending: archive facade-only helper surface
+- `0b70ace Archive facade-only helper surface`
 
 ### Scope archived to ignored local surface
 
