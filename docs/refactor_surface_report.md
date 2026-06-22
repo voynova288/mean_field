@@ -1683,3 +1683,46 @@ Commit in this continuation:
 ### Documentation consistency
 
 `docs/api/hf_api.md` now lists the public model facades consistently with the model registry, including `tbg` as well as `htqg`.
+
+## Update: HTG supercell preflight and artifact payload docs
+
+Commits in this continuation:
+
+- `51db277 Record HTG supercell software preflight`
+- `a79c0db Document HF canonical artifact payload modes`
+
+### Current summary after this continuation
+
+- Tracked text lines: 66730
+- Tracked Python lines: 62016
+- Tracked Julia lines: 826
+- `src` Python files: 275
+- `src` Python lines: 55205
+- Files over 1000 lines: 0
+
+### HTG supercell software preflight
+
+Ran a 1x1 explicit HTG supercell public `run_hf(...)` preflight on `test001` with output only under `/data/home/ziyuzhu/tmp`:
+
+```text
+/data/home/ziyuzhu/tmp/mean_field_validation_htg_supercell_7d8ac74_20260622_100932/summary.json
+```
+
+Summary:
+
+```text
+result_model: htg_supercell
+has_canonical_run_result: true
+loaded_canonical_sidecar: true
+metadata_only_arrays_absent: true
+primitive_nu: 3.5
+supercell_area_ratio: 2
+filling_from_density: 3.5000000000000018
+workflow metadata: htg.supercell.explicit_config.preflight
+```
+
+This is software/API readiness evidence only, not a converged fractional-filling production run.
+
+### Artifact payload documentation
+
+Updated `docs/api/artifact_api.md` to document the `HFResult.save(...)` canonical payload modes: `canonical_payload="metadata_only"` is the default and writes only `canonical_hf_run_result.json`, while dense canonical arrays require explicit `canonical_payload="arrays"`.
