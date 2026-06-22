@@ -1996,3 +1996,40 @@ PYTHONPATH=src python -m compileall -q src scripts
 PYTHONPATH=src pytest -q $(git ls-files tests)
 # 53 passed
 ```
+
+## Update: thin system package facades
+
+Commit in this continuation:
+
+- pending: thin system package facades
+
+### Scope
+
+Reduced system package-root `__init__.py` files to the symbols actually needed by the current tracked API/tests. Implementation modules remain tracked and importable by explicit module path; only large package-root re-export surfaces were thinned.
+
+Touched facades:
+
+- `src/mean_field/systems/RnG_hBN/__init__.py`
+- `src/mean_field/systems/atmg/__init__.py`
+- `src/mean_field/systems/htg/__init__.py`
+- `src/mean_field/systems/tdbg/__init__.py`
+- `src/mean_field/systems/tmbg/__init__.py`
+
+### Current summary after this continuation
+
+- Tracked text lines: 44122
+- Tracked Python lines: 39386
+- Tracked Julia lines: 826
+- `src` Python files: 192
+- `src` Python lines: 37878
+- `tests` Python lines: 1447
+- `src/mean_field/systems` Python lines: 26070
+- Files over 1000 lines: 0
+
+Validation:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 53 passed
+```
