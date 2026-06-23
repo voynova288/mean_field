@@ -2305,3 +2305,62 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 - `tests` Python lines: 1776
 - `src/mean_field/systems` Python lines: 26178
 - Files over 1000 lines: 0
+
+## Update: restore thin TDBG topology wrapper
+
+Commit in this continuation:
+
+- pending: restore thin TDBG topology wrapper
+
+### Scope restored
+
+Restored the second concrete system topology wrapper as a thin delegation layer:
+
+```text
+src/mean_field/systems/tdbg/topology.py
+```
+
+The wrapper exposes `compute_topology_from_eigenvectors`, `compute_topology_from_grid_result`, `compute_topology_on_grid`, `boundary_sewing_transforms`, and reuses `translation_srcmap` from projected-HF geometry. It delegates all FHS link/plaquette/Chern calculations to `analysis.topology` and keeps TDBG q-site boundary sewing as system metadata/gauge plumbing.
+
+Still not restored:
+
+- ATMG/RLG-hBN concrete topology wrappers
+- `model.topology_on_grid(...)` package-root convenience methods
+- retrying grid-builder workflows
+- projected-HF microscopic wavefunction reconstruction helpers
+- paper-level topology workflows or Slurm jobs
+
+### Validation
+
+Added:
+
+```text
+tests/test_tdbg_topology.py
+```
+
+The tests use QWZ/fake-grid inputs and monkeypatching to prove metadata/delegation behavior, explicit grid construction parameters, n-band guard behavior, and q-site boundary sewing shape/mapping behavior without running TDBG production physics.
+
+Validation on `test001`:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 71 passed
+
+python import-boundary smoke
+# TMBG/TDBG topology wrapper boundary ok
+
+python -m pip install -e . --dry-run --no-deps --no-build-isolation
+# Would install mean-field-0.1.0
+```
+
+### Current summary after this continuation
+
+- Tracked text lines: 47061
+- Tracked Python lines: 41952
+- Tracked Julia lines: 826
+- `src` Python files: 199
+- `src` Python lines: 39972
+- `tests` Python lines: 1919
+- `src/mean_field/systems` Python lines: 26222
+- Files over 1000 lines: 0
