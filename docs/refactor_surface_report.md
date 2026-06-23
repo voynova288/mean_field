@@ -2610,7 +2610,7 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 
 Commit in this continuation:
 
-- pending: make topology orientation sign self-consistent
+- `288035c Make topology orientation sign self-consistent`
 
 ### Scope
 
