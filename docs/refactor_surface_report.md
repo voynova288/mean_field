@@ -2650,7 +2650,7 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 
 Commit in this continuation:
 
-- pending: add TMBG/ATMG reciprocal boundary sewing helpers
+- `bda781b Add TMBG ATMG topology sewing helpers`
 
 ### Scope
 
