@@ -2821,7 +2821,7 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 
 Commit in this continuation:
 
-- pending: connect projected-HF reconstruction adapters
+- `2da1ea1 Connect projected HF reconstruction adapters`
 
 ### Scope
 
