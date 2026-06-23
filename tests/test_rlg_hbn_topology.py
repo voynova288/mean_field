@@ -73,12 +73,24 @@ def test_rlg_hbn_topology_on_grid_builds_single_explicit_eigenvector_grid(monkey
         return SimpleNamespace(eigenvectors=wavefunctions[:, :, :, :n_bands], k_grid_frac=k_grid_frac)
 
     monkeypatch.setattr(rlg_topology, "compute_bands_on_grid", fake_compute_bands_on_grid)
-    result = rlg_topology.compute_topology_on_grid(9, object(), object(), 0, valley=-1, endpoint=True, frac_shift=(0.25, 0.5), use_boundary_sewing=False)
+    result = rlg_topology.compute_topology_on_grid(9, object(), object(), 0, valley=-1, frac_shift=(0.25, 0.5), use_boundary_sewing=False)
 
     assert result.rounded_chern_number == 1
     assert result.index_metadata is not None
     assert result.index_metadata["metadata"] == {"boundary_sewing": False, "orientation_sign": 1.0}
-    assert calls == {"mesh_size": 9, "valley": -1, "n_bands": 1, "return_eigenvectors": True, "endpoint": True, "frac_shift": (0.25, 0.5)}
+    assert calls == {"mesh_size": 9, "valley": -1, "n_bands": 1, "return_eigenvectors": True, "endpoint": False, "frac_shift": (0.25, 0.5)}
+
+
+def test_rlg_hbn_topology_from_grid_result_requires_requested_boundary_sewing_inputs() -> None:
+    wavefunctions, k_grid_frac = _qiwuzhang_wavefunctions(mesh=5, mass=1.0)
+    grid = SimpleNamespace(eigenvectors=wavefunctions, k_grid_frac=k_grid_frac)
+    with pytest.raises(ValueError, match="boundary sewing requires"):
+        rlg_topology.compute_topology_from_grid_result(grid, 0)
+
+
+def test_rlg_hbn_topology_on_grid_rejects_endpoint_mesh() -> None:
+    with pytest.raises(ValueError, match="endpoint=False"):
+        rlg_topology.compute_topology_on_grid(3, object(), object(), 0, endpoint=True, use_boundary_sewing=False)
 
 
 def test_rlg_hbn_topology_on_grid_rejects_n_bands_that_excludes_target_band() -> None:

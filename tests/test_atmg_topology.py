@@ -95,7 +95,6 @@ def test_atmg_topology_on_grid_builds_single_explicit_eigenvector_grid(monkeypat
         object(),
         0,
         valley=-1,
-        endpoint=True,
         frac_shift=(0.25, 0.5),
     )
 
@@ -104,8 +103,13 @@ def test_atmg_topology_on_grid_builds_single_explicit_eigenvector_grid(monkeypat
     assert calls["valley"] == -1
     assert calls["n_bands"] == 1
     assert calls["return_eigenvectors"] is True
-    assert calls["endpoint"] is True
+    assert calls["endpoint"] is False
     assert calls["frac_shift"] == (0.25, 0.5)
+
+
+def test_atmg_topology_on_grid_rejects_endpoint_mesh() -> None:
+    with pytest.raises(ValueError, match="endpoint=False"):
+        atmg_topology.compute_topology_on_grid(3, object(), object(), 0, endpoint=True)
 
 
 def test_atmg_topology_on_grid_rejects_n_bands_that_excludes_target_band() -> None:

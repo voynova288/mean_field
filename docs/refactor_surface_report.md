@@ -2522,3 +2522,44 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 - `tests` Python lines: 2148
 - `src/mean_field/systems` Python lines: 26321
 - Files over 1000 lines: 0
+
+## Update: harden topology wrapper endpoint and sewing guards
+
+Commit in this continuation:
+
+- pending: harden topology wrapper endpoint and sewing guards
+
+### Scope
+
+Hardened the restored thin topology wrappers based on wrapper review findings:
+
+- `compute_topology_on_grid(..., endpoint=True)` now raises in TMBG, TDBG, ATMG, and RLG-hBN wrappers. FHS torus meshes must use one representative per periodic direction, not duplicate the endpoint seam.
+- `RLG_hBN.compute_topology_from_grid_result(..., use_boundary_sewing=True)` now requires either explicit `sewing_transforms` or both `lattice` and `params`; it no longer silently falls back to no sewing when the default boundary-sewing request cannot be fulfilled.
+
+No paper-level physics validation, Slurm jobs, projected-HF reconstruction, or model convenience methods were added.
+
+### Validation
+
+Updated wrapper tests now cover endpoint rejection and the RLG-hBN boundary-sewing input guard.
+
+Validation on `test001`:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 90 passed
+
+python -m pip install -e . --dry-run --no-deps --no-build-isolation
+# Would install mean-field-0.1.0
+```
+
+### Current summary after this continuation
+
+- Tracked text lines: 47598
+- Tracked Python lines: 42231
+- Tracked Julia lines: 826
+- `src` Python files: 201
+- `src` Python lines: 39998
+- `tests` Python lines: 2172
+- `src/mean_field/systems` Python lines: 26328
+- Files over 1000 lines: 0

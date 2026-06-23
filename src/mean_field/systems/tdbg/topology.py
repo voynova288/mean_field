@@ -78,6 +78,8 @@ def compute_topology_on_grid(
     resolved_n_bands = max(requested) + 1 if n_bands is None else int(n_bands)
     if resolved_n_bands <= max(requested):
         raise ValueError(f"n_bands={resolved_n_bands} does not include requested band index {max(requested)}")
+    if endpoint:
+        raise ValueError("Topology FHS meshes must use endpoint=False")
     grid = compute_bands_on_grid(
         int(mesh_size), lattice, params, valley=int(valley), n_bands=resolved_n_bands, return_eigenvectors=True,
         endpoint=bool(endpoint), frac_shift=(float(frac_shift[0]), float(frac_shift[1])),

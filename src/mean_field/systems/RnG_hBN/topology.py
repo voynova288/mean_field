@@ -56,7 +56,9 @@ def compute_topology_from_grid_result(
     sewing_transforms: Sequence[SewingTransform | None] | None = None, use_boundary_sewing: bool = True,
     orientation_sign: float | None = None, paper_orientation: bool = False,
 ) -> TopologyResult:
-    if sewing_transforms is None and use_boundary_sewing and lattice is not None and params is not None:
+    if sewing_transforms is None and use_boundary_sewing:
+        if lattice is None or params is None:
+            raise ValueError("RLG-hBN boundary sewing requires explicit sewing_transforms or both lattice and params")
         sewing_transforms = rlg_hbn_boundary_sewing_transforms(lattice, params, valley=valley)
     sign = _orientation_sign(orientation_sign=orientation_sign, paper_orientation=paper_orientation)
     return compute_system_topology_from_grid_result(
@@ -75,6 +77,8 @@ def compute_topology_on_grid(
     resolved_n_bands = max(requested) + 1 if n_bands is None else int(n_bands)
     if resolved_n_bands <= max(requested):
         raise ValueError(f"n_bands={resolved_n_bands} does not include requested band index {max(requested)}")
+    if endpoint:
+        raise ValueError("Topology FHS meshes must use endpoint=False")
     grid = compute_bands_on_grid(
         int(mesh_size), lattice, params, valley=int(valley), n_bands=resolved_n_bands, return_eigenvectors=True,
         endpoint=bool(endpoint), frac_shift=(float(frac_shift[0]), float(frac_shift[1])),
