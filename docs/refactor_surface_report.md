@@ -2527,7 +2527,7 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 
 Commit in this continuation:
 
-- pending: harden topology wrapper endpoint and sewing guards
+- `a01b23f Harden topology wrapper grid guards`
 
 ### Scope
 
