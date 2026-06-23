@@ -2423,3 +2423,62 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 - `tests` Python lines: 2032
 - `src/mean_field/systems` Python lines: 26228
 - Files over 1000 lines: 0
+
+## Update: restore thin RLG-hBN topology wrapper
+
+Commit in this continuation:
+
+- pending: restore thin RLG-hBN topology wrapper
+
+### Scope restored
+
+Restored the RLG-hBN concrete system topology wrapper as a thin delegation layer:
+
+```text
+src/mean_field/systems/RnG_hBN/topology.py
+```
+
+The wrapper exposes `compute_topology_from_eigenvectors`, `compute_topology_from_grid_result`, `compute_topology_on_grid`, and `rlg_hbn_boundary_sewing_transforms`. It contains no FHS/link/plaquette implementation and delegates all topology math to `analysis.topology`; the RLG-hBN-specific part is reciprocal-translation boundary sewing and explicit orientation metadata.
+
+Still not restored:
+
+- HTG concrete topology wrapper
+- `model.topology_on_grid(...)` package-root convenience methods
+- retrying grid-builder workflows
+- projected-HF microscopic wavefunction reconstruction helpers
+- paper-level topology workflows or Slurm jobs
+
+### Validation
+
+Added:
+
+```text
+tests/test_rlg_hbn_topology.py
+```
+
+The tests use QWZ/fake-grid inputs and fake reciprocal-lattice sewing to prove metadata/delegation behavior, orientation-sign metadata, explicit grid construction parameters, n-band guard behavior, and reciprocal-translation sewing shape/mapping behavior without running RLG-hBN production physics.
+
+Validation on `test001`:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 80 passed
+
+python import-boundary smoke
+# TMBG/TDBG/ATMG/RLG-hBN topology wrapper boundary ok
+
+python -m pip install -e . --dry-run --no-deps --no-build-isolation
+# Would install mean-field-0.1.0
+```
+
+### Current summary after this continuation
+
+- Tracked text lines: 47397
+- Tracked Python lines: 42170
+- Tracked Julia lines: 826
+- `src` Python files: 201
+- `src` Python lines: 39991
+- `tests` Python lines: 2118
+- `src/mean_field/systems` Python lines: 26321
+- Files over 1000 lines: 0

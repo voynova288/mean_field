@@ -1,109 +1,29 @@
-"""Minimal common topology and quantum-geometry helpers.
+"""Common topology and quantum-geometry public API."""
 
-This public surface exposes system-independent FHS link/plaquette/Chern
-utilities, generic wavefunction layout helpers, small system-facing adapters for
-already-built eigenvector grids, and projector-based quantum-geometry maps.
-Concrete system wrappers and paper workflows remain separate reviewed surfaces.
-"""
+from . import core as _core
+from . import quantum_geometry as _quantum_geometry
+from . import system as _system
+from . import wavefunction as _wavefunction
 
-from .core import (
-    DirectBandGapReport,
-    LatticeTopologyResult,
-    LinkMethod,
-    LinkVariables,
-    SewingTransform,
-    WavefunctionIndex,
-    adjacent_direct_gap_reports,
-    berry_curvature_from_links,
-    chern_number_from_berry_curvature,
-    compute_lattice_topology,
-    compute_lattice_topology_for_state_groups,
-    compute_link_variables,
-    default_k_grid_frac,
-    direct_band_gap_report,
-    matrix_sewing_transform,
-    normalize_state_indices,
-    select_wavefunction_subspace,
-    split_state_indices_by_direct_gaps,
-    wavefunction_index_for_state_group,
-)
-from .quantum_geometry import (
-    CoordinateSystem,
-    NormalizedQuantumGeometryMaps,
-    QuantumGeometryResult,
-    brillouin_zone_area,
-    compute_quantum_geometry,
-    fubini_study_trace,
-    infer_berry_sign_from_chern,
-    integrated_fubini_study_metric,
-    normalize_quantum_geometry_maps,
-    normalized_chern_density,
-    orthonormalize_wavefunction_frames,
-    projector_qgt_central_difference,
-    projector_qgt_forward_difference,
-    qgt_to_metric_and_berry,
-    reciprocal_vectors_to_derivative_transform,
-    trace_condition_violation,
-    transform_quantum_geometric_tensor,
-)
-from .system import (
-    TopologyResult,
-    compute_system_topology_from_eigenvectors,
-    compute_system_topology_from_grid_result,
-    topology_result_from_lattice_result,
-)
-from .wavefunction import (
-    CanonicalWavefunctionGrid,
-    WavefunctionLayout,
-    canonicalize_wavefunction_grid,
-    reshape_flat_mesh_to_grid,
-    wavefunction_index_from_state_labels,
-)
-
-__all__ = [
-    "CanonicalWavefunctionGrid",
-    "CoordinateSystem",
-    "DirectBandGapReport",
-    "LatticeTopologyResult",
-    "LinkMethod",
-    "LinkVariables",
-    "NormalizedQuantumGeometryMaps",
-    "QuantumGeometryResult",
-    "SewingTransform",
-    "TopologyResult",
-    "WavefunctionIndex",
-    "WavefunctionLayout",
-    "adjacent_direct_gap_reports",
-    "berry_curvature_from_links",
-    "brillouin_zone_area",
-    "canonicalize_wavefunction_grid",
-    "chern_number_from_berry_curvature",
-    "compute_lattice_topology",
-    "compute_lattice_topology_for_state_groups",
-    "compute_link_variables",
-    "compute_quantum_geometry",
-    "compute_system_topology_from_eigenvectors",
-    "compute_system_topology_from_grid_result",
-    "default_k_grid_frac",
-    "direct_band_gap_report",
-    "fubini_study_trace",
-    "infer_berry_sign_from_chern",
-    "integrated_fubini_study_metric",
-    "matrix_sewing_transform",
-    "normalize_quantum_geometry_maps",
-    "normalize_state_indices",
-    "normalized_chern_density",
-    "orthonormalize_wavefunction_frames",
-    "projector_qgt_central_difference",
-    "projector_qgt_forward_difference",
-    "qgt_to_metric_and_berry",
-    "reciprocal_vectors_to_derivative_transform",
-    "reshape_flat_mesh_to_grid",
-    "select_wavefunction_subspace",
-    "split_state_indices_by_direct_gaps",
-    "topology_result_from_lattice_result",
-    "trace_condition_violation",
-    "transform_quantum_geometric_tensor",
+_CORE = (
+    "DirectBandGapReport", "LatticeTopologyResult", "LinkMethod", "LinkVariables", "SewingTransform", "WavefunctionIndex",
+    "adjacent_direct_gap_reports", "berry_curvature_from_links", "chern_number_from_berry_curvature", "compute_lattice_topology",
+    "compute_lattice_topology_for_state_groups", "compute_link_variables", "default_k_grid_frac", "direct_band_gap_report",
+    "matrix_sewing_transform", "normalize_state_indices", "select_wavefunction_subspace", "split_state_indices_by_direct_gaps",
     "wavefunction_index_for_state_group",
-    "wavefunction_index_from_state_labels",
-]
+)
+_QUANTUM_GEOMETRY = tuple(_quantum_geometry.__all__)
+_SYSTEM = tuple(_system.__all__)
+_WAVEFUNCTION = tuple(_wavefunction.__all__)
+
+for _module, _names in (
+    (_core, _CORE),
+    (_quantum_geometry, _QUANTUM_GEOMETRY),
+    (_system, _SYSTEM),
+    (_wavefunction, _WAVEFUNCTION),
+):
+    globals().update({name: getattr(_module, name) for name in _names})
+
+__all__ = [*_CORE, *_QUANTUM_GEOMETRY, *_SYSTEM, *_WAVEFUNCTION]
+
+del _core, _quantum_geometry, _system, _wavefunction, _module, _names
