@@ -2687,3 +2687,47 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 - `tests` Python lines: 2341
 - `src/mean_field/systems` Python lines: 26330
 - Files over 1000 lines: 0
+
+## Update: restore thin HTG topology wrapper
+
+Commit in this continuation:
+
+- pending: restore thin HTG topology wrapper
+
+### Scope
+
+Restored `mean_field.systems.htg.topology` as a thin wrapper over `analysis.topology` for ordinary HTG single-particle GridBandsResult topology:
+
+- HTG already used the common `GridBandsResult` band/grid container; the new topology wrapper maps requested absolute HTG band labels through `grid_result.band_indices` using the common topology adapter.
+- `compute_topology_on_grid(...)` requests the contiguous absolute band window needed by the HTG scipy diagonalizer, then selects the requested labels through the common grid-result mapping.
+- Added HTG reciprocal boundary sewing using the same G-index relabeling as TMBG with local block size 6.
+- Added optional `HTGModel.topology_on_grid(...)` lazy delegate.
+- Updated current docs and topology boundary tests to include HTG in the restored thin-wrapper surface.
+
+Still not restored: HTG Chern-basis workflows, projected/supercell-HF topology, paper workflows, plotting/report scripts, or paper-level claims.
+
+### Validation
+
+Added `tests/test_htg_topology.py` with QWZ/fake-grid/monkeypatch tests for delegation, absolute band-label mapping, contiguous-window grid requests, endpoint rejection, and sewing transform shape/mapping.
+
+Validation on `test001`:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 106 passed
+
+python -m pip install -e . --dry-run --no-deps --no-build-isolation
+# Would install mean-field-0.1.0
+```
+
+### Current summary after this continuation
+
+- Tracked text lines: 48091
+- Tracked Python lines: 42544
+- Tracked Julia lines: 826
+- `src` Python files: 202
+- `src` Python lines: 39997
+- `tests` Python lines: 2486
+- `src/mean_field/systems` Python lines: 26340
+- Files over 1000 lines: 0

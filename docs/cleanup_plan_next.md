@@ -97,5 +97,5 @@ Acceptance:
 
 ## Lower priority
 
-- Bands wrappers remain. Thin TMBG, TDBG, ATMG, and RLG-hBN topology wrappers are restored; HTG topology wrapper and paper workflows are archived, while the tracked surface includes the common FHS/QGT topology core and generic wavefunction/system adapters under `src/analysis/topology`.
+- Bands wrappers remain. Thin TMBG, TDBG, ATMG, RLG-hBN, and HTG topology wrappers are restored; paper workflows remain archived, while the tracked surface includes the common FHS/QGT topology core and generic wavefunction/system adapters under `src/analysis/topology`.
 - Devtools cleanup: tracked devtools are archived locally for now; future durable commands should be reintroduced only through a small reviewed public surface.

@@ -1,20 +1,14 @@
 from __future__ import annotations
-
 from dataclasses import dataclass
-
 import numpy as np
-
 from .bands import GridBandsResult, PathBandsResult, compute_bands_along_path, compute_bands_on_grid
 from .hamiltonian import build_hamiltonian, diagonalize_hamiltonian
 from .lattice import HTGLattice, KPath, build_htg_lattice, build_kpath_from_nodes, build_paper_hf_kpath, build_standard_kpath
 from .params import HTGParams
-
-
 @dataclass(frozen=True)
 class HTGModel:
     lattice: HTGLattice
     params: HTGParams
-
     @classmethod
     def from_config(
         cls,
@@ -30,19 +24,15 @@ class HTGModel:
             graphene_lattice_constant_nm=resolved_params.graphene_lattice_constant_nm,
         )
         return cls(lattice=lattice, params=resolved_params)
-
     @property
     def theta_deg(self) -> float:
         return float(self.lattice.theta_deg)
-
     @property
     def n_shells(self) -> int:
         return int(self.lattice.n_shells)
-
     @property
     def matrix_dim(self) -> int:
         return int(self.lattice.matrix_dim)
-
     def lattice_summary(self) -> dict[str, object]:
         summary = self.lattice.to_summary_dict()
         summary.update(
@@ -55,7 +45,6 @@ class HTGModel:
             }
         )
         return summary
-
     def build_hamiltonian(
         self,
         k_tilde: complex,
@@ -72,7 +61,6 @@ class HTGModel:
             d_top=d_top,
             d_bot=d_bot,
         )
-
     def diagonalize(
         self,
         k_tilde: complex,
@@ -93,7 +81,6 @@ class HTGModel:
             band_indices=band_indices,
             return_eigenvectors=return_eigenvectors,
         )
-
     def build_kpath(
         self,
         nodes: tuple[complex, ...],
@@ -102,13 +89,10 @@ class HTGModel:
         points_per_segment: int,
     ) -> KPath:
         return build_kpath_from_nodes(nodes, labels, points_per_segment)
-
     def standard_kpath(self, *, points_per_segment: int = 120) -> KPath:
         return build_standard_kpath(self.lattice, points_per_segment=points_per_segment)
-
     def paper_hf_kpath(self, *, points_per_segment: int = 120) -> KPath:
         return build_paper_hf_kpath(self.lattice, points_per_segment=points_per_segment)
-
     def bands_along_path(
         self,
         path: KPath,
@@ -131,7 +115,6 @@ class HTGModel:
             central_band_count=central_band_count,
             return_eigenvectors=return_eigenvectors,
         )
-
     def bands_along_standard_path(
         self,
         *,
@@ -146,7 +129,6 @@ class HTGModel:
             central_band_count=central_band_count,
             return_eigenvectors=return_eigenvectors,
         )
-
     def bands_on_grid(
         self,
         mesh_size: int,
@@ -169,3 +151,6 @@ class HTGModel:
             endpoint=endpoint,
             frac_shift=frac_shift,
         )
+    def topology_on_grid(self, mesh_size: int, band_indices, **kwargs):
+        from .topology import compute_topology_on_grid
+        return compute_topology_on_grid(mesh_size, self.lattice, self.params, band_indices, **kwargs)

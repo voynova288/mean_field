@@ -59,7 +59,7 @@ Models with reviewed thin topology wrappers may expose:
 def topology_on_grid(mesh_size: int, band_indices, **kwargs) -> analysis.topology.TopologyResult: ...
 ```
 
-This is an optional convenience, not a required `ContinuumModel` protocol method. Current coverage is TMBG, TDBG, ATMG, and RLG-hBN; HTG remains absent until its absolute-band-window API is reviewed. At the model/wrapper/grid-result layer, `band_indices` means the system/grid-result band labels, normally absolute Hamiltonian band indices, and the common topology adapter maps them to returned eigenvector columns. Only the low-level `compute_topology_from_eigenvectors(...)` entrypoint uses raw eigenvector-column indices.
+This is an optional convenience, not a required `ContinuumModel` protocol method. Current coverage is TMBG, TDBG, ATMG, RLG-hBN, and HTG. At the model/wrapper/grid-result layer, `band_indices` means the system/grid-result band labels, normally absolute Hamiltonian band indices, and the common topology adapter maps them to returned eigenvector columns. HTG `topology_on_grid(...)` requests the contiguous absolute band window needed by its scipy diagonalizer, then lets the common grid-result adapter select the requested labels. Only the low-level `compute_topology_from_eigenvectors(...)` entrypoint uses raw eigenvector-column indices.
 
 `topology_on_grid(...)` diagonalizes a 2D grid with eigenvectors and is therefore a numerical job for realistic meshes. Use `endpoint=False`; paper-level topology validation still requires explicit provenance and Slurm-scale validation.
 

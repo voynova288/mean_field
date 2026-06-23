@@ -74,5 +74,13 @@ def test_rlg_hbn_model_topology_on_grid_delegates_wrapper_specific_kwargs(monkey
     assert calls == {"mesh_size": 11, "lattice": lattice, "params": params, "band_indices": 4, "kwargs": {"use_boundary_sewing": False, "paper_orientation": True}}
 
 
-def test_htg_model_topology_on_grid_remains_absent() -> None:
-    assert not hasattr(HTGModel, "topology_on_grid")
+def test_htg_model_topology_on_grid_delegates_to_wrapper(monkeypatch) -> None:
+    calls: dict[str, object] = {}
+    sentinel = object()
+    _patch_topology(monkeypatch, "mean_field.systems.htg.topology", calls, sentinel)
+    lattice, params = object(), object()
+
+    result = HTGModel(lattice, params).topology_on_grid(13, (20, 21), d_top=1.0j, d_bot=-0.5j, boundary_sewing=False)
+
+    assert result is sentinel
+    assert calls == {"mesh_size": 13, "lattice": lattice, "params": params, "band_indices": (20, 21), "kwargs": {"d_top": 1.0j, "d_bot": -0.5j, "boundary_sewing": False}}
