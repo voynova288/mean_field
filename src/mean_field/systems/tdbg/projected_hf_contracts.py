@@ -83,6 +83,9 @@ def _projected_basis(data: TDBGProjectedHFData) -> ContractProjectedBasis:
         metadata={
             "projected_basis_source": "TDBGProjectedHFData",
             "wavefunctions_axis_order": "state,k,q_site,local",
+            "canonical_dense_reconstruction_available": False,
+            "reconstruction_adapter": "TDBGProjectedHFResult.reconstruct_micro_wavefunctions",
+            "reconstruction_note": "Raw TDBG wavefunctions need spin/valley direct-sum expansion before common k,microscopic_basis,active_basis contraction.",
             "density_axis_order": "abk",
             "window_name": data.config.window.name,
             "window_band_indices": None

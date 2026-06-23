@@ -1,11 +1,29 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from ._hf_types import *  # noqa: F401,F403
 from ._hf_reference import *  # noqa: F401,F403
 from ._hf_initialization import *  # noqa: F401,F403
 from ._hf_basis import *  # noqa: F401,F403
 from ._hf_interaction_path import *  # noqa: F401,F403
 from ._hf_runner import *  # noqa: F401,F403
+
+from ._hf_reconstruction import (
+    diagonalize_htg_active_hamiltonian_field as _diagonalize_htg_active_hamiltonian_field,
+    htg_active_hamiltonian_state_count as _htg_active_hamiltonian_state_count,
+    htg_direct_sum_state_index as _htg_direct_sum_state_index,
+    htg_hf_state_labels as _htg_hf_state_labels,
+    htg_reconstruction_output_element_count as _htg_reconstruction_output_element_count,
+    normalize_htg_reconstruction_state_indices as _normalize_htg_reconstruction_state_indices,
+    reconstruct_htg_projected_micro_bundle as _reconstruct_htg_projected_micro_bundle,
+    validate_htg_reconstruction_output_size as _validate_htg_reconstruction_output_size,
+)
+
+_HTG_RECONSTRUCTION_DEFAULT_MAX_DENSE_ELEMENTS = 5_000_000
+
+if TYPE_CHECKING:
+    from mean_field.core.contracts import MicroscopicWavefunctionBundle
 
 @dataclass(frozen=True)
 class HTGRunHFConfig:
@@ -223,9 +241,10 @@ def _contract_flatten_k_grid_frac(data: HTGProjectedBasisData) -> np.ndarray:
 
 
 def _contract_state_index(data: HTGProjectedBasisData) -> np.ndarray:
-    return np.arange(int(data.basis.nt), dtype=int).reshape(
-        (int(data.basis.n_spin), int(data.basis.n_flavor), int(data.basis.n_band)),
-        order="F",
+    return _htg_direct_sum_state_index(
+        int(data.basis.n_spin),
+        int(data.basis.n_flavor),
+        int(data.basis.n_band),
     )
 
 
@@ -268,6 +287,99 @@ def _contract_band_labels(data: HTGProjectedBasisData) -> tuple[dict[str, object
     )
 
 
+def _contract_active_basis_labels(data: HTGProjectedBasisData) -> tuple[dict[str, object], ...]:
+    labels: list[dict[str, object]] = [{} for _ in range(int(data.basis.nt))]
+    state_index = _contract_state_index(data)
+    valley_labels = tuple(int(value) for value in VALLEY_SEQUENCE)
+    projected = tuple(int(index) for index in data.projected_band_indices)
+    for ispin in range(int(data.basis.n_spin)):
+        for ieta in range(int(data.basis.n_flavor)):
+            valley = valley_labels[ieta] if ieta < len(valley_labels) else ieta
+            for iband, physical_band in enumerate(projected):
+                labels[int(state_index[ispin, ieta, iband])] = {
+                    "active_basis_index": int(state_index[ispin, ieta, iband]),
+                    "spin_index": int(ispin),
+                    "eta_index": int(ieta),
+                    "valley": int(valley),
+                    "projected_band_position": int(iband),
+                    "physical_band_index": int(physical_band),
+                }
+    return tuple(labels)
+
+def _contract_reconstruction_grid_shape(data: HTGProjectedBasisData) -> tuple[int, int] | None:
+    grid = np.asarray(data.k_grid_frac, dtype=float)
+    if grid.ndim == 3 and grid.shape[-1] == 2 and int(grid.shape[0] * grid.shape[1]) == int(data.nk):
+        return (int(grid.shape[0]), int(grid.shape[1]))
+    mesh_size = int(data.mesh_size)
+    if mesh_size > 0 and int(mesh_size * mesh_size) == int(data.nk):
+        return (mesh_size, mesh_size)
+    return None
+
+def reconstruct_htg_projected_hf_micro_wavefunctions(
+    run: HTGHartreeFockRun,
+    *,
+    band_indices: int | Iterable[int] | None = None,
+    max_dense_elements: int | None = _HTG_RECONSTRUCTION_DEFAULT_MAX_DENSE_ELEMENTS,
+    unitarity_atol: float | None = 1.0e-8,
+) -> MicroscopicWavefunctionBundle:
+    """Explicitly reconstruct primitive HTG projected-HF microscopic wavefunctions.
+
+    Canonical HTG HF wrappers keep the compact system basis by default.  This
+    opt-in adapter expands the compact ``(basis, band, flavor, k)`` projected
+    basis into the common direct-sum row order, diagonalizes the final projected
+    HF Hamiltonian for active-state coefficients, and allocates only the selected
+    reconstructed HF state columns requested by ``band_indices``.
+    """
+
+    data = run.basis_data
+    n_state = _htg_active_hamiltonian_state_count(run.state.hamiltonian, context="HTG primitive")
+    selected = _normalize_htg_reconstruction_state_indices(band_indices, n_state)
+    dense_elements = _validate_htg_reconstruction_output_size(
+        data,
+        n_output_states=len(selected),
+        max_dense_elements=max_dense_elements,
+        context="HTG primitive",
+    )
+    all_dense_elements = _htg_reconstruction_output_element_count(data, n_output_states=n_state)
+    _evals, evecs, eig_diagnostics = _diagonalize_htg_active_hamiltonian_field(
+        run.state.hamiltonian,
+        context="HTG primitive",
+        reference_energies=getattr(run.state, "energies", None),
+    )
+    all_state_labels = _htg_hf_state_labels(n_state)
+    selected_labels = tuple(all_state_labels[index] for index in selected)
+    metadata: dict[str, object] = {
+        "system": "htg",
+        "adapter": "mean_field.systems.htg.mean_field_adapter.reconstruct_htg_projected_hf_micro_wavefunctions",
+        "projected_hf_reconstruction": "explicit_dense_opt_in",
+        "canonical_wrapping_dense_by_default": False,
+        "raw_projected_basis_axis_order": "basis,band,flavor,k",
+        "micro_basis_axis_order": "k,microscopic_basis,active_basis",
+        "microscopic_row_order": "spin,eta,basis_flat_F(local,gx,gy)",
+        "active_basis_order": "spin,eta,band with numpy.reshape(..., order='F')",
+        "active_basis_labels": _contract_active_basis_labels(data),
+        "dense_reconstruction_estimated_elements": int(dense_elements),
+        "dense_reconstruction_estimated_all_state_elements": int(all_dense_elements),
+        "max_dense_elements": None if max_dense_elements is None else int(max_dense_elements),
+        "selected_hf_band_indices": [int(index) for index in selected],
+        "sewing_policy": "unavailable: primitive projected-basis boundary sewing is not validated",
+    }
+    metadata.update(eig_diagnostics)
+    return _reconstruct_htg_projected_micro_bundle(
+        np.asarray(data.basis.wavefunctions, dtype=np.complex128),
+        evecs,
+        n_spin=int(data.basis.n_spin),
+        selected_state_indices=selected,
+        kvec=np.asarray(data.kvec, dtype=np.complex128),
+        k_grid_frac=_contract_flatten_k_grid_frac(data),
+        grid_shape=_contract_reconstruction_grid_shape(data),
+        state_labels=selected_labels,
+        sewing_transforms=(),
+        basis_metadata=metadata,
+        unitarity_atol=unitarity_atol,
+        context="HTG primitive",
+    )
+
 def _contract_reference_scheme(data: HTGProjectedBasisData) -> str:
     reference = htg_band_reference_occupations(int(data.basis.n_band))
     return "average" if np.allclose(reference, 0.5, atol=1.0e-12, rtol=0.0) else "central_average"
@@ -293,6 +405,10 @@ def _contract_projected_basis(data: HTGProjectedBasisData) -> ContractProjectedB
         metadata={
             "projected_basis_source": "HTGProjectedBasisData",
             "wavefunctions_axis_order": "basis,band,flavor,k",
+            "canonical_micro_wavefunctions_storage": "compact_system_projected_basis_not_dense_direct_sum",
+            "reconstruction_adapter": "mean_field.systems.htg.mean_field_adapter.reconstruct_htg_projected_hf_micro_wavefunctions",
+            "reconstruction_requires_explicit_call": True,
+            "reconstruction_dense_by_default": False,
             "density_axis_order": "abk",
             "active_band_semantics": "projected_band_indices_repeated_over_spin_valley",
             "projected_band_indices": [int(index) for index in data.projected_band_indices],
@@ -474,6 +590,8 @@ def _contract_result_observables(run: HTGHartreeFockRun) -> dict[str, object]:
         "seed": int(run.seed),
         "iterations": int(_contract_iteration_count(run)),
         "raw_density_convention": "stored_delta",
+        "projected_hf_reconstruction_adapter": "mean_field.systems.htg.mean_field_adapter.reconstruct_htg_projected_hf_micro_wavefunctions",
+        "projected_hf_reconstruction_dense_by_default": False,
         "occupation_counts": None
         if state.occupation_counts is None
         else [int(value) for value in state.occupation_counts],
@@ -503,6 +621,9 @@ def htg_hf_run_to_hf_run_result(
         mu=float(state.mu),
         observables={
             "eigenvectors_active_available": False,
+            "projected_hf_reconstruction_adapter": "mean_field.systems.htg.mean_field_adapter.reconstruct_htg_projected_hf_micro_wavefunctions",
+            "projected_hf_reconstruction_requires_explicit_call": True,
+            "projected_hf_reconstruction_dense_by_default": False,
             "primitive_nu": float(state.nu),
             "filling_from_density": float(
                 htg_filling_from_density(

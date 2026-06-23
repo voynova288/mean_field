@@ -371,6 +371,10 @@ def test_public_run_hf_htg_primitive_explicit_config_attaches_canonical_contract
     assert result.observables["public_run_hf_adapter"].endswith("run_htg_hf_config_adapter")
     assert result.canonical_run_result.final_state.density.reference.metadata["raw_density_convention"] == "stored_delta"
     assert result.canonical_run_result.final_state.hamiltonian.metadata["supports_crpa"] is False
+    primitive_basis = result.canonical_run_result.final_state.basis
+    assert primitive_basis.micro_wavefunctions.ndim == 4
+    assert primitive_basis.metadata["canonical_micro_wavefunctions_storage"] == "compact_system_projected_basis_not_dense_direct_sum"
+    assert primitive_basis.metadata["reconstruction_dense_by_default"] is False
     _assert_metadata_only_hf_save_load(result, tmp_path, system_name="htg")
 
 
@@ -408,6 +412,10 @@ def test_public_run_hf_htg_supercell_explicit_config_attaches_canonical_contract
     assert result.observables["public_run_hf_adapter"].endswith("run_htg_supercell_hf_config_adapter")
     assert result.canonical_run_result.final_state.density.reference.metadata["raw_density_convention"] == "stored_delta"
     assert result.canonical_run_result.final_state.hamiltonian.metadata["supports_crpa"] is False
+    supercell_basis = result.canonical_run_result.final_state.basis
+    assert supercell_basis.micro_wavefunctions.ndim == 4
+    assert supercell_basis.metadata["canonical_micro_wavefunctions_storage"] == "compact_system_projected_basis_not_dense_direct_sum"
+    assert supercell_basis.metadata["reconstruction_dense_by_default"] is False
 
     _assert_metadata_only_hf_save_load(result, tmp_path, system_name="htg_supercell")
 

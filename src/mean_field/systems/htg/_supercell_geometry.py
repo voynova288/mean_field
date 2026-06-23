@@ -224,28 +224,42 @@ def htg_supercell_full_boundary_sewing_transform(basis_data: HTGSupercellProject
     shift_x = int(dm)
     shift_y = int(dn)
 
+    basis_dimension = int(local_size * nx * ny)
+
     def apply(vector: np.ndarray) -> np.ndarray:
         array = np.asarray(vector, dtype=np.complex128)
+        if array.ndim not in {1, 2}:
+            raise ValueError(f"HTG supercell sewing expects a vector or frame, got shape {array.shape}")
+        if array.shape[0] != int(n_spin * n_eta * basis_dimension):
+            raise ValueError(
+                "HTG supercell sewing vector length is incompatible with the projected-micro row order: "
+                f"got {array.shape[0]}, expected {int(n_spin * n_eta * basis_dimension)}"
+            )
         has_columns = array.ndim == 2
-        if has_columns:
-            n_column = int(array.shape[1])
-            reshaped = array.reshape((n_spin, n_eta, local_size, nx, ny, n_column))
-            out = np.zeros_like(reshaped)
-        else:
-            reshaped = array.reshape((n_spin, n_eta, local_size, nx, ny))
-            out = np.zeros_like(reshaped)
-        for ix in range(nx):
-            source_x = ix + shift_x
-            if source_x < 0 or source_x >= nx:
-                continue
-            for iy in range(ny):
-                source_y = iy + shift_y
-                if source_y < 0 or source_y >= ny:
-                    continue
+        n_column = int(array.shape[1]) if has_columns else 1
+        reshaped = array.reshape((n_spin, n_eta, basis_dimension, n_column)) if has_columns else array.reshape((n_spin, n_eta, basis_dimension))
+        out = np.zeros_like(reshaped)
+        for ispin in range(n_spin):
+            for ieta in range(n_eta):
                 if has_columns:
-                    out[:, :, :, ix, iy, :] = reshaped[:, :, :, source_x, source_y, :]
+                    block = reshaped[ispin, ieta].reshape((local_size, nx, ny, n_column), order="F")
+                    shifted = np.zeros_like(block)
                 else:
-                    out[:, :, :, ix, iy] = reshaped[:, :, :, source_x, source_y]
+                    block = reshaped[ispin, ieta].reshape((local_size, nx, ny), order="F")
+                    shifted = np.zeros_like(block)
+                for ix in range(nx):
+                    source_x = ix + shift_x
+                    if source_x < 0 or source_x >= nx:
+                        continue
+                    for iy in range(ny):
+                        source_y = iy + shift_y
+                        if source_y < 0 or source_y >= ny:
+                            continue
+                        if has_columns:
+                            shifted[:, ix, iy, :] = block[:, source_x, source_y, :]
+                        else:
+                            shifted[:, ix, iy] = block[:, source_x, source_y]
+                out[ispin, ieta] = shifted.reshape((basis_dimension, n_column), order="F") if has_columns else shifted.reshape((basis_dimension,), order="F")
         return out.reshape(array.shape)
 
     return apply
@@ -265,14 +279,12 @@ def _htg_supercell_full_wavefunction_from_coefficients(
     n_eta = int(basis_data.basis.n_flavor)
     n_band = int(basis_data.basis.n_band)
     basis_dimension = int(basis_data.basis.basis_dimension)
-    local_size = int(basis_data.basis.local_basis_size)
-    nx, ny = basis_data.basis.grid_shape
     coeff = np.asarray(coefficients, dtype=np.complex128).reshape((n_spin, n_eta, n_band), order="F")
     out = np.zeros((n_spin, n_eta, basis_dimension), dtype=np.complex128)
     for ispin in range(n_spin):
         for ieta in range(n_eta):
             out[ispin, ieta, :] = basis_data.basis.wavefunctions[:, :, ieta, int(ik)] @ coeff[ispin, ieta, :]
-    return out.reshape((n_spin, n_eta, local_size, int(nx), int(ny))).reshape(-1)
+    return out.reshape(-1)
 
 def build_htg_supercell_hf_wavefunction_grid(
     hamiltonian: np.ndarray,

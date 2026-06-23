@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from analysis.order_parameters import StateLabel, analyze_tdbg_order_parameters
 
+from ...core.contracts import MicroscopicWavefunctionBundle
 from ...core.hf import (
     DensityConvention,
     DensityUpdateResult,
@@ -16,7 +17,7 @@ from ...core.hf import (
     density_to_stored_delta,
     stored_projector_to_conventional,
 )
-from .projected_hf_config import SPIN_LABELS, TDBGProjectedHFConfig, VALLEY_LABELS
+from .projected_hf_config import SPIN_LABELS, TDBGProjectedHFConfig, TDBG_LOCAL_LABELS, VALLEY_LABELS, VALLEY_SEQUENCE
 
 if TYPE_CHECKING:
     from ...core.hf import HartreeFockRun
@@ -108,6 +109,350 @@ class TDBGProjectedHFTargetData:
         return int(self.h0.shape[2])
 
 
+_TDBG_RAW_WAVEFUNCTION_AXIS_ORDER = "state,k,q_site,local"
+_TDBG_CANONICAL_MICRO_AXIS_ORDER = "k,microscopic_basis,active_basis"
+_TDBG_MICRO_ROW_ORDER = "spin,valley,q_site,local"
+_TDBG_RECONSTRUCTION_DEFAULT_MAX_DENSE_ELEMENTS = 5_000_000
+
+
+def _tdbg_label_indices(label: TDBGStateLabel) -> tuple[int, int]:
+    try:
+        spin_index = SPIN_LABELS.index(str(label.spin))
+    except ValueError as exc:
+        raise ValueError(f"Unsupported TDBG spin label {label.spin!r}; expected one of {SPIN_LABELS}") from exc
+    try:
+        valley_index = VALLEY_SEQUENCE.index(int(label.valley))
+    except ValueError as exc:
+        raise ValueError(f"Unsupported TDBG valley label {label.valley!r}; expected one of {VALLEY_SEQUENCE}") from exc
+    return spin_index, valley_index
+
+
+def _tdbg_micro_basis_metadata(data: TDBGProjectedHFData) -> dict[str, Any]:
+    n_q = int(data.model.lattice.n_q)
+    n_local = len(TDBG_LOCAL_LABELS)
+    return {
+        "system": "tdbg",
+        "projected_basis_source": "TDBGProjectedHFData.wavefunctions",
+        "raw_wavefunctions_axis_order": _TDBG_RAW_WAVEFUNCTION_AXIS_ORDER,
+        "wavefunctions_axis_order": _TDBG_CANONICAL_MICRO_AXIS_ORDER,
+        "microscopic_basis_axis_order": _TDBG_MICRO_ROW_ORDER,
+        "microscopic_basis_flattening": "(((spin_index * n_valley + valley_index) * n_q + q_site) * n_local + local)",
+        "spin_order": list(SPIN_LABELS),
+        "valley_order": [int(valley) for valley in VALLEY_SEQUENCE],
+        "local_order": list(TDBG_LOCAL_LABELS),
+        "q_site_count": n_q,
+        "local_basis_size": n_local,
+        "active_basis_axis_order": "TDBGStateLabel.index; band_position fastest inside valley inside spin",
+        "active_basis_labels": [label.to_dict() for label in data.labels],
+        "sewing_transforms_available": False,
+        "sewing_policy": "unavailable: TDBG torus boundary sewing transform is not attached or validated",
+        "topology_eligible": False,
+        "topology_ineligible_reason": "No validated TDBG torus/boundary sewing transforms are attached to this reconstructed projected-HF bundle.",
+        "uncertainty": "Algebraic direct-sum reconstruction only; no TDBG torus sewing transform is attached or validated here.",
+        "evidence_paths": [
+            "src/mean_field/systems/tdbg/projected_hf_data.py",
+            "src/mean_field/systems/tdbg/projected_hf_state.py",
+            "src/mean_field/systems/tdbg/projected_hf_contracts.py",
+        ],
+    }
+
+
+def _tdbg_micro_dim(n_q: int, n_local: int) -> int:
+    return int(len(SPIN_LABELS) * len(VALLEY_SEQUENCE) * int(n_q) * int(n_local))
+
+def _tdbg_validated_raw_wavefunctions(data: TDBGProjectedHFData) -> tuple[np.ndarray, int, int, int, int]:
+    raw = np.asarray(data.wavefunctions, dtype=np.complex128)
+    if raw.ndim != 4:
+        raise ValueError(
+            f"Expected TDBG raw wavefunctions axis order {_TDBG_RAW_WAVEFUNCTION_AXIS_ORDER!r} with rank 4, got shape {raw.shape}"
+        )
+    nt, nk, n_q, n_local = (int(v) for v in raw.shape)
+    if nt != int(data.nt) or nk != int(data.nk):
+        raise ValueError(f"Raw TDBG wavefunctions shape {raw.shape} is incompatible with data.nt={data.nt}, data.nk={data.nk}")
+    if n_q != int(data.model.lattice.n_q):
+        raise ValueError(f"Raw TDBG q_site axis has length {n_q}, expected lattice.n_q={data.model.lattice.n_q}")
+    if n_local != len(TDBG_LOCAL_LABELS):
+        raise ValueError(f"Raw TDBG local axis has length {n_local}, expected {len(TDBG_LOCAL_LABELS)}")
+    return raw, nt, nk, n_q, n_local
+
+def _tdbg_validated_label_rows(data: TDBGProjectedHFData, *, nt: int, sector_stride: int) -> tuple[tuple[int, int], ...]:
+    if len(data.labels) != nt:
+        raise ValueError(f"TDBG label count {len(data.labels)} must match active dimension nt={nt}")
+    entries: list[tuple[int, int]] = []
+    seen: set[int] = set()
+    for label in data.labels:
+        col = int(label.index)
+        if col < 0 or col >= nt:
+            raise ValueError(f"TDBG label index {col} is outside active dimension nt={nt}")
+        if col in seen:
+            raise ValueError(f"Duplicate TDBG label index {col}")
+        seen.add(col)
+        spin_index, valley_index = _tdbg_label_indices(label)
+        row0 = (spin_index * len(VALLEY_SEQUENCE) + valley_index) * int(sector_stride)
+        entries.append((col, row0))
+    if len(seen) != nt:
+        missing = sorted(set(range(nt)) - seen)
+        raise ValueError(f"TDBG labels did not cover active indices {missing}")
+    return tuple(entries)
+
+def tdbg_canonical_projected_micro_basis(data: TDBGProjectedHFData) -> np.ndarray:
+    """Expand raw TDBG projected states to ``(k, microscopic_basis, active_basis)``.
+
+    Raw TDBG projected-HF stores ``data.wavefunctions[state, k, q_site, local]``.
+    The ``state`` axis is the active projected basis with labels carrying spin,
+    valley, and band.  For microscopic reconstruction, spin and valley sectors
+    must be orthogonal row blocks, so the canonical row index is
+    ``(((spin * n_valley + valley) * n_q + q_site) * n_local + local)`` while
+    the active column remains ``TDBGStateLabel.index``.
+    """
+
+    raw, nt, nk, n_q, n_local = _tdbg_validated_raw_wavefunctions(data)
+    sector_stride = n_q * n_local
+    micro_dim = _tdbg_micro_dim(n_q, n_local)
+    canonical = np.zeros((nk, micro_dim, nt), dtype=np.complex128)
+    for col, row0 in _tdbg_validated_label_rows(data, nt=nt, sector_stride=sector_stride):
+        canonical[:, row0 : row0 + sector_stride, col] = raw[col].reshape(nk, sector_stride)
+    return canonical
+
+
+def tdbg_active_eigensystem_from_hamiltonian(
+    hamiltonian: np.ndarray,
+    *,
+    hermiticity_atol: float = 1.0e-8,
+) -> tuple[np.ndarray, np.ndarray, dict[str, float]]:
+    """Diagonalize final TDBG active Hamiltonians as ket coefficients.
+
+    Returns eigenvalues ``(active_state, k)`` and eigenvectors
+    ``(active_basis, hf_state, k)`` in the same active-basis order as
+    ``TDBGStateLabel.index``.  These are ket coefficients from ``np.linalg.eigh``;
+    no density-projector transpose/conjugation convention is used.  Non-Hermitian
+    final Hamiltonians are rejected instead of being silently symmetrized.
+    """
+
+    hermiticity_atol_value = float(hermiticity_atol)
+    if hermiticity_atol_value < 0.0:
+        raise ValueError(f"hermiticity_atol must be non-negative, got {hermiticity_atol}")
+    hamiltonian = np.asarray(hamiltonian, dtype=np.complex128)
+    if hamiltonian.ndim != 3 or hamiltonian.shape[0] != hamiltonian.shape[1]:
+        raise ValueError(f"Expected TDBG Hamiltonian shape (nt, nt, nk), got {hamiltonian.shape}")
+    nt, _nt_rhs, nk = (int(v) for v in hamiltonian.shape)
+    max_hermitian_residual = (
+        float(np.max(np.abs(hamiltonian - hamiltonian.conjugate().swapaxes(0, 1)))) if hamiltonian.size else 0.0
+    )
+    if max_hermitian_residual > hermiticity_atol_value:
+        raise ValueError(
+            "TDBG final Hamiltonian is not Hermitian enough for reconstruction; "
+            f"max residual {max_hermitian_residual:.6e} exceeds hermiticity_atol={hermiticity_atol_value:.6e}. "
+            "Refusing to symmetrize silently."
+        )
+    energies = np.zeros((nt, nk), dtype=float)
+    eigenvectors = np.zeros((nt, nt, nk), dtype=np.complex128)
+    max_eigen_residual = 0.0
+    max_unitarity_residual = 0.0
+    identity = np.eye(nt, dtype=np.complex128)
+    for ik in range(nk):
+        block = hamiltonian[:, :, ik]
+        vals, vecs = np.linalg.eigh(block)
+        energies[:, ik] = vals
+        eigenvectors[:, :, ik] = vecs
+        residual = block @ vecs - vecs * vals[None, :]
+        max_eigen_residual = max(max_eigen_residual, float(np.max(np.abs(residual))) if residual.size else 0.0)
+        unitary_residual = vecs.conjugate().T @ vecs - identity
+        max_unitarity_residual = max(
+            max_unitarity_residual,
+            float(np.max(np.abs(unitary_residual))) if unitary_residual.size else 0.0,
+        )
+    return energies, eigenvectors, {
+        "active_hamiltonian_hermitian_residual": max_hermitian_residual,
+        "active_hamiltonian_hermiticity_atol": hermiticity_atol_value,
+        "active_hamiltonian_hermiticity_policy": "reject_without_symmetrization",
+        "active_eigensystem_residual": max_eigen_residual,
+        "active_eigenvector_unitarity_residual": max_unitarity_residual,
+    }
+
+
+def _tdbg_normalize_reconstruction_state_indices(
+    *,
+    state_indices: int | Iterable[int] | None,
+    band_indices: int | Iterable[int] | None,
+    n_state: int,
+) -> tuple[tuple[int, ...], str]:
+    if state_indices is not None and band_indices is not None:
+        raise ValueError("Pass only one of state_indices or band_indices for TDBG reconstruction")
+    source = "all"
+    raw_indices: int | Iterable[int] | None = None
+    if state_indices is not None:
+        source = "state_indices"
+        raw_indices = state_indices
+    elif band_indices is not None:
+        source = "band_indices"
+        raw_indices = band_indices
+    if raw_indices is None:
+        selected = tuple(range(int(n_state)))
+    elif isinstance(raw_indices, (int, np.integer)):
+        selected = (int(raw_indices),)
+    else:
+        selected = tuple(int(index) for index in raw_indices)
+    if not selected:
+        raise ValueError("TDBG reconstruction requires at least one selected HF state")
+    if len(set(selected)) != len(selected):
+        raise ValueError(f"Duplicate TDBG reconstruction state indices {selected}")
+    invalid = [int(index) for index in selected if int(index) < 0 or int(index) >= int(n_state)]
+    if invalid:
+        raise ValueError(f"TDBG reconstruction state indices {invalid} are outside [0, {int(n_state)})")
+    return selected, source
+
+def _tdbg_reconstruction_dense_element_count(data: TDBGProjectedHFData, *, n_selected: int) -> int:
+    micro_dim = _tdbg_micro_dim(int(data.model.lattice.n_q), len(TDBG_LOCAL_LABELS))
+    return int(data.nk) * int(micro_dim) * int(n_selected)
+
+def _tdbg_validate_reconstruction_size(
+    data: TDBGProjectedHFData,
+    *,
+    n_selected: int,
+    max_dense_elements: int | None,
+) -> int:
+    dense_elements = _tdbg_reconstruction_dense_element_count(data, n_selected=n_selected)
+    if max_dense_elements is None:
+        return dense_elements
+    max_elements = int(max_dense_elements)
+    if max_elements < 0:
+        raise ValueError("max_dense_elements must be non-negative or None")
+    if dense_elements > max_elements:
+        raise ValueError(
+            "TDBG projected-HF dense reconstruction would exceed the explicit size guard: "
+            f"estimated {dense_elements} complex elements for {int(n_selected)} selected HF states "
+            f"> max_dense_elements={max_elements}. Pass selected state_indices/band_indices or increase "
+            "max_dense_elements only for an intentional reconstruction call."
+        )
+    return dense_elements
+
+def _tdbg_selected_eigenvector_unitarity_residual(eigenvectors: np.ndarray, selected: tuple[int, ...]) -> float:
+    coeffs = eigenvectors[:, np.asarray(selected, dtype=int), :]
+    gram = np.einsum("ahk,amk->hmk", coeffs.conjugate(), coeffs, optimize=True)
+    identity = np.eye(len(selected), dtype=np.complex128)[:, :, None]
+    return float(np.max(np.abs(gram - identity))) if gram.size else 0.0
+
+def _tdbg_contract_selected_micro_wavefunctions(
+    data: TDBGProjectedHFData,
+    eigenvectors: np.ndarray,
+    selected: tuple[int, ...],
+) -> np.ndarray:
+    raw, nt, nk, n_q, n_local = _tdbg_validated_raw_wavefunctions(data)
+    if eigenvectors.shape != (nt, nt, nk):
+        raise ValueError(f"TDBG active eigenvectors must have shape ({nt}, {nt}, {nk}), got {eigenvectors.shape}")
+    sector_stride = n_q * n_local
+    micro_dim = _tdbg_micro_dim(n_q, n_local)
+    selected_array = np.asarray(selected, dtype=int)
+    psi = np.zeros((nk, micro_dim, len(selected)), dtype=np.complex128)
+    for col, row0 in _tdbg_validated_label_rows(data, nt=nt, sector_stride=sector_stride):
+        raw_block = raw[col].reshape(nk, sector_stride)
+        psi[:, row0 : row0 + sector_stride, :] += np.einsum(
+            "kb,hk->kbh",
+            raw_block,
+            eigenvectors[col, selected_array, :],
+            optimize=True,
+        )
+    return psi
+
+def reconstruct_tdbg_projected_hf_micro_wavefunctions(
+    result: "TDBGProjectedHFResult",
+    *,
+    state_indices: int | Iterable[int] | None = None,
+    band_indices: int | Iterable[int] | None = None,
+    max_dense_elements: int | None = _TDBG_RECONSTRUCTION_DEFAULT_MAX_DENSE_ELEMENTS,
+    hermiticity_atol: float = 1.0e-8,
+    unitarity_atol: float | None = 1.0e-8,
+) -> MicroscopicWavefunctionBundle:
+    """Return a core microscopic-wavefunction bundle for a TDBG projected-HF result.
+
+    ``state_indices`` and ``band_indices`` select HF eigenstate columns after
+    ``np.linalg.eigh`` sorting.  ``band_indices`` is an API-compatibility alias;
+    it is not the noninteracting ``TDBGProjectedHFData.band_indices`` label.
+    """
+
+    data = result.data
+    selected, selection_source = _tdbg_normalize_reconstruction_state_indices(
+        state_indices=state_indices,
+        band_indices=band_indices,
+        n_state=data.nt,
+    )
+    dense_elements = _tdbg_validate_reconstruction_size(
+        data,
+        n_selected=len(selected),
+        max_dense_elements=max_dense_elements,
+    )
+    energies, eigenvectors, eigensystem_metadata = tdbg_active_eigensystem_from_hamiltonian(
+        result.run.state.hamiltonian,
+        hermiticity_atol=hermiticity_atol,
+    )
+    selected_unitarity_residual = _tdbg_selected_eigenvector_unitarity_residual(eigenvectors, selected)
+    if unitarity_atol is not None:
+        unitarity_atol_value = float(unitarity_atol)
+        if unitarity_atol_value < 0.0:
+            raise ValueError(f"unitarity_atol must be non-negative or None, got {unitarity_atol}")
+        if selected_unitarity_residual > unitarity_atol_value:
+            raise ValueError(
+                "Selected TDBG active eigenvectors are not unitary enough for reconstruction; "
+                f"max column-Gram residual {selected_unitarity_residual:.6e} exceeds {unitarity_atol_value:.6e}"
+            )
+    kvec = np.asarray(data.kvec, dtype=np.complex128).reshape(-1)
+    if kvec.shape != (data.nk,):
+        raise ValueError(f"TDBG kvec must have shape ({data.nk},), got {kvec.shape}")
+    try:
+        k_grid_frac = np.asarray(data.k_grid_frac, dtype=float).reshape((data.nk, 2))
+    except ValueError as exc:
+        raise ValueError(f"TDBG k_grid_frac must reshape to ({data.nk}, 2), got {np.asarray(data.k_grid_frac).shape}") from exc
+    psi = _tdbg_contract_selected_micro_wavefunctions(data, eigenvectors, selected)
+    energy_residual = None
+    stored_energies = np.asarray(getattr(result.run.state, "energies", np.empty((0,))), dtype=float)
+    if stored_energies.shape == energies.shape:
+        energy_residual = float(np.max(np.abs(stored_energies - energies)))
+    state_labels = tuple({"hf_state_index": int(index)} for index in selected)
+    metadata = _tdbg_micro_basis_metadata(data)
+    metadata.update(eigensystem_metadata)
+    if energy_residual is not None:
+        metadata["stored_energy_eigensystem_residual"] = energy_residual
+    metadata.update(
+        {
+            "active_eigenvectors_source": "np.linalg.eigh(result.run.state.hamiltonian)",
+            "active_eigenvectors_axis_order": "active_basis,hf_state,k",
+            "selected_active_eigenvectors_unitarity_residual": selected_unitarity_residual,
+            "hf_state_gauge": "np.linalg.eigh column phases; degenerate subspaces are not gauge-fixed",
+            "reconstruction_adapter": "mean_field.systems.tdbg.projected_hf_state.reconstruct_tdbg_projected_hf_micro_wavefunctions",
+            "projected_hf_reconstruction": "explicit_selected_dense_opt_in",
+            "canonical_wrapping_dense_by_default": False,
+            "canonical_micro_basis_materialized": False,
+            "dense_reconstruction_estimated_elements": int(dense_elements),
+            "dense_reconstruction_size_policy": "counts selected output psi_micro elements; all-state psi_micro is not materialized for selected calls",
+            "max_dense_elements": None if max_dense_elements is None else int(max_dense_elements),
+            "selection_argument": selection_source,
+            "selected_hf_state_indices": [int(index) for index in selected],
+            "selected_hf_band_indices": [int(index) for index in selected],
+            "band_indices_argument_meaning": "HF eigenstate indices after np.linalg.eigh sorting, not TDBGProjectedHFData.band_indices",
+            "all_hf_state_count": int(data.nt),
+            "n_reconstructed_states": int(len(selected)),
+            "state_labels": state_labels,
+            "micro_basis_axis_order": _TDBG_CANONICAL_MICRO_AXIS_ORDER,
+            "input_micro_basis_axes": {"k_axis": 0, "microscopic_basis_axis": 1, "active_axis": 2},
+            "psi_micro_axis_order": "k,microscopic_basis,hf_state",
+            "n_k": int(data.nk),
+            "microscopic_basis_dim": int(psi.shape[1]),
+            "n_active": int(data.nt),
+            "kvec_provided": True,
+            "k_grid_frac_shape": [int(k_grid_frac.shape[0]), int(k_grid_frac.shape[1])],
+            "sewing_transforms_count": 0,
+        }
+    )
+    return MicroscopicWavefunctionBundle(
+        kvec=kvec,
+        psi_micro=psi,
+        sewing_transforms=(),
+        basis_metadata=metadata,
+        source="hf_reconstructed",
+    )
+
+
 @dataclass(frozen=True)
 class TDBGProjectedHFResult:
     run: HartreeFockRun
@@ -117,6 +462,45 @@ class TDBGProjectedHFResult:
     order_parameters: dict[str, object]
     energy_components: dict[str, float]
     hamiltonian_components: Mapping[str, np.ndarray] | None = None
+
+    def reconstruct_micro_wavefunctions(
+        self,
+        *,
+        state_indices: int | Iterable[int] | None = None,
+        band_indices: int | Iterable[int] | None = None,
+        max_dense_elements: int | None = _TDBG_RECONSTRUCTION_DEFAULT_MAX_DENSE_ELEMENTS,
+        hermiticity_atol: float = 1.0e-8,
+        unitarity_atol: float | None = 1.0e-8,
+    ):
+        """Public HFResult state adapter for TDBG projected-HF wavefunctions."""
+
+        core_bundle = reconstruct_tdbg_projected_hf_micro_wavefunctions(
+            self,
+            state_indices=state_indices,
+            band_indices=band_indices,
+            max_dense_elements=max_dense_elements,
+            hermiticity_atol=hermiticity_atol,
+            unitarity_atol=unitarity_atol,
+        )
+        metadata = dict(core_bundle.basis_metadata)
+        metadata.update(
+            {
+                "source": core_bundle.source,
+                "reconstruction_path": "TDBGProjectedHFResult.reconstruct_micro_wavefunctions",
+            }
+        )
+        from mean_field.api import ConventionBundle, WavefunctionBundle
+
+        return WavefunctionBundle(
+            k=core_bundle.kvec,
+            wavefunctions=core_bundle.psi_micro,
+            metadata=metadata,
+            convention=ConventionBundle(
+                density_convention="projector",
+                wavefunction_axis_order=str(metadata.get("psi_micro_axis_order", "k,microscopic_basis,hf_state")),
+                gauge="tdbg_projected_hf_system_defined",
+            ),
+        )
 
     def to_summary_dict(self) -> dict[str, object]:
         return {
@@ -430,6 +814,9 @@ __all__ = [
     "_stored_to_conventional",
     "initialize_tdbg_density",
     "initialize_tdbg_nu2_density",
+    "reconstruct_tdbg_projected_hf_micro_wavefunctions",
+    "tdbg_active_eigensystem_from_hamiltonian",
+    "tdbg_canonical_projected_micro_basis",
     "tdbg_density_from_hamiltonian",
     "tdbg_order_parameters",
 ]

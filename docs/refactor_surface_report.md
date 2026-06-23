@@ -2816,3 +2816,77 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 - `tests` Python lines: 2788
 - `src/mean_field/systems` Python lines: 26340
 - Files over 1000 lines: 0
+
+## Update: connect projected-HF reconstruction adapters across systems
+
+Commit in this continuation:
+
+- pending: connect projected-HF reconstruction adapters
+
+### Scope
+
+Connected projected-HF microscopic reconstruction to the common `mean_field.core.hf.reconstruction` helper through reviewed system-owned adapters:
+
+- **TDBG**: `TDBGProjectedHFResult.reconstruct_micro_wavefunctions(...)` expands raw `(state,k,q_site,local)` projected data to canonical `(k,microscopic_basis,active_basis)` with explicit `spin,valley,q_site,local` row metadata, uses Hermitian final-HF eigensystems only, supports selected-state reconstruction, and records that sewing/topology eligibility is unavailable until a TDBG torus sewing convention is implemented.
+- **HTG primitive/supercell**: added HTG-local reconstruction helpers with selected-state output guards. Primitive reconstruction remains no-sewing/topology-ineligible; supercell reconstruction can attach the validated full-boundary sewing transforms and has nontrivial row-order tests.
+- **RLG-hBN/RnG-hBN**: exported explicit reconstruction helpers from `mean_field.systems.RnG_hBN.hf`, with selected-state guards, final-HF eigensystem wrapper, direct-sum row metadata, and projected-micro sewing transforms. Validation remains software/toy level until the saved Fig.6 target is rerun/rechecked on Slurm.
+- **TMBG/Polshyn**: added a private/experimental reconstruction adapter with Hermiticity/off-sector/stored-energy checks and selected-state guards. It is intentionally not exported from the public Polshyn facade and marks sewing/topology ineligible until doubled-cell sewing is derived and validated.
+
+These changes do not restore paper workflows, do not submit Slurm jobs, and do not claim physical Chern/QGT/paper reproduction.
+
+### Validation targets located by subagents
+
+Subagent report `tmp/subagents/reconstruction_next2/validation_targets.md` identified the strongest future physical checks:
+
+- RLG-hBN Fig.6 xi=1, V=60 meV: saved HF state + cached projected basis + historical reconstructed-micro Chern JSON/NPZ.
+- HTG minimal supercell `nu=3.5`: saved supercell HF state plus isolated flat-band topology artifacts; micro basis/eigenvectors must be rebuilt/rediagonalized under Slurm.
+- TMBG/Polshyn Fig. S1: good Chern-number targets, but cleaned artifacts lack full state/micro-basis/eigenvector payloads.
+- TDBG: no suitable projected-HF reconstruction target found in `results/`; existing Fig.3 artifacts are non-HF topology references.
+
+### Software validation
+
+Focused reconstruction gate on `test001`:
+
+```bash
+PYTHONPATH=src python -m compileall -q \
+  src/mean_field/systems/tdbg src/mean_field/systems/htg \
+  src/mean_field/systems/RnG_hBN src/mean_field/systems/tmbg \
+  tests/test_tdbg_projected_hf_reconstruction.py \
+  tests/test_htg_supercell.py \
+  tests/test_rlg_tmbg_reconstruction_adapters.py
+
+PYTHONPATH=src pytest -q \
+  tests/test_tdbg_projected_hf_reconstruction.py \
+  tests/test_htg_supercell.py \
+  tests/test_rlg_tmbg_reconstruction_adapters.py \
+  tests/test_api_hf_result_reconstruction.py \
+  tests/test_api_hf_adapters.py::test_public_run_hf_tdbg_explicit_config_dispatches_without_guessing \
+  tests/test_api_hf_adapters.py::test_public_run_hf_tdbg_explicit_config_attaches_canonical_contract_result \
+  tests/test_api_hf_adapters.py::test_public_run_hf_htg_primitive_explicit_config_attaches_canonical_contract_result \
+  tests/test_api_hf_adapters.py::test_public_run_hf_htg_supercell_explicit_config_attaches_canonical_contract_result
+# 28 passed
+```
+
+Full gate on `test001` before commit:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 128 passed
+
+python -m pip install -e . --dry-run --no-deps --no-build-isolation
+# Would install mean-field-0.1.0
+```
+
+### Current summary after this continuation
+
+- Tracked text lines: 51623
+- Tracked Python lines: 45917
+- Tracked Julia lines: 826
+- `src` Python files: 206
+- `src` Python lines: 42057
+- `tests` Python lines: 3799
+- `src/mean_field/systems` Python lines: 28404
+- Files over 1000 lines: 0
+
+The previous soft `src` Python line budget is exceeded by the multi-system reconstruction adapter surface; this should be cleaned up later via a separate refactor/compaction pass if preserving the 4w target remains mandatory.

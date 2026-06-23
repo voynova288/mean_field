@@ -7,7 +7,7 @@ existing HTG supercell HF path and do not change SCF, interaction contractions,
 topology, or cRPA behavior.
 """
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 import math
@@ -19,10 +19,22 @@ from mean_field.core.contracts import (
     HFRunResult as ContractHFRunResult,
     HFState as ContractHFState,
     HamiltonianParts as ContractHamiltonianParts,
+    MicroscopicWavefunctionBundle,
     ProjectedBasis as ContractProjectedBasis,
     SingleParticleModel as ContractSingleParticleModel,
 )
 from mean_field.core.hf.contracts_bridge import density_state_from_delta
+
+from ._hf_reconstruction import (
+    diagonalize_htg_active_hamiltonian_field,
+    htg_active_hamiltonian_state_count,
+    htg_direct_sum_state_index,
+    htg_hf_state_labels,
+    htg_reconstruction_output_element_count,
+    normalize_htg_reconstruction_state_indices,
+    reconstruct_htg_projected_micro_bundle,
+    validate_htg_reconstruction_output_size,
+)
 
 from .model import HTGModel
 from .params import InteractionParams
@@ -32,9 +44,12 @@ from .supercell import (
     HTGSupercellProjectedBasisData,
     _supercell_reference_density_blocks,
     htg_supercell_filling_from_density,
+    htg_supercell_full_boundary_sewing_transforms,
     htg_supercell_occupied_count_per_k,
     run_htg_supercell_hf,
 )
+
+_HTG_SUPERCELL_RECONSTRUCTION_DEFAULT_MAX_DENSE_ELEMENTS = 5_000_000
 
 if TYPE_CHECKING:
     from mean_field.api import HFConfig, HFResult
@@ -144,7 +159,7 @@ def _active_band_indices(data: HTGSupercellProjectedBasisData) -> tuple[int, ...
     n_eta = int(data.basis.n_flavor)
     n_band = int(data.basis.n_band)
     state_labels = np.zeros((n_spin * n_eta * n_band,), dtype=int)
-    state_index = np.arange(state_labels.size, dtype=int).reshape((n_spin, n_eta, n_band), order="F")
+    state_index = htg_direct_sum_state_index(n_spin, n_eta, n_band)
     for ispin in range(n_spin):
         for ieta in range(n_eta):
             for iband, label in enumerate(band_labels):
@@ -157,13 +172,118 @@ def _flavor_labels(data: HTGSupercellProjectedBasisData) -> tuple[str, ...]:
     n_eta = int(data.basis.n_flavor)
     n_band = int(data.basis.n_band)
     labels = [""] * (n_spin * n_eta * n_band)
-    state_index = np.arange(len(labels), dtype=int).reshape((n_spin, n_eta, n_band), order="F")
+    state_index = htg_direct_sum_state_index(n_spin, n_eta, n_band)
     for ispin in range(n_spin):
         for ieta in range(n_eta):
             for iband in range(n_band):
                 labels[int(state_index[ispin, ieta, iband])] = f"spin{ispin}_eta{ieta}_band{iband}"
     return tuple(labels)
 
+
+def _active_basis_labels(data: HTGSupercellProjectedBasisData) -> tuple[dict[str, object], ...]:
+    band_labels = _folded_band_labels(data)
+    n_spin = int(data.basis.n_spin)
+    n_eta = int(data.basis.n_flavor)
+    n_band = int(data.basis.n_band)
+    labels: list[dict[str, object]] = [{} for _ in range(n_spin * n_eta * n_band)]
+    state_index = htg_direct_sum_state_index(n_spin, n_eta, n_band)
+    for ispin in range(n_spin):
+        for ieta in range(n_eta):
+            for iband, band_label in enumerate(band_labels):
+                labels[int(state_index[ispin, ieta, iband])] = {
+                    "active_basis_index": int(state_index[ispin, ieta, iband]),
+                    "spin_index": int(ispin),
+                    "eta_index": int(ieta),
+                    "folded_band_index": int(iband),
+                    **dict(band_label),
+                }
+    return tuple(labels)
+
+def _reconstruction_grid_shape(data: HTGSupercellProjectedBasisData) -> tuple[int, int] | None:
+    if data.k_grid_frac is None:
+        return None
+    grid = np.asarray(data.k_grid_frac, dtype=float)
+    if grid.ndim == 3 and grid.shape[-1] == 2 and int(grid.shape[0] * grid.shape[1]) == int(data.nk):
+        return (int(grid.shape[0]), int(grid.shape[1]))
+    mesh_size = int(data.mesh_size)
+    if mesh_size > 0 and int(mesh_size * mesh_size) == int(data.nk):
+        return (mesh_size, mesh_size)
+    return None
+
+def reconstruct_htg_supercell_projected_hf_micro_wavefunctions(
+    run: HTGSupercellHartreeFockRun,
+    *,
+    band_indices: int | Iterable[int] | None = None,
+    attach_sewing: bool = True,
+    max_dense_elements: int | None = _HTG_SUPERCELL_RECONSTRUCTION_DEFAULT_MAX_DENSE_ELEMENTS,
+    unitarity_atol: float | None = 1.0e-8,
+) -> MicroscopicWavefunctionBundle:
+    """Explicitly reconstruct HTG supercell projected-HF microscopic wavefunctions.
+
+    The canonical HTG supercell contract remains compact by default.  This
+    opt-in adapter expands the folded ``(basis, band, flavor, k)`` basis into
+    the common direct-sum row order, diagonalizes the final projected HF
+    Hamiltonian, and allocates only the selected reconstructed HF state columns
+    requested by ``band_indices``.  Sewing transforms are attached only for this
+    explicit reconstructed bundle and use the validated direct-sum/F-order row
+    convention documented in metadata.
+    """
+
+    data = run.basis_data
+    if data.k_grid_frac is None:
+        raise ValueError("HTG supercell projected-HF reconstruction requires basis_data.k_grid_frac")
+    n_state = htg_active_hamiltonian_state_count(run.state.hamiltonian, context="HTG supercell")
+    selected = normalize_htg_reconstruction_state_indices(band_indices, n_state)
+    dense_elements = validate_htg_reconstruction_output_size(
+        data,
+        n_output_states=len(selected),
+        max_dense_elements=max_dense_elements,
+        context="HTG supercell",
+    )
+    all_dense_elements = htg_reconstruction_output_element_count(data, n_output_states=n_state)
+    _evals, evecs, eig_diagnostics = diagonalize_htg_active_hamiltonian_field(
+        run.state.hamiltonian,
+        context="HTG supercell",
+        reference_energies=getattr(run.state, "energies", None),
+    )
+    all_state_labels = htg_hf_state_labels(n_state)
+    selected_labels = tuple(all_state_labels[index] for index in selected)
+    sewing = htg_supercell_full_boundary_sewing_transforms(data) if bool(attach_sewing) else ()
+    metadata: dict[str, object] = {
+        "system": "htg_supercell",
+        "adapter": "mean_field.systems.htg.supercell_contracts.reconstruct_htg_supercell_projected_hf_micro_wavefunctions",
+        "projected_hf_reconstruction": "explicit_dense_opt_in",
+        "canonical_wrapping_dense_by_default": False,
+        "raw_projected_basis_axis_order": "basis,band,flavor,k",
+        "micro_basis_axis_order": "k,microscopic_basis,active_basis",
+        "microscopic_row_order": "spin,eta,basis_flat_F(local,sx,sy)",
+        "active_basis_order": "spin,eta,folded_band with numpy.reshape(..., order='F')",
+        "active_basis_labels": _active_basis_labels(data),
+        "dense_reconstruction_estimated_elements": int(dense_elements),
+        "dense_reconstruction_estimated_all_state_elements": int(all_dense_elements),
+        "max_dense_elements": None if max_dense_elements is None else int(max_dense_elements),
+        "selected_hf_band_indices": [int(index) for index in selected],
+        "supercell_matrix": _supercell_matrix_metadata(data),
+        "area_ratio": int(data.supercell.area_ratio),
+        "fold_representatives": [[int(a), int(b)] for a, b in data.fold_representatives],
+        "sewing_policy": "htg_supercell_full_boundary_sewing_transforms" if bool(attach_sewing) else "not_attached_by_request",
+        "sewing_row_order_validation": "software toy with nx,ny>1 in tests/test_htg_supercell.py",
+    }
+    metadata.update(eig_diagnostics)
+    return reconstruct_htg_projected_micro_bundle(
+        np.asarray(data.basis.wavefunctions, dtype=np.complex128),
+        evecs,
+        n_spin=int(data.basis.n_spin),
+        selected_state_indices=selected,
+        kvec=np.asarray(data.kvec, dtype=np.complex128),
+        k_grid_frac=_flatten_k_grid_frac(data),
+        grid_shape=_reconstruction_grid_shape(data),
+        state_labels=selected_labels,
+        sewing_transforms=sewing,
+        basis_metadata=metadata,
+        unitarity_atol=unitarity_atol,
+        context="HTG supercell",
+    )
 
 def _reference_scheme(data: HTGSupercellProjectedBasisData) -> str:
     reference = np.asarray(data.reference_diagonal, dtype=float).reshape(-1)
@@ -190,6 +310,10 @@ def _projected_basis(data: HTGSupercellProjectedBasisData) -> ContractProjectedB
         metadata={
             "projected_basis_source": "HTGSupercellProjectedBasisData",
             "wavefunctions_axis_order": "basis,band,flavor,k",
+            "canonical_micro_wavefunctions_storage": "compact_system_projected_basis_not_dense_direct_sum",
+            "reconstruction_adapter": "mean_field.systems.htg.supercell_contracts.reconstruct_htg_supercell_projected_hf_micro_wavefunctions",
+            "reconstruction_requires_explicit_call": True,
+            "reconstruction_dense_by_default": False,
             "density_axis_order": "abk",
             "active_band_semantics": "primitive_projected_indices_repeated_over_supercell_folds_spin_valley",
             "primitive_projected_indices": [int(index) for index in data.primitive_projected_indices],
@@ -526,6 +650,8 @@ def _result_observables(run: HTGSupercellHartreeFockRun) -> dict[str, object]:
         "iterations": int(_iteration_count(run)),
         "supercell_area_ratio": int(data.supercell.area_ratio),
         "raw_density_convention": "stored_delta",
+        "projected_hf_reconstruction_adapter": "mean_field.systems.htg.supercell_contracts.reconstruct_htg_supercell_projected_hf_micro_wavefunctions",
+        "projected_hf_reconstruction_dense_by_default": False,
     }
 
 
@@ -552,6 +678,9 @@ def htg_supercell_hf_run_to_hf_run_result(
         mu=float(state.mu),
         observables={
             "eigenvectors_active_available": False,
+            "projected_hf_reconstruction_adapter": "mean_field.systems.htg.supercell_contracts.reconstruct_htg_supercell_projected_hf_micro_wavefunctions",
+            "projected_hf_reconstruction_requires_explicit_call": True,
+            "projected_hf_reconstruction_dense_by_default": False,
             "primitive_nu": float(state.nu),
             "filling_from_density": float(
                 htg_supercell_filling_from_density(
@@ -639,5 +768,6 @@ __all__ = [
     "HTGSupercellRunHFConfig",
     "htg_supercell_hf_run_to_hf_result",
     "htg_supercell_hf_run_to_hf_run_result",
+    "reconstruct_htg_supercell_projected_hf_micro_wavefunctions",
     "run_htg_supercell_hf_config_adapter",
 ]

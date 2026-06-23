@@ -59,6 +59,12 @@ from ._hf_runner import (
     run_rlg_hbn_hartree_fock,
     scan_rlg_hbn_ground_state,
 )
+from ._hf_reconstruction import (
+    build_rlg_hbn_final_hf_eigensystem,
+    expand_rlg_hbn_projected_micro_basis,
+    reconstruct_rlg_hbn_projected_hf_micro_wavefunctions,
+    rlg_hbn_projected_hf_active_index,
+)
 from .interaction import RLGhBNInteractionParams
 from .model import RLGhBNModel
 
@@ -85,6 +91,7 @@ __all__ = [
     "build_rlg_hbn_layer_overlap_blocks",
     "build_rlg_hbn_layer_overlap_blocks_between",
     "build_rlg_hbn_projected_basis",
+    "build_rlg_hbn_final_hf_eigensystem",
     "build_rlg_hbn_projected_basis_for_kvec",
     "build_rlg_hbn_remote_average_hamiltonian",
     "build_rlg_hbn_target_hamiltonian",
@@ -93,6 +100,7 @@ __all__ = [
     "compute_rlg_hbn_oda_parameter",
     "diagonal_layer_overlap_blocks",
     "evaluate_rlg_hbn_hf_path",
+    "expand_rlg_hbn_projected_micro_basis",
     "initialize_rlg_hbn_density",
     "interaction_shifts_for_cutoff",
     "normalize_rlg_hbn_init_mode",
@@ -105,6 +113,8 @@ __all__ = [
     "rlg_hbn_layer_component_groups",
     "rlg_hbn_occupied_bands_per_k",
     "rlg_hbn_occupied_state_count",
+    "reconstruct_rlg_hbn_projected_hf_micro_wavefunctions",
+    "rlg_hbn_projected_hf_active_index",
     "rlg_hbn_projector_from_density",
     "rlg_hbn_projector_idempotency_residual",
     "rlg_hbn_reference_density",
