@@ -2369,7 +2369,7 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 
 Commit in this continuation:
 
-- pending: restore thin ATMG topology wrapper
+- `c67de40 Restore thin ATMG topology wrapper`
 
 ### Scope restored
 
