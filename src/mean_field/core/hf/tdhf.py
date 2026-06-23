@@ -15,44 +15,33 @@ where every ``(p, h)`` pair must already belong to a fixed collective-momentum
 sector.  Production system adapters should provide an on-demand matrix-element
 callable instead of materializing the full four-index tensor.
 """
-
 from __future__ import annotations
-
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
-
 import numpy as np
 from scipy import linalg as scipy_linalg
-
 TDHF_TWO_BODY_CONVENTION = (
     "V[a,b,c,d] is the coefficient of c_b^† c_a^† c_c c_d "
     "(equivalently c_a^† c_b^† c_d c_c); pass un-antisymmetrized "
     "density-density matrix elements."
 )
-
 FlavorChannel = Literal[
     "intraflavor",
     "intervalley",
     "interspin",
     "inter_spin_valley",
 ]
-
 TwoBodyMatrixInput = (
     np.ndarray
     | Mapping[tuple[int, int, int, int], complex]
     | Callable[[int, int, int, int], complex]
 )
-
-
 @dataclass(frozen=True)
 class SpinValleyFlavor:
     """Minimal flavor tag for spin/valley TDHF sector classification."""
-
     spin: Hashable
     valley: Hashable
-
-
 @dataclass(frozen=True)
 class ParticleHolePair:
     """One particle-hole basis element inside a fixed collective-momentum sector.
@@ -61,24 +50,19 @@ class ParticleHolePair:
     orbital.  Momentum/flavor metadata is optional and only used by helper
     routines for sector construction and classification.
     """
-
     particle: int
     hole: int
     particle_momentum: Hashable | None = None
     hole_momentum: Hashable | None = None
     particle_flavor: Any | None = None
     hole_flavor: Any | None = None
-
-
 @dataclass(frozen=True)
 class TDHFStructureResiduals:
     """Structure-check residuals for TDHF/RPA matrices."""
-
     a_hermitian: float
     b_symmetric: float
     particle_hole_symmetry: float
     tolerance: float
-
     @property
     def ok(self) -> bool:
         return (
@@ -86,18 +70,14 @@ class TDHFStructureResiduals:
             and self.b_symmetric <= self.tolerance
             and self.particle_hole_symmetry <= self.tolerance
         )
-
-
 @dataclass(frozen=True)
 class TDHFMatrices:
     """Dense TDHF matrices for one already-filtered ph sector."""
-
     pairs: tuple[ParticleHolePair, ...]
     A: np.ndarray
     B: np.ndarray
     L: np.ndarray
     structure: TDHFStructureResiduals
-
 
 @dataclass(frozen=True)
 class TDHFSpectrum:

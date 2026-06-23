@@ -2772,3 +2772,47 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 - `tests` Python lines: 2598
 - `src/mean_field/systems` Python lines: 26340
 - Files over 1000 lines: 0
+
+## Update: add guarded HFResult micro reconstruction fallback
+
+Commit in this continuation:
+
+- pending: add guarded HFResult micro reconstruction fallback
+
+### Scope
+
+Added a guarded public fallback for `HFResult.reconstruct_micro_wavefunctions()`:
+
+- Existing system-state adapters still take precedence.
+- The fallback only runs when `canonical_run_result.final_state.basis.micro_wavefunctions`, `final_state.eigenvectors_active`, and `basis.kvec` are present and non-empty.
+- The fallback requires `basis.micro_wavefunctions` to be rank-3 and explicitly tagged with `basis.metadata["wavefunctions_axis_order"] == "k,microscopic_basis,active_basis"`.
+- Noncanonical/raw system arrays such as current TDBG raw 4D projected wavefunctions are rejected with `NotImplementedError` rather than guessed.
+- The fallback uses the existing system-independent `core.hf.reconstruction.reconstruct_projected_micro_wavefunctions(...)` helper.
+
+System-specific TDBG/HTG/RLG-hBN/TMBG reconstruction adapters remain deferred; subagent reports for those lanes were written under ignored `tmp/subagents/reconstruction_next/`.
+
+### Validation
+
+Added `tests/test_api_hf_result_reconstruction.py` covering canonical dense fallback, missing/empty array errors, raw-rank rejection, missing axis metadata rejection, and state-adapter precedence.
+
+Validation on `test001`:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 112 passed
+
+python -m pip install -e . --dry-run --no-deps --no-build-isolation
+# Would install mean-field-0.1.0
+```
+
+### Current summary after this continuation
+
+- Tracked text lines: 48430
+- Tracked Python lines: 42842
+- Tracked Julia lines: 826
+- `src` Python files: 203
+- `src` Python lines: 39993
+- `tests` Python lines: 2788
+- `src/mean_field/systems` Python lines: 26340
+- Files over 1000 lines: 0
