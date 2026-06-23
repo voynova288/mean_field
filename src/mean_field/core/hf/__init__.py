@@ -16,6 +16,10 @@ from .contracts_bridge import (
     make_contract_reference_density,
     normalize_contract_reference_scheme,
 )
+from .reconstruction import (
+    canonicalize_projected_micro_basis,
+    reconstruct_projected_micro_wavefunctions,
+)
 from .archive import (
     HF_ARCHIVE_READER_VERSION,
     HFArchiveSummary,
@@ -255,6 +259,7 @@ __all__ = [
     "calculate_norm_convergence",
     "calculate_valley_spin_order_parameters",
     "calculate_projected_overlap",
+    "canonicalize_projected_micro_basis",
     "canonical_tdhf_orbitals_from_hf_run_result",
     "canonical_tdhf_orbitals_from_hf_state",
     "calculate_projected_overlap_between",
@@ -298,6 +303,7 @@ __all__ = [
     "random_unitary_from_hermitian",
     "real_space_cell_area_nm2_from_reciprocal",
     "reciprocal_cell_area_nm_inv_sq",
+    "reconstruct_projected_micro_wavefunctions",
     "restrict_tdhf_matrices",
     "run_finite_field_hartree_fock",
     "run_finite_field_hartree_fock_from_inputs",

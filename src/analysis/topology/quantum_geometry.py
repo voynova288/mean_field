@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 """Gauge-invariant quantum-geometry utilities for two-dimensional meshes.
 
 This module extends the FHS Chern framework with projector/subspace quantum
@@ -7,12 +6,9 @@ geometry.  It intentionally depends only on wavefunctions on a 2D mesh plus
 optional boundary sewing.  System-specific code is still responsible for
 building the wavefunctions and labelling which columns are band/flavor states.
 """
-
 from dataclasses import dataclass, field
 from typing import Iterable, Literal, Mapping, Sequence
-
 import numpy as np
-
 from .core import (
     LinkMethod,
     SewingTransform,
@@ -22,11 +18,8 @@ from .core import (
     normalize_state_indices,
     select_wavefunction_subspace,
 )
-
-
 FiniteDifferenceMethod = Literal["forward", "central"]
 CoordinateSystem = Literal["fractional", "cartesian"]
-
 @dataclass(frozen=True)
 class NormalizedQuantumGeometryMaps:
     """Paper-style normalized Berry/FS maps for a 2D quantum-geometry result.
@@ -37,7 +30,6 @@ class NormalizedQuantumGeometryMaps:
     numbers are uniform-sample BZ averages of the normalized maps, so a uniform
     ``C=1`` Berry curvature averages to one.
     """
-
     quantum_metric: np.ndarray
     fubini_study_trace: np.ndarray
     berry_curvature: np.ndarray
@@ -48,10 +40,8 @@ class NormalizedQuantumGeometryMaps:
     bz_area: float
     berry_sign: float = 1.0
     metadata: Mapping[str, object] = field(default_factory=dict)
-
     def to_dict(self) -> dict[str, object]:
         """Return a compact JSON-serializable summary."""
-
         return {
             "bz_area": float(self.bz_area),
             "berry_sign": float(self.berry_sign),
@@ -63,7 +53,6 @@ class NormalizedQuantumGeometryMaps:
             "quantum_metric_shape": list(np.asarray(self.quantum_metric).shape),
             "metadata": dict(self.metadata),
         }
-
 @dataclass(frozen=True)
 class QuantumGeometryResult:
     """Quantum geometric tensor, metric, Berry curvature, and Chern data.
@@ -82,7 +71,6 @@ class QuantumGeometryResult:
     components have been transformed with the supplied reciprocal-vector matrix.
     The FHS curvature, when present, remains a plaquette flux.
     """
-
     wavefunction_index: WavefunctionIndex
     k_grid_frac: np.ndarray
     quantum_geometric_tensor: np.ndarray
@@ -98,32 +86,23 @@ class QuantumGeometryResult:
     min_link_magnitude: float | None = None
     reciprocal_vectors: np.ndarray | None = None
     metadata: Mapping[str, object] = field(default_factory=dict)
-
     @property
     def trace_metric(self) -> np.ndarray:
         """Return ``g_11 + g_22`` on the mesh."""
-
         return np.asarray(self.quantum_metric[0, 0] + self.quantum_metric[1, 1], dtype=float)
-
     @property
     def fubini_study_metric(self) -> np.ndarray:
         """Alias for the real quantum metric ``g_ab``."""
-
         return self.quantum_metric
-
     @property
     def fubini_study_trace(self) -> np.ndarray:
         """Return the Fubini-Study trace ``tr g_FS`` on the mesh."""
-
         return self.trace_metric
-
     @property
     def determinant_metric(self) -> np.ndarray:
         """Return ``det(g)`` on the mesh."""
-
         metric = np.asarray(self.quantum_metric, dtype=float)
         return metric[0, 0] * metric[1, 1] - metric[0, 1] * metric[1, 0]
-
     @property
     def trace_condition_residual(self) -> np.ndarray:
         """Return ``tr(g) - |Omega_12|``.
@@ -132,9 +111,7 @@ class QuantumGeometryResult:
         physically meaningful only in an orthonormal momentum-coordinate basis
         such as Cartesian k coordinates.
         """
-
         return self.trace_metric - np.abs(self.berry_curvature_density)
-
     @property
     def determinant_condition_residual(self) -> np.ndarray:
         """Return ``det(g) - Omega_12^2 / 4``.
@@ -142,9 +119,7 @@ class QuantumGeometryResult:
         This coordinate-sensitive diagnostic should be interpreted in the same
         coordinate convention as ``quantum_metric`` and ``berry_curvature_density``.
         """
-
         return self.determinant_metric - 0.25 * np.asarray(self.berry_curvature_density, dtype=float) ** 2
-
     @property
     def momentum_area_element(self) -> float:
         """Return the area represented by one mesh cell in the current coordinates.
@@ -155,14 +130,12 @@ class QuantumGeometryResult:
         :func:`normalize_quantum_geometry_maps` and explicit sample averaging
         for such paper-map workflows.
         """
-
         h1, h2 = self.coordinate_steps
         if self.coordinate_system == "cartesian":
             if self.derivative_coordinates == "fractional" and self.reciprocal_vectors is not None:
                 return float(brillouin_zone_area(self.reciprocal_vectors) * h1 * h2)
             return float(h1 * h2)
         return float(h1 * h2)
-
     @property
     def normalized_berry_curvature(self) -> np.ndarray | None:
         """Return paper-style curvature with uniform ``C=1`` equal to one.
@@ -170,31 +143,25 @@ class QuantumGeometryResult:
         This needs Cartesian reciprocal vectors.  For a scalar Berry curvature
         density ``Omega(k)``, the returned field is ``A_BZ Omega(k)/(2*pi)``.
         """
-
         if self.reciprocal_vectors is None:
             return None
         area_bz = brillouin_zone_area(self.reciprocal_vectors)
         return normalized_chern_density(self.berry_curvature_density, area_bz)
-
     @property
     def normalized_fubini_study_trace(self) -> np.ndarray | None:
         """Return ``A_BZ tr(g_FS)/(2*pi)`` for paper-style map comparison."""
-
         if self.reciprocal_vectors is None:
             return None
         area_bz = brillouin_zone_area(self.reciprocal_vectors)
         return normalized_chern_density(self.fubini_study_trace, area_bz)
-
     @property
     def average_trace_condition_violation(self) -> float | None:
         """Return the average of normalized ``tr(g_FS)-|Omega|`` over the mesh."""
-
         normalized_trace = self.normalized_fubini_study_trace
         normalized_curvature = self.normalized_berry_curvature
         if normalized_trace is None or normalized_curvature is None:
             return None
         return float(np.mean(normalized_trace - np.abs(normalized_curvature)))
-
     @property
     def integrated_fubini_study_metric(self) -> float | None:
         """Return ``G = int_BZ tr(g_FS) d^2k / (2*pi)`` when meaningful.
@@ -203,11 +170,9 @@ class QuantumGeometryResult:
         lower-bound diagnostic in the R5G/hBN papers.  It is only reported for
         Cartesian metric components with reciprocal vectors attached.
         """
-
         if self.coordinate_system != "cartesian" or self.reciprocal_vectors is None:
             return None
         return integrated_fubini_study_metric(self.fubini_study_trace, area_element=self.momentum_area_element)
-
     def normalized_maps(
         self,
         *,
@@ -221,17 +186,14 @@ class QuantumGeometryResult:
         convention, e.g. ``berry_sign=-1`` for the Zhang2025 tMoTe2 Fig. 3
         checkpoint.
         """
-
         return normalize_quantum_geometry_maps(
             self,
             bz_area=bz_area,
             berry_sign=berry_sign,
             metadata=metadata,
         )
-
     def to_dict(self) -> dict[str, object]:
         """Return a compact JSON-serializable summary."""
-
         payload: dict[str, object] = {
             "wavefunction_index": self.wavefunction_index.to_dict(),
             "coordinate_system": str(self.coordinate_system),
@@ -259,8 +221,6 @@ class QuantumGeometryResult:
         if self.reciprocal_vectors is not None:
             payload["reciprocal_vectors"] = np.asarray(self.reciprocal_vectors, dtype=float).tolist()
         return payload
-
-
 def _resolve_coordinate_steps(
     mesh_1: int,
     mesh_2: int,
@@ -274,10 +234,8 @@ def _resolve_coordinate_steps(
         if h1 <= 0.0 or h2 <= 0.0:
             raise ValueError(f"coordinate_steps must be positive, got {(h1, h2)}")
         return h1, h2
-
     if k_grid_frac is None:
         return 1.0 / float(mesh_1), 1.0 / float(mesh_2)
-
     grid = np.asarray(k_grid_frac, dtype=float)
     if grid.shape != (mesh_1, mesh_2, 2):
         raise ValueError(
@@ -296,8 +254,6 @@ def _resolve_coordinate_steps(
     if h1 <= 0.0 or h2 <= 0.0:
         return 1.0 / float(mesh_1), 1.0 / float(mesh_2)
     return h1, h2
-
-
 def _orthonormalize_one(frame: np.ndarray, *, atol: float) -> np.ndarray:
     matrix = np.asarray(frame, dtype=np.complex128)
     if matrix.ndim == 1:
@@ -309,13 +265,11 @@ def _orthonormalize_one(frame: np.ndarray, *, atol: float) -> np.ndarray:
         raise ValueError("Expected at least one selected state")
     if basis_dim < n_state:
         raise ValueError(f"basis_dim={basis_dim} is smaller than selected subspace dimension {n_state}")
-
     if n_state == 1:
         norm = float(np.linalg.norm(matrix[:, 0]))
         if norm <= atol:
             raise ValueError("Encountered a near-zero selected wavefunction while orthonormalizing frames")
         return matrix / norm
-
     singular_values = np.linalg.svd(matrix, compute_uv=False)
     if singular_values.size == 0 or float(np.min(singular_values)) <= atol:
         raise ValueError(
@@ -323,15 +277,11 @@ def _orthonormalize_one(frame: np.ndarray, *, atol: float) -> np.ndarray:
         )
     q_matrix, _ = np.linalg.qr(matrix, mode="reduced")
     return np.asarray(q_matrix[:, :n_state], dtype=np.complex128)
-
-
 def orthonormalize_wavefunction_frames(selected_vectors: np.ndarray, *, atol: float = 1.0e-12) -> np.ndarray:
     """Return orthonormal frames for ``(mesh_1, mesh_2, basis, n_sel)`` data."""
-
     selected, _ = select_wavefunction_subspace(selected_vectors, None)
     mesh_1, mesh_2, basis_dim, n_state = selected.shape
     frames = np.empty((mesh_1, mesh_2, basis_dim, n_state), dtype=np.complex128)
-
     if n_state == 1:
         norms = np.linalg.norm(selected[:, :, :, 0], axis=2)
         min_norm = float(np.min(norms))
@@ -339,13 +289,10 @@ def orthonormalize_wavefunction_frames(selected_vectors: np.ndarray, *, atol: fl
             raise ValueError("Encountered a near-zero selected wavefunction while normalizing a line bundle")
         frames[:, :, :, 0] = selected[:, :, :, 0] / norms[:, :, np.newaxis]
         return frames
-
     for i in range(mesh_1):
         for j in range(mesh_2):
             frames[i, j] = _orthonormalize_one(selected[i, j], atol=atol)
     return frames
-
-
 def _normalize_sewing_transforms(
     sewing_transforms: Sequence[SewingTransform | None] | None,
 ) -> tuple[SewingTransform | None, SewingTransform | None]:
@@ -354,8 +301,6 @@ def _normalize_sewing_transforms(
     if len(sewing_transforms) != 2:
         raise ValueError("Expected two sewing transforms, one for each mesh direction")
     return sewing_transforms[0], sewing_transforms[1]
-
-
 def _forward_frames(
     frames: np.ndarray,
     *,
@@ -364,10 +309,8 @@ def _forward_frames(
 ) -> tuple[np.ndarray, np.ndarray]:
     sew_1, sew_2 = _normalize_sewing_transforms(sewing_transforms)
     mesh_1, mesh_2 = frames.shape[:2]
-
     forward_1 = np.roll(frames, shift=-1, axis=0)
     forward_2 = np.roll(frames, shift=-1, axis=1)
-
     if sew_1 is not None:
         for j in range(mesh_2):
             forward_1[mesh_1 - 1, j] = _orthonormalize_one(sew_1(frames[0, j]), atol=atol)
@@ -375,8 +318,6 @@ def _forward_frames(
         for i in range(mesh_1):
             forward_2[i, mesh_2 - 1] = _orthonormalize_one(sew_2(frames[i, 0]), atol=atol)
     return forward_1, forward_2
-
-
 def _backward_frames(
     frames: np.ndarray,
     *,
@@ -385,10 +326,8 @@ def _backward_frames(
 ) -> tuple[np.ndarray, np.ndarray]:
     sew_1, sew_2 = _normalize_sewing_transforms(backward_sewing_transforms)
     mesh_1, mesh_2 = frames.shape[:2]
-
     backward_1 = np.roll(frames, shift=1, axis=0)
     backward_2 = np.roll(frames, shift=1, axis=1)
-
     if sew_1 is not None:
         for j in range(mesh_2):
             backward_1[0, j] = _orthonormalize_one(sew_1(frames[mesh_1 - 1, j]), atol=atol)
@@ -396,17 +335,11 @@ def _backward_frames(
         for i in range(mesh_1):
             backward_2[i, 0] = _orthonormalize_one(sew_2(frames[i, mesh_2 - 1]), atol=atol)
     return backward_1, backward_2
-
-
 def _frobenius_overlap_squared(left: np.ndarray, right: np.ndarray) -> float:
     overlap = left.conjugate().T @ right
     return float(np.sum(np.abs(overlap) ** 2))
-
-
 def _triple_projector_trace(q0: np.ndarray, q1: np.ndarray, q2: np.ndarray) -> complex:
     return complex(np.trace((q0.conjugate().T @ q1) @ (q1.conjugate().T @ q2) @ (q2.conjugate().T @ q0)))
-
-
 def projector_qgt_forward_difference(
     selected_vectors: np.ndarray,
     *,
@@ -426,51 +359,40 @@ def projector_qgt_forward_difference(
     convention.  ``qgt`` and ``metric`` have shape ``(2, 2, mesh_1, mesh_2)``;
     ``omega_12`` has shape ``(mesh_1, mesh_2)``.
     """
-
     selected, _ = select_wavefunction_subspace(selected_vectors, None)
     mesh_1, mesh_2 = selected.shape[:2]
     h1, h2 = _resolve_coordinate_steps(mesh_1, mesh_2, k_grid_frac, coordinate_steps)
     frames = orthonormalize_wavefunction_frames(selected, atol=atol)
     forward_1, forward_2 = _forward_frames(frames, sewing_transforms=sewing_transforms, atol=atol)
-
     qgt = np.zeros((2, 2, mesh_1, mesh_2), dtype=np.complex128)
     metric = np.zeros((2, 2, mesh_1, mesh_2), dtype=float)
     omega_12 = np.zeros((mesh_1, mesh_2), dtype=float)
     rank = int(frames.shape[-1])
-
     for i in range(mesh_1):
         for j in range(mesh_2):
             q0 = frames[i, j]
             q1 = forward_1[i, j]
             q2 = forward_2[i, j]
-
             tr_p0p1 = _frobenius_overlap_squared(q0, q1)
             tr_p0p2 = _frobenius_overlap_squared(q0, q2)
             tr_p1p2 = _frobenius_overlap_squared(q1, q2)
-
             g11 = (float(rank) - tr_p0p1) / (h1 * h1)
             g22 = (float(rank) - tr_p0p2) / (h2 * h2)
             g12 = 0.5 * (tr_p1p2 - tr_p0p1 - tr_p0p2 + float(rank)) / (h1 * h2)
-
             tr_012 = _triple_projector_trace(q0, q1, q2)
             tr_021 = _triple_projector_trace(q0, q2, q1)
             omega = (-1j * (tr_012 - tr_021) / (h1 * h2)).real
-
             metric[0, 0, i, j] = g11
             metric[1, 1, i, j] = g22
             metric[0, 1, i, j] = g12
             metric[1, 0, i, j] = g12
             omega_12[i, j] = float(omega)
-
             qgt[0, 0, i, j] = complex(g11)
             qgt[1, 1, i, j] = complex(g22)
             qgt[0, 1, i, j] = complex(g12, 0.5 * float(omega))
             qgt[1, 0, i, j] = complex(g12, -0.5 * float(omega))
-
     projector_chern = float(np.sum(omega_12) * h1 * h2 / (2.0 * np.pi))
     return qgt, metric, omega_12, projector_chern
-
-
 def projector_qgt_central_difference(
     selected_vectors: np.ndarray,
     *,
@@ -489,13 +411,11 @@ def projector_qgt_central_difference(
     ``backward_sewing_transforms`` must supply the inverse transition functions
     needed to represent the ``k-h`` neighbor in the same local chart.
     """
-
     if sewing_transforms is not None and backward_sewing_transforms is None:
         raise ValueError(
             "central finite differences with boundary sewing require backward_sewing_transforms "
             "for the inverse boundary transition functions"
         )
-
     selected, _ = select_wavefunction_subspace(selected_vectors, None)
     mesh_1, mesh_2 = selected.shape[:2]
     h1, h2 = _resolve_coordinate_steps(mesh_1, mesh_2, k_grid_frac, coordinate_steps)
@@ -506,12 +426,10 @@ def projector_qgt_central_difference(
         backward_sewing_transforms=backward_sewing_transforms,
         atol=atol,
     )
-
     qgt = np.zeros((2, 2, mesh_1, mesh_2), dtype=np.complex128)
     metric = np.zeros((2, 2, mesh_1, mesh_2), dtype=float)
     omega_12 = np.zeros((mesh_1, mesh_2), dtype=float)
     rank = int(frames.shape[-1])
-
     for i in range(mesh_1):
         for j in range(mesh_2):
             q0 = frames[i, j]
@@ -519,7 +437,6 @@ def projector_qgt_central_difference(
             p2 = forward_2[i, j]
             m1 = backward_1[i, j]
             m2 = backward_2[i, j]
-
             g11 = (float(rank) - _frobenius_overlap_squared(p1, m1)) / (4.0 * h1 * h1)
             g22 = (float(rank) - _frobenius_overlap_squared(p2, m2)) / (4.0 * h2 * h2)
             cross = (
@@ -529,7 +446,6 @@ def projector_qgt_central_difference(
                 + _frobenius_overlap_squared(m1, m2)
             )
             g12 = 0.5 * cross / (4.0 * h1 * h2)
-
             commutator_trace = (
                 _triple_projector_trace(q0, p1, p2)
                 - _triple_projector_trace(q0, p1, m2)
@@ -541,22 +457,17 @@ def projector_qgt_central_difference(
                 - _triple_projector_trace(q0, m2, m1)
             ) / (4.0 * h1 * h2)
             omega = (-1j * commutator_trace).real
-
             metric[0, 0, i, j] = g11
             metric[1, 1, i, j] = g22
             metric[0, 1, i, j] = g12
             metric[1, 0, i, j] = g12
             omega_12[i, j] = float(omega)
-
             qgt[0, 0, i, j] = complex(g11)
             qgt[1, 1, i, j] = complex(g22)
             qgt[0, 1, i, j] = complex(g12, 0.5 * float(omega))
             qgt[1, 0, i, j] = complex(g12, -0.5 * float(omega))
-
     projector_chern = float(np.sum(omega_12) * h1 * h2 / (2.0 * np.pi))
     return qgt, metric, omega_12, projector_chern
-
-
 def transform_quantum_geometric_tensor(qgt: np.ndarray, derivative_transform: np.ndarray) -> np.ndarray:
     """Transform QGT components to a new coordinate basis.
 
@@ -565,7 +476,6 @@ def transform_quantum_geometric_tensor(qgt: np.ndarray, derivative_transform: np
     fractional coordinates ``f`` and Cartesian momenta ``k = B f``, pass
     ``np.linalg.inv(B)`` where the columns of ``B`` are reciprocal vectors.
     """
-
     tensor = np.asarray(qgt, dtype=np.complex128)
     transform = np.asarray(derivative_transform, dtype=float)
     if tensor.ndim < 2 or tensor.shape[:2] != (2, 2):

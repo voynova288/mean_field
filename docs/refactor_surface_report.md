@@ -2731,3 +2731,44 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 - `tests` Python lines: 2486
 - `src/mean_field/systems` Python lines: 26340
 - Files over 1000 lines: 0
+
+## Update: add pure projected-HF micro reconstruction helper
+
+Commit in this continuation:
+
+- pending: add projected-HF micro reconstruction helper
+
+### Scope
+
+Added a small system-independent projected-HF reconstruction helper under `mean_field.core.hf`:
+
+- `canonicalize_projected_micro_basis(...)` canonicalizes a projected microscopic basis to `(k, microscopic_basis, active_basis)`.
+- `reconstruct_projected_micro_wavefunctions(...)` contracts a canonical projected microscopic basis with explicit active HF eigenvectors shaped `(active_basis, hf_state, k)` and returns a `MicroscopicWavefunctionBundle`.
+
+The helper is pure array plumbing. It does not infer system-specific band/flavor ordering, does not build sewing transforms, does not fill missing active HF eigenvectors in system adapters, and does not restore projected-HF topology or paper workflows.
+
+### Validation
+
+Added `tests/test_core_hf_reconstruction.py` for identity/rotation reconstruction, noncanonical axis handling, unitarity guard, bad grid shape, bad labels, and bad basis rank.
+
+Validation on `test001`:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 109 passed
+
+python -m pip install -e . --dry-run --no-deps --no-build-isolation
+# Would install mean-field-0.1.0
+```
+
+### Current summary after this continuation
+
+- Tracked text lines: 48239
+- Tracked Python lines: 42642
+- Tracked Julia lines: 826
+- `src` Python files: 203
+- `src` Python lines: 39992
+- `tests` Python lines: 2598
+- `src/mean_field/systems` Python lines: 26340
+- Files over 1000 lines: 0
