@@ -2563,3 +2563,45 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 - `tests` Python lines: 2172
 - `src/mean_field/systems` Python lines: 26328
 - Files over 1000 lines: 0
+
+## Update: unify topology band-index semantics and add model convenience
+
+Commit in this continuation:
+
+- pending: unify topology band indices and model convenience
+
+### Scope
+
+Unified system topology band-index semantics and added optional model convenience methods:
+
+- `analysis.topology.compute_system_topology_from_grid_result(...)` now treats `band_indices` as grid-result/system band labels. If `grid_result.band_indices` is present, those labels are mapped to returned eigenvector columns; otherwise a full/prefix grid uses the natural labels `0..n_columns-1`.
+- The common adapter records `band_indices_semantics`, `absolute_band_indices`, `column_indices`, and `grid_result_band_indices` in result metadata.
+- TMBG, TDBG, ATMG, and RLG-hBN `compute_topology_on_grid(...)` now default to full-grid eigenvectors when `n_bands=None`; explicit `n_bands` is only a prefix guard and must include the requested absolute band labels.
+- TMBG and ATMG wrappers now accept explicit `sewing_transforms`, forwarding them to the common topology API instead of hard-locking no-sewing behavior. No automatic TMBG/ATMG sewing convention was fabricated.
+- Added optional lazy `model.topology_on_grid(...)` delegates for TMBG, TDBG, ATMG, and RLG-hBN. HTG remains absent pending its separate absolute-band-window API decision.
+
+### Validation
+
+Added/updated tests for common grid-result band-label mapping, TMBG/ATMG explicit sewing-transform forwarding, wrapper full-grid default semantics, and model convenience delegation.
+
+Validation on `test001`:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 98 passed
+
+python -m pip install -e . --dry-run --no-deps --no-build-isolation
+# Would install mean-field-0.1.0
+```
+
+### Current summary after this continuation
+
+- Tracked text lines: 47740
+- Tracked Python lines: 42361
+- Tracked Julia lines: 826
+- `src` Python files: 201
+- `src` Python lines: 39998
+- `tests` Python lines: 2302
+- `src/mean_field/systems` Python lines: 26342
+- Files over 1000 lines: 0

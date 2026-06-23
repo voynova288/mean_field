@@ -153,6 +153,10 @@ class RLGhBNModel:
         )
 
 
+    def topology_on_grid(self, mesh_size: int, band_indices, **kwargs):
+        from .topology import compute_topology_on_grid
+        return compute_topology_on_grid(mesh_size, self.lattice, self.params, band_indices, **kwargs)
+
     def valence_charge_background(
         self,
         grid_result: GridBandsResult,

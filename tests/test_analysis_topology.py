@@ -211,3 +211,20 @@ def test_quantum_geometry_qiwuzhang_matches_fhs_sign_and_metric_shapes() -> None
     assert normalized.integrated_berry_curvature == pytest.approx(result.projector_chern_number, abs=5.0e-2)
     assert normalized.integrated_fubini_study_trace > 0.0
     assert normalized.metadata == {"model": "qiwuzhang"}
+
+
+def test_system_topology_grid_result_maps_absolute_band_indices_to_columns() -> None:
+    wavefunctions, _energies = _qiwuzhang_wavefunctions(mesh=17, mass=1.0)
+    grid = SimpleNamespace(eigenvectors=wavefunctions, band_indices=(100, 101))
+
+    result = compute_system_topology_from_grid_result(grid, 101, system="mapped", valley=1)
+
+    assert result.band_indices == (101,)
+    assert result.rounded_chern_number == -1
+    assert result.index_metadata is not None
+    assert result.index_metadata["metadata"]["absolute_band_indices"] == [101]
+    assert result.index_metadata["metadata"]["column_indices"] == [1]
+    assert result.index_metadata["metadata"]["grid_result_band_indices"] == [100, 101]
+
+    with pytest.raises(ValueError, match="not available"):
+        compute_system_topology_from_grid_result(grid, 102, system="mapped")

@@ -74,14 +74,13 @@ def compute_topology_on_grid(
     orientation_sign: float | None = None, paper_orientation: bool = False,
 ) -> TopologyResult:
     requested = normalize_state_indices(band_indices)
-    resolved_n_bands = max(requested) + 1 if n_bands is None else int(n_bands)
-    if resolved_n_bands <= max(requested):
-        raise ValueError(f"n_bands={resolved_n_bands} does not include requested band index {max(requested)}")
+    if n_bands is not None and int(n_bands) <= max(requested):
+        raise ValueError(f"n_bands={int(n_bands)} does not include requested band index {max(requested)}")
     if endpoint:
         raise ValueError("Topology FHS meshes must use endpoint=False")
     grid = compute_bands_on_grid(
-        int(mesh_size), lattice, params, valley=int(valley), n_bands=resolved_n_bands, return_eigenvectors=True,
-        endpoint=bool(endpoint), frac_shift=(float(frac_shift[0]), float(frac_shift[1])),
+        int(mesh_size), lattice, params, valley=int(valley), n_bands=None if n_bands is None else int(n_bands), return_eigenvectors=True,
+        endpoint=False, frac_shift=(float(frac_shift[0]), float(frac_shift[1])),
     )
     if sewing_transforms is None and bool(use_boundary_sewing):
         sewing_transforms = rlg_hbn_boundary_sewing_transforms(lattice, params, valley=valley)

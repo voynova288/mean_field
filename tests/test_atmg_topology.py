@@ -101,7 +101,7 @@ def test_atmg_topology_on_grid_builds_single_explicit_eigenvector_grid(monkeypat
     assert result.rounded_chern_number == 1
     assert calls["mesh_size"] == 9
     assert calls["valley"] == -1
-    assert calls["n_bands"] == 1
+    assert calls["n_bands"] is None
     assert calls["return_eigenvectors"] is True
     assert calls["endpoint"] is False
     assert calls["frac_shift"] == (0.25, 0.5)
@@ -115,3 +115,15 @@ def test_atmg_topology_on_grid_rejects_endpoint_mesh() -> None:
 def test_atmg_topology_on_grid_rejects_n_bands_that_excludes_target_band() -> None:
     with pytest.raises(ValueError, match="does not include requested band index"):
         atmg_topology.compute_topology_on_grid(3, object(), object(), 2, n_bands=2)
+
+
+def test_atmg_topology_accepts_explicit_common_sewing_transforms() -> None:
+    wavefunctions, k_grid_frac = _qiwuzhang_wavefunctions(mesh=9, mass=1.0)
+    result = atmg_topology.compute_topology_from_eigenvectors(
+        wavefunctions,
+        0,
+        k_grid_frac=k_grid_frac,
+        sewing_transforms=(None, None),
+    )
+    assert result.index_metadata is not None
+    assert result.index_metadata["metadata"]["boundary_sewing"] is True

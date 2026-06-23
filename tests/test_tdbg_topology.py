@@ -128,10 +128,13 @@ def test_tdbg_topology_on_grid_builds_single_explicit_eigenvector_grid(monkeypat
 
     assert result.rounded_chern_number == 1
     assert result.index_metadata is not None
-    assert result.index_metadata["metadata"] == {"boundary_sewing": False}
+    metadata = result.index_metadata["metadata"]
+    assert metadata["boundary_sewing"] is False
+    assert metadata["absolute_band_indices"] == [0]
+    assert metadata["column_indices"] == [0]
     assert calls["mesh_size"] == 9
     assert calls["valley"] == -1
-    assert calls["n_bands"] == 1
+    assert calls["n_bands"] is None
     assert calls["return_eigenvectors"] is True
     assert calls["endpoint"] is False
     assert calls["frac_shift"] == (0.25, 0.5)

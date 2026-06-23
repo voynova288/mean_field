@@ -51,6 +51,18 @@ Current component-group status:
 - `htg`: intentionally left unset while HTG work is owned elsewhere.
 - `tdbg`: declares sector/layer/sublattice groups through a dedicated adapter. Public model records use the full q-site-major Hamiltonian-basis index `4*q_site + alpha` with `alpha=(A1,B1,A2,B2)` and carry `index_space="tdbg_full_hamiltonian_basis"`; projected-HF overlap helpers use a separate embedded eight-component local basis `4*sector + alpha`.
 
+## Optional topology convenience
+
+Models with reviewed thin topology wrappers may expose:
+
+```python
+def topology_on_grid(mesh_size: int, band_indices, **kwargs) -> analysis.topology.TopologyResult: ...
+```
+
+This is an optional convenience, not a required `ContinuumModel` protocol method. Current coverage is TMBG, TDBG, ATMG, and RLG-hBN; HTG remains absent until its absolute-band-window API is reviewed. At the model/wrapper/grid-result layer, `band_indices` means the system/grid-result band labels, normally absolute Hamiltonian band indices, and the common topology adapter maps them to returned eigenvector columns. Only the low-level `compute_topology_from_eigenvectors(...)` entrypoint uses raw eigenvector-column indices.
+
+`topology_on_grid(...)` diagonalizes a 2D grid with eigenvectors and is therefore a numerical job for realistic meshes. Use `endpoint=False`; paper-level topology validation still requires explicit provenance and Slurm-scale validation.
+
 ## ModelRecord
 
 `model_record(model)` creates a serializable record for artifacts.  It is intentionally lossy: it captures public summary metadata, not enough data to reconstruct all caches.  Reconstructable workflow inputs belong in `config.yaml` and system-specific result metadata.

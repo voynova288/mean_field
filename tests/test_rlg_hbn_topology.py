@@ -44,7 +44,11 @@ def test_rlg_hbn_topology_from_grid_result_uses_optional_boundary_metadata() -> 
     assert result.rounded_chern_number == -1
     np.testing.assert_allclose(result.k_grid_frac, k_grid_frac)
     assert result.index_metadata is not None
-    assert result.index_metadata["metadata"] == {"boundary_sewing": False, "orientation_sign": 1.0}
+    metadata = result.index_metadata["metadata"]
+    assert metadata["boundary_sewing"] is False
+    assert metadata["orientation_sign"] == 1.0
+    assert metadata["absolute_band_indices"] == [0]
+    assert metadata["column_indices"] == [0]
 
 
 def test_rlg_hbn_boundary_sewing_transform_uses_reciprocal_translation() -> None:
@@ -77,8 +81,12 @@ def test_rlg_hbn_topology_on_grid_builds_single_explicit_eigenvector_grid(monkey
 
     assert result.rounded_chern_number == 1
     assert result.index_metadata is not None
-    assert result.index_metadata["metadata"] == {"boundary_sewing": False, "orientation_sign": 1.0}
-    assert calls == {"mesh_size": 9, "valley": -1, "n_bands": 1, "return_eigenvectors": True, "endpoint": False, "frac_shift": (0.25, 0.5)}
+    metadata = result.index_metadata["metadata"]
+    assert metadata["boundary_sewing"] is False
+    assert metadata["orientation_sign"] == 1.0
+    assert metadata["absolute_band_indices"] == [0]
+    assert metadata["column_indices"] == [0]
+    assert calls == {"mesh_size": 9, "valley": -1, "n_bands": None, "return_eigenvectors": True, "endpoint": False, "frac_shift": (0.25, 0.5)}
 
 
 def test_rlg_hbn_topology_from_grid_result_requires_requested_boundary_sewing_inputs() -> None:
