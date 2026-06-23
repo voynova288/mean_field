@@ -2310,7 +2310,7 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 
 Commit in this continuation:
 
-- pending: restore thin TDBG topology wrapper
+- `00d79b9 Restore thin TDBG topology wrapper`
 
 ### Scope restored
 
