@@ -2487,7 +2487,7 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 
 Commit in this continuation:
 
-- pending: add topology wrapper boundary test
+- `1396390 Add topology wrapper boundary test`
 
 ### Scope
 
