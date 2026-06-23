@@ -2428,7 +2428,7 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 
 Commit in this continuation:
 
-- pending: restore thin RLG-hBN topology wrapper
+- `286ee1f Restore thin RLG-hBN topology wrapper`
 
 ### Scope restored
 
