@@ -2736,7 +2736,7 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 
 Commit in this continuation:
 
-- pending: add projected-HF micro reconstruction helper
+- `c7b45b1 Add projected HF micro reconstruction helper`
 
 ### Scope
 
