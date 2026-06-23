@@ -2482,3 +2482,43 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 - `tests` Python lines: 2118
 - `src/mean_field/systems` Python lines: 26321
 - Files over 1000 lines: 0
+
+## Update: codify system topology wrapper boundary
+
+Commit in this continuation:
+
+- pending: add topology wrapper boundary test
+
+### Scope
+
+Added a tracked boundary test for the current concrete topology wrapper surface:
+
+```text
+tests/test_system_topology_wrapper_boundary.py
+```
+
+The test asserts that thin wrappers are importable for TMBG, TDBG, ATMG, and RLG-hBN, and that `mean_field.systems.htg.topology` remains absent pending a separate API decision. HTG was not restored in this step because there was no archived `systems/htg/topology.py`, and the current HTG band-grid API selects absolute band windows via `band_indices` / `central_band_count`, so its wrapper semantics should be reviewed before adding a public topology surface.
+
+### Validation
+
+Validation on `test001`:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 85 passed
+
+python -m pip install -e . --dry-run --no-deps --no-build-isolation
+# Would install mean-field-0.1.0
+```
+
+### Current summary after this continuation
+
+- Tracked text lines: 47486
+- Tracked Python lines: 42200
+- Tracked Julia lines: 826
+- `src` Python files: 201
+- `src` Python lines: 39991
+- `tests` Python lines: 2148
+- `src/mean_field/systems` Python lines: 26321
+- Files over 1000 lines: 0
