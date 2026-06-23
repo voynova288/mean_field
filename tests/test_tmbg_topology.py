@@ -99,6 +99,7 @@ def test_tmbg_topology_on_grid_builds_single_explicit_eigenvector_grid(monkeypat
         0,
         valley=-1,
         frac_shift=(0.25, 0.5),
+        boundary_sewing=False,
     )
 
     assert result.rounded_chern_number == 1
@@ -108,6 +109,16 @@ def test_tmbg_topology_on_grid_builds_single_explicit_eigenvector_grid(monkeypat
     assert calls["return_eigenvectors"] is True
     assert calls["endpoint"] is False
     assert calls["frac_shift"] == (0.25, 0.5)
+
+
+def test_tmbg_boundary_sewing_transform_uses_reciprocal_translation() -> None:
+    lattice = SimpleNamespace(g_indices=np.asarray([[0, 0], [1, 0]], dtype=int), n_g=2)
+    sew_plus, sew_y = tmbg_topology.boundary_sewing_transforms(lattice)
+    values = np.arange(12, dtype=float).astype(np.complex128)
+    np.testing.assert_allclose(sew_plus(values), np.concatenate((values[6:12], np.zeros(6, dtype=np.complex128))))
+    np.testing.assert_allclose(sew_y(values), 0.0)
+    with pytest.raises(ValueError, match="Expected first axis"):
+        sew_plus(np.zeros((11,), dtype=np.complex128))
 
 
 def test_tmbg_topology_on_grid_rejects_endpoint_mesh() -> None:

@@ -2645,3 +2645,45 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 - `tests` Python lines: 2318
 - `src/mean_field/systems` Python lines: 26342
 - Files over 1000 lines: 0
+
+## Update: add TMBG/ATMG reciprocal boundary sewing helpers
+
+Commit in this continuation:
+
+- pending: add TMBG/ATMG reciprocal boundary sewing helpers
+
+### Scope
+
+Added system-owned reciprocal-basis boundary sewing helpers for the thin TMBG and ATMG topology wrappers:
+
+- `mean_field.systems.tmbg.topology.boundary_sewing_transforms(lattice)` uses G-index reciprocal translation with local block size 6.
+- `mean_field.systems.atmg.topology.boundary_sewing_transforms(lattice, params)` uses the same G-index reciprocal translation with local block size `2 * params.n_layers`.
+- TMBG/ATMG `compute_topology_on_grid(...)` now defaults to these boundary sewing transforms unless callers pass explicit `sewing_transforms` or `boundary_sewing=False`.
+
+This restores the expected torus seam relabeling for the continuum plane-wave basis, but does not claim paper-level Chern validation or convergence. No Slurm jobs, paper workflows, projected-HF reconstruction, or result mutations were performed.
+
+### Validation
+
+Added toy shape/mapping tests for the TMBG/ATMG reciprocal translation transforms and kept fake-grid topology tests software-only.
+
+Validation on `test001`:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 101 passed
+
+python -m pip install -e . --dry-run --no-deps --no-build-isolation
+# Would install mean-field-0.1.0
+```
+
+### Current summary after this continuation
+
+- Tracked text lines: 47892
+- Tracked Python lines: 42389
+- Tracked Julia lines: 826
+- `src` Python files: 201
+- `src` Python lines: 39987
+- `tests` Python lines: 2341
+- `src/mean_field/systems` Python lines: 26330
+- Files over 1000 lines: 0
