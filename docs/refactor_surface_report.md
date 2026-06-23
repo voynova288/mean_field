@@ -2568,7 +2568,7 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 
 Commit in this continuation:
 
-- pending: unify topology band indices and model convenience
+- `b9be514 Unify topology band indices and model convenience`
 
 ### Scope
 
