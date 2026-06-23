@@ -16,7 +16,6 @@ import numpy as np
 LinkMethod = Literal["polar", "determinant"]
 SewingTransform = Callable[[np.ndarray], np.ndarray]
 
-
 @dataclass(frozen=True)
 class WavefunctionIndex:
     """Metadata that identifies which wavefunction columns were used.
@@ -545,21 +544,23 @@ def compute_lattice_topology(
         atol=atol,
         regularization=regularization,
     )
-    curvature = berry_curvature_from_links(links.link_1, links.link_2)
-    if orientation_sign != 1.0:
-        curvature = float(orientation_sign) * curvature
+    sign = float(orientation_sign)
+    if sign not in (-1.0, 1.0): raise ValueError(f"orientation_sign must be +1 or -1, got {orientation_sign!r}")
+    link_1 = links.link_1 if sign > 0.0 else links.link_1.conjugate()
+    link_2 = links.link_2 if sign > 0.0 else links.link_2.conjugate()
+    curvature = berry_curvature_from_links(link_1, link_2)
     chern = chern_number_from_berry_curvature(curvature)
     grid = default_k_grid_frac(mesh_1, mesh_2) if k_grid_frac is None else np.asarray(k_grid_frac, dtype=float)
 
     return LatticeTopologyResult(
         wavefunction_index=resolved_index,
         k_grid_frac=grid,
-        berry_connection=links.berry_connection,
+        berry_connection=np.stack((np.angle(link_1), np.angle(link_2)), axis=0),
         berry_curvature=curvature,
         chern_number=float(chern),
         rounded_chern_number=int(np.rint(chern)),
         min_link_magnitude=float(links.min_link_magnitude),
-        link_1=links.link_1,
-        link_2=links.link_2,
+        link_1=link_1,
+        link_2=link_2,
         metadata={} if metadata is None else dict(metadata),
     )

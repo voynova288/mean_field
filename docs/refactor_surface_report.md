@@ -2605,3 +2605,43 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 - `tests` Python lines: 2302
 - `src/mean_field/systems` Python lines: 26342
 - Files over 1000 lines: 0
+
+## Update: make topology orientation sign self-consistent
+
+Commit in this continuation:
+
+- pending: make topology orientation sign self-consistent
+
+### Scope
+
+Hardened the common topology orientation convention:
+
+- `orientation_sign` is now restricted to `+1` or `-1`; arbitrary curvature scaling is rejected.
+- For `orientation_sign=-1`, returned FHS links are conjugated and the returned Berry connection is computed from the conjugated links, so Berry connection, Berry curvature, and Chern number are internally consistent.
+- Added a toy QWZ test asserting `link_1`, `link_2`, Berry connection, curvature, and rounded Chern all flip self-consistently under `orientation_sign=-1`.
+
+No system-specific sewing convention, paper workflow, projected-HF reconstruction, Slurm job, or physical-result claim was added.
+
+### Validation
+
+Validation on `test001`:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 99 passed
+
+python -m pip install -e . --dry-run --no-deps --no-build-isolation
+# Would install mean-field-0.1.0
+```
+
+### Current summary after this continuation
+
+- Tracked text lines: 47839
+- Tracked Python lines: 42378
+- Tracked Julia lines: 826
+- `src` Python files: 201
+- `src` Python lines: 39999
+- `tests` Python lines: 2318
+- `src/mean_field/systems` Python lines: 26342
+- Files over 1000 lines: 0

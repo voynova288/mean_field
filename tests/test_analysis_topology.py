@@ -131,6 +131,22 @@ def test_gap_grouping_and_group_topology_api() -> None:
     assert all(result.is_nearly_integer for result in results)
 
 
+def test_lattice_topology_orientation_sign_flips_links_connection_and_curvature() -> None:
+    wavefunctions, _energies = _qiwuzhang_wavefunctions(mesh=17, mass=1.0)
+
+    positive = compute_lattice_topology(wavefunctions, 0)
+    negative = compute_lattice_topology(wavefunctions, 0, orientation_sign=-1.0)
+
+    np.testing.assert_allclose(negative.link_1, positive.link_1.conjugate())
+    np.testing.assert_allclose(negative.link_2, positive.link_2.conjugate())
+    np.testing.assert_allclose(negative.berry_connection, -positive.berry_connection)
+    np.testing.assert_allclose(negative.berry_curvature, -positive.berry_curvature)
+    assert negative.rounded_chern_number == -positive.rounded_chern_number
+
+    with pytest.raises(ValueError, match="orientation_sign"):
+        compute_lattice_topology(wavefunctions, 0, orientation_sign=0.5)
+
+
 def test_system_topology_adapter_attaches_metadata_and_orientation() -> None:
     wavefunctions, _energies = _qiwuzhang_wavefunctions(mesh=17, mass=1.0)
 
