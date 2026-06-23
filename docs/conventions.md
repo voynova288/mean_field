@@ -35,7 +35,7 @@ Use `DensityBundle.as_projector()` or `density_to_projector(...)` instead of ope
 ## Gauge and reciprocal-cell conventions
 
 - A model owns its plane-wave basis, reciprocal-cell labels, and boundary sewing convention.
-- `analysis.topology` owns the minimal system-independent FHS link/plaquette/Chern formulas and projector QGT/quantum-metric formulas. System or workflow artifacts that use it must record whether wavefunctions are periodic, sewn at the boundary, or represented in a physical Cartesian mBZ; concrete system wrappers remain separate reviewed surfaces. Current concrete wrapper coverage is limited to thin TMBG topology delegation.
+- `analysis.topology` owns the minimal system-independent FHS link/plaquette/Chern formulas and projector QGT/quantum-metric formulas. System or workflow artifacts that use it must record whether wavefunctions are periodic, sewn at the boundary, or represented in a physical Cartesian mBZ; concrete system wrappers remain separate reviewed surfaces. Current concrete wrapper coverage is limited to thin TMBG/TDBG/ATMG topology delegation.
 
 ## Artifact metadata
 

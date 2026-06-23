@@ -7,11 +7,11 @@ from .bands import compute_bands_on_grid
 
 
 def compute_topology_from_eigenvectors(eigenvectors, band_indices: int | Iterable[int], *, valley: int = 1, k_grid_frac=None, orientation_sign: float = 1.0) -> TopologyResult:
-    return compute_system_topology_from_eigenvectors(eigenvectors, band_indices, system="tmbg", valley=valley, k_grid_frac=k_grid_frac, orientation_sign=orientation_sign)
+    return compute_system_topology_from_eigenvectors(eigenvectors, band_indices, system="atmg", valley=valley, k_grid_frac=k_grid_frac, orientation_sign=orientation_sign)
 
 
 def compute_topology_from_grid_result(grid_result, band_indices: int | Iterable[int], *, valley: int = 1, orientation_sign: float = 1.0) -> TopologyResult:
-    return compute_system_topology_from_grid_result(grid_result, band_indices, system="tmbg", valley=valley, orientation_sign=orientation_sign)
+    return compute_system_topology_from_grid_result(grid_result, band_indices, system="atmg", valley=valley, orientation_sign=orientation_sign)
 
 
 def compute_topology_on_grid(
