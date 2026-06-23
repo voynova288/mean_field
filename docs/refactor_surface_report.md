@@ -2777,7 +2777,7 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 
 Commit in this continuation:
 
-- pending: add guarded HFResult micro reconstruction fallback
+- `f5b41ad Add guarded HFResult micro reconstruction fallback`
 
 ### Scope
 
