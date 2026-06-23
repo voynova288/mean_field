@@ -2692,7 +2692,7 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 
 Commit in this continuation:
 
-- pending: restore thin HTG topology wrapper
+- `517840d Restore thin HTG topology wrapper`
 
 ### Scope
 
