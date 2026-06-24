@@ -2951,7 +2951,7 @@ This remains software/API validation only. HTG/RLG physical parity scripts were 
 
 Commit in this continuation:
 
-- pending: add Polshyn doubled-cell topology adapter
+- `ec23fdd Add Polshyn doubled cell topology adapter`
 
 ### Scope
 
