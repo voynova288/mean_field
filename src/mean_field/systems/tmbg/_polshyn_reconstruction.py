@@ -3,10 +3,12 @@ from __future__ import annotations
 """Projected-HF microscopic reconstruction implementation for the Polshyn tMBG cell.
 
 The public ``polshyn_supercell`` facade re-exports the reconstruction entry
-point for explicit flat-k diagnostics.  The doubled-cell microscopic row order
-can be reconstructed, but Polshyn boundary sewing has not been derived or
-validated, so returned bundles remain topology-ineligible and never attach
-sewing transforms.
+point for explicit flat-k diagnostics.  Returned bundles deliberately remain
+flat and topology-ineligible because this facade does not attach torus grid
+shape or sewing transforms.  Topology workflows must use
+``mean_field.systems.tmbg.topology.compute_polshyn_projected_hf_topology``,
+which owns the doubled-cell reshape/sewing boundary before delegating to the
+common FHS core; paper-level Chern validation remains a separate Slurm target.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -386,11 +388,11 @@ def _metadata(
         "grid_shape_attached": False,
         "sewing_available": False,
         "sewing_transforms_attached": False,
-        "sewing_blocker": "Polshyn doubled-cell projected-micro sewing has not been derived/tested",
-        "topology_status": "topology-ineligible",
+        "sewing_blocker": "public flat-k diagnostic facade does not attach torus sewing; use mean_field.systems.tmbg.topology.compute_polshyn_projected_hf_topology for the reviewed doubled-cell topology adapter",
+        "topology_status": "topology-ineligible-flat-diagnostic",
         "topology_eligible": False,
-        "topology_ineligible_reason": "Polshyn doubled-cell sewing is unavailable; flat-k reconstructed bundles are not validated torus bundles",
-        "topology_policy": "refuse/avoid FHS torus topology unless a future explicit diagnostic path derives sewing",
+        "topology_ineligible_reason": "flat-k reconstructed bundles are not validated torus bundles and do not carry doubled-cell sewing transforms",
+        "topology_policy": "refuse FHS torus topology through the flat diagnostic bundle; use the separate Polshyn doubled-cell topology adapter",
         "eigenvector_source": str(eigenvector_source),
         "selected_hf_state_indices": [int(index) for index in selected_state_indices],
         "n_reconstructed_states": int(n_reconstructed_states),
@@ -520,7 +522,8 @@ def reconstruct_polshyn_wang_hf_micro_wavefunctions(
 
 
 # Public flat-k diagnostic entrypoint is re-exported by mean_field.systems.tmbg.polshyn_supercell;
-# sewing/topology remains intentionally disabled until doubled-cell sewing is derived and validated.
+# returned flat bundles remain intentionally topology-ineligible.  Use the separate doubled-cell
+# sewing/reshape adapter in mean_field.systems.tmbg.topology for topology workflows.
 __all__ = [
     "expand_polshyn_projected_micro_basis",
     "polshyn_projected_hf_active_index",

@@ -351,12 +351,12 @@ def test_polshyn_public_reconstruction_keeps_flat_k_order_and_records_missing_se
     assert bundle.basis_metadata["raw_wavefunctions_axis_order"] == "basis,folded_band,valley,k"
     assert bundle.basis_metadata["grid_shape_attached"] is False
     assert bundle.basis_metadata["sewing_available"] is False
-    assert bundle.basis_metadata["topology_status"] == "topology-ineligible"
+    assert bundle.basis_metadata["topology_status"] == "topology-ineligible-flat-diagnostic"
     assert bundle.basis_metadata["topology_eligible"] is False
     assert "sewing" in bundle.basis_metadata["topology_ineligible_reason"]
-    with pytest.raises(ValueError, match="topology_eligible=False.*Polshyn doubled-cell sewing"):
+    with pytest.raises(ValueError, match="topology_eligible=False.*flat-k reconstructed bundles"):
         assert_topology_eligible(bundle, context="polshyn-public-diagnostic")
-    with pytest.raises(ValueError, match="topology_eligible=False.*Polshyn doubled-cell sewing"):
+    with pytest.raises(ValueError, match="topology_eligible=False.*flat-k reconstructed bundles"):
         compute_system_topology_from_bundle(bundle, 0, system="tmbg_polshyn")
     assert bundle.basis_metadata["embedding_shape"] == [2, 3]
     assert bundle.basis_metadata["selected_hf_state_indices"] == list(range(8))
