@@ -2895,7 +2895,7 @@ The previous soft `src` Python line budget is exceeded by the multi-system recon
 
 Commit in this continuation:
 
-- pending: finalize projected-HF topology/reconstruction API guards
+- `2b5c174 Finalize projected HF topology API guards`
 
 ### Scope
 
