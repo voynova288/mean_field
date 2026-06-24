@@ -13,23 +13,18 @@ from typing import Any
 import numpy as np
 
 from mean_field.core.contracts import MicroscopicWavefunctionBundle, MicroscopicWavefunctionSource
+from mean_field.core.hf.reconstruction import (
+    active_eigenvector_unitarity_residual,
+    contract_direct_sum_projected_micro_wavefunctions,
+    direct_sum_active_index,
+    normalize_reconstruction_state_indices,
+)
 
 
 def htg_direct_sum_state_index(n_spin: int, n_eta: int, n_band: int) -> np.ndarray:
     """Return HTG active-basis indices in spin/eta/band Fortran order."""
 
-    n_spin_i = int(n_spin)
-    n_eta_i = int(n_eta)
-    n_band_i = int(n_band)
-    if n_spin_i <= 0 or n_eta_i <= 0 or n_band_i <= 0:
-        raise ValueError(
-            "HTG active-basis dimensions must be positive; "
-            f"got n_spin={n_spin}, n_eta={n_eta}, n_band={n_band}"
-        )
-    return np.arange(n_spin_i * n_eta_i * n_band_i, dtype=int).reshape(
-        (n_spin_i, n_eta_i, n_band_i),
-        order="F",
-    )
+    return direct_sum_active_index((n_spin, n_eta, n_band), context="HTG active-basis index")
 
 
 def htg_hf_state_labels(n_state: int) -> tuple[dict[str, object], ...]:
@@ -45,22 +40,7 @@ def normalize_htg_reconstruction_state_indices(
 ) -> tuple[int, ...]:
     """Normalize selected final-HF state indices with explicit bounds checks."""
 
-    n_state_i = int(n_state)
-    if n_state_i <= 0:
-        raise ValueError(f"n_state must be positive, got {n_state}")
-    if band_indices is None:
-        return tuple(range(n_state_i))
-    if isinstance(band_indices, (str, bytes)):
-        raise TypeError("band_indices must be an integer, an iterable of integers, or None")
-    if isinstance(band_indices, (int, np.integer)):
-        out = (int(band_indices),)
-    else:
-        out = tuple(int(index) for index in band_indices)
-    if not out:
-        raise ValueError("At least one HF band/state index is required")
-    if min(out) < 0 or max(out) >= n_state_i:
-        raise ValueError(f"HF band/state indices {out} outside [0, {n_state_i})")
-    return out
+    return normalize_reconstruction_state_indices(band_indices, n_state, label="HF band/state")
 
 
 def htg_reconstruction_output_element_count(
@@ -217,17 +197,11 @@ def reconstruct_htg_projected_micro_bundle(
     selected = normalize_htg_reconstruction_state_indices(tuple(int(index) for index in selected_state_indices), n_active)
     n_selected = int(len(selected))
     selected_coeffs = coeffs[:, list(selected), :]
-    residual = None
-    if unitarity_atol is not None:
-        if float(unitarity_atol) < 0.0:
-            raise ValueError(f"unitarity_atol must be non-negative or None, got {unitarity_atol}")
-        gram = np.einsum("ahk,amk->hmk", selected_coeffs.conjugate(), selected_coeffs, optimize=True)
-        residual = float(np.max(np.abs(gram - np.eye(n_selected, dtype=np.complex128)[:, :, None])))
-        if residual > float(unitarity_atol):
-            raise ValueError(
-                f"{context} selected active_eigenvectors must be orthonormal at each k point; "
-                f"max column-Gram residual {residual:.6e} exceeds {float(unitarity_atol):.6e}"
-            )
+    residual = active_eigenvector_unitarity_residual(
+        selected_coeffs,
+        unitarity_atol=unitarity_atol,
+        context=f"{context} selected active_eigenvectors",
+    )
 
     kvec_arr = np.arange(nk, dtype=np.complex128) if kvec is None else np.asarray(kvec, dtype=np.complex128).reshape(-1)
     if kvec_arr.shape != (nk,):
@@ -237,14 +211,7 @@ def reconstruct_htg_projected_micro_bundle(
     shape = _grid_shape(grid_shape, nk)
 
     micro_dim = int(n_spin_i * n_eta * basis_dimension)
-    psi_flat = np.zeros((nk, micro_dim, n_selected), dtype=np.complex128)
-    for ik in range(nk):
-        for ispin in range(n_spin_i):
-            for ieta in range(n_eta):
-                row_start = int((ispin * n_eta + ieta) * basis_dimension)
-                row_stop = int(row_start + basis_dimension)
-                active_rows = state_index[ispin, ieta, :]
-                psi_flat[ik, row_start:row_stop, :] = raw[:, :, ieta, ik] @ selected_coeffs[active_rows, :, ik]
+    psi_flat = contract_direct_sum_projected_micro_wavefunctions(raw, selected_coeffs, state_index)
 
     psi = psi_flat if shape is None else psi_flat.reshape((*shape, micro_dim, n_selected), order="C")
     labels = _state_labels(state_labels, n_selected)

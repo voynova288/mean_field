@@ -85,6 +85,125 @@ def test_tdbg_boundary_sewing_transform_uses_translation_srcmap() -> None:
         sew_1(np.zeros((7,), dtype=np.complex128))
 
 
+def test_tdbg_projected_hf_boundary_sewing_respects_spin_valley_q_site_local_rows() -> None:
+    lattice = SimpleNamespace(
+        q_sites=np.asarray([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=float),
+        n_q=2,
+        g_m1=1.0 + 0.0j,
+        g_m2=0.0 + 1.0j,
+    )
+
+    sew_1, sew_2 = tdbg_topology.projected_hf_boundary_sewing_transforms(lattice)  # type: ignore[arg-type]
+    values = np.arange(2 * 2 * 2 * 4, dtype=float).astype(np.complex128)
+    shifted = sew_1(values).reshape(2, 2, 2, 4)
+    original = values.reshape(2, 2, 2, 4)
+
+    np.testing.assert_allclose(shifted[:, :, 0, :], original[:, :, 1, :])
+    np.testing.assert_allclose(shifted[:, :, 1, :], 0.0)
+    np.testing.assert_allclose(sew_2(values), 0.0)
+
+    frame = np.stack((values, 100.0 + values), axis=1)
+    shifted_frame = sew_1(frame).reshape(2, 2, 2, 4, 2)
+    original_frame = frame.reshape(2, 2, 2, 4, 2)
+    np.testing.assert_allclose(shifted_frame[:, :, 0, :, :], original_frame[:, :, 1, :, :])
+    np.testing.assert_allclose(shifted_frame[:, :, 1, :, :], 0.0)
+
+    with pytest.raises(ValueError, match="spin,valley,q_site,local"):
+        sew_1(np.zeros((31,), dtype=np.complex128))
+
+
+def test_tdbg_projected_hf_topology_reconstructs_reshapes_and_preserves_sewing(monkeypatch) -> None:
+ psi_flat = (np.arange(4 * 3 * 2, dtype=float).reshape(4, 3, 2) + 1j).astype(np.complex128)
+ k_grid_flat = np.asarray(
+  [[0.0, 0.0], [0.0, 0.5], [0.5, 0.0], [0.5, 0.5]],
+  dtype=float,
+ )
+
+ def sew_1(values):
+  return np.asarray(values)
+
+ def sew_2(values):
+  return np.asarray(values)
+
+ calls: dict[str, object] = {}
+
+ def fake_reconstruct(result, **kwargs):
+  calls["result"] = result
+  calls["reconstruct_kwargs"] = kwargs
+  return SimpleNamespace(
+   psi_micro=psi_flat,
+   sewing_transforms=(sew_1, sew_2),
+   basis_metadata={
+    "topology_grid_shape": [2, 2],
+    "topology_grid_shape_source": "unit-test metadata",
+    "selected_hf_state_indices": [2, 5],
+    "topology_eligible": True,
+   },
+  )
+
+ def fake_common(eigenvectors, band_indices, **kwargs):
+  calls["eigenvectors"] = eigenvectors
+  calls["band_indices"] = band_indices
+  calls["common_kwargs"] = kwargs
+  return tdbg_topology.TopologyResult(
+   band_indices=tuple(kwargs["result_band_indices"]),
+   valley=int(kwargs["valley"]),
+   k_grid_frac=kwargs["k_grid_frac"],
+   berry_curvature=np.zeros((2, 2), dtype=float),
+   chern_number=0.0,
+   rounded_chern_number=0,
+   index_metadata={"metadata": dict(kwargs["index_metadata"])},
+  )
+
+ monkeypatch.setattr(tdbg_topology, "reconstruct_tdbg_projected_hf_micro_wavefunctions", fake_reconstruct)
+ monkeypatch.setattr(tdbg_topology, "compute_system_topology_from_eigenvectors", fake_common)
+ fake_result = SimpleNamespace(data=SimpleNamespace(k_grid_frac=k_grid_flat))
+
+ result = tdbg_topology.compute_projected_hf_topology(
+  fake_result,
+  state_indices=(2, 5),
+  valley=7,
+  max_dense_elements=123,
+  metadata={"fixture": "projected-hf-topology-wiring"},
+ )
+
+ assert calls["result"] is fake_result
+ reconstruct_kwargs = calls["reconstruct_kwargs"]
+ assert reconstruct_kwargs["state_indices"] == (2, 5)
+ assert reconstruct_kwargs["band_indices"] is None
+ assert reconstruct_kwargs["max_dense_elements"] == 123
+ np.testing.assert_allclose(calls["eigenvectors"], psi_flat.reshape(2, 2, 3, 2))
+ np.testing.assert_allclose(calls["common_kwargs"]["k_grid_frac"], k_grid_flat.reshape(2, 2, 2))
+ assert calls["band_indices"] == (0, 1)
+ assert calls["common_kwargs"]["result_band_indices"] == (2, 5)
+ assert calls["common_kwargs"]["sewing_transforms"] == (sew_1, sew_2)
+ assert calls["common_kwargs"]["role"] == "hf_state"
+ assert calls["common_kwargs"]["labels"] == ("hf_state=2", "hf_state=5")
+ payload = calls["common_kwargs"]["index_metadata"]
+ assert payload["topology_flat_input_axis_order"] == "nk,basis,state"
+ assert payload["topology_input_axis_order"] == "mesh,mesh,basis,state"
+ assert payload["topology_grid_shape"] == [2, 2]
+ assert payload["topology_grid_shape_source"] == "unit-test metadata"
+ assert payload["topology_sewing_transforms_count"] == 2
+ assert payload["fixture"] == "projected-hf-topology-wiring"
+ assert result.band_indices == (2, 5)
+ assert result.valley == 7
+
+
+def test_tdbg_projected_hf_topology_requires_mesh_shape_metadata(monkeypatch) -> None:
+ def fake_reconstruct(_result, **_kwargs):
+  return SimpleNamespace(
+   psi_micro=np.ones((3, 2, 1), dtype=np.complex128),
+   sewing_transforms=(),
+   basis_metadata={"selected_hf_state_indices": [0]},
+  )
+
+ monkeypatch.setattr(tdbg_topology, "reconstruct_tdbg_projected_hf_micro_wavefunctions", fake_reconstruct)
+
+ with pytest.raises(ValueError, match="topology_grid_shape/grid_shape"):
+  tdbg_topology.compute_projected_hf_topology(SimpleNamespace(data=SimpleNamespace(k_grid_frac=np.zeros((3, 2)))))
+
+
 def test_tdbg_topology_on_grid_builds_single_explicit_eigenvector_grid(monkeypatch) -> None:
     wavefunctions, k_grid_frac = _qiwuzhang_wavefunctions(mesh=9, mass=1.0)
     calls: dict[str, object] = {}

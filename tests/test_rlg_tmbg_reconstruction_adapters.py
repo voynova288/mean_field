@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from analysis.topology import assert_topology_eligible, compute_system_topology_from_bundle
 from mean_field.core.hf import ProjectedWavefunctionBasis
 from mean_field.systems.RnG_hBN.hf import (
     RLGhBNHartreeFockState,
@@ -302,9 +303,9 @@ def _toy_polshyn_state_from_hamiltonian(
     )
 
 
-def test_polshyn_private_reconstruction_keeps_flat_k_order_and_records_missing_sewing() -> None:
-    assert "reconstruct_polshyn_wang_hf_micro_wavefunctions" not in polshyn_public.__all__
-    assert not hasattr(polshyn_public, "reconstruct_polshyn_wang_hf_micro_wavefunctions")
+def test_polshyn_public_reconstruction_keeps_flat_k_order_and_records_missing_sewing() -> None:
+    assert "reconstruct_polshyn_wang_hf_micro_wavefunctions" in polshyn_public.__all__
+    assert polshyn_public.reconstruct_polshyn_wang_hf_micro_wavefunctions is reconstruct_polshyn_wang_hf_micro_wavefunctions
 
     basis = _toy_polshyn_basis(embedding_shape=(2, 3))
     expanded = expand_polshyn_projected_micro_basis(basis)
@@ -344,13 +345,19 @@ def test_polshyn_private_reconstruction_keeps_flat_k_order_and_records_missing_s
     np.testing.assert_allclose(bundle.psi_micro, expected)
     assert bundle.sewing_transforms == ()
     assert bundle.basis_metadata["system"] == "tmbg_polshyn_doubled"
-    assert bundle.basis_metadata["reconstruction_api_status"].startswith("private_experimental")
-    assert bundle.basis_metadata["public_facade_exported"] is False
+    assert bundle.basis_metadata["reconstruction_api_status"] == "public_flat_k_diagnostic_topology_ineligible"
+    assert bundle.basis_metadata["public_facade_exported"] is True
+    assert bundle.basis_metadata["public_facade"] == "mean_field.systems.tmbg.polshyn_supercell.reconstruct_polshyn_wang_hf_micro_wavefunctions"
     assert bundle.basis_metadata["raw_wavefunctions_axis_order"] == "basis,folded_band,valley,k"
     assert bundle.basis_metadata["grid_shape_attached"] is False
     assert bundle.basis_metadata["sewing_available"] is False
+    assert bundle.basis_metadata["topology_status"] == "topology-ineligible"
     assert bundle.basis_metadata["topology_eligible"] is False
     assert "sewing" in bundle.basis_metadata["topology_ineligible_reason"]
+    with pytest.raises(ValueError, match="topology_eligible=False.*Polshyn doubled-cell sewing"):
+        assert_topology_eligible(bundle, context="polshyn-public-diagnostic")
+    with pytest.raises(ValueError, match="topology_eligible=False.*Polshyn doubled-cell sewing"):
+        compute_system_topology_from_bundle(bundle, 0, system="tmbg_polshyn")
     assert bundle.basis_metadata["embedding_shape"] == [2, 3]
     assert bundle.basis_metadata["selected_hf_state_indices"] == list(range(8))
     assert bundle.basis_metadata["n_reconstructed_states"] == 8
@@ -362,7 +369,7 @@ def test_polshyn_private_reconstruction_keeps_flat_k_order_and_records_missing_s
         reconstruct_polshyn_wang_hf_micro_wavefunctions(basis, active_eigenvectors=coeffs, include_sewing=True)
 
 
-def test_polshyn_private_reconstruction_supports_selected_states_and_size_guard() -> None:
+def test_polshyn_public_reconstruction_supports_selected_states_and_size_guard() -> None:
     basis = _toy_polshyn_basis(embedding_shape=(2, 3))
     expanded = expand_polshyn_projected_micro_basis(basis)
     coeffs = _unitary_phases(8, 2)

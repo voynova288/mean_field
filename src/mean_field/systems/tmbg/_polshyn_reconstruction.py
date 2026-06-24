@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-"""Private projected-HF microscopic reconstruction adapters for the Polshyn tMBG cell.
+"""Projected-HF microscopic reconstruction implementation for the Polshyn tMBG cell.
 
-This module is deliberately kept behind the private ``_polshyn_reconstruction``
-boundary.  The doubled-cell microscopic row order can be reconstructed for
-flat-k diagnostics, but Polshyn boundary sewing has not been derived or
-validated, so the adapter is not exported from the public ``polshyn_supercell``
-facade and returned bundles are topology-ineligible.
+The public ``polshyn_supercell`` facade re-exports the reconstruction entry
+point for explicit flat-k diagnostics.  The doubled-cell microscopic row order
+can be reconstructed, but Polshyn boundary sewing has not been derived or
+validated, so returned bundles remain topology-ineligible and never attach
+sewing transforms.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -15,6 +15,13 @@ from typing import Any
 import numpy as np
 
 from mean_field.core.contracts import MicroscopicWavefunctionBundle
+from mean_field.core.hf.reconstruction import (
+    active_eigenvector_unitarity_residual,
+    contract_direct_sum_projected_micro_wavefunctions,
+    direct_sum_active_index,
+    expand_direct_sum_projected_micro_basis,
+    normalize_reconstruction_state_indices,
+)
 
 from ._polshyn_types import PolshynProjectedBasis, PolshynWangHFState
 
@@ -24,10 +31,7 @@ _POLSHYN_RECONSTRUCTION_DEFAULT_MAX_DENSE_ELEMENTS = 5_000_000
 def polshyn_projected_hf_active_index(n_spin: int, n_eta: int, nb: int) -> np.ndarray:
     """Return Polshyn-Wang active-state indices as ``(spin, valley, folded_band)``."""
 
-    resolved = (int(n_spin), int(n_eta), int(nb))
-    if any(value <= 0 for value in resolved):
-        raise ValueError(f"n_spin, n_eta, and nb must be positive, got {resolved}")
-    return np.arange(int(np.prod(resolved)), dtype=int).reshape(resolved, order="F")
+    return direct_sum_active_index((n_spin, n_eta, nb), context="Polshyn-Wang active-state index")
 
 
 def _basis_shape(basis: PolshynProjectedBasis) -> tuple[int, int, int, int, int]:
@@ -108,18 +112,9 @@ def expand_polshyn_projected_micro_basis(basis: PolshynProjectedBasis) -> np.nda
     ``spin-major -> valley-inner -> basis_F(local,embed_x,embed_y)``.
     """
 
-    raw = np.asarray(basis.wavefunctions, dtype=np.complex128)
-    basis_dim, nb, n_eta, nk, n_spin = _basis_shape(basis)
+    _basis_dim, nb, n_eta, _nk, n_spin = _basis_shape(basis)
     active = polshyn_projected_hf_active_index(n_spin, n_eta, nb)
-    expanded = np.zeros((nk, n_spin * n_eta * basis_dim, n_spin * n_eta * nb), dtype=np.complex128)
-    for ispin in range(n_spin):
-        for ieta in range(n_eta):
-            row_start = (ispin * n_eta + ieta) * basis_dim
-            row_stop = row_start + basis_dim
-            for iband in range(nb):
-                active_col = int(active[ispin, ieta, iband])
-                expanded[:, row_start:row_stop, active_col] = raw[:, iband, ieta, :].T
-    return expanded
+    return expand_direct_sum_projected_micro_basis(basis.wavefunctions, active)
 
 
 def _sector_offdiag_residual(hamiltonian: np.ndarray, *, n_spin: int, n_eta: int, nb: int) -> float:
@@ -229,22 +224,7 @@ def _normalize_polshyn_reconstruction_state_indices(
     state_indices: int | Iterable[int] | None,
     n_state: int,
 ) -> tuple[int, ...]:
-    n_state_i = int(n_state)
-    if n_state_i <= 0:
-        raise ValueError(f"n_state must be positive, got {n_state}")
-    if state_indices is None:
-        return tuple(range(n_state_i))
-    if isinstance(state_indices, (str, bytes)):
-        raise TypeError("state_indices must be an integer, an iterable of integers, or None")
-    if isinstance(state_indices, (int, np.integer)):
-        out = (int(state_indices),)
-    else:
-        out = tuple(int(index) for index in state_indices)
-    if not out:
-        raise ValueError("At least one selected HF state index is required")
-    if min(out) < 0 or max(out) >= n_state_i:
-        raise ValueError(f"HF state indices {out} outside [0, {n_state_i})")
-    return out
+    return normalize_reconstruction_state_indices(state_indices, n_state, label="HF state")
 
 
 def _select_active_eigenvectors(
@@ -308,44 +288,14 @@ def _validate_polshyn_reconstruction_output_size(
     return dense_elements
 
 
-def _selected_unitarity_residual(
-    selected_coeffs: np.ndarray,
-    *,
-    unitarity_atol: float | None,
-) -> float | None:
-    if unitarity_atol is None:
-        return None
-    if float(unitarity_atol) < 0.0:
-        raise ValueError(f"unitarity_atol must be non-negative or None, got {unitarity_atol}")
-    n_selected = int(selected_coeffs.shape[1])
-    gram = np.einsum("ahk,amk->hmk", selected_coeffs.conjugate(), selected_coeffs, optimize=True)
-    residual = float(np.max(np.abs(gram - np.eye(n_selected, dtype=np.complex128)[:, :, None])))
-    if residual > float(unitarity_atol):
-        raise ValueError(
-            "Polshyn selected active_eigenvectors must be orthonormal at each k point; "
-            f"max column-Gram residual {residual:.6e} exceeds {float(unitarity_atol):.6e}"
-        )
-    return residual
-
 
 def _contract_polshyn_selected_micro_wavefunctions(
     basis: PolshynProjectedBasis,
     selected_coeffs: np.ndarray,
 ) -> np.ndarray:
-    raw = np.asarray(basis.wavefunctions, dtype=np.complex128)
-    basis_dim, nb, n_eta, nk, n_spin = _basis_shape(basis)
+    _basis_dim, nb, n_eta, _nk, n_spin = _basis_shape(basis)
     active = polshyn_projected_hf_active_index(n_spin, n_eta, nb)
-    n_selected = int(selected_coeffs.shape[1])
-    micro_dim = int(n_spin * n_eta * basis_dim)
-    psi_flat = np.zeros((nk, micro_dim, n_selected), dtype=np.complex128)
-    for ik in range(nk):
-        for ispin in range(n_spin):
-            for ieta in range(n_eta):
-                row_start = (ispin * n_eta + ieta) * basis_dim
-                row_stop = row_start + basis_dim
-                active_rows = np.asarray(active[ispin, ieta, :], dtype=int)
-                psi_flat[ik, row_start:row_stop, :] = raw[:, :, ieta, ik] @ selected_coeffs[active_rows, :, ik]
-    return psi_flat
+    return contract_direct_sum_projected_micro_wavefunctions(basis.wavefunctions, selected_coeffs, active)
 
 
 def _k_grid_frac(basis: PolshynProjectedBasis) -> np.ndarray | None:
@@ -404,10 +354,11 @@ def _metadata(
     diagnostics = {key: float(value) for key, value in dict(eigensystem_diagnostics or {}).items()}
     return {
         "system": "tmbg_polshyn_doubled",
-        "reconstruction_api_status": "private_experimental_not_exported_from_polshyn_supercell",
-        "public_facade_exported": False,
+        "reconstruction_api_status": "public_flat_k_diagnostic_topology_ineligible",
+        "public_facade_exported": True,
+        "public_facade": "mean_field.systems.tmbg.polshyn_supercell.reconstruct_polshyn_wang_hf_micro_wavefunctions",
         "reconstruction_adapter": "mean_field.systems.tmbg._polshyn_reconstruction.reconstruct_polshyn_wang_hf_micro_wavefunctions",
-        "selected_state_contraction": "system-specific rectangular contraction; common helper currently requires square all-state coefficients",
+        "selected_state_contraction": "common direct-sum rectangular contraction over selected HF eigenstate coefficients",
         "raw_wavefunctions_axis_order": "basis,folded_band,valley,k",
         "expanded_micro_basis_axis_order": "k,microscopic_basis,active_basis",
         "microscopic_row_order": "spin_major,valley_inner,basis_F(local=6,embed_x,embed_y)",
@@ -436,6 +387,7 @@ def _metadata(
         "sewing_available": False,
         "sewing_transforms_attached": False,
         "sewing_blocker": "Polshyn doubled-cell projected-micro sewing has not been derived/tested",
+        "topology_status": "topology-ineligible",
         "topology_eligible": False,
         "topology_ineligible_reason": "Polshyn doubled-cell sewing is unavailable; flat-k reconstructed bundles are not validated torus bundles",
         "topology_policy": "refuse/avoid FHS torus topology unless a future explicit diagnostic path derives sewing",
@@ -467,8 +419,9 @@ def reconstruct_polshyn_wang_hf_micro_wavefunctions(
 ) -> MicroscopicWavefunctionBundle:
     """Reconstruct flat-k Polshyn-Wang projected-HF wavefunctions in microscopic rows.
 
-    This is a private, explicit adapter.  It supports selected final-HF states
-    and a dense-output size guard, but it intentionally does not attach boundary
+    This is an explicit flat-k diagnostic adapter exported through the public
+    ``polshyn_supercell`` facade.  It supports selected final-HF states and a
+    dense-output size guard, but it intentionally does not attach boundary
     sewing or a 2D grid shape.  Returned bundles are diagnostic flat-k objects,
     not topology-ready torus wavefunction bundles.
     """
@@ -509,7 +462,11 @@ def reconstruct_polshyn_wang_hf_micro_wavefunctions(
         max_dense_elements=max_dense_elements,
     )
     all_dense_elements = _polshyn_reconstruction_output_element_count(basis, n_output_states=n_active)
-    unitarity_residual = _selected_unitarity_residual(selected_coeffs, unitarity_atol=unitarity_atol)
+    unitarity_residual = active_eigenvector_unitarity_residual(
+        selected_coeffs,
+        unitarity_atol=unitarity_atol,
+        context="Polshyn selected active_eigenvectors",
+    )
     psi_flat = _contract_polshyn_selected_micro_wavefunctions(basis, selected_coeffs)
 
     kvec_arr = np.asarray(basis.kvec, dtype=np.complex128).reshape(-1)
@@ -562,8 +519,8 @@ def reconstruct_polshyn_wang_hf_micro_wavefunctions(
     )
 
 
-# Intentionally not re-exported by mean_field.systems.tmbg.polshyn_supercell.
-# ``__all__`` documents the testable helpers inside this private module only.
+# Public flat-k diagnostic entrypoint is re-exported by mean_field.systems.tmbg.polshyn_supercell;
+# sewing/topology remains intentionally disabled until doubled-cell sewing is derived and validated.
 __all__ = [
     "expand_polshyn_projected_micro_basis",
     "polshyn_projected_hf_active_index",

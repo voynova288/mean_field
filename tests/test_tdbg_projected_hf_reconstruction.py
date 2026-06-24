@@ -69,8 +69,12 @@ def _fake_tdbg_data(*, nk: int = 2, n_q: int = 2) -> TDBGProjectedHFData:
         interaction=TDBGInteractionSettings(include_intersite=False, include_onsite=False),
         max_iter=1,
     )
+    q_sites = np.asarray([[float(iq), 0.0, 0.0] for iq in range(n_q)], dtype=float)
     return TDBGProjectedHFData(
-        model=SimpleNamespace(lattice=SimpleNamespace(n_q=n_q), params={}),
+        model=SimpleNamespace(
+            lattice=SimpleNamespace(n_q=n_q, q_sites=q_sites, g_m1=1.0 + 0.0j, g_m2=0.0 + 1.0j),
+            params={},
+        ),
         config=config,
         k_grid_frac=np.asarray([[float(ik) / max(nk, 1), 0.25] for ik in range(nk)], dtype=float),
         kvec=np.asarray([0.1 * ik + 0.2j * ik for ik in range(nk)], dtype=np.complex128),
@@ -170,10 +174,13 @@ def test_tdbg_result_reconstructs_micro_wavefunctions_by_manual_contraction() ->
     assert bundle.metadata["micro_basis_axis_order"] == "k,microscopic_basis,active_basis"
     assert bundle.metadata["microscopic_basis_axis_order"] == "spin,valley,q_site,local"
     assert bundle.metadata["reconstruction_path"] == "TDBGProjectedHFResult.reconstruct_micro_wavefunctions"
+    assert bundle.metadata["core_reconstruction_sewing_transforms_available"] is True
+    assert bundle.metadata["core_reconstruction_sewing_transforms_count"] == 2
     assert bundle.metadata["sewing_transforms_available"] is False
-    assert bundle.metadata["sewing_policy"].startswith("unavailable")
+    assert bundle.metadata["sewing_policy"].startswith("not attached to public flat")
+    assert bundle.metadata["sewing_transforms_entrypoint"].endswith("projected_hf_boundary_sewing_transforms")
     assert bundle.metadata["topology_eligible"] is False
-    assert "sewing" in bundle.metadata["topology_ineligible_reason"]
+    assert "compute_projected_hf_topology" in bundle.metadata["topology_ineligible_reason"]
     assert bundle.metadata["sewing_transforms_count"] == 0
     assert bundle.metadata["canonical_micro_basis_materialized"] is False
     assert bundle.metadata["selected_hf_state_indices"] == list(range(data.nt))
@@ -235,18 +242,26 @@ def test_tdbg_state_indices_alias_and_selection_validation() -> None:
     with pytest.raises(ValueError, match="outside"):
         result.reconstruct_micro_wavefunctions(state_indices=(data.nt,))
 
-def test_tdbg_core_reconstruction_bundle_keeps_topology_ineligible_sewing_metadata() -> None:
+def test_tdbg_core_reconstruction_bundle_attaches_projected_hf_sewing_metadata() -> None:
     data = _fake_tdbg_data(nk=2, n_q=2)
     result = _fake_tdbg_result(data)
 
     core_bundle = reconstruct_tdbg_projected_hf_micro_wavefunctions(result, state_indices=(0,), max_dense_elements=10_000)
 
-    assert core_bundle.sewing_transforms == ()
-    assert core_bundle.basis_metadata["sewing_transforms_available"] is False
-    assert core_bundle.basis_metadata["topology_eligible"] is False
-    assert "sewing" in core_bundle.basis_metadata["topology_ineligible_reason"]
-    assert core_bundle.basis_metadata["sewing_transforms_count"] == 0
-    assert core_bundle.basis_metadata["uncertainty"].startswith("Algebraic direct-sum")
+    assert len(core_bundle.sewing_transforms) == 2
+    assert core_bundle.basis_metadata["sewing_transforms_available"] is True
+    assert core_bundle.basis_metadata["topology_eligible"] is True
+    assert core_bundle.basis_metadata["topology_ineligible_reason"] == ""
+    assert core_bundle.basis_metadata["sewing_transforms_count"] == 2
+    assert "q_site translation" in core_bundle.basis_metadata["uncertainty"]
+
+    values = np.arange(core_bundle.psi_micro.shape[1], dtype=float).astype(np.complex128)
+    shifted = core_bundle.sewing_transforms[0](values).reshape(
+        len(SPIN_LABELS), len(VALLEY_SEQUENCE), data.model.lattice.n_q, len(TDBG_LOCAL_LABELS)
+    )
+    original = values.reshape(len(SPIN_LABELS), len(VALLEY_SEQUENCE), data.model.lattice.n_q, len(TDBG_LOCAL_LABELS))
+    np.testing.assert_allclose(shifted[:, :, 0, :], original[:, :, 1, :])
+    np.testing.assert_allclose(shifted[:, :, 1, :], 0.0)
 
 def test_public_hfresult_tdbg_state_adapter_precedes_raw_noncanonical_contract_fallback() -> None:
     data = _fake_tdbg_data(nk=2, n_q=2)

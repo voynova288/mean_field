@@ -16,6 +16,57 @@ from .core import (
     normalize_state_indices,
 )
 
+def _bundle_metadata_candidates(bundle_or_metadata: Any) -> tuple[dict[str, object], ...]:
+    if isinstance(bundle_or_metadata, Mapping):
+        return (dict(bundle_or_metadata),)
+    candidates: list[dict[str, object]] = []
+    for attr in ("basis_metadata", "metadata"):
+        value = getattr(bundle_or_metadata, attr, None)
+        if isinstance(value, Mapping):
+            candidates.append(dict(value))
+    return tuple(candidates)
+
+def _bundle_metadata(bundle: Any) -> dict[str, object]:
+    merged: dict[str, object] = {}
+    for metadata in _bundle_metadata_candidates(bundle):
+        merged.update(metadata)
+    return merged
+
+def _explicit_false(value: object) -> bool:
+    return isinstance(value, (bool, np.bool_)) and not bool(value)
+
+def assert_topology_eligible(bundle_or_metadata: Any, *, context: str = "topology-from-bundle") -> None:
+    """Reject reconstructed bundles explicitly marked topology-ineligible.
+
+    Low-level array topology APIs intentionally do not call this guard; it is
+    for system-facing helpers that accept bundle objects carrying provenance and
+    sewing/topology eligibility metadata.
+    """
+
+    for metadata in _bundle_metadata_candidates(bundle_or_metadata):
+        if not _explicit_false(metadata.get("topology_eligible")):
+            continue
+        reason = (
+            metadata.get("topology_ineligible_reason")
+            or metadata.get("topology_policy")
+            or metadata.get("sewing_policy")
+            or "metadata marks this reconstructed bundle as topology-ineligible"
+        )
+        evidence = metadata.get("evidence_paths")
+        evidence_text = ""
+        if evidence is not None:
+            if isinstance(evidence, (str, bytes)):
+                evidence_items = [str(evidence)]
+            elif isinstance(evidence, Iterable):
+                evidence_items = [str(item) for item in evidence]
+            else:
+                evidence_items = [str(evidence)]
+            evidence_text = f" Evidence paths: {evidence_items}."
+        raise ValueError(
+            f"{context} refused because bundle metadata has topology_eligible=False. "
+            f"Reason: {reason}.{evidence_text}"
+        )
+
 @dataclass(frozen=True)
 class TopologyResult:
     band_indices: tuple[int, ...]
@@ -171,4 +222,82 @@ def compute_system_topology_from_grid_result(
         metadata=metadata,
     )
 
-__all__ = ["TopologyResult", "compute_system_topology_from_eigenvectors", "compute_system_topology_from_grid_result", "topology_result_from_lattice_result"]
+def _bundle_wavefunctions(bundle: Any) -> np.ndarray:
+    if hasattr(bundle, "psi_micro"):
+        return np.asarray(getattr(bundle, "psi_micro"), dtype=np.complex128)
+    if hasattr(bundle, "wavefunctions"):
+        return np.asarray(getattr(bundle, "wavefunctions"), dtype=np.complex128)
+    raise ValueError("Expected a topology bundle with a psi_micro or wavefunctions array.")
+
+def _bundle_sewing_transforms(bundle: Any) -> Sequence[SewingTransform | None] | None:
+    value = getattr(bundle, "sewing_transforms", None)
+    if value is None:
+        return None
+    if isinstance(value, Sequence) and len(value) == 0:
+        return None
+    return value
+
+def compute_system_topology_from_bundle(
+    bundle: Any,
+    band_indices: int | Iterable[int],
+    *,
+    system: str,
+    valley: int = 1,
+    k_grid_frac: np.ndarray | None = None,
+    sewing_transforms: Sequence[SewingTransform | None] | None = None,
+    index_metadata: Mapping[str, object] | None = None,
+    role: str = "band",
+    labels: Iterable[str] = (),
+    link_method: LinkMethod = "polar",
+    orientation_sign: float = 1.0,
+    atol: float = 1.0e-14,
+    regularization: float = 1.0e-12,
+    metadata: Mapping[str, object] | None = None,
+) -> TopologyResult:
+    """Compute topology from a metadata-carrying wavefunction bundle.
+
+    This system-facing helper first enforces ``topology_eligible`` metadata so
+    reconstructed bundles that explicitly lack validated torus/sewing support
+    fail before entering the common FHS array kernels.
+    """
+
+    assert_topology_eligible(bundle, context="compute_system_topology_from_bundle")
+    vectors = _bundle_wavefunctions(bundle)
+    if vectors.ndim != 4:
+        axis_order = _bundle_metadata(bundle).get("psi_micro_axis_order") or _bundle_metadata(bundle).get("wavefunction_axis_order")
+        raise ValueError(
+            "compute_system_topology_from_bundle requires a 4D torus wavefunction grid "
+            "(mesh_x, mesh_y, basis_dim, n_states). "
+            f"Got shape {vectors.shape} with axis_order={axis_order!r}; flat reconstructed bundles must use a system topology adapter or supply a validated grid reshape/sewing path."
+        )
+    payload = _bundle_metadata(bundle)
+    payload.update(dict(index_metadata or {}))
+    if k_grid_frac is None:
+        k_grid_frac = getattr(bundle, "k_grid_frac", None)
+    if sewing_transforms is None:
+        sewing_transforms = _bundle_sewing_transforms(bundle)
+    return compute_system_topology_from_eigenvectors(
+        vectors,
+        band_indices,
+        system=system,
+        valley=valley,
+        k_grid_frac=k_grid_frac,
+        sewing_transforms=sewing_transforms,
+        index_metadata=payload,
+        role=role,
+        labels=labels,
+        link_method=link_method,
+        orientation_sign=orientation_sign,
+        atol=atol,
+        regularization=regularization,
+        metadata=metadata,
+    )
+
+__all__ = [
+    "TopologyResult",
+    "assert_topology_eligible",
+    "compute_system_topology_from_bundle",
+    "compute_system_topology_from_eigenvectors",
+    "compute_system_topology_from_grid_result",
+    "topology_result_from_lattice_result",
+]

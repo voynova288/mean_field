@@ -1,5 +1,5 @@
 from __future__ import annotations
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 import numpy as np
 from mean_field.core.contracts import MicroscopicWavefunctionBundle, MicroscopicWavefunctionSource
@@ -33,6 +33,77 @@ def _grid_shape(shape: tuple[int, int] | None, n_k: int) -> tuple[int, int] | No
     out = (int(shape[0]), int(shape[1]))
     if out[0] <= 0 or out[1] <= 0 or out[0] * out[1] != int(n_k): raise ValueError(f"grid_shape={shape} is incompatible with n_k={n_k}")
     return out
+
+def direct_sum_active_index(dimensions: Iterable[int], *, context: str = "direct-sum active basis") -> np.ndarray:
+    """Return Fortran-ordered active indices for a spin/flavor/band direct sum."""
+    resolved = tuple(int(value) for value in dimensions)
+    if not resolved or any(value <= 0 for value in resolved): raise ValueError(f"{context} dimensions must be positive, got {resolved}")
+    return np.arange(int(np.prod(resolved)), dtype=int).reshape(resolved, order="F")
+
+def normalize_reconstruction_state_indices(state_indices: int | Iterable[int] | None, n_state: int, *, label: str = "HF state") -> tuple[int, ...]:
+    """Normalize selected reconstructed-state indices with explicit bounds checks."""
+    n_state_i = int(n_state)
+    if n_state_i <= 0: raise ValueError(f"n_state must be positive, got {n_state}")
+    if state_indices is None: return tuple(range(n_state_i))
+    if isinstance(state_indices, (str, bytes)): raise TypeError(f"{label} indices must be an integer, an iterable of integers, or None")
+    out = (int(state_indices),) if isinstance(state_indices, (int, np.integer)) else tuple(int(index) for index in state_indices)
+    if not out: raise ValueError(f"At least one {label} index is required")
+    if len(set(out)) != len(out): raise ValueError(f"Duplicate {label} indices {out}")
+    if min(out) < 0 or max(out) >= n_state_i: raise ValueError(f"{label} indices {out} outside [0, {n_state_i})")
+    return out
+
+def active_eigenvector_unitarity_residual(coeffs: np.ndarray, *, unitarity_atol: float | None, context: str = "active_eigenvectors") -> float | None:
+    """Return/max-check the column Gram residual for active-HF eigenvectors."""
+    if unitarity_atol is None: return None
+    tolerance = float(unitarity_atol)
+    if tolerance < 0.0: raise ValueError(f"unitarity_atol must be non-negative or None, got {unitarity_atol}")
+    arr = np.asarray(coeffs, dtype=np.complex128)
+    if arr.ndim != 3: raise ValueError(f"{context} must have shape (active_basis, hf_state, k), got {arr.shape}")
+    n_state = int(arr.shape[1])
+    gram = np.einsum("ahk,amk->hmk", arr.conjugate(), arr, optimize=True)
+    residual = float(np.max(np.abs(gram - np.eye(n_state, dtype=np.complex128)[:, :, None])))
+    if residual > tolerance: raise ValueError(f"{context} must be orthonormal at each k point; max column-Gram residual {residual:.6e} exceeds {tolerance:.6e}")
+    return residual
+
+def _direct_sum_basis_inputs(raw_projected_basis: np.ndarray, active_index: np.ndarray) -> tuple[np.ndarray, np.ndarray, int, int, int, int, int, int]:
+    raw = np.asarray(raw_projected_basis, dtype=np.complex128)
+    active = np.asarray(active_index, dtype=int)
+    if raw.ndim != 4: raise ValueError(f"raw_projected_basis must have shape (basis, band, flavor, k), got {raw.shape}")
+    if active.ndim != 3: raise ValueError(f"active_index must have shape (spin, flavor, band), got {active.shape}")
+    basis_dim, n_band, n_flavor, n_k = (int(value) for value in raw.shape)
+    n_spin, active_flavor, active_band = (int(value) for value in active.shape)
+    if (active_flavor, active_band) != (n_flavor, n_band): raise ValueError(f"active_index shape {active.shape} is incompatible with raw basis shape {raw.shape}")
+    n_active = int(active.size)
+    flat = active.reshape(-1)
+    if n_active <= 0:
+        raise ValueError("active_index must be a permutation of the compact direct-sum active basis")
+    if int(flat.min()) < 0 or int(flat.max()) >= n_active or len(np.unique(flat)) != n_active:
+        raise ValueError("active_index must be a permutation of the compact direct-sum active basis")
+    return raw, active, basis_dim, n_band, n_flavor, n_k, n_spin, n_active
+
+def expand_direct_sum_projected_micro_basis(raw_projected_basis: np.ndarray, active_index: np.ndarray) -> np.ndarray:
+    """Expand compact ``(basis, band, flavor, k)`` basis into ``(k, micro, active)``."""
+    raw, active, basis_dim, _n_band, n_flavor, n_k, n_spin, n_active = _direct_sum_basis_inputs(raw_projected_basis, active_index)
+    expanded = np.zeros((n_k, n_spin * n_flavor * basis_dim, n_active), dtype=np.complex128)
+    for ispin in range(n_spin):
+        for iflavor in range(n_flavor):
+            row_start = (ispin * n_flavor + iflavor) * basis_dim
+            expanded[:, row_start : row_start + basis_dim, active[ispin, iflavor, :]] = np.transpose(raw[:, :, iflavor, :], (2, 0, 1))
+    return expanded
+
+def contract_direct_sum_projected_micro_wavefunctions(raw_projected_basis: np.ndarray, active_coefficients: np.ndarray, active_index: np.ndarray) -> np.ndarray:
+    """Contract compact direct-sum projected basis with selected active coefficients."""
+    raw, active, basis_dim, _n_band, n_flavor, n_k, n_spin, n_active = _direct_sum_basis_inputs(raw_projected_basis, active_index)
+    coeffs = np.asarray(active_coefficients, dtype=np.complex128)
+    if coeffs.ndim != 3 or coeffs.shape[0] != n_active or coeffs.shape[2] != n_k:
+        raise ValueError(f"active_coefficients must have shape ({n_active}, n_state, {n_k}), got {coeffs.shape}")
+    psi_flat = np.zeros((n_k, n_spin * n_flavor * basis_dim, int(coeffs.shape[1])), dtype=np.complex128)
+    for ispin in range(n_spin):
+        for iflavor in range(n_flavor):
+            row_start = (ispin * n_flavor + iflavor) * basis_dim
+            rows = active[ispin, iflavor, :]
+            psi_flat[:, row_start : row_start + basis_dim, :] = np.einsum("pbk,bhk->kph", raw[:, :, iflavor, :], coeffs[rows, :, :], optimize=True)
+    return psi_flat
 
 
 def reconstruct_projected_micro_wavefunctions(
@@ -76,4 +147,12 @@ def reconstruct_projected_micro_wavefunctions(
     return MicroscopicWavefunctionBundle(kvec=kvec_arr, psi_micro=psi, sewing_transforms=tuple(sewing_transforms), basis_metadata=metadata, source=source)
 
 
-__all__ = ["canonicalize_projected_micro_basis", "reconstruct_projected_micro_wavefunctions"]
+__all__ = [
+    "active_eigenvector_unitarity_residual",
+    "canonicalize_projected_micro_basis",
+    "contract_direct_sum_projected_micro_wavefunctions",
+    "direct_sum_active_index",
+    "expand_direct_sum_projected_micro_basis",
+    "normalize_reconstruction_state_indices",
+    "reconstruct_projected_micro_wavefunctions",
+]

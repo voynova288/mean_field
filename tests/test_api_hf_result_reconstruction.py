@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from mean_field.api import HFConfig, HFResult, ModelRecord, WavefunctionBundle
+from analysis.topology import compute_system_topology_from_bundle
 from mean_field.core.contracts import (
     DensityState as ContractDensityState,
     HamiltonianParts as ContractHamiltonianParts,
@@ -139,7 +140,50 @@ def test_hfresult_reconstruct_micro_wavefunctions_uses_canonical_dense_array_fal
     assert bundle.metadata["psi_micro_axis_order"] == "k,microscopic_basis,hf_state"
     assert bundle.metadata["k_grid_frac_shape"] == [3, 2]
     assert bundle.metadata["active_eigenvectors_unitarity_residual"] < 1.0e-14
+    assert bundle.metadata["selection_argument"] == "all"
+    assert bundle.metadata["selected_hf_state_indices"] == [0, 1]
+    assert "src/mean_field/api/_hf_result.py" in bundle.metadata["evidence_paths"]
+    assert "system-specific sewing" in bundle.metadata["uncertainty"]
+    assert bundle.metadata["topology_eligible"] is False
+    assert "no system sewing/grid topology adapter" in bundle.metadata["topology_ineligible_reason"]
+    with pytest.raises(ValueError, match="topology_eligible=False"):
+        compute_system_topology_from_bundle(bundle, 0, system="toy")
     assert bundle.convention.wavefunction_axis_order == "k,microscopic_basis,hf_state"
+
+def test_hfresult_reconstruct_micro_wavefunctions_supports_selected_canonical_fallback_and_guard() -> None:
+    canonical_run_result, micro_wavefunctions, eigenvectors_active = _toy_canonical_run_result()
+    result = _toy_hf_result(canonical_run_result)
+    selected = (1,)
+    full_elements = micro_wavefunctions.shape[0] * micro_wavefunctions.shape[1] * eigenvectors_active.shape[1]
+    selected_elements = micro_wavefunctions.shape[0] * micro_wavefunctions.shape[1] * len(selected)
+
+    with pytest.raises(ValueError, match="size guard"):
+        result.reconstruct_micro_wavefunctions(max_dense_elements=full_elements - 1)
+
+    bundle = result.reconstruct_micro_wavefunctions(state_indices=selected, max_dense_elements=selected_elements)
+
+    expected = np.einsum("kba,ahk->kbh", micro_wavefunctions, eigenvectors_active[:, list(selected), :], optimize=True)
+    np.testing.assert_allclose(bundle.wavefunctions, expected, atol=1.0e-14)
+    assert bundle.wavefunctions.shape == (micro_wavefunctions.shape[0], micro_wavefunctions.shape[1], len(selected))
+    assert bundle.metadata["selection_argument"] == "state_indices"
+    assert bundle.metadata["selected_hf_state_indices"] == list(selected)
+    assert bundle.metadata["selected_hf_band_indices"] == list(selected)
+    assert bundle.metadata["dense_reconstruction_estimated_elements"] == selected_elements
+    assert bundle.metadata["max_dense_elements"] == selected_elements
+    assert bundle.metadata["n_reconstructed_states"] == len(selected)
+    assert bundle.metadata["band_indices_argument_meaning"].startswith("HF eigenstate indices")
+
+    alias = result.reconstruct_micro_wavefunctions(band_indices=0, max_dense_elements=selected_elements)
+    np.testing.assert_allclose(alias.wavefunctions, np.einsum("kba,ahk->kbh", micro_wavefunctions, eigenvectors_active[:, [0], :], optimize=True))
+    assert alias.metadata["selection_argument"] == "band_indices"
+    assert alias.metadata["selected_hf_state_indices"] == [0]
+
+    with pytest.raises(ValueError, match="only one of state_indices or band_indices"):
+        result.reconstruct_micro_wavefunctions(state_indices=0, band_indices=0)
+    with pytest.raises(ValueError, match="Duplicate"):
+        result.reconstruct_micro_wavefunctions(state_indices=(0, 0))
+    with pytest.raises(ValueError, match="outside"):
+        result.reconstruct_micro_wavefunctions(state_indices=(eigenvectors_active.shape[1],))
 
 
 def test_hfresult_reconstruct_micro_wavefunctions_requires_nonempty_canonical_arrays() -> None:
@@ -188,3 +232,43 @@ def test_hfresult_reconstruct_micro_wavefunctions_keeps_state_adapter_precedence
     )
 
     assert result.reconstruct_micro_wavefunctions() is sentinel
+    with pytest.raises(NotImplementedError, match="does not support.*state_indices"):
+        result.reconstruct_micro_wavefunctions(state_indices=0)
+
+def test_hfresult_reconstruct_micro_wavefunctions_forwards_selected_kwargs_to_state_adapter() -> None:
+    sentinel = WavefunctionBundle(
+        k=np.asarray([0.0], dtype=np.complex128),
+        wavefunctions=np.ones((1, 1, 1), dtype=np.complex128),
+        metadata={"source": "state_adapter"},
+    )
+    calls: list[dict[str, object]] = []
+
+    class Adapter:
+        def reconstruct_micro_wavefunctions(
+            self,
+            *,
+            state_indices=None,
+            band_indices=None,
+            max_dense_elements=None,
+        ):
+            calls.append(
+                {
+                    "state_indices": state_indices,
+                    "band_indices": band_indices,
+                    "max_dense_elements": max_dense_elements,
+                }
+            )
+            return sentinel
+
+    result = HFResult(
+        model=ModelRecord(system_name="toy"),
+        config=HFConfig(filling=0.0, mesh=(1, 1)),
+        state=Adapter(),
+        canonical_run_result=None,
+    )
+
+    assert result.reconstruct_micro_wavefunctions(state_indices=(0, 2), max_dense_elements=123) is sentinel
+    assert calls[-1] == {"state_indices": (0, 2), "band_indices": None, "max_dense_elements": 123}
+
+    assert result.reconstruct_micro_wavefunctions(band_indices=1, max_dense_elements=None) is sentinel
+    assert calls[-1] == {"state_indices": None, "band_indices": 1, "max_dense_elements": None}

@@ -17,6 +17,13 @@ import numpy as np
 
 from mean_field.core.contracts import MicroscopicWavefunctionBundle
 from mean_field.core.hf import reconstruct_projected_micro_wavefunctions
+from mean_field.core.hf.reconstruction import (
+    active_eigenvector_unitarity_residual,
+    contract_direct_sum_projected_micro_wavefunctions,
+    direct_sum_active_index,
+    expand_direct_sum_projected_micro_basis,
+    normalize_reconstruction_state_indices,
+)
 
 from ._hf_types import RLGhBNHartreeFockRun, RLGhBNHartreeFockState, RLGhBNProjectedBasisData
 from .sewing import rlg_hbn_projected_micro_sewing_transforms
@@ -32,10 +39,7 @@ def rlg_hbn_projected_hf_active_index(n_spin: int, n_eta: int, n_band: int) -> n
     ``np.arange(nt).reshape((n_spin, n_eta, n_band), order="F")``.
     """
 
-    resolved = (int(n_spin), int(n_eta), int(n_band))
-    if any(value <= 0 for value in resolved):
-        raise ValueError(f"n_spin, n_eta, and n_band must be positive, got {resolved}")
-    return np.arange(int(np.prod(resolved)), dtype=int).reshape(resolved, order="F")
+    return direct_sum_active_index((n_spin, n_eta, n_band), context="RnG/hBN active-state index")
 
 
 def _final_hf_hermiticity_residual(hamiltonian: np.ndarray) -> float:
@@ -94,19 +98,7 @@ def _normalize_reconstruction_state_indices(
     state_indices: int | Iterable[int] | None,
     n_state: int,
 ) -> tuple[int, ...]:
-    if state_indices is None:
-        return tuple(range(int(n_state)))
-    if isinstance(state_indices, (str, bytes)):
-        raise TypeError("state_indices must be an integer, an iterable of integers, or None")
-    if isinstance(state_indices, (int, np.integer)):
-        out = (int(state_indices),)
-    else:
-        out = tuple(int(index) for index in state_indices)
-    if not out:
-        raise ValueError("At least one HF state index is required")
-    if min(out) < 0 or max(out) >= int(n_state):
-        raise ValueError(f"HF state indices {out} outside [0, {int(n_state)})")
-    return out
+    return normalize_reconstruction_state_indices(state_indices, n_state, label="HF state")
 
 
 def _reconstruction_output_element_count(data: RLGhBNProjectedBasisData, n_state: int) -> int:
@@ -197,26 +189,6 @@ def _selected_state_labels(
     )
 
 
-def _active_coefficients_unitarity_residual(
-    coeffs: np.ndarray,
-    *,
-    unitarity_atol: float | None,
-) -> float | None:
-    if unitarity_atol is None:
-        return None
-    tolerance = float(unitarity_atol)
-    if tolerance < 0.0:
-        raise ValueError(f"unitarity_atol must be non-negative or None, got {unitarity_atol}")
-    n_state = int(coeffs.shape[1])
-    gram = np.einsum("ahk,amk->hmk", coeffs.conjugate(), coeffs, optimize=True)
-    residual = float(np.max(np.abs(gram - np.eye(n_state, dtype=np.complex128)[:, :, None])))
-    if residual > tolerance:
-        raise ValueError(
-            "selected active_eigenvectors must be orthonormal at each k point; "
-            f"max column-Gram residual {residual:.6e} exceeds {tolerance:.6e}"
-        )
-    return residual
-
 
 def _active_basis_labels(data: RLGhBNProjectedBasisData) -> tuple[dict[str, object], ...]:
     basis_dim, n_band, n_eta, _nk, n_spin = _basis_shape(data)
@@ -251,38 +223,17 @@ def expand_rlg_hbn_projected_micro_basis(data: RLGhBNProjectedBasisData) -> np.n
     axis matches ``rlg_hbn_projected_micro_sewing_transforms``.
     """
 
-    raw = np.asarray(data.basis.wavefunctions, dtype=np.complex128)
-    basis_dim, n_band, n_eta, nk, n_spin = _basis_shape(data)
+    _basis_dim, n_band, n_eta, _nk, n_spin = _basis_shape(data)
     active = rlg_hbn_projected_hf_active_index(n_spin, n_eta, n_band)
-    expanded = np.zeros((nk, n_spin * n_eta * basis_dim, n_spin * n_eta * n_band), dtype=np.complex128)
-    for ispin in range(n_spin):
-        for iflavor in range(n_eta):
-            row_start = (ispin * n_eta + iflavor) * basis_dim
-            row_stop = row_start + basis_dim
-            for iband in range(n_band):
-                active_col = int(active[ispin, iflavor, iband])
-                expanded[:, row_start:row_stop, active_col] = raw[:, iband, iflavor, :].T
-    return expanded
+    return expand_direct_sum_projected_micro_basis(data.basis.wavefunctions, active)
 
 
 def _contract_selected_micro_wavefunctions(data: RLGhBNProjectedBasisData, coeffs: np.ndarray) -> np.ndarray:
     """Contract raw RnG/hBN basis rows with a selected rectangular HF eigensystem."""
 
-    raw = np.asarray(data.basis.wavefunctions, dtype=np.complex128)
-    basis_dim, n_band, n_eta, nk, n_spin = _basis_shape(data)
-    n_selected = int(coeffs.shape[1])
+    _basis_dim, n_band, n_eta, _nk, n_spin = _basis_shape(data)
     active = rlg_hbn_projected_hf_active_index(n_spin, n_eta, n_band)
-    psi_flat = np.zeros((nk, n_spin * n_eta * basis_dim, n_selected), dtype=np.complex128)
-    for ispin in range(n_spin):
-        for iflavor in range(n_eta):
-            row_start = (ispin * n_eta + iflavor) * basis_dim
-            row_stop = row_start + basis_dim
-            for iband in range(n_band):
-                active_col = int(active[ispin, iflavor, iband])
-                basis_by_k = raw[:, iband, iflavor, :].T
-                weights_by_k_state = coeffs[active_col, :, :].T
-                psi_flat[:, row_start:row_stop, :] += basis_by_k[:, :, None] * weights_by_k_state[:, None, :]
-    return psi_flat
+    return contract_direct_sum_projected_micro_wavefunctions(data.basis.wavefunctions, coeffs, active)
 
 
 def _regular_grid_shape(data: RLGhBNProjectedBasisData, *, as_grid: bool) -> tuple[int, int] | None:
@@ -375,7 +326,11 @@ def _selected_bundle(
 ) -> MicroscopicWavefunctionBundle:
     basis_dim, n_band, n_eta, nk, n_spin = _basis_shape(data)
     n_full_state = int(n_spin * n_eta * n_band)
-    unitarity_residual = _active_coefficients_unitarity_residual(coeffs, unitarity_atol=unitarity_atol)
+    unitarity_residual = active_eigenvector_unitarity_residual(
+        coeffs,
+        unitarity_atol=unitarity_atol,
+        context="selected active_eigenvectors",
+    )
     labels = _selected_state_labels(
         state_labels,
         selected=selected,

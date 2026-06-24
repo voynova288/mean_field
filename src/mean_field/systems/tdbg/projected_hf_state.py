@@ -18,6 +18,7 @@ from ...core.hf import (
     stored_projector_to_conventional,
 )
 from .projected_hf_config import SPIN_LABELS, TDBGProjectedHFConfig, TDBG_LOCAL_LABELS, VALLEY_LABELS, VALLEY_SEQUENCE
+from .projected_hf_geometry import tdbg_projected_hf_boundary_sewing_transforms
 
 if TYPE_CHECKING:
     from ...core.hf import HartreeFockRun
@@ -130,6 +131,8 @@ def _tdbg_label_indices(label: TDBGStateLabel) -> tuple[int, int]:
 def _tdbg_micro_basis_metadata(data: TDBGProjectedHFData) -> dict[str, Any]:
     n_q = int(data.model.lattice.n_q)
     n_local = len(TDBG_LOCAL_LABELS)
+    mesh = int(getattr(data.config, "mesh_size", 0))
+    topology_grid_shape = [mesh, mesh] if mesh > 0 and mesh * mesh == int(data.nk) else None
     return {
         "system": "tdbg",
         "projected_basis_source": "TDBGProjectedHFData.wavefunctions",
@@ -144,15 +147,23 @@ def _tdbg_micro_basis_metadata(data: TDBGProjectedHFData) -> dict[str, Any]:
         "local_basis_size": n_local,
         "active_basis_axis_order": "TDBGStateLabel.index; band_position fastest inside valley inside spin",
         "active_basis_labels": [label.to_dict() for label in data.labels],
-        "sewing_transforms_available": False,
-        "sewing_policy": "unavailable: TDBG torus boundary sewing transform is not attached or validated",
-        "topology_eligible": False,
-        "topology_ineligible_reason": "No validated TDBG torus/boundary sewing transforms are attached to this reconstructed projected-HF bundle.",
-        "uncertainty": "Algebraic direct-sum reconstruction only; no TDBG torus sewing transform is attached or validated here.",
+        "sewing_transforms_available": True,
+        "sewing_policy": "available: block-diagonal q_site reciprocal-translation sewing for reconstructed row order spin,valley,q_site,local",
+        "sewing_transforms_entrypoint": "mean_field.systems.tdbg.topology.projected_hf_boundary_sewing_transforms",
+        "sewing_transform_axes": "acts on first axis of vectors/frames with row order spin,valley,q_site,local; spin and valley are spectator direct-sum blocks",
+        "topology_eligible": True,
+        "topology_eligibility_scope": "software/API eligibility for FHS on endpoint=False source-grid reconstructed projected-HF bundles; physical Chern validation remains separate",
+        "topology_grid_shape": topology_grid_shape,
+        "topology_grid_shape_source": "TDBGProjectedHFConfig.mesh_size when mesh_size**2 == nk",
+        "topology_ineligible_reason": "",
+        "topology_validation_status": "toy row-order sewing tests only; no TDBG projected-HF physical Chern or paper validation has been run here",
+        "uncertainty": "Sewing is derived as direct-sum q_site translation; selected HF state/subspace isolation, min-link diagnostics, and physical projected-HF topology validation remain undone.",
         "evidence_paths": [
             "src/mean_field/systems/tdbg/projected_hf_data.py",
+            "src/mean_field/systems/tdbg/projected_hf_geometry.py",
             "src/mean_field/systems/tdbg/projected_hf_state.py",
             "src/mean_field/systems/tdbg/projected_hf_contracts.py",
+            "src/mean_field/systems/tdbg/topology.py",
         ],
     }
 
@@ -404,6 +415,7 @@ def reconstruct_tdbg_projected_hf_micro_wavefunctions(
     except ValueError as exc:
         raise ValueError(f"TDBG k_grid_frac must reshape to ({data.nk}, 2), got {np.asarray(data.k_grid_frac).shape}") from exc
     psi = _tdbg_contract_selected_micro_wavefunctions(data, eigenvectors, selected)
+    sewing_transforms = tdbg_projected_hf_boundary_sewing_transforms(data.model.lattice)
     energy_residual = None
     stored_energies = np.asarray(getattr(result.run.state, "energies", np.empty((0,))), dtype=float)
     if stored_energies.shape == energies.shape:
@@ -441,13 +453,13 @@ def reconstruct_tdbg_projected_hf_micro_wavefunctions(
             "n_active": int(data.nt),
             "kvec_provided": True,
             "k_grid_frac_shape": [int(k_grid_frac.shape[0]), int(k_grid_frac.shape[1])],
-            "sewing_transforms_count": 0,
+            "sewing_transforms_count": int(len(sewing_transforms)),
         }
     )
     return MicroscopicWavefunctionBundle(
         kvec=kvec,
         psi_micro=psi,
-        sewing_transforms=(),
+        sewing_transforms=sewing_transforms,
         basis_metadata=metadata,
         source="hf_reconstructed",
     )
@@ -487,6 +499,14 @@ class TDBGProjectedHFResult:
             {
                 "source": core_bundle.source,
                 "reconstruction_path": "TDBGProjectedHFResult.reconstruct_micro_wavefunctions",
+                "core_reconstruction_sewing_transforms_available": bool(core_bundle.sewing_transforms),
+                "core_reconstruction_sewing_transforms_count": int(len(core_bundle.sewing_transforms)),
+                "sewing_transforms_available": False,
+                "sewing_transforms_count": 0,
+                "sewing_policy": "not attached to public flat WavefunctionBundle; use mean_field.systems.tdbg.topology.compute_projected_hf_topology",
+                "topology_eligible": False,
+                "topology_eligibility_scope": "public WavefunctionBundle is flat (nk,basis,state) and does not carry sewing_transforms; use mean_field.systems.tdbg.topology.compute_projected_hf_topology for FHS topology",
+                "topology_ineligible_reason": "public API WavefunctionBundle drops core sewing transforms and is not reshaped to (mesh,mesh,basis,state); TDBG topology must use mean_field.systems.tdbg.topology.compute_projected_hf_topology, which reconstructs, reshapes, and passes sewing transforms explicitly",
             }
         )
         from mean_field.api import ConventionBundle, WavefunctionBundle

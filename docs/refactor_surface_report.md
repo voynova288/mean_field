@@ -2830,7 +2830,7 @@ Connected projected-HF microscopic reconstruction to the common `mean_field.core
 - **TDBG**: `TDBGProjectedHFResult.reconstruct_micro_wavefunctions(...)` expands raw `(state,k,q_site,local)` projected data to canonical `(k,microscopic_basis,active_basis)` with explicit `spin,valley,q_site,local` row metadata, uses Hermitian final-HF eigensystems only, supports selected-state reconstruction, and records that sewing/topology eligibility is unavailable until a TDBG torus sewing convention is implemented.
 - **HTG primitive/supercell**: added HTG-local reconstruction helpers with selected-state output guards. Primitive reconstruction remains no-sewing/topology-ineligible; supercell reconstruction can attach the validated full-boundary sewing transforms and has nontrivial row-order tests.
 - **RLG-hBN/RnG-hBN**: exported explicit reconstruction helpers from `mean_field.systems.RnG_hBN.hf`, with selected-state guards, final-HF eigensystem wrapper, direct-sum row metadata, and projected-micro sewing transforms. Validation remains software/toy level until the saved Fig.6 target is rerun/rechecked on Slurm.
-- **TMBG/Polshyn**: added a private/experimental reconstruction adapter with Hermiticity/off-sector/stored-energy checks and selected-state guards. It is intentionally not exported from the public Polshyn facade and marks sewing/topology ineligible until doubled-cell sewing is derived and validated.
+- **TMBG/Polshyn**: added a public flat-k diagnostic reconstruction adapter with Hermiticity/off-sector/stored-energy checks and selected-state guards. It is exported from the public Polshyn facade, but remains explicitly sewing-disabled and topology-ineligible until doubled-cell sewing is derived and validated.
 
 These changes do not restore paper workflows, do not submit Slurm jobs, and do not claim physical Chern/QGT/paper reproduction.
 
@@ -2890,3 +2890,59 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 - Files over 1000 lines: 0
 
 The previous soft `src` Python line budget is exceeded by the multi-system reconstruction adapter surface; this should be cleaned up later via a separate refactor/compaction pass if preserving the 4w target remains mandatory.
+
+## Update: finalize projected-HF topology/reconstruction API guards
+
+Commit in this continuation:
+
+- pending: finalize projected-HF topology/reconstruction API guards
+
+### Scope
+
+Finalized the aggressive common-API wiring requested for the remaining projected-HF reconstruction/topology surface:
+
+- `HFResult.reconstruct_micro_wavefunctions(...)` accepts selected `state_indices`/`band_indices` plus `max_dense_elements`, forwards supported kwargs to state adapters, and marks the canonical dense fallback explicitly topology-ineligible because it is algebraic contraction without system sewing/grid topology adapters.
+- `analysis.topology.compute_system_topology_from_bundle(...)` now fails early for flat reconstructed bundles with a clear instruction to use a system topology adapter or validated grid reshape/sewing path.
+- `mean_field.systems.tdbg.topology.compute_projected_hf_topology(...)` is the TDBG projected-HF topology API: it reconstructs through the TDBG system adapter, preserves sewing transforms, reshapes flat source-grid wavefunctions to `(mesh, mesh, basis, state)`, and delegates only FHS math to the common topology adapter. The public flat `TDBGProjectedHFResult.reconstruct_micro_wavefunctions(...)` remains topology-ineligible by itself because `WavefunctionBundle` does not carry sewing transforms.
+- `mean_field.systems.tmbg.polshyn_supercell.reconstruct_polshyn_wang_hf_micro_wavefunctions(...)` is accepted as a public flat-k diagnostic API. It remains explicitly sewing-disabled and topology-ineligible until doubled-cell sewing/topology validation is derived.
+- Common direct-sum reconstruction helpers gained focused tests and duplicate-index rejection.
+
+### Validation
+
+Focused software/API gate on `test001`:
+
+```bash
+PYTHONPATH=src pytest -q \
+  tests/test_core_hf_reconstruction.py \
+  tests/test_analysis_topology.py \
+  tests/test_api_hf_result_reconstruction.py \
+  tests/test_tdbg_projected_hf_reconstruction.py \
+  tests/test_tdbg_topology.py \
+  tests/test_rlg_tmbg_reconstruction_adapters.py \
+  tests/test_system_topology_wrapper_boundary.py
+# 50 passed
+```
+
+Full software/API gate on `test001`:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+# 138 passed
+
+python -m pip install -e . --dry-run --no-deps --no-build-isolation
+# Would install mean-field-0.1.0
+```
+
+### Current summary after this continuation
+
+- Tracked text lines: 52571
+- Tracked Python lines: 46809
+- Tracked Julia lines: 826
+- `src` Python files: 206
+- `src` Python lines: 42636
+- `tests` Python lines: 4112
+- `src/mean_field/systems` Python lines: 28557
+- Files over 1000 lines: 0
+
+This remains software/API validation only. HTG/RLG physical parity scripts were prepared under ignored `tmp/subagents/reconstruction_remaining/validation_prep/`; Slurm validation is separate.

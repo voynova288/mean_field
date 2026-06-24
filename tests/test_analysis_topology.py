@@ -8,10 +8,12 @@ import pytest
 from analysis.topology import (
     WavefunctionIndex,
     WavefunctionLayout,
+    assert_topology_eligible,
     canonicalize_wavefunction_grid,
     compute_lattice_topology,
     compute_quantum_geometry,
     compute_lattice_topology_for_state_groups,
+    compute_system_topology_from_bundle,
     compute_system_topology_from_eigenvectors,
     compute_system_topology_from_grid_result,
     fubini_study_trace,
@@ -244,3 +246,45 @@ def test_system_topology_grid_result_maps_absolute_band_indices_to_columns() -> 
 
     with pytest.raises(ValueError, match="not available"):
         compute_system_topology_from_grid_result(grid, 102, system="mapped")
+
+def test_topology_bundle_guard_blocks_explicit_ineligible_metadata_before_fhs() -> None:
+    bundle = SimpleNamespace(
+        wavefunctions=np.zeros((1,), dtype=np.complex128),
+        metadata={
+            "topology_eligible": False,
+            "topology_ineligible_reason": "unit-test no validated torus sewing",
+            "evidence_paths": ["tests/test_analysis_topology.py"],
+        },
+    )
+
+    with pytest.raises(ValueError, match="topology_eligible=False.*unit-test no validated torus sewing"):
+        assert_topology_eligible(bundle, context="unit-test")
+    with pytest.raises(ValueError, match="topology_eligible=False.*unit-test no validated torus sewing"):
+        compute_system_topology_from_bundle(bundle, 0, system="toy")
+
+def test_topology_bundle_helper_rejects_flat_reconstructed_bundle_with_clear_error() -> None:
+    bundle = SimpleNamespace(
+        wavefunctions=np.ones((6, 2, 1), dtype=np.complex128),
+        metadata={"topology_eligible": True, "psi_micro_axis_order": "k,microscopic_basis,hf_state"},
+    )
+    with pytest.raises(ValueError, match="requires a 4D torus wavefunction grid.*system topology adapter"):
+        compute_system_topology_from_bundle(bundle, 0, system="toy")
+
+
+def test_topology_bundle_helper_allows_eligible_metadata_without_changing_low_level_arrays() -> None:
+    wavefunctions = np.ones((2, 3, 1, 1), dtype=np.complex128)
+    bundle = SimpleNamespace(
+        wavefunctions=wavefunctions,
+        metadata={"topology_eligible": True, "fixture": "constant-line-bundle"},
+    )
+
+    result = compute_system_topology_from_bundle(bundle, 0, system="toy", valley=0)
+
+    assert result.rounded_chern_number == 0
+    assert result.is_nearly_integer
+    assert result.index_metadata is not None
+    assert result.index_metadata["metadata"]["fixture"] == "constant-line-bundle"
+
+    low_level = compute_lattice_topology(wavefunctions, 0, metadata={"topology_eligible": False})
+    assert low_level.rounded_chern_number == 0
+    assert low_level.metadata["topology_eligible"] is False

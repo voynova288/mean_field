@@ -4,6 +4,12 @@ import numpy as np
 import pytest
 
 from mean_field.core.hf import canonicalize_projected_micro_basis, reconstruct_projected_micro_wavefunctions
+from mean_field.core.hf.reconstruction import (
+    contract_direct_sum_projected_micro_wavefunctions,
+    direct_sum_active_index,
+    expand_direct_sum_projected_micro_basis,
+    normalize_reconstruction_state_indices,
+)
 
 
 def _rotation(theta: float) -> np.ndarray:
@@ -110,3 +116,41 @@ def test_reconstruct_projected_micro_wavefunctions_rejects_unsafe_inputs() -> No
 
     with pytest.raises(ValueError, match="exactly three axes"):
         canonicalize_projected_micro_basis(np.zeros((2, 2), dtype=np.complex128))
+
+def test_direct_sum_helpers_use_fortran_active_order_and_rectangular_coefficients() -> None:
+    active = direct_sum_active_index((2, 2, 2))
+    np.testing.assert_array_equal(active[:, :, 0], np.asarray([[0, 2], [1, 3]]))
+    np.testing.assert_array_equal(active[:, :, 1], np.asarray([[4, 6], [5, 7]]))
+
+    raw = np.zeros((3, 2, 2, 2), dtype=np.complex128)
+    for basis in range(3):
+        for band in range(2):
+            for flavor in range(2):
+                for ik in range(2):
+                    raw[basis, band, flavor, ik] = 1000 * band + 100 * flavor + 10 * basis + ik
+
+    expanded = expand_direct_sum_projected_micro_basis(raw, active)
+    assert expanded.shape == (2, 2 * 2 * 3, 8)
+    for spin in range(2):
+        for flavor in range(2):
+            row0 = (spin * 2 + flavor) * 3
+            for band in range(2):
+                col = int(active[spin, flavor, band])
+                np.testing.assert_allclose(expanded[:, row0:row0 + 3, col], raw[:, band, flavor, :].T)
+
+    coeffs = np.zeros((8, 2, 2), dtype=np.complex128)
+    coeffs[1, 0, :] = 1.0
+    coeffs[6, 1, :] = 1.0
+    contracted = contract_direct_sum_projected_micro_wavefunctions(raw, coeffs, active)
+    np.testing.assert_allclose(contracted, expanded[:, :, [1, 6]])
+
+
+def test_direct_sum_helpers_reject_bad_active_index_and_duplicate_selection() -> None:
+    with pytest.raises(ValueError, match="positive"):
+        direct_sum_active_index((2, 0, 1))
+    raw = np.zeros((2, 2, 2, 1), dtype=np.complex128)
+    bad = np.zeros((2, 2, 2), dtype=int)
+    with pytest.raises(ValueError, match="permutation"):
+        expand_direct_sum_projected_micro_basis(raw, bad)
+    with pytest.raises(ValueError, match="Duplicate"):
+        normalize_reconstruction_state_indices((1, 1), 3)

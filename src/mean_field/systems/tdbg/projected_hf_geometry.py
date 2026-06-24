@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 import math
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -12,8 +14,10 @@ from ...core.hf import (
     real_space_cell_area_nm2_from_reciprocal,
 )
 from .lattice import TDBGLattice
-from .projected_hf_config import SPIN_LABELS, TDBGProjectedWindow, VALLEY_SEQUENCE
-from .projected_hf_state import TDBGProjectedHFData
+from .projected_hf_config import SPIN_LABELS, TDBGProjectedWindow, TDBG_LOCAL_LABELS, VALLEY_SEQUENCE
+
+if TYPE_CHECKING:
+    from .projected_hf_state import TDBGProjectedHFData
 
 
 def translation_srcmap(lattice: TDBGLattice, gvec: complex, *, atol: float = 1.0e-8) -> np.ndarray:
@@ -31,6 +35,86 @@ def translation_srcmap(lattice: TDBGLattice, gvec: complex, *, atol: float = 1.0
         if matches.size:
             out[isite] = int(matches[0])
     return out
+
+TDBGSewingTransform = Callable[[np.ndarray], np.ndarray]
+
+def tdbg_projected_hf_q_site_sewing_transform(
+    lattice: TDBGLattice,
+    gvec: complex,
+    *,
+    spin_count: int = len(SPIN_LABELS),
+    valley_count: int = len(VALLEY_SEQUENCE),
+    local_basis_size: int = len(TDBG_LOCAL_LABELS),
+    atol: float = 1.0e-8,
+) -> TDBGSewingTransform:
+    """Return boundary sewing for reconstructed TDBG projected-HF rows.
+
+    Reconstructed projected-HF wavefunctions use row order
+    ``spin,valley,q_site,local``.  The torus seam only relabels the finite
+    TDBG ``q_site`` disk by the same reciprocal translation used by the
+    single-valley continuum topology wrapper; spin and valley are direct-sum
+    spectator blocks.
+    """
+
+    n_q = int(lattice.n_q)
+    n_spin = int(spin_count)
+    n_valley = int(valley_count)
+    n_local = int(local_basis_size)
+    if n_spin <= 0 or n_valley <= 0 or n_local <= 0:
+        raise ValueError(
+            "spin_count, valley_count, and local_basis_size must be positive, "
+            f"got {(n_spin, n_valley, n_local)}"
+        )
+    src = translation_srcmap(lattice, complex(gvec), atol=float(atol))
+    if src.shape != (n_q,):
+        raise ValueError(f"TDBG sewing srcmap shape {src.shape} is incompatible with lattice.n_q={n_q}")
+    valid = src >= 0
+    expected = n_spin * n_valley * n_q * n_local
+
+    def transform(values: np.ndarray) -> np.ndarray:
+        arr = np.asarray(values, dtype=np.complex128)
+        if arr.shape[0] != expected:
+            raise ValueError(
+                "Expected first axis "
+                f"{expected} for reconstructed TDBG projected-HF sewing with row order "
+                "spin,valley,q_site,local, got "
+                f"{arr.shape}"
+            )
+        reshaped = arr.reshape((n_spin, n_valley, n_q, n_local) + arr.shape[1:], order="C")
+        out = np.zeros_like(reshaped)
+        out[:, :, valid, :, ...] = reshaped[:, :, src[valid], :, ...]
+        return out.reshape(arr.shape, order="C")
+
+    return transform
+
+def tdbg_projected_hf_boundary_sewing_transforms(
+    lattice: TDBGLattice,
+    *,
+    spin_count: int = len(SPIN_LABELS),
+    valley_count: int = len(VALLEY_SEQUENCE),
+    local_basis_size: int = len(TDBG_LOCAL_LABELS),
+    atol: float = 1.0e-8,
+) -> tuple[TDBGSewingTransform, TDBGSewingTransform]:
+    """Return ``(+g_m1, +g_m2)`` sewing for reconstructed projected-HF bundles."""
+
+    return (
+        tdbg_projected_hf_q_site_sewing_transform(
+            lattice,
+            lattice.g_m1,
+            spin_count=spin_count,
+            valley_count=valley_count,
+            local_basis_size=local_basis_size,
+            atol=atol,
+        ),
+        tdbg_projected_hf_q_site_sewing_transform(
+            lattice,
+            lattice.g_m2,
+            spin_count=spin_count,
+            valley_count=valley_count,
+            local_basis_size=local_basis_size,
+            atol=atol,
+        ),
+    )
 
 def tdbg_band_window_indices(matrix_dim: int, window: TDBGProjectedWindow | str = "two_flat") -> tuple[int, ...]:
     if isinstance(window, str):
@@ -226,4 +310,6 @@ __all__ = [
     "tdbg_band_window_indices",
     "tdbg_embedded_component_groups",
     "tdbg_moire_area_nm2",
+    "tdbg_projected_hf_boundary_sewing_transforms",
+    "tdbg_projected_hf_q_site_sewing_transform",
 ]

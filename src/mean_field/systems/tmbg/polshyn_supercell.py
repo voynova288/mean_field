@@ -18,6 +18,7 @@ from ._polshyn_filling import (
     primitive_nu_from_counts,
     reference_diagonal_for_projected_indices,
 )
+from ._polshyn_reconstruction import reconstruct_polshyn_wang_hf_micro_wavefunctions
 from ._polshyn_wang import (
     build_wang_hf_problem,
     build_wang_overlap_blocks,
@@ -57,6 +58,7 @@ __all__ = [
     "polshyn_nu_7over2_filling_summary",
     "polshyn_wang_hf_bundle_to_hf_run_result",
     "primitive_nu_from_counts",
+    "reconstruct_polshyn_wang_hf_micro_wavefunctions",
     "reference_diagonal_for_projected_indices",
     "run_projected_hf_scf_wang",
     "run_tmbg_polshyn_hf_config_adapter",
