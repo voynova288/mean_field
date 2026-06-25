@@ -11,7 +11,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-import math
 
 import numpy as np
 
@@ -23,7 +22,7 @@ from mean_field.core.contracts import (
     ProjectedBasis as ContractProjectedBasis,
     SingleParticleModel as ContractSingleParticleModel,
 )
-from mean_field.core.hf.contracts_bridge import density_state_from_delta
+from mean_field.core.hf.contracts_bridge import density_state_from_delta, float_diagnostics
 
 from .hf import (
     RLGhBNHartreeFockRun,
@@ -50,13 +49,6 @@ def _unavailable_diagonalizer(_kvec: np.ndarray) -> tuple[np.ndarray, np.ndarray
         "fresh diagonalization is not performed by the adapter."
     )
 
-
-def _finite_or_none(value: object) -> float | None:
-    try:
-        out = float(value)
-    except (TypeError, ValueError):
-        return None
-    return out if math.isfinite(out) else None
 
 
 def _summary_dict(value: object) -> dict[str, object]:
@@ -300,14 +292,6 @@ def _hamiltonian_parts(run: RLGhBNHartreeFockRun) -> ContractHamiltonianParts:
     )
 
 
-def _float_diagnostics(values: Mapping[str, Any]) -> dict[str, float]:
-    out: dict[str, float] = {}
-    for key, value in values.items():
-        finite = _finite_or_none(value)
-        if finite is not None:
-            out[str(key)] = finite
-    return out
-
 
 def _iteration_history(run: RLGhBNHartreeFockRun) -> list[dict[str, Any]]:
     count = max(len(run.iter_energy), len(run.iter_err), len(run.iter_oda))
@@ -482,7 +466,7 @@ def rlg_hbn_hf_run_to_hf_run_result(
             if state.occupation_counts is None
             else [int(value) for value in state.occupation_counts],
         },
-        diagnostics=_float_diagnostics(state.diagnostics),
+        diagnostics=float_diagnostics(state.diagnostics),
     )
     return ContractHFRunResult(
         final_state=final_state,

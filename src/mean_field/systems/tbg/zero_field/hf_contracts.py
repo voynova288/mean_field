@@ -30,7 +30,7 @@ from mean_field.core.contracts import (
     ProjectedBasis as ContractProjectedBasis,
     SingleParticleModel as ContractSingleParticleModel,
 )
-from mean_field.core.hf.contracts_bridge import density_state_from_delta
+from mean_field.core.hf.contracts_bridge import density_state_from_delta, finite_float_or_none, float_diagnostics
 
 from .hf import (
     RestrictedHartreeFockRun,
@@ -61,22 +61,6 @@ def _complex_pair(value: complex) -> list[float]:
     z = complex(value)
     return [float(z.real), float(z.imag)]
 
-
-def _finite_or_none(value: object) -> float | None:
-    try:
-        out = float(value)
-    except (TypeError, ValueError):
-        return None
-    return out if math.isfinite(out) else None
-
-
-def _float_diagnostics(values: Mapping[str, Any]) -> dict[str, float]:
-    out: dict[str, float] = {}
-    for key, value in values.items():
-        finite = _finite_or_none(value)
-        if finite is not None:
-            out[str(key)] = finite
-    return out
 
 
 def _single_particle_model(solution: BMSolution) -> ContractSingleParticleModel:
@@ -332,8 +316,8 @@ def _hamiltonian_parts(run: RestrictedHartreeFockRun) -> ContractHamiltonianPart
             "raw_interaction_components_available": False,
             "supports_crpa": False,
             "v0_mev": float(state.v0),
-            "beta": _finite_or_none(state.diagnostics.get("beta")),
-            "overlap_lg": _finite_or_none(state.diagnostics.get("overlap_lg")),
+            "beta": finite_float_or_none(state.diagnostics.get("beta")),
+            "overlap_lg": finite_float_or_none(state.diagnostics.get("overlap_lg")),
         },
     )
 
@@ -511,7 +495,7 @@ def tbg_zero_field_hf_run_to_hf_run_result(
             "micro_wavefunctions_source": "BMSolution.uk",
             "micro_wavefunctions_spin_degeneracy_implicit": True,
         },
-        diagnostics=_float_diagnostics(state.diagnostics),
+        diagnostics=float_diagnostics(state.diagnostics),
     )
     return ContractHFRunResult(
         final_state=final_state,

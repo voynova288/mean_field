@@ -8,8 +8,10 @@ HF arrays so systems can add contract checks and sidecars without changing their
 physics implementation.
 """
 
+from collections.abc import Mapping
 from typing import Any
 
+import math
 import numpy as np
 
 from mean_field.core.contracts import (
@@ -24,6 +26,63 @@ from .density import (
     density_to_stored_delta,
     validate_density_array,
 )
+
+def float_or_none(
+    value: object,
+    *,
+    include_bool: bool = True,
+    finite_only: bool = True,
+) -> float | None:
+    """Return a float scalar for contract metadata, or ``None`` if unsupported.
+
+    This helper is for post-run contract/sidecar adapters only.  It does not
+    participate in SCF logic.  ``include_bool`` and ``finite_only`` preserve the
+    small historical differences between system adapters while centralizing the
+    conversion policy.
+    """
+
+    if not include_bool and isinstance(value, bool | np.bool_):
+        return None
+    try:
+        out = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if finite_only and not math.isfinite(out):
+        return None
+    return out
+
+
+def finite_float_or_none(value: object, *, include_bool: bool = True) -> float | None:
+    """Return a finite float scalar for contract metadata, or ``None``."""
+
+    return float_or_none(value, include_bool=include_bool, finite_only=True)
+
+
+def float_diagnostics(
+    values: Mapping[str, Any],
+    *,
+    include_bool: bool = True,
+    finite_only: bool = True,
+) -> dict[str, float]:
+    """Extract numeric scalar diagnostics from a mapping-like object."""
+
+    out: dict[str, float] = {}
+    for key, value in values.items():
+        scalar = float_or_none(value, include_bool=include_bool, finite_only=finite_only)
+        if scalar is not None:
+            out[str(key)] = scalar
+    return out
+
+
+def basis_energies_from_h0(h0: np.ndarray) -> np.ndarray:
+    """Return eigenvalue bands for a stored ``(state, state, k)`` h0 field."""
+
+    h0_array = np.asarray(h0, dtype=np.complex128)
+    out = np.zeros((h0_array.shape[0], h0_array.shape[2]), dtype=float)
+    for ik in range(h0_array.shape[2]):
+        out[:, ik] = np.linalg.eigvalsh(h0_array[:, :, ik])
+    return out
+
 
 _REFERENCE_SCHEME_ALIASES: dict[str, ReferenceScheme] = {
     "average": "average",
@@ -172,8 +231,12 @@ def density_state_from_projector(
 
 
 __all__ = [
+    "basis_energies_from_h0",
     "density_state_from_delta",
     "density_state_from_projector",
+    "finite_float_or_none",
+    "float_diagnostics",
+    "float_or_none",
     "make_contract_reference_density",
     "normalize_contract_reference_scheme",
 ]

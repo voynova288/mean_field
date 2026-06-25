@@ -3076,3 +3076,63 @@ This validates the public Polshyn h0-subtraction API for the selected S1b/S1c to
 - `tests` Python lines: 4486
 - `src/mean_field/systems` Python lines: 29627
 - Files over 1000 lines: 0
+
+## Update: commonize HF contract metadata helpers
+
+Continuation cleanup after the Polshyn h0 API work.  This was a line-budget/refactor-only change; it does not alter SCF, projected overlaps, topology, sewing, or physical Hamiltonian logic.
+
+### Scope
+
+Moved duplicate post-run contract/sidecar helpers into `mean_field.core.hf.contracts_bridge`:
+
+- `float_or_none(...)`
+- `finite_float_or_none(...)`
+- `float_diagnostics(...)`
+- `basis_energies_from_h0(...)`
+
+Updated the system contract adapters to use these helpers:
+
+- `src/mean_field/systems/RnG_hBN/hf_contracts.py`
+- `src/mean_field/systems/tbg/zero_field/hf_contracts.py`
+- `src/mean_field/systems/htg/_hf_contracts.py`
+- `src/mean_field/systems/htg/supercell_contracts.py`
+- `src/mean_field/systems/tdbg/projected_hf_contracts.py`
+- `src/mean_field/systems/tmbg/_polshyn_contracts.py`
+
+TDBG keeps its pre-existing non-finite numeric diagnostic behavior via `finite_only=False`; Polshyn keeps its bool-exclusion behavior via `include_bool=False`.
+
+### Validation
+
+On `test001`:
+
+```bash
+python -m compileall -q src/mean_field/core/hf \
+  src/mean_field/systems/RnG_hBN/hf_contracts.py \
+  src/mean_field/systems/tbg/zero_field/hf_contracts.py \
+  src/mean_field/systems/htg/_hf_contracts.py \
+  src/mean_field/systems/htg/supercell_contracts.py \
+  src/mean_field/systems/tdbg/projected_hf_contracts.py \
+  src/mean_field/systems/tmbg/_polshyn_contracts.py
+pytest -q tests/test_api_hf_adapters.py tests/test_htg_supercell.py \
+  tests/test_tdbg_projected_hf_reconstruction.py \
+  tests/test_tmbg_polshyn_hf_readiness.py
+# 50 passed
+
+python -m compileall -q src scripts
+pytest -q $(git ls-files tests)
+python -m pip install -e . --dry-run --no-deps --no-build-isolation
+# 150 passed; Would install mean-field-0.1.0
+```
+
+### Line metrics after cleanup
+
+- Tracked text lines: 54110
+- Tracked Python lines: 48202
+- Tracked Julia lines: 826
+- `src` Python files: 207
+- `src` Python lines: 43655
+- `tests` Python lines: 4486
+- `src/mean_field/systems` Python lines: 29513
+- Files over 1000 lines: 0
+
+Compared with the post-Polshyn-h0 report, this saves 51 tracked `src` Python lines and 114 `src/mean_field/systems` Python lines while adding the shared helpers to `core/hf/contracts_bridge.py`.

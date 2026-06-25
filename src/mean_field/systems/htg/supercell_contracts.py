@@ -10,7 +10,6 @@ topology, or cRPA behavior.
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
-import math
 
 import numpy as np
 
@@ -23,7 +22,7 @@ from mean_field.core.contracts import (
     ProjectedBasis as ContractProjectedBasis,
     SingleParticleModel as ContractSingleParticleModel,
 )
-from mean_field.core.hf.contracts_bridge import density_state_from_delta
+from mean_field.core.hf.contracts_bridge import basis_energies_from_h0, density_state_from_delta, float_diagnostics
 
 from ._hf_reconstruction import (
     diagonalize_htg_active_hamiltonian_field,
@@ -69,13 +68,6 @@ def _unavailable_diagonalizer(_kvec: np.ndarray) -> tuple[np.ndarray, np.ndarray
     )
 
 
-def _finite_or_none(value: object) -> float | None:
-    try:
-        out = float(value)
-    except (TypeError, ValueError):
-        return None
-    return out if math.isfinite(out) else None
-
 
 def _single_particle_model(data: HTGSupercellProjectedBasisData) -> ContractSingleParticleModel:
     model = data.model
@@ -116,13 +108,6 @@ def _single_particle_model(data: HTGSupercellProjectedBasisData) -> ContractSing
         metadata=metadata,
     )
 
-
-def _basis_energies_from_h0(h0: np.ndarray) -> np.ndarray:
-    h0_array = np.asarray(h0, dtype=np.complex128)
-    out = np.zeros((h0_array.shape[0], h0_array.shape[2]), dtype=float)
-    for ik in range(h0_array.shape[2]):
-        out[:, ik] = np.linalg.eigvalsh(h0_array[:, :, ik])
-    return out
 
 
 def _flatten_k_grid_frac(data: HTGSupercellProjectedBasisData) -> np.ndarray:
@@ -300,7 +285,7 @@ def _projected_basis(data: HTGSupercellProjectedBasisData) -> ContractProjectedB
         kvec=np.asarray(data.kvec, dtype=np.complex128),
         k_grid_frac=_flatten_k_grid_frac(data),
         h0=np.asarray(data.h0, dtype=np.complex128),
-        basis_energies=_basis_energies_from_h0(data.h0),
+        basis_energies=basis_energies_from_h0(data.h0),
         active_band_indices=_active_band_indices(data),
         active_valence_bands=int(active_valence),
         active_conduction_bands=int(n_band - active_valence),
@@ -407,14 +392,6 @@ def _hamiltonian_parts(run: HTGSupercellHartreeFockRun) -> ContractHamiltonianPa
         },
     )
 
-
-def _float_diagnostics(values: Mapping[str, Any]) -> dict[str, float]:
-    out: dict[str, float] = {}
-    for key, value in values.items():
-        finite = _finite_or_none(value)
-        if finite is not None:
-            out[str(key)] = finite
-    return out
 
 
 def _iteration_history(run: HTGSupercellHartreeFockRun) -> list[dict[str, Any]]:
@@ -692,7 +669,7 @@ def htg_supercell_hf_run_to_hf_run_result(
                 )
             ),
         },
-        diagnostics=_float_diagnostics(state.diagnostics),
+        diagnostics=float_diagnostics(state.diagnostics),
     )
     return ContractHFRunResult(
         final_state=final_state,

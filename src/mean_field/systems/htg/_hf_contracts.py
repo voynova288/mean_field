@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from mean_field.core.hf.contracts_bridge import basis_energies_from_h0, float_diagnostics
+
 from ._hf_types import *  # noqa: F401,F403
 from ._hf_reference import *  # noqa: F401,F403
 from ._hf_initialization import *  # noqa: F401,F403
@@ -177,13 +179,6 @@ def _contract_unavailable_diagonalizer(_kvec: np.ndarray) -> tuple[np.ndarray, n
     )
 
 
-def _contract_finite_or_none(value: object) -> float | None:
-    try:
-        out = float(value)
-    except (TypeError, ValueError):
-        return None
-    return out if math.isfinite(out) else None
-
 
 def _contract_single_particle_model(data: HTGProjectedBasisData) -> ContractSingleParticleModel:
     model = data.model
@@ -221,13 +216,6 @@ def _contract_single_particle_model(data: HTGProjectedBasisData) -> ContractSing
         metadata=metadata,
     )
 
-
-def _contract_basis_energies_from_h0(h0: np.ndarray) -> np.ndarray:
-    h0_array = np.asarray(h0, dtype=np.complex128)
-    out = np.zeros((h0_array.shape[0], h0_array.shape[2]), dtype=float)
-    for ik in range(h0_array.shape[2]):
-        out[:, ik] = np.linalg.eigvalsh(h0_array[:, :, ik])
-    return out
 
 
 def _contract_flatten_k_grid_frac(data: HTGProjectedBasisData) -> np.ndarray:
@@ -395,7 +383,7 @@ def _contract_projected_basis(data: HTGProjectedBasisData) -> ContractProjectedB
         kvec=np.asarray(data.kvec, dtype=np.complex128),
         k_grid_frac=_contract_flatten_k_grid_frac(data),
         h0=np.asarray(data.h0, dtype=np.complex128),
-        basis_energies=_contract_basis_energies_from_h0(data.h0),
+        basis_energies=basis_energies_from_h0(data.h0),
         active_band_indices=_contract_active_band_indices(data),
         active_valence_bands=int(active_valence),
         active_conduction_bands=int(n_band - active_valence),
@@ -494,14 +482,6 @@ def _contract_hamiltonian_parts(run: HTGHartreeFockRun) -> ContractHamiltonianPa
         },
     )
 
-
-def _contract_float_diagnostics(values: Mapping[str, Any]) -> dict[str, float]:
-    out: dict[str, float] = {}
-    for key, value in values.items():
-        finite = _contract_finite_or_none(value)
-        if finite is not None:
-            out[str(key)] = finite
-    return out
 
 
 def _contract_iteration_history(run: HTGHartreeFockRun) -> list[dict[str, Any]]:
@@ -636,7 +616,7 @@ def htg_hf_run_to_hf_run_result(
             if state.occupation_counts is None
             else [int(value) for value in state.occupation_counts],
         },
-        diagnostics=_contract_float_diagnostics(state.diagnostics),
+        diagnostics=float_diagnostics(state.diagnostics),
     )
     return ContractHFRunResult(
         final_state=final_state,

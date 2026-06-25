@@ -6,7 +6,6 @@ The functions here are post-run I/O adapters. They do not change the TDBG SCF
 loop, density builders, interaction contractions, or cRPA behavior.
 """
 
-from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
@@ -19,7 +18,7 @@ from mean_field.core.contracts import (
     ProjectedBasis as ContractProjectedBasis,
     SingleParticleModel as ContractSingleParticleModel,
 )
-from mean_field.core.hf.contracts_bridge import density_state_from_projector
+from mean_field.core.hf.contracts_bridge import basis_energies_from_h0, density_state_from_projector, float_diagnostics
 
 from .projected_hf_state import TDBGProjectedHFData, TDBGProjectedHFResult
 
@@ -56,13 +55,6 @@ def _single_particle_model(data: TDBGProjectedHFData) -> ContractSingleParticleM
     )
 
 
-def _basis_energies_from_h0(h0: np.ndarray) -> np.ndarray:
-    h0_array = np.asarray(h0, dtype=np.complex128)
-    out = np.zeros((h0_array.shape[0], h0_array.shape[2]), dtype=float)
-    for ik in range(h0_array.shape[2]):
-        out[:, ik] = np.linalg.eigvalsh(h0_array[:, :, ik])
-    return out
-
 
 def _projected_basis(data: TDBGProjectedHFData) -> ContractProjectedBasis:
     model = _single_particle_model(data)
@@ -73,7 +65,7 @@ def _projected_basis(data: TDBGProjectedHFData) -> ContractProjectedBasis:
         kvec=np.asarray(data.kvec, dtype=np.complex128),
         k_grid_frac=k_grid_frac,
         h0=np.asarray(data.h0, dtype=np.complex128),
-        basis_energies=_basis_energies_from_h0(data.h0),
+        basis_energies=basis_energies_from_h0(data.h0),
         active_band_indices=tuple(int(label.band_index) for label in data.labels),
         active_valence_bands=int(data.lower_band_count),
         active_conduction_bands=int(data.n_band - data.lower_band_count),
@@ -176,15 +168,6 @@ def _hamiltonian_parts(result: TDBGProjectedHFResult) -> ContractHamiltonianPart
     )
 
 
-def _float_diagnostics(values: Mapping[str, Any]) -> dict[str, float]:
-    out: dict[str, float] = {}
-    for key, value in values.items():
-        try:
-            out[str(key)] = float(value)
-        except (TypeError, ValueError):
-            continue
-    return out
-
 
 def _iteration_history(result: TDBGProjectedHFResult) -> list[dict[str, Any]]:
     run = result.run
@@ -228,7 +211,7 @@ def tdbg_projected_hf_result_to_hf_run_result(
             "energy_components_ev": dict(result.energy_components),
             "eigenvectors_active_available": False,
         },
-        diagnostics=_float_diagnostics(result.run.state.diagnostics),
+        diagnostics=float_diagnostics(result.run.state.diagnostics, finite_only=False),
     )
     return ContractHFRunResult(
         final_state=final_state,

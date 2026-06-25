@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import field
 
+from mean_field.core.hf.contracts_bridge import basis_energies_from_h0, finite_float_or_none, float_diagnostics
+
 from ._polshyn_shared import *  # noqa: F401,F403
 from ._polshyn_types import *  # noqa: F401,F403
 from ._polshyn_basis import build_polshyn_projected_basis
@@ -361,13 +363,6 @@ def _polshyn_single_particle_model(basis: PolshynProjectedBasis) -> ContractSing
         },
     )
 
-def _basis_energies_from_flat_h0(h0: np.ndarray) -> np.ndarray:
-    h0_array = np.asarray(h0, dtype=np.complex128)
-    out = np.zeros((h0_array.shape[0], h0_array.shape[2]), dtype=float)
-    for ik in range(h0_array.shape[2]):
-        out[:, ik] = np.linalg.eigvalsh(h0_array[:, :, ik])
-    return out
-
 def _polshyn_flat_state_index(basis: PolshynProjectedBasis) -> np.ndarray:
     return np.arange(int(basis.n_spin) * int(basis.n_eta) * int(basis.nb), dtype=int).reshape(
         (int(basis.n_spin), int(basis.n_eta), int(basis.nb)),
@@ -460,7 +455,7 @@ def _polshyn_projected_basis_contract(
         kvec=np.asarray(basis.kvec, dtype=np.complex128),
         k_grid_frac=k_grid_frac.reshape((int(basis.nk), 2)),
         h0=np.asarray(state.h0, dtype=np.complex128),
-        basis_energies=_basis_energies_from_flat_h0(state.h0),
+        basis_energies=basis_energies_from_h0(state.h0),
         active_band_indices=_polshyn_active_band_indices(basis),
         active_valence_bands=int(lower_folded_count),
         active_conduction_bands=int(basis.nb - lower_folded_count),
@@ -549,23 +544,6 @@ def _polshyn_hamiltonian_parts(state: PolshynWangHFState) -> ContractHamiltonian
         },
     )
 
-def _finite_float_or_none(value: object) -> float | None:
-    if isinstance(value, bool | np.bool_):
-        return None
-    try:
-        out = float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return None
-    return out if np.isfinite(out) else None
-
-def _float_diagnostics(values: Mapping[str, Any]) -> dict[str, float]:
-    out: dict[str, float] = {}
-    for key, value in values.items():
-        finite = _finite_float_or_none(value)
-        if finite is not None:
-            out[str(key)] = finite
-    return out
-
 def _info_scalar_summary(info: Mapping[str, Any]) -> dict[str, object]:
     out: dict[str, object] = {}
     for key, value in info.items():
@@ -577,7 +555,7 @@ def _info_scalar_summary(info: Mapping[str, Any]) -> dict[str, object]:
         if isinstance(value, int | np.integer):
             out[str(key)] = int(value)
             continue
-        finite = _finite_float_or_none(value)
+        finite = finite_float_or_none(value, include_bool=False)
         if finite is not None:
             out[str(key)] = finite
     return out
@@ -589,7 +567,7 @@ def _coerce_iteration_history_value(value: object) -> object:
         return bool(value)
     if isinstance(value, int | np.integer):
         return int(value)
-    finite = _finite_float_or_none(value)
+    finite = finite_float_or_none(value, include_bool=False)
     if finite is not None:
         return finite
     raise TypeError(f"Unsupported iteration_history value type {type(value).__name__}")
@@ -653,8 +631,8 @@ def polshyn_wang_hf_bundle_to_hf_run_result(
     density = _polshyn_wang_density_state(basis, state)
     iteration_history = _iteration_history_from_info(info_map)
     history_source = "info.iteration_history" if "iteration_history" in info_map else "unavailable_in_polshyn_wang_info"
-    diagnostics = _float_diagnostics(state.diagnostics)
-    diagnostics.update(_float_diagnostics(info_map))
+    diagnostics = float_diagnostics(state.diagnostics, include_bool=False)
+    diagnostics.update(float_diagnostics(info_map, include_bool=False))
     final_state = ContractHFState(
         basis=_polshyn_projected_basis_contract(basis, state),
         density=density,
