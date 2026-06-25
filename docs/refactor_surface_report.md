@@ -3051,6 +3051,28 @@ PYTHONPATH=src pytest -q \
 
 These tests cover h0-subtraction config normalization/fixed signs, reference projector blocks, active-reference correction against the common interaction builder, q=0 policy, basis correction shape/Hermiticity guards, minus-full-P0 empty-overlap safety, public facade exports, and public `run_hf(...)` metadata for `none`, `active-reference`, and `minus-full-p0` smoke configurations.
 
-### Caveat
+### Post-API Slurm validation
 
-The Slurm summaries above validated the ignored harness logic before the API promotion. After this public API commit, rerun the S1b/S1c Slurm validation through the public `PolshynH0SubtractionConfig` path before upgrading documentation from software/API validation to post-API physical validation.
+After pushing `883ebad` to `origin/main`, the S1b/S1c harnesses were rerun through the public `PolshynH0SubtractionConfig` path with clean `HEAD=origin/main=883ebad`:
+
+- S1b no-remote HF split target, `PolshynH0SubtractionConfig("minus-full-p0")`: job `159530`, PASS, summary `tmp/subagents/reconstruction_remaining/validation_prep/runs/polshyn_s1b_hf_159530/summary.json`.
+  - split target Chern: `+1`, `+1`; two-band target Chern: `+2`.
+  - min links: `0.9493172702900907`, `0.955667263843386`, `0.9444283756620684`.
+  - SCF final raw norm: `4.385051808753266e-7`.
+- S1c remote-window HF split target, `PolshynH0SubtractionConfig("active-reference")`: job `159531`, PASS, summary `tmp/subagents/reconstruction_remaining/validation_prep/runs/polshyn_s1c_hf_159531/summary.json`.
+  - split target Chern: `+1`, `+1`; two-band target Chern: `+2`.
+  - min links: `0.8940880250801424`, `0.7554143061328026`, `0.7245047591505996`.
+  - SCF final raw norm: `6.549976129232509e-7`.
+
+This validates the public Polshyn h0-subtraction API for the selected S1b/S1c topology targets. It is still not a full paper reproduction or phase-search closure.
+
+### Metrics after public h0 API commit
+
+- Tracked text lines: 54137
+- Tracked Python lines: 48253
+- Tracked Julia lines: 826
+- `src` Python files: 207
+- `src` Python lines: 43706
+- `tests` Python lines: 4486
+- `src/mean_field/systems` Python lines: 29627
+- Files over 1000 lines: 0

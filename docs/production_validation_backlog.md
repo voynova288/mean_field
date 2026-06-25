@@ -110,7 +110,7 @@ workflow metadata: tmbg.polshyn_wang.explicit_config
 Latest software-gate result on `test001`:
 
 ```text
-coverage commit: pending public h0-subtraction API commit
+coverage commit: d4b6e3b / report commit 883ebad
 validation: pytest -q tests/test_tmbg_polshyn_hf_readiness.py
 result: 18 passed on test001
 coverage added: metadata-only `HFResult.save(...)` writes `canonical_hf_run_result.json`, remains loadable via `mean_field.api.load_result(...)`, does not write `canonical_hf_arrays.npz`, and records explicit Polshyn `h0_subtraction` metadata for `none`, `active-reference`, and `minus-full-p0` smoke configs.
@@ -254,15 +254,17 @@ Production acceptance:
 
 Goal: move from explicit API smoke to paper-level Polshyn-Wang validation.
 
-Current selected-target validation evidence at commit `7d3fc7a`:
+Current selected-target validation evidence:
 
 | Slurm job | Validation | Status | Summary |
 |---:|---|---|---|
-| 159192 | S1b noninteracting folded-subspace topology | PASS | `tmp/subagents/reconstruction_remaining/validation_prep/runs/polshyn_s1b_noninteracting_159192/summary.json` |
-| 159214 | S1b no-remote HF split target, `h0_subtraction=minus-full-p0` | PASS | `tmp/subagents/reconstruction_remaining/validation_prep/runs/polshyn_s1b_hf_159214/summary.json` |
-| 159217 | S1c remote-window HF split target, `h0_subtraction=active-reference` | PASS | `tmp/subagents/reconstruction_remaining/validation_prep/runs/polshyn_s1c_hf_159217/summary.json` |
+| 159192 | S1b noninteracting folded-subspace topology at `7d3fc7a` | PASS | `tmp/subagents/reconstruction_remaining/validation_prep/runs/polshyn_s1b_noninteracting_159192/summary.json` |
+| 159214 | S1b no-remote HF split target, pre-public-API `minus-full-p0` harness at `7d3fc7a` | PASS | `tmp/subagents/reconstruction_remaining/validation_prep/runs/polshyn_s1b_hf_159214/summary.json` |
+| 159217 | S1c remote-window HF split target, pre-public-API `active-reference` harness at `7d3fc7a` | PASS | `tmp/subagents/reconstruction_remaining/validation_prep/runs/polshyn_s1c_hf_159217/summary.json` |
+| 159530 | S1b no-remote HF split target through public `PolshynH0SubtractionConfig("minus-full-p0")` at `883ebad` | PASS | `tmp/subagents/reconstruction_remaining/validation_prep/runs/polshyn_s1b_hf_159530/summary.json` |
+| 159531 | S1c remote-window HF split target through public `PolshynH0SubtractionConfig("active-reference")` at `883ebad` | PASS | `tmp/subagents/reconstruction_remaining/validation_prep/runs/polshyn_s1c_hf_159531/summary.json` |
 
-These jobs validate the selected doubled-cell topology/HF split-band targets: S1b lower remote folded subspace `C=-1`, target folded subspace `C=+2`, S1b HF split target `C=+1,+1` and two-band `C=+2`, and S1c HF split target `C=+1,+1` and two-band `C=+2`. They do not constitute a full phase search, complete Fig. S1 reproduction, or bit-for-bit historical replay. After public API changes beyond `7d3fc7a`, rerun the S1b/S1c validation through the public `PolshynH0SubtractionConfig` path before upgrading claims.
+These jobs validate the selected doubled-cell topology/HF split-band targets: S1b lower remote folded subspace `C=-1`, target folded subspace `C=+2`, S1b HF split target `C=+1,+1` and two-band `C=+2`, and S1c HF split target `C=+1,+1` and two-band `C=+2`. Jobs `159530` and `159531` specifically validate the public `PolshynH0SubtractionConfig` path at `HEAD=origin/main=883ebad` with a clean worktree. They do not constitute a full phase search, complete Fig. S1 reproduction, or bit-for-bit historical replay.
 
 Required evidence before claiming full reproduction:
 
