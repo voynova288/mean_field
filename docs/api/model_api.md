@@ -10,17 +10,15 @@ from mean_field.api import make_model, model_record, component_group_records
 
 ## Supported public names
 
-Current façade names:
+Current façade names in the tracked core profile:
 
 - `htg`
-- `htqg`
 - `rlg_hbn`
 - `tbg` (`variant="zero_field_bm"` only; BM single-particle bands)
 - `tdbg`
 - `tmbg`
-- `atmg`
 
-Each system may keep historical internal class names and paths.  Public workflows should use the façade spelling.
+ATMG and HTQG are archived optional exploratory systems under `local_archive/optional_features/` for the 35k core-profile cleanup. Public workflows should use the façade spelling for retained systems.
 
 ## ContinuumModel protocol
 
@@ -47,7 +45,6 @@ Current component-group status:
 
 - `rlg_hbn`: declares `layer_0`, `layer_1`, ... over the two-sublattice local layer blocks.
 - `tmbg`: declares `layer_bottom`, `layer_middle`, and `layer_top` for the local six-orbital block `(A_b, B_b, A_m, B_m, A_t, B_t)`.
-- `atmg`: declares `layer_0`, `layer_1`, ... over the two-sublattice local layer blocks.
 - `htg`: intentionally left unset while HTG work is owned elsewhere.
 - `tdbg`: declares sector/layer/sublattice groups through a dedicated adapter. Public model records use the full q-site-major Hamiltonian-basis index `4*q_site + alpha` with `alpha=(A1,B1,A2,B2)` and carry `index_space="tdbg_full_hamiltonian_basis"`; projected-HF overlap helpers use a separate embedded eight-component local basis `4*sector + alpha`.
 
@@ -59,7 +56,7 @@ Models with reviewed thin topology wrappers may expose:
 def topology_on_grid(mesh_size: int, band_indices, **kwargs) -> analysis.topology.TopologyResult: ...
 ```
 
-This is an optional convenience, not a required `ContinuumModel` protocol method. Current coverage is TMBG, TDBG, ATMG, RLG-hBN, and HTG. At the model/wrapper/grid-result layer, `band_indices` means the system/grid-result band labels, normally absolute Hamiltonian band indices, and the common topology adapter maps them to returned eigenvector columns. HTG `topology_on_grid(...)` requests the contiguous absolute band window needed by its scipy diagonalizer, then lets the common grid-result adapter select the requested labels. Only the low-level `compute_topology_from_eigenvectors(...)` entrypoint uses raw eigenvector-column indices.
+This is an optional convenience, not a required `ContinuumModel` protocol method. Current tracked coverage is TMBG, TDBG, RLG-hBN, and HTG. At the model/wrapper/grid-result layer, `band_indices` means the system/grid-result band labels, normally absolute Hamiltonian band indices, and the common topology adapter maps them to returned eigenvector columns. HTG `topology_on_grid(...)` requests the contiguous absolute band window needed by its scipy diagonalizer, then lets the common grid-result adapter select the requested labels. Only the low-level `compute_topology_from_eigenvectors(...)` entrypoint uses raw eigenvector-column indices.
 
 `topology_on_grid(...)` diagonalizes a 2D grid with eigenvectors and is therefore a numerical job for realistic meshes. Use `endpoint=False`; paper-level topology validation still requires explicit provenance and Slurm-scale validation.
 

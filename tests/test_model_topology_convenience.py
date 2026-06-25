@@ -3,7 +3,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from mean_field.systems.RnG_hBN.model import RLGhBNModel
-from mean_field.systems.atmg.model import ATMGModel
 from mean_field.systems.htg.model import HTGModel
 from mean_field.systems.tdbg.model import TDBGModel
 from mean_field.systems.tmbg.model import TMBGModel
@@ -30,21 +29,6 @@ def test_tmbg_model_topology_on_grid_delegates_to_wrapper(monkeypatch) -> None:
     assert result is sentinel
     assert calls == {"mesh_size": 7, "lattice": lattice, "params": params, "band_indices": 3, "kwargs": {"valley": -1, "endpoint": False, "frac_shift": (0.25, 0.5)}}
 
-
-def test_atmg_model_topology_on_grid_delegates_to_wrapper(monkeypatch) -> None:
-    calls: dict[str, object] = {}
-    sentinel = object()
-    _patch_topology(monkeypatch, "mean_field.systems.atmg.topology", calls, sentinel)
-    lattice, params = object(), object()
-
-    result = ATMGModel(lattice, params).topology_on_grid(5, (2, 3), orientation_sign=-1.0)
-
-    assert result is sentinel
-    assert calls["mesh_size"] == 5
-    assert calls["lattice"] is lattice
-    assert calls["params"] is params
-    assert calls["band_indices"] == (2, 3)
-    assert calls["kwargs"] == {"orientation_sign": -1.0}
 
 
 def test_tdbg_model_topology_on_grid_uses_params_valley_by_default(monkeypatch) -> None:

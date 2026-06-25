@@ -122,11 +122,7 @@ def run_htg_hf_config_adapter(model: object, config: "HFConfig", **kwargs: Any) 
 
     if not isinstance(model, HTGModel):
         return None
-    if "htg_config" in kwargs and "htg_supercell_config" in kwargs:
-        raise TypeError("Pass only one of htg_config or htg_supercell_config")
     if "htg_config" not in kwargs:
-        if "htg_supercell_config" in kwargs:
-            return None
         raise NotImplementedError(
             "Unified run_hf has an HTG primitive adapter only for explicit "
             "htg_config=HTGRunHFConfig(...); generic HFConfig -> HTG runner mapping is not implemented"

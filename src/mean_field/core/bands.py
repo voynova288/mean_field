@@ -15,8 +15,8 @@ DiagonalizeCallback = Callable[[complex, int, bool], tuple[np.ndarray, np.ndarra
 class PathBandsResult:
     """Band energies/eigenvectors sampled along a k-path.
 
-    The optional fields cover the historical system-specific extensions used by
-    HTG (``band_indices``) and ATMG (mapped/subspace spectra) while keeping the
+    The optional fields cover retained and archived system-specific extensions
+    such as HTG ``band_indices`` and mapped/subspace spectra while keeping the
     common path/energy/eigenvector shape shared by most systems.
     """
 

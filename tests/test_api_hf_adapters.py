@@ -11,8 +11,7 @@ from mean_field.api.hf import get_hf_adapter_info, list_hf_adapters, resolve_hf_
 from mean_field.core.contracts import HFRunResult as ContractHFRunResult
 from mean_field.systems import tdbg as tdbg_system
 from mean_field.systems.RnG_hBN import RLGhBNInteractionParams, RLGhBNRunHFConfig
-from mean_field.systems.htg import HTGRunHFConfig, HTGSupercellRunHFConfig, InteractionParams
-from mean_field.systems.htqg import HTQGModel, HTQGParams
+from mean_field.systems.htg import HTGRunHFConfig, InteractionParams
 from mean_field.systems.tbg.params import TBGParameters
 from mean_field.systems.tbg.zero_field import BMSolution, TBGZeroFieldRunHFConfig, build_b0_uniform_lattice
 from mean_field.systems.tdbg import TDBGInteractionSettings, TDBGProjectedHFConfig, TDBGProjectedWindow
@@ -72,9 +71,6 @@ def test_public_hf_adapter_registry_exposes_post_run_converters_without_run_disp
         "htg_hf_run_to_hf_run_result",
         "htg_hf_run_to_hf_result",
         "htg_explicit_primitive_run_hf",
-        "htg_supercell_hf_run_to_hf_run_result",
-        "htg_supercell_hf_run_to_hf_result",
-        "htg_explicit_supercell_run_hf",
         "tbg_zero_field_hf_run_to_hf_run_result",
         "tbg_zero_field_hf_run_to_hf_result",
         "tbg_zero_field_explicit_run_hf",
@@ -87,7 +83,6 @@ def test_public_hf_adapter_registry_exposes_post_run_converters_without_run_disp
     run_adapters = {
         "tdbg_explicit_projected_run_hf",
         "htg_explicit_primitive_run_hf",
-        "htg_explicit_supercell_run_hf",
         "rlg_hbn_explicit_run_hf",
         "tbg_zero_field_explicit_run_hf",
     }
@@ -107,40 +102,25 @@ def test_public_hf_adapter_registry_exposes_post_run_converters_without_run_disp
 
 
 def test_public_hf_adapter_registry_filters_and_resolves_existing_helpers() -> None:
-    htg_supercell = {info.name for info in list_hf_adapters(system_name="htg_supercell")}
-    assert htg_supercell == {
-        "htg_supercell_hf_run_to_hf_run_result",
-        "htg_supercell_hf_run_to_hf_result",
-        "htg_explicit_supercell_run_hf",
-    }
+    assert list_hf_adapters(system_name="htg_supercell") == ()
     canonical = {info.name for info in list_hf_adapters(adapter_type="canonical_hf_run_result")}
     assert "tdbg_explicit_projected_run_hf" not in canonical
     assert "polshyn_wang_hf_bundle_to_hf_run_result" in canonical
 
-    adapter = resolve_hf_adapter("htg_supercell_hf_run_to_hf_run_result")
-    assert adapter.__name__ == "htg_supercell_hf_run_to_hf_run_result"
-    assert adapter.__module__ == "mean_field.systems.htg.supercell_contracts"
+    adapter = resolve_hf_adapter("htg_hf_run_to_hf_run_result")
+    assert adapter.__name__ == "htg_hf_run_to_hf_run_result"
+    assert adapter.__module__ == "mean_field.systems.htg._hf_contracts"
     assert get_hf_adapter_info("tdbg_explicit_projected_run_hf").supports_run_hf_config is True
     assert get_hf_adapter_info("htg_explicit_primitive_run_hf").supports_run_hf_config is True
     assert "HTGRunHFConfig" in get_hf_adapter_info("htg_explicit_primitive_run_hf").run_hf_config_reason
     assert "RLGhBNRunHFConfig" in get_hf_adapter_info("rlg_hbn_explicit_run_hf").run_hf_config_reason
     assert "TBGZeroFieldRunHFConfig" in get_hf_adapter_info("tbg_zero_field_explicit_run_hf").run_hf_config_reason
-    assert "htg_supercell_hf_run_to_hf_result" in hf_api.__all__
+    assert "htg_supercell_hf_run_to_hf_result" not in hf_api.__all__
     assert "rlg_hbn_hf_run_to_hf_result" in hf_api.__all__
     assert "tbg_zero_field_hf_run_to_hf_result" in hf_api.__all__
 
     with pytest.raises(KeyError, match="Unknown HF adapter"):
         get_hf_adapter_info("not_a_registered_hf_adapter")
-
-
-def test_public_run_hf_htqg_requires_explicit_adapter_before_projected_hf_claims() -> None:
-    params = HTQGParams.default(kappa=0.6, lambda_mdt_nm=0.0, include_dirac_rotation=False)
-    model = HTQGModel.default(theta_deg=2.25, n_shells=0, params=params)
-    cfg = HFConfig(filling=0.0, mesh=(1, 1), max_iter=1)
-
-    assert list_hf_adapters(system_name="htqg") == ()
-    with pytest.raises(NotImplementedError, match="no run_hf\\(config\\) adapter yet"):
-        run_hf(model, cfg)
 
 
 def _assert_metadata_only_hf_save_load(result: HFResult, tmp_path, *, system_name: str) -> None:
@@ -377,47 +357,6 @@ def test_public_run_hf_htg_primitive_explicit_config_attaches_canonical_contract
     assert primitive_basis.metadata["reconstruction_dense_by_default"] is False
     _assert_metadata_only_hf_save_load(result, tmp_path, system_name="htg")
 
-
-def test_public_run_hf_htg_supercell_explicit_config_attaches_canonical_contract_result(tmp_path) -> None:
-    model = make_model("htg", theta_deg=1.8, n_shells=0)
-    interaction = InteractionParams(n_k=1, g_shells=0)
-    cfg = HFConfig(
-        filling=3.5,
-        mesh=(1, 1),
-        max_iter=1,
-        precision=1.0e-6,
-        density_convention="stored_delta",
-        epsilon_r=interaction.epsilon_r,
-        dsc_nm=interaction.d_sc_nm,
-    )
-    htg_supercell_cfg = HTGSupercellRunHFConfig(
-        primitive_nu=3.5,
-        mesh_size=1,
-        interaction=interaction,
-        init_mode="bm",
-        seed=1,
-        max_iter=1,
-        precision=1.0e-6,
-        g_shells=0,
-        use_numba=False,
-    )
-
-    result = run_hf(model, cfg, htg_supercell_config=htg_supercell_cfg)
-
-    assert isinstance(result, HFResult)
-    assert result.model.system_name == "htg_supercell"
-    assert isinstance(result.canonical_run_result, ContractHFRunResult)
-    assert result.state.seed == 1
-    assert result.observables["supercell_area_ratio"] == 2
-    assert result.observables["public_run_hf_adapter"].endswith("run_htg_supercell_hf_config_adapter")
-    assert result.canonical_run_result.final_state.density.reference.metadata["raw_density_convention"] == "stored_delta"
-    assert result.canonical_run_result.final_state.hamiltonian.metadata["supports_crpa"] is False
-    supercell_basis = result.canonical_run_result.final_state.basis
-    assert supercell_basis.micro_wavefunctions.ndim == 4
-    assert supercell_basis.metadata["canonical_micro_wavefunctions_storage"] == "compact_system_projected_basis_not_dense_direct_sum"
-    assert supercell_basis.metadata["reconstruction_dense_by_default"] is False
-
-    _assert_metadata_only_hf_save_load(result, tmp_path, system_name="htg_supercell")
 
 
 def test_public_run_hf_tdbg_explicit_config_dispatches_without_guessing(monkeypatch: pytest.MonkeyPatch) -> None:

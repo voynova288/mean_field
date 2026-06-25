@@ -32,34 +32,6 @@ def test_public_model_record_and_component_group_contract() -> None:
     assert component_groups(model) == ()
 
 
-def test_public_make_model_htqg_pilot_band_contract() -> None:
-    model = make_model("htqg", theta_deg=2.25, n_shells=0, domain="abg")
-    record = model_record(model, system_name="htqg")
-
-    assert record.system_name == "htqg"
-    assert record.lattice["model_name"] == "fujimoto2025_convention_locked"
-    assert record.lattice["domain"] == "alpha_beta_gamma"
-    assert model.matrix_dim == 8
-
-    groups = component_groups(model)
-    assert [group.name for group in groups] == [
-        "layer_0",
-        "layer_1",
-        "layer_2",
-        "layer_3",
-        "sublattice_A",
-        "sublattice_B",
-    ]
-    assert [group.indices.tolist() for group in groups[:4]] == [[0, 1], [2, 3], [4, 5], [6, 7]]
-
-    path_bundle = compute_bands(model, n_bands=4, points_per_segment=1)
-    assert path_bundle.energies.shape == (5, 4)
-    assert path_bundle.basis_metadata["component_groups"][0] == {"name": "layer_0", "indices": [0, 1]}
-
-    grid_bundle = compute_bands(model, grid_mesh=2, n_bands=4)
-    assert grid_bundle.energies.shape == (2, 2, 4)
-
-
 def test_public_make_model_tbg_zero_field_bm_band_contract() -> None:
     model = make_model("tbg", variant="zero_field_bm", theta_deg=1.2, lg=1)
     record = model_record(model, system_name="tbg")
@@ -130,28 +102,8 @@ def test_tdbg_model_declares_q_site_sector_layer_component_groups() -> None:
     assert "q-sites" in records[0]["description"]
 
 
-def test_atmg_model_declares_layer_component_groups() -> None:
-    model = make_model("atmg", n_layers=4, n_shells=0)
-    groups = component_groups(model)
-
-    assert [group.name for group in groups] == ["layer_0", "layer_1", "layer_2", "layer_3"]
-    assert [group.indices.tolist() for group in groups] == [[0, 1], [2, 3], [4, 5], [6, 7]]
-
-
-def test_compute_bands_includes_declared_component_group_metadata() -> None:
-    model = make_model("atmg", n_layers=3, n_shells=0)
-    bundle = compute_bands(model, n_bands=2, points_per_segment=1)
-
-    assert bundle.basis_metadata["component_groups"] == [
-        {"name": "layer_0", "indices": [0, 1]},
-        {"name": "layer_1", "indices": [2, 3]},
-        {"name": "layer_2", "indices": [4, 5]},
-    ]
-
-
 def test_public_run_hf_fails_explicitly_for_system_without_adapter() -> None:
     cfg = HFConfig(filling=0.0, mesh=(2, 2))
-    model = make_model("htqg", theta_deg=2.25, n_shells=0, domain="abg")
 
     with pytest.raises(NotImplementedError, match=r"no run_hf\(config\) adapter"):
-        run_hf(model, cfg)
+        run_hf(object(), cfg)

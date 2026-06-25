@@ -51,7 +51,7 @@ Public HF metadata-only sidecar coverage:
 
 ```text
 coverage: tests/test_api_hf_adapters.py
-adapters covered: tbg_zero_field, tdbg, htg, htg_supercell, rlg_hbn
+adapters covered at the time: tbg_zero_field, tdbg, htg, htg_supercell, rlg_hbn (HTG supercell is now optional-archived in the 35k core profile)
 validation: 16 passed on test001
 assertion shape: HFResult.save(..., canonical_payload="metadata_only") writes canonical_hf_run_result.json, remains loadable via mean_field.api.load_result(...), and does not write canonical_hf_arrays.npz.
 ```
@@ -134,59 +134,20 @@ Acceptance:
 
 ## 3. HTG fractional filling
 
-Goal: validate primitive/supercell fractional-filling HF using explicit supercell adapters, not fractional occupations in a primitive cell.
-
-Preconditions:
-
-- use `HTGSupercellRunHFConfig`/supercell path for fractional fillings;
-- choose the minimal physically intended supercell denominator by default (`Nc=2` for half, `Nc=3` for thirds);
-- record primitive filling, reference diagonal, supercell matrix, occupation counts, and exact SCF grid.
-
-Software gate:
-
-```bash
-pytest -q tests/test_htg_supercell.py tests/test_api_hf_adapters.py -k htg
-```
-
-Latest software-gate result on `test001`:
+Status in the 35k core-profile cleanup: the former tracked HTG folded-supercell/fractional-filling lane is archived under:
 
 ```text
-archived historical gate: pytest -q tests/test_htg_supercell.py tests/test_htg_supercell_contract_adapter.py
-current tracked gate: pytest -q tests/test_htg_supercell.py tests/test_api_hf_adapters.py -k htg
+local_archive/optional_features/htg_supercell_20260625/
 ```
 
-Additional public-HF gate:
+The tracked core profile keeps primitive HTG model/HF only. Historical HTG supercell software gates and preflight summaries remain useful evidence for restoring this lane later, but current tracked tests/API docs no longer advertise `HTGSupercellRunHFConfig` or `htg_supercell_*` adapters.
 
-```text
-coverage commit: 834b132
-validation: pytest -q tests/test_api_hf_adapters.py
-result: 16 passed on test001
-coverage added: explicit HTG supercell `run_hf(...)` metadata-only save/load writes `canonical_hf_run_result.json`, remains loadable via `mean_field.api.load_result(...)`, and does not write `canonical_hf_arrays.npz`.
-```
+If HTG fractional filling is reopened, restore it through a reviewed optional-feature branch/API and require:
 
-Latest software preflight (not production validation):
-
-```text
-commit: 7d8ac74
-output: /data/home/ziyuzhu/tmp/mean_field_validation_htg_supercell_7d8ac74_20260622_100932/summary.json
-result_model: htg_supercell
-has_canonical_run_result: true
-loaded_canonical_sidecar: true
-metadata_only_arrays_absent: true
-primitive_nu: 3.5
-supercell_area_ratio: 2
-filling_from_density: 3.5000000000000018
-workflow metadata: htg.supercell.explicit_config.preflight
-```
-
-This is software readiness only, not a converged fractional-filling production run.
-
-Production acceptance:
-
-- self-consistent run converges for relevant candidate states;
-- exact SCF-grid path/bands saved, not nearest-grid/flattened-index plots;
-- energy components and filling from density match the intended convention;
-- if comparing to a paper panel, axes/path/energy reference and target bands are documented.
+- an explicit supercell path for fractional fillings, not fractional occupations in a primitive cell;
+- the minimal physically intended supercell denominator by default (`Nc=2` for half, `Nc=3` for thirds);
+- recorded primitive filling, reference diagonal, supercell matrix, occupation counts, and exact SCF grid;
+- converged HF states, exact SCF-grid path/bands, energy components, and filling-from-density checks before paper comparison.
 
 ## 4. RnG/hBN finite-q TDHF
 
@@ -213,42 +174,20 @@ Acceptance:
 
 ## 5. HTQG projected HF / Fig. 1
 
-Goal: validate HTQG projected-HF and Fig. 1 style band outputs without confusing software readiness with paper reproduction.
-
-Preconditions:
-
-- identify the target Hamiltonian parameters, projected band/subspace, reference density, and path convention;
-- use common HF/problem machinery where possible and keep HTQG-specific physics in `systems/htqg`;
-- save exact SCF-grid spectra and path metadata.
-
-Software gates:
-
-```bash
-pytest -q tests/test_htqg_model.py tests/test_api_imports.py
-```
-
-Latest software-gate result on `test001`:
+Status in the 35k core-profile cleanup: HTQG is archived as an optional exploratory system under:
 
 ```text
-commit: 9d045c5
-command: pytest -q tests/test_htqg_model.py tests/test_api_imports.py
-result: 14 passed
+local_archive/optional_features/htqg_20260625/
 ```
 
-Current public-HF status:
+Historical HTQG model/band smokes and software-gate notes remain useful evidence for a future restoration, but the tracked core profile no longer exposes `make_model("htqg")` or tracked HTQG tests/docs as active public API.
 
-```text
-HTQG has no registered HF adapter yet.
-`run_hf(HTQGModel, HFConfig(...))` is tested to fail explicitly with "no run_hf(config) adapter yet" instead of inferring projected-HF physics.
-```
+If HTQG projected HF is reopened, restore it through a reviewed optional-feature branch/API and require:
 
-This is band/model API readiness only; projected-HF production validation still needs the explicit HTQG HF adapter or workflow described below.
-
-Production acceptance:
-
-- converged HF state archive with density, hamiltonian, h0, energies, k grid, convergence history, and provenance;
-- quantitative comparison to target Fig. 1 axes/energy reference/band features;
-- unresolved parameter/path ambiguity explicitly reported, not hidden in plotting.
+- identified Hamiltonian parameters, projected band/subspace, reference density, and path convention;
+- use of common HF/problem machinery where possible while keeping HTQG-specific physics in the restored system adapter;
+- saved exact SCF-grid spectra/path metadata;
+- converged HF state archive with density, Hamiltonian, h0, energies, k grid, convergence history, and provenance before any Fig. 1 paper comparison.
 
 ## 6. TMBG Polshyn production validation
 
@@ -300,7 +239,7 @@ Fresh public HF adapter preflights:
 
 ```text
 summary: /data/home/ziyuzhu/tmp/mean_field_production_validation_7bede75_20260622_134024/summary.json
-cases: tmbg_polshyn_mesh1_metadata_only, htg_supercell_primitive_nu_3p333333_mesh1_metadata_only, htg_supercell_primitive_nu_3p666667_mesh1_metadata_only
+cases at the time: tmbg_polshyn_mesh1_metadata_only, htg_supercell_primitive_nu_3p333333_mesh1_metadata_only, htg_supercell_primitive_nu_3p666667_mesh1_metadata_only (HTG supercell is now optional-archived)
 all_have_canonical_run_result: true
 all_loaded_canonical_sidecar: true
 all_metadata_only_arrays_absent: true
@@ -326,12 +265,12 @@ No Slurm jobs have been submitted in this continuation. If paper-level validatio
 Recommended first paper-level candidates, in increasing physics-risk order:
 
 - TMBG Polshyn: choose target band/window and candidate initial states (`bm_wang`, `cdw`, competitors); run convergence/energy comparison before any topology claim.
-- HTG fractional filling: use `HTGSupercellRunHFConfig`, exact SCF-grid path/bands, and document denominator/supercell choice for `3+1/3` and `3+2/3`.
+- HTG fractional filling: restore the optional HTG supercell lane first, then use its explicit supercell config, exact SCF-grid path/bands, and documented denominator/supercell choice for `3+1/3` and `3+2/3`.
 - RLG/hBN canonical sidecar audit: use the newly discoverable historical sidecars as metadata inputs only; do not run TDHF finite-q validation unless TDHF scope is explicitly reopened.
 - TDBG projected HF: run explicit projected config only after target window/filling/interaction choices are fixed.
 
 Blocked or out-of-scope unless separately authorized:
 
 - cRPA validation (tracked surface archived).
-- topology/Chern/QGT paper-level validation beyond the common system-independent core and thin TMBG/TDBG/ATMG/RLG-hBN/HTG wrappers; reintroduce reviewed concrete workflows for each target system before claiming system or paper reproduction.
+- topology/Chern/QGT paper-level validation beyond the common system-independent FHS core and thin TMBG/TDBG/RLG-hBN/HTG wrappers; optional ATMG/HTQG and QGT helpers must be restored through reviewed optional-feature APIs before claiming system or paper reproduction.
 - RLG/hBN finite-q TDHF production maps (TDHF remains a separate scope boundary).

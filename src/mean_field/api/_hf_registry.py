@@ -53,34 +53,6 @@ _HF_ADAPTER_REGISTRY: tuple[HFAdapterInfo, ...] = (
         run_hf_config_reason="Requires explicit htg_config=HTGRunHFConfig; generic HFConfig to HTG runner inference is not implemented.",
     ),
     HFAdapterInfo(
-        name="htg_supercell_hf_run_to_hf_run_result",
-        system_name="htg_supercell",
-        adapter_type="canonical_hf_run_result",
-        import_path="mean_field.systems.htg.supercell_contracts:htg_supercell_hf_run_to_hf_run_result",
-        description="Post-run canonical HFRunResult view for an existing HTG folded-supercell HF run.",
-        requires_explicit_inputs=("HTGSupercellHartreeFockRun",),
-        run_hf_config_reason="Post-run converter only; use htg_explicit_supercell_run_hf for explicit HTG supercell config dispatch.",
-    ),
-    HFAdapterInfo(
-        name="htg_supercell_hf_run_to_hf_result",
-        system_name="htg_supercell",
-        adapter_type="hf_result",
-        import_path="mean_field.systems.htg.supercell_contracts:htg_supercell_hf_run_to_hf_result",
-        description="Public HFResult view of an existing HTG folded-supercell HF run.",
-        requires_explicit_inputs=("HTGSupercellHartreeFockRun",),
-        run_hf_config_reason="Post-run HFResult converter only; use htg_explicit_supercell_run_hf for explicit HTG supercell config dispatch.",
-    ),
-    HFAdapterInfo(
-        name="htg_explicit_supercell_run_hf",
-        system_name="htg_supercell",
-        adapter_type="run_hf",
-        import_path="mean_field.systems.htg.supercell_contracts:run_htg_supercell_hf_config_adapter",
-        description="Public run_hf dispatch for an explicit folded-supercell HTGSupercellRunHFConfig.",
-        supports_run_hf_config=True,
-        requires_explicit_inputs=("htg_supercell_config=HTGSupercellRunHFConfig",),
-        run_hf_config_reason="Requires explicit htg_supercell_config=HTGSupercellRunHFConfig; generic fractional-filling inference is not implemented.",
-    ),
-    HFAdapterInfo(
         name="tbg_zero_field_hf_run_to_hf_run_result",
         system_name="tbg_zero_field",
         adapter_type="canonical_hf_run_result",
@@ -230,12 +202,6 @@ def htg_hf_run_to_hf_result(*args: Any, **kwargs: Any) -> Any:
     return _call_registered_hf_adapter("htg_hf_run_to_hf_result", *args, **kwargs)
 
 
-def htg_supercell_hf_run_to_hf_run_result(*args: Any, **kwargs: Any) -> ContractHFRunResult:
-    return _call_registered_hf_adapter("htg_supercell_hf_run_to_hf_run_result", *args, **kwargs)
-
-
-def htg_supercell_hf_run_to_hf_result(*args: Any, **kwargs: Any) -> Any:
-    return _call_registered_hf_adapter("htg_supercell_hf_run_to_hf_result", *args, **kwargs)
 
 
 def tbg_zero_field_hf_run_to_hf_run_result(*args: Any, **kwargs: Any) -> ContractHFRunResult:

@@ -1,7 +1,6 @@
 """Common topology and quantum-geometry public API."""
 
 from . import core as _core
-from . import quantum_geometry as _quantum_geometry
 from . import system as _system
 from . import wavefunction as _wavefunction
 
@@ -12,18 +11,16 @@ _CORE = (
     "matrix_sewing_transform", "normalize_state_indices", "select_wavefunction_subspace", "split_state_indices_by_direct_gaps",
     "wavefunction_index_for_state_group",
 )
-_QUANTUM_GEOMETRY = tuple(_quantum_geometry.__all__)
 _SYSTEM = tuple(_system.__all__)
 _WAVEFUNCTION = tuple(_wavefunction.__all__)
 
 for _module, _names in (
     (_core, _CORE),
-    (_quantum_geometry, _QUANTUM_GEOMETRY),
     (_system, _SYSTEM),
     (_wavefunction, _WAVEFUNCTION),
 ):
     globals().update({name: getattr(_module, name) for name in _names})
 
-__all__ = [*_CORE, *_QUANTUM_GEOMETRY, *_SYSTEM, *_WAVEFUNCTION]
+__all__ = [*_CORE, *_SYSTEM, *_WAVEFUNCTION]
 
-del _core, _quantum_geometry, _system, _wavefunction, _module, _names
+del _core, _system, _wavefunction, _module, _names

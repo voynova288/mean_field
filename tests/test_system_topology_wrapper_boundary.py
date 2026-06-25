@@ -7,7 +7,6 @@ import pytest
 RESTORED_THIN_WRAPPERS = (
     "mean_field.systems.tmbg.topology",
     "mean_field.systems.tdbg.topology",
-    "mean_field.systems.atmg.topology",
     "mean_field.systems.RnG_hBN.topology",
     "mean_field.systems.htg.topology",
 )

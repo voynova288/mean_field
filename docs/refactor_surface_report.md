@@ -3136,3 +3136,77 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 - Files over 1000 lines: 0
 
 Compared with the post-Polshyn-h0 report, this saves 51 tracked `src` Python lines and 114 `src/mean_field/systems` Python lines while adding the shared helpers to `core/hf/contracts_bridge.py`.
+
+## Update: 35k core-profile cleanup Phase A/B
+
+### Phase A — line-budget report tool
+
+Added `scripts/line_budget.py` as a report-only tracked source-budget helper. It counts tracked files under a configurable root/suffix using `git ls-files`, prints total lines, top directories, top files, and candidate optional-feature buckets. It is non-failing by default; `--fail-on-over` is reserved for later once the repository is expected to be under budget.
+
+Baseline before optional-feature archive:
+
+- tracked `src/**/*.py` files: 207
+- tracked `src/**/*.py` lines: 43655
+- 35k overage: 8655
+
+### Phase B — archive TBG finite-field lane
+
+Archived to ignored local storage before removal:
+
+```text
+local_archive/optional_features/tbg_finite_field_20260625/
+```
+
+Removed from tracked source:
+
+- `src/mean_field/systems/tbg/finite_field/`
+- `src/mean_field/core/hf/finite_field.py`
+- `src/mean_field/core/hf/_finite_field_*.py`
+- `src/mean_field/core/magnetic_field.py`
+
+Updated `core`/`core.hf` facade exports and architecture docs so tracked code no longer imports the archived modules. The public TBG model registry still explicitly rejects `variant="finite_field"`, preserving the API failure mode rather than silently falling through.
+
+Validation on `test001`:
+
+```bash
+python -m compileall -q src scripts
+pytest -q $(git ls-files tests)
+python -m pip install -e . --dry-run --no-deps --no-build-isolation
+python scripts/line_budget.py --root src --suffix .py --max-lines 35000
+# 150 passed; Would install mean-field-0.1.0
+```
+
+Line metrics after Phase B:
+
+- tracked `src/**/*.py` files: 191
+- tracked `src/**/*.py` lines: 40440
+- 35k overage: 5440
+- removed from tracked `src` Python: 3215 lines
+
+Remaining top optional-feature buckets from the report include HTG supercell, RLG-hBN TDHF, HTQG, ATMG, topology quantum geometry, and TDHF API/core lanes.
+
+### Phase C/D/E — finish 35k tracked core profile
+
+Archived additional optional feature surfaces into ignored local storage before removal:
+
+- `local_archive/optional_features/htg_supercell_20260625/`
+  - former HTG folded-supercell source and `tests/test_htg_supercell.py`;
+  - removed `htg_supercell_*` public HF registry entries and docs while keeping primitive HTG HF.
+- `local_archive/optional_features/atmg_20260625/`
+  - former exploratory ATMG system source and direct ATMG topology test.
+- `local_archive/optional_features/htqg_20260625/`
+  - former exploratory HTQG system source and direct HTQG model test.
+- `local_archive/optional_features/topology_quantum_geometry_20260625/`
+  - former optional `analysis.topology.quantum_geometry` projector-QGT/metric helpers and the QGT portions of the topology test.
+- `local_archive/optional_features/public_tdhf_api_20260625/`
+  - former public `mean_field.api.tdhf` façade and TDHF API docs/tests; lower-level core/system TDHF code remains internal/optional source surface for now.
+
+Updated public registries/docs/tests so the tracked core profile advertises only retained façade systems: `htg`, `rlg_hbn`, `tbg`, `tdbg`, and `tmbg`. Current tracked topology is minimal FHS/link/plaquette/Chern plus wavefunction-grid/system adapters and thin TMBG/TDBG/RLG-hBN/HTG wrappers.
+
+Line metrics after these archive phases:
+
+- tracked `src/**/*.py` files: 164
+- tracked `src/**/*.py` lines: 34984
+- 35k overage: 0
+
+This reaches the 35k source budget without deleting RnG/hBN physics code, moving FHS math back into system modules, or mutating historical `results/`.

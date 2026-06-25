@@ -28,4 +28,4 @@ This is a non-interacting/model-band façade.  HF quasiparticle bands should eve
 
 ## Compatibility rule
 
-System-specific special cases such as ATMG mapped spectra or HTG Chern-basis labels may remain in `basis_metadata` until a second system needs the same public field.  Do not force one-system paper outputs into generic fields prematurely.
+System-specific special cases such as HTG Chern-basis labels or archived optional mapped-spectrum adapters may remain in `basis_metadata` until a second tracked system needs the same public field.  Do not force one-system paper outputs into generic fields prematurely.

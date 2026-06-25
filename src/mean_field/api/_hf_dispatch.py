@@ -147,7 +147,6 @@ def run_hf(model: object, config: HFConfig, **kwargs: Any) -> HFResult:
 
     for adapter_name in (
         "htg_explicit_primitive_run_hf",
-        "htg_explicit_supercell_run_hf",
         "rlg_hbn_explicit_run_hf",
         "tbg_zero_field_explicit_run_hf",
         "tmbg_polshyn_explicit_run_hf",

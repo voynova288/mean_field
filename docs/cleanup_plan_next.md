@@ -97,5 +97,69 @@ Acceptance:
 
 ## Lower priority
 
-- Bands wrappers remain. Thin TMBG, TDBG, ATMG, RLG-hBN, and HTG topology wrappers are restored; paper workflows remain archived, while the tracked surface includes the common FHS/QGT topology core and generic wavefunction/system adapters under `src/analysis/topology`.
+- Bands wrappers remain. Thin TMBG, TDBG, RLG-hBN, and HTG topology wrappers are restored; paper workflows remain archived, while the tracked surface includes the common FHS topology core and generic wavefunction/system adapters under `src/analysis/topology`.
 - Devtools cleanup: tracked devtools are archived locally for now; future durable commands should be reintroduced only through a small reviewed public surface.
+
+## Phase 5 — 35k tracked-core profile cleanup
+
+New target after the Polshyn/topology/API cleanup through `origin/main` `dec4fa2`:
+
+- The 35k budget counts only tracked Python source under `src/`.
+- Tests, docs, and scripts are not part of the 35k budget, but tests should not be deleted for line count. Heavy or historical tests may move only to ignored `tests/local/` or `tests/slow/` when their feature surface is archived.
+- Do not keep splitting already-small files just to appear cleaner; all tracked Python files are now below 1000 lines. The next reduction must come from reducing tracked feature surface.
+- Every optional-feature retirement must first copy the tracked source into ignored `local_archive/optional_features/<feature>_<date>/`, then remove the tracked files with `git rm`.
+- Tracked code, tests, scripts, and docs must not import from ignored `local_archive/`.
+
+### Core profile to preserve
+
+Keep the tracked core profile focused on:
+
+- `mean_field.api` public facade and adapters for the retained systems.
+- `mean_field.core` generic lattice/HF/contracts/I/O/reconstruction helpers.
+- `analysis.order_parameters`.
+- `analysis.optical_response`.
+- `analysis.topology` minimal FHS/link/plaquette/Chern core, wavefunction-grid helpers, and system-facing adapter.
+- Retained system surfaces: RnG/hBN HF, TDBG projected HF, TBG zero-field, primitive HTG, and minimal TMBG/Polshyn adapters.
+
+### Optional features to archive first
+
+1. **TBG finite-field lane**
+   - Archive `src/mean_field/systems/tbg/finite_field/`.
+   - Archive generic finite-B helpers: `src/mean_field/core/hf/finite_field.py`, `src/mean_field/core/hf/_finite_field_*.py`, and `src/mean_field/core/magnetic_field.py`.
+   - Remove public exports/tests/docs references to these modules.
+   - Expected reduction: roughly 3.1k lines.
+2. **HTG supercell lane**
+   - Archive `src/mean_field/systems/htg/supercell.py`, `src/mean_field/systems/htg/supercell_contracts.py`, and `src/mean_field/systems/htg/_supercell_*.py`.
+   - Keep primitive HTG model/HF.
+   - Expected reduction: roughly 2.4k lines.
+3. **Exploratory optional systems**
+   - Archived `src/mean_field/systems/atmg/` and `src/mean_field/systems/htqg/` to ignored optional-feature storage.
+   - Expected reduction: roughly 2.0k lines combined.
+4. **Topology quantum geometry and public TDHF façade**
+   - Archived `src/analysis/topology/quantum_geometry.py` while keeping FHS topology core/system/wavefunction helpers.
+   - Archived the small public `mean_field.api.tdhf` façade and docs; retained lower-level core/system TDHF code is still source-budget-visible and should only be interpreted as internal/optional scope unless reopened.
+5. **Contract/sidecar compression**
+   - Continue extracting shared metadata/sidecar helpers out of system contract files without changing system physics.
+6. **RLG/hBN cache compression**
+   - Move generic cache/hash/path mechanics into a reusable core I/O helper while preserving RLG/hBN-specific cache keys and physics checks.
+
+### Non-negotiable safety constraints
+
+- Do not delete or simplify RnG/hBN layer-dependent Coulomb, layer-dependent form factors, q=0 internal screening limits, or average/CN interaction schemes for line count.
+- Do not move topology FHS math back into system modules.
+- Do not mutate historical `results/` during source-surface cleanup.
+- Do not submit Slurm jobs for these archive phases; source compile/import/tests are sufficient unless a retained physical code path changes.
+- cRPA remains archived unless explicitly reopened. If restored later, preserve the split convention: bare Coulomb for remote-reference/Hartree subtraction and screened cRPA only for the intended dynamic self-energy channel.
+
+### Validation after each phase
+
+Run from a compute-safe development node such as `test001`:
+
+```bash
+PYTHONPATH=src python -m compileall -q src scripts
+PYTHONPATH=src pytest -q $(git ls-files tests)
+python -m pip install -e . --dry-run --no-deps --no-build-isolation
+python scripts/line_budget.py --root src --suffix .py --max-lines 35000
+```
+
+The line-budget tool is report-only by default; use `--fail-on-over` only after the codebase is expected to be under budget.
