@@ -73,7 +73,7 @@ Software entrypoint:
 ```python
 from mean_field.api import HFConfig, run_hf
 from mean_field.systems.tmbg import TMBGModel, TMBGParameters
-from mean_field.systems.tmbg.polshyn_supercell import PolshynRunHFConfig
+from mean_field.systems.tmbg.polshyn_supercell import PolshynH0SubtractionConfig, PolshynRunHFConfig
 
 model = TMBGModel.from_config(theta_deg=1.25, n_shells=0, params=TMBGParameters.minimal())
 polshyn = PolshynRunHFConfig(
@@ -83,6 +83,7 @@ polshyn = PolshynRunHFConfig(
     shifts=(),
     v0=0.0,
     max_iter=1,
+    h0_subtraction=PolshynH0SubtractionConfig("none"),
 )
 config = HFConfig(
     filling=3.5,
@@ -109,11 +110,13 @@ workflow metadata: tmbg.polshyn_wang.explicit_config
 Latest software-gate result on `test001`:
 
 ```text
-coverage commit: e308aa0
+coverage commit: pending public h0-subtraction API commit
 validation: pytest -q tests/test_tmbg_polshyn_hf_readiness.py
-result: 10 passed on test001
-coverage added: metadata-only `HFResult.save(...)` writes `canonical_hf_run_result.json`, remains loadable via `mean_field.api.load_result(...)`, and does not write `canonical_hf_arrays.npz`.
+result: 18 passed on test001
+coverage added: metadata-only `HFResult.save(...)` writes `canonical_hf_run_result.json`, remains loadable via `mean_field.api.load_result(...)`, does not write `canonical_hf_arrays.npz`, and records explicit Polshyn `h0_subtraction` metadata for `none`, `active-reference`, and `minus-full-p0` smoke configs.
 ```
+
+`PolshynH0SubtractionConfig` is now the reviewed public API for the system-owned one-body conventions used by Polshyn validation: `none`, `active-reference` with fixed `+1` sign, and `minus-full-p0` with fixed `-1` sign. It does not infer Fig. S1 windows, plotting, Slurm launchers, or topology targets.
 
 Production-scale validation still needs explicit physics choices:
 
@@ -251,13 +254,24 @@ Production acceptance:
 
 Goal: move from explicit API smoke to paper-level Polshyn-Wang validation.
 
-Required evidence before claiming reproduction:
+Current selected-target validation evidence at commit `7d3fc7a`:
+
+| Slurm job | Validation | Status | Summary |
+|---:|---|---|---|
+| 159192 | S1b noninteracting folded-subspace topology | PASS | `tmp/subagents/reconstruction_remaining/validation_prep/runs/polshyn_s1b_noninteracting_159192/summary.json` |
+| 159214 | S1b no-remote HF split target, `h0_subtraction=minus-full-p0` | PASS | `tmp/subagents/reconstruction_remaining/validation_prep/runs/polshyn_s1b_hf_159214/summary.json` |
+| 159217 | S1c remote-window HF split target, `h0_subtraction=active-reference` | PASS | `tmp/subagents/reconstruction_remaining/validation_prep/runs/polshyn_s1c_hf_159217/summary.json` |
+
+These jobs validate the selected doubled-cell topology/HF split-band targets: S1b lower remote folded subspace `C=-1`, target folded subspace `C=+2`, S1b HF split target `C=+1,+1` and two-band `C=+2`, and S1c HF split target `C=+1,+1` and two-band `C=+2`. They do not constitute a full phase search, complete Fig. S1 reproduction, or bit-for-bit historical replay. After public API changes beyond `7d3fc7a`, rerun the S1b/S1c validation through the public `PolshynH0SubtractionConfig` path before upgrading claims.
+
+Required evidence before claiming full reproduction:
 
 - target band selected by topology/config evidence, not by visual position alone;
 - filling computed from occupation counts minus reference (`nu=7/2` convention);
 - convergence across relevant initial states;
 - exact SCF-grid bands/order parameters saved;
-- optional Chern/topology postprocessing only after the target band/subspace is explicitly selected.
+- optional Chern/topology postprocessing only after the target band/subspace is explicitly selected;
+- quantitative paper-panel comparison/overlay if claiming Fig. S1 reproduction rather than selected-target validation.
 
 Production job template should be created in ignored scratch or a reviewed durable workflow, then submitted only after explicit approval.
 

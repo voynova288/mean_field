@@ -3007,3 +3007,50 @@ python -m pip install -e . --dry-run --no-deps --no-build-isolation
 - Files over 1000 lines: 0
 
 This is still software/API validation only. Paper-level TMBG/Polshyn Chern validation remains a Slurm target, preferably starting from the S1b no-remote k18 folded subspace/HF split-band checkpoints.
+
+## Update: promote reviewed Polshyn h0-subtraction API
+
+Commit in this continuation:
+
+- pending: promote Polshyn h0-subtraction API
+
+### Scope
+
+After Slurm validation of the Polshyn doubled-cell topology path, promoted the two reviewed Polshyn one-body conventions into a small public, system-owned API:
+
+- `PolshynH0SubtractionConfig(mode="none" | "active-reference" | "minus-full-p0")`
+- `PolshynH0SubtractionResult`
+- `polshyn_reference_projector_blocks(...)`
+- `compute_polshyn_active_reference_h0_correction(...)`
+- `compute_polshyn_minus_full_p0_h0_correction(...)`
+- `basis_with_polshyn_h0_correction(...)`
+- `apply_polshyn_h0_subtraction(...)`
+
+The API lives under `mean_field.systems.tmbg.polshyn_supercell` and remains a TMBG/Polshyn system adapter. It does not add Fig. S1 workflows, plotting, Slurm submission, topology target selection, or generic core-HF behavior. Application signs are fixed by mode: `active-reference` applies `+1`; `minus-full-p0` applies `-1`; callers cannot override the sign.
+
+`PolshynRunHFConfig` now accepts an explicit `h0_subtraction` field. When enabled, the public `run_hf(...)` adapter prebuilds Polshyn overlap blocks, applies the h0 correction to the projected basis, then still runs the shared Wang/Xiaoyu core-HF engine. Metadata records mode, sign, P0 reference, and q=0 policy in observables, artifact metadata, and canonical archive manifest.
+
+### Validation evidence
+
+Fresh Slurm validation before this API promotion, at `7d3fc7a`, established the selected-target conventions used here:
+
+- S1b noninteracting folded-subspace topology: job `159192`, PASS, summary `tmp/subagents/reconstruction_remaining/validation_prep/runs/polshyn_s1b_noninteracting_159192/summary.json`.
+- S1b no-remote HF split target with `minus-full-p0`: job `159214`, PASS, summary `tmp/subagents/reconstruction_remaining/validation_prep/runs/polshyn_s1b_hf_159214/summary.json`.
+- S1c remote-window HF split target with `active-reference`: job `159217`, PASS, summary `tmp/subagents/reconstruction_remaining/validation_prep/runs/polshyn_s1c_hf_159217/summary.json`.
+
+Post-API software gate on `test001`:
+
+```bash
+PYTHONPATH=src pytest -q \
+  tests/test_tmbg_polshyn_hf_readiness.py \
+  tests/test_tmbg_topology.py \
+  tests/test_rlg_tmbg_reconstruction_adapters.py \
+  tests/test_api_imports.py
+# 44 passed
+```
+
+These tests cover h0-subtraction config normalization/fixed signs, reference projector blocks, active-reference correction against the common interaction builder, q=0 policy, basis correction shape/Hermiticity guards, minus-full-P0 empty-overlap safety, public facade exports, and public `run_hf(...)` metadata for `none`, `active-reference`, and `minus-full-p0` smoke configurations.
+
+### Caveat
+
+The Slurm summaries above validated the ignored harness logic before the API promotion. After this public API commit, rerun the S1b/S1c Slurm validation through the public `PolshynH0SubtractionConfig` path before upgrading documentation from software/API validation to post-API physical validation.

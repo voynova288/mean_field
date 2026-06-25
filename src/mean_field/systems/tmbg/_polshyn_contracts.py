@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from dataclasses import field
+
 from ._polshyn_shared import *  # noqa: F401,F403
 from ._polshyn_types import *  # noqa: F401,F403
 from ._polshyn_basis import build_polshyn_projected_basis
 from ._polshyn_filling import cdw_density_blocks, polshyn_nu_7over2_filling_summary
-from ._polshyn_wang import run_projected_hf_scf_wang, translation_order_parameters, wang_sector_density_blocks
+from ._polshyn_h0 import PolshynH0SubtractionConfig, apply_polshyn_h0_subtraction
+from ._polshyn_wang import build_wang_overlap_blocks, run_projected_hf_scf_wang, translation_order_parameters, wang_sector_density_blocks
 from .model import TMBGModel
 
 
@@ -35,6 +38,7 @@ class PolshynRunHFConfig:
     hartree_scale: float = 1.0
     fock_scale: float = 1.0
     zero_hartree_q0: bool = False
+    h0_subtraction: PolshynH0SubtractionConfig = field(default_factory=PolshynH0SubtractionConfig)
     basis: PolshynProjectedBasis | None = None
 
     def __post_init__(self) -> None:
@@ -63,6 +67,15 @@ class PolshynRunHFConfig:
         if init_mode not in {"bm_wang", "cdw"}:
             raise ValueError("PolshynRunHFConfig.init_mode must be 'bm_wang' or 'cdw'")
         object.__setattr__(self, "init_mode", init_mode)
+        h0_subtraction = self.h0_subtraction
+        if isinstance(h0_subtraction, str):
+            h0_subtraction = PolshynH0SubtractionConfig(mode=h0_subtraction)
+        if not isinstance(h0_subtraction, PolshynH0SubtractionConfig):
+            raise TypeError(
+                "PolshynRunHFConfig.h0_subtraction must be PolshynH0SubtractionConfig or str, "
+                f"got {type(h0_subtraction).__name__}"
+            )
+        object.__setattr__(self, "h0_subtraction", h0_subtraction)
 
 def _polshyn_gvecs_for_shifts(basis: PolshynProjectedBasis, shifts: tuple[tuple[int, int], ...]) -> np.ndarray:
     return np.asarray(
@@ -155,6 +168,26 @@ def run_tmbg_polshyn_hf_config_adapter(model: object, config: "HFConfig", **kwar
         raise ValueError("PolshynRunHFConfig.basis does not match the supplied TMBGModel")
     shifts = tuple(polshyn_config.shifts)
     gvecs = _polshyn_gvecs_for_shifts(basis, shifts)
+    h0_subtraction_result = None
+    overlap_blocks_for_run = None
+    if polshyn_config.h0_subtraction.enabled:
+        overlap_blocks_for_run = build_wang_overlap_blocks(
+            basis,
+            basis,
+            shifts,
+            gvecs,
+            epsilon_r=float(polshyn_config.epsilon_r),
+            d_sc_nm=float(polshyn_config.d_sc_nm),
+            include_hartree=True,
+            include_fock=True,
+        )
+        h0_subtraction_result = apply_polshyn_h0_subtraction(
+            basis,
+            overlap_blocks_for_run,
+            config=polshyn_config.h0_subtraction,
+            v0=float(polshyn_config.v0),
+        )
+        basis = h0_subtraction_result.corrected_basis
     filling = polshyn_nu_7over2_filling_summary(
         polshyn_config.projected_indices,
         target_band_index=int(polshyn_config.target_band_index),
@@ -186,6 +219,21 @@ def run_tmbg_polshyn_hf_config_adapter(model: object, config: "HFConfig", **kwar
         hartree_scale=float(polshyn_config.hartree_scale),
         fock_scale=float(polshyn_config.fock_scale),
         zero_hartree_q0=bool(polshyn_config.zero_hartree_q0),
+        overlap_blocks=overlap_blocks_for_run,
+    )
+    info = dict(info)
+    h0_subtraction_diagnostics = (
+        polshyn_config.h0_subtraction.to_dict()
+        if h0_subtraction_result is None
+        else dict(h0_subtraction_result.diagnostics)
+    )
+    info.update(
+        {
+            "h0_subtraction_mode": str(h0_subtraction_diagnostics.get("mode", polshyn_config.h0_subtraction.mode)),
+            "h0_subtraction_applied_sign": float(h0_subtraction_diagnostics.get("applied_sign", polshyn_config.h0_subtraction.applied_sign)),
+            "h0_subtraction_zero_hartree_q0": bool(h0_subtraction_diagnostics.get("zero_hartree_q0", polshyn_config.h0_subtraction.zero_hartree_q0)),
+            "h0_subtraction_p0_reference": str(h0_subtraction_diagnostics.get("p0_reference", polshyn_config.h0_subtraction.p0_reference)),
+        }
     )
     canonical = polshyn_wang_hf_bundle_to_hf_run_result(
         basis,
@@ -198,6 +246,7 @@ def run_tmbg_polshyn_hf_config_adapter(model: object, config: "HFConfig", **kwar
             "projected_indices": [int(value) for value in polshyn_config.projected_indices],
             "target_band_index": int(polshyn_config.target_band_index),
             "shifts": [[int(m), int(n)] for m, n in shifts],
+            "h0_subtraction": h0_subtraction_diagnostics,
         },
     )
     density_blocks = wang_sector_density_blocks(state, basis)
@@ -219,6 +268,10 @@ def run_tmbg_polshyn_hf_config_adapter(model: object, config: "HFConfig", **kwar
         "occupation_counts": filling.occupation_counts.astype(int).tolist(),
         "target_translation_order_x2_mean": float(target_order["target_x2_mean"]),
         "all_translation_order_x2_mean": float(target_order["all_x2_mean"]),
+        "h0_subtraction_mode": str(h0_subtraction_diagnostics.get("mode", polshyn_config.h0_subtraction.mode)),
+        "h0_subtraction_applied_sign": float(h0_subtraction_diagnostics.get("applied_sign", polshyn_config.h0_subtraction.applied_sign)),
+        "h0_subtraction_zero_hartree_q0": bool(h0_subtraction_diagnostics.get("zero_hartree_q0", polshyn_config.h0_subtraction.zero_hartree_q0)),
+        "h0_subtraction_p0_reference": str(h0_subtraction_diagnostics.get("p0_reference", polshyn_config.h0_subtraction.p0_reference)),
         **_info_scalar_summary(info),
     }
     return HFResult(
@@ -244,6 +297,7 @@ def run_tmbg_polshyn_hf_config_adapter(model: object, config: "HFConfig", **kwar
                 "adapter": "mean_field.systems.tmbg.polshyn_supercell.run_tmbg_polshyn_hf_config_adapter",
                 "canonical_adapter": "mean_field.systems.tmbg.polshyn_supercell.polshyn_wang_hf_bundle_to_hf_run_result",
                 "raw_state_type": "PolshynWangHFState",
+                "h0_subtraction": h0_subtraction_diagnostics,
             },
         ),
         canonical_run_result=canonical,

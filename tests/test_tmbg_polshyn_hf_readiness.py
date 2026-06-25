@@ -11,8 +11,12 @@ from mean_field.core.contracts import (
     assert_hamiltonian_parts_consistent,
     assert_projected_basis_consistent,
 )
+from dataclasses import replace
+
 from mean_field.core.hf import (
+    HFOverlapBlockSet,
     HartreeFockProblem,
+    build_projected_interaction_hamiltonian,
     conventional_projector_to_stored,
     empty_overlap_block_set,
     run_hartree_fock_problem,
@@ -20,18 +24,26 @@ from mean_field.core.hf import (
 from mean_field.systems.tmbg import TMBGModel, TMBGParameters
 from mean_field.systems.tmbg.polshyn_supercell import (
     PolshynDoubledCell,
+    PolshynH0SubtractionConfig,
+    PolshynH0SubtractionResult,
     PolshynProjectedBasis,
     PolshynRunHFConfig,
     PolshynWangHFState,
+    apply_polshyn_h0_subtraction,
+    basis_with_polshyn_h0_correction,
     build_polshyn_projected_basis,
     build_wang_hf_problem,
     cdw_density_blocks,
+    compute_polshyn_active_reference_h0_correction,
+    compute_polshyn_minus_full_p0_h0_correction,
     flatten_sector_blocks,
     polshyn_nu_7over2_filling_summary,
+    polshyn_reference_projector_blocks,
     polshyn_wang_hf_bundle_to_hf_run_result,
     translation_order_parameters,
     unflatten_sector_blocks,
     wang_sector_density_blocks,
+    wang_stored_density_from_sector_blocks,
 )
 
 
@@ -195,6 +207,108 @@ def _toy_polshyn_wang_bundle() -> tuple[PolshynProjectedBasis, PolshynWangHFStat
     return basis, state, conventional_delta
 
 
+def _toy_hartree_q0_overlap(nt: int, nk: int) -> HFOverlapBlockSet:
+    overlap = np.zeros((int(nt), int(nk), int(nt), int(nk)), dtype=np.complex128)
+    diagonal = np.zeros((int(nt), int(nt), int(nk)), dtype=np.complex128)
+    for ik in range(int(nk)):
+        diagonal[:, :, ik] = np.eye(int(nt), dtype=np.complex128)
+    return HFOverlapBlockSet(
+        shifts=((0, 0),),
+        gvecs=np.asarray([0.0 + 0.0j], dtype=np.complex128),
+        overlaps={(0, 0): overlap},
+        diagonal_overlaps={(0, 0): diagonal},
+        hartree_screening={(0, 0): 1.0},
+        fock_screening={},
+    )
+
+
+def test_polshyn_h0_subtraction_config_normalizes_modes_and_fixed_signs() -> None:
+    assert PolshynH0SubtractionConfig("active_reference").mode == "active-reference"
+    assert PolshynH0SubtractionConfig("active-reference").applied_sign == 1.0
+    assert PolshynH0SubtractionConfig("minus_full_p0").mode == "minus-full-p0"
+    assert PolshynH0SubtractionConfig("minus-full-p0").applied_sign == -1.0
+    assert PolshynH0SubtractionConfig("none").enabled is False
+    with pytest.raises(ValueError, match="Unsupported Polshyn h0_subtraction"):
+        PolshynH0SubtractionConfig("paper-figure")
+    with pytest.raises(ValueError, match="decoupled-layers"):
+        PolshynH0SubtractionConfig("minus-full-p0", p0_reference="bernal-bilayer")
+
+
+def test_polshyn_reference_projector_blocks_match_reference_diagonal() -> None:
+    basis, _state, _conventional_delta = _toy_polshyn_wang_bundle()
+    basis = replace(basis, reference_diagonal=np.asarray([1.0, 0.0], dtype=float))
+    blocks = polshyn_reference_projector_blocks(basis)
+    assert blocks.shape == (basis.n_spin, basis.n_eta, basis.nb, basis.nb, basis.nk)
+    for ispin in range(basis.n_spin):
+        for ieta in range(basis.n_eta):
+            for ik in range(basis.nk):
+                np.testing.assert_allclose(blocks[ispin, ieta, :, :, ik], np.diag([1.0, 0.0]))
+
+
+def test_polshyn_active_reference_h0_correction_matches_common_interaction_and_q0_policy() -> None:
+    basis, _state, _conventional_delta = _toy_polshyn_wang_bundle()
+    basis = replace(basis, reference_diagonal=np.asarray([1.0, 0.0], dtype=float))
+    nt = basis.n_spin * basis.n_eta * basis.nb
+    overlaps = _toy_hartree_q0_overlap(nt, basis.nk)
+    correction_zeroed, diag_zeroed = compute_polshyn_active_reference_h0_correction(
+        basis,
+        overlaps,
+        v0=2.0,
+        zero_hartree_q0=True,
+    )
+    np.testing.assert_allclose(correction_zeroed, 0.0)
+    assert diag_zeroed["mode"] == "active-reference"
+    correction, diag = compute_polshyn_active_reference_h0_correction(
+        basis,
+        overlaps,
+        v0=2.0,
+        zero_hartree_q0=False,
+    )
+    ref_blocks = polshyn_reference_projector_blocks(basis)
+    ref_flat = wang_stored_density_from_sector_blocks(ref_blocks)
+    expected = unflatten_sector_blocks(
+        build_projected_interaction_hamiltonian(ref_flat, overlaps, v0=2.0, beta=1.0),
+        n_spin=basis.n_spin,
+        n_eta=basis.n_eta,
+        nb=basis.nb,
+    )
+    np.testing.assert_allclose(correction, expected)
+    assert diag["zero_hartree_q0"] is False
+    assert diag["h0_correction_norm_ev"] > 0.0
+
+
+def test_basis_with_polshyn_h0_correction_validates_shape_and_symmetrizes() -> None:
+    basis, _state, _conventional_delta = _toy_polshyn_wang_bundle()
+    with pytest.raises(ValueError, match="incompatible"):
+        basis_with_polshyn_h0_correction(basis, np.zeros((1, 1), dtype=np.complex128))
+    correction = np.zeros_like(basis.h0_blocks)
+    correction[0, 0, 0, 1, 0] = 1.0 + 2.0j
+    corrected = basis_with_polshyn_h0_correction(basis, correction)
+    np.testing.assert_allclose(corrected.h0_blocks, np.swapaxes(corrected.h0_blocks.conjugate(), 2, 3))
+
+
+def test_minus_full_p0_h0_correction_empty_overlap_is_shape_safe() -> None:
+    basis, _state, _conventional_delta = _toy_polshyn_wang_bundle()
+    raw, diag = compute_polshyn_minus_full_p0_h0_correction(
+        basis,
+        empty_overlap_block_set(),
+        v0=0.0,
+    )
+    np.testing.assert_allclose(raw, 0.0)
+    assert raw.shape == basis.h0_blocks.shape
+    assert diag["mode"] == "minus-full-p0"
+    assert "projected_p0_trace_mean" in diag
+    result = apply_polshyn_h0_subtraction(
+        basis,
+        empty_overlap_block_set(),
+        config=PolshynH0SubtractionConfig("minus-full-p0"),
+        v0=0.0,
+    )
+    assert isinstance(result, PolshynH0SubtractionResult)
+    assert result.diagnostics["applied_sign"] == -1.0
+    np.testing.assert_allclose(result.corrected_basis.h0_blocks, basis.h0_blocks)
+
+
 def test_polshyn_wang_bundle_adapter_preserves_stored_density_orientation_without_fake_history() -> None:
     basis, state, conventional_delta = _toy_polshyn_wang_bundle()
     info = {
@@ -279,7 +393,7 @@ def test_polshyn_projected_basis_builder_embeds_doubled_cell_shapes() -> None:
     np.testing.assert_allclose(basis.reference_diagonal, [0.0, 0.0])
 
 
-def _minimal_polshyn_public_run_hf_result():
+def _minimal_polshyn_public_run_hf_result(h0_subtraction=None):
     model = TMBGModel.from_config(1.25, n_shells=0, params=TMBGParameters.minimal())
     polshyn_config = PolshynRunHFConfig(
         mesh_size=1,
@@ -292,6 +406,7 @@ def _minimal_polshyn_public_run_hf_result():
         max_iter=1,
         precision=1.0e-7,
         seed=5,
+        h0_subtraction=PolshynH0SubtractionConfig() if h0_subtraction is None else h0_subtraction,
     )
     cfg = HFConfig(
         filling=3.5,
@@ -314,9 +429,39 @@ def test_polshyn_public_run_hf_explicit_config_smoke_attaches_canonical_result()
     assert result.canonical_run_result is not None
     assert result.canonical_run_result.best_seed == 5
     assert result.observables["explicit_config_type"] == "PolshynRunHFConfig"
+    assert result.observables["h0_subtraction_mode"] == "none"
     assert result.observables["primitive_nu"] == pytest.approx(3.5)
     assert result.artifacts is not None
     assert result.artifacts.metadata["workflow"] == "tmbg.polshyn_wang.explicit_config"
+    assert result.artifacts.metadata["h0_subtraction"]["mode"] == "none"
+
+
+def test_polshyn_public_run_hf_records_active_reference_h0_metadata() -> None:
+    result = _minimal_polshyn_public_run_hf_result(PolshynH0SubtractionConfig("active-reference"))
+    assert result.observables["h0_subtraction_mode"] == "active-reference"
+    assert result.observables["h0_subtraction_applied_sign"] == 1.0
+    assert result.artifacts is not None
+    assert result.artifacts.metadata["h0_subtraction"]["mode"] == "active-reference"
+    assert result.canonical_run_result is not None
+    assert result.canonical_run_result.archive_manifest["h0_subtraction"]["mode"] == "active-reference"
+
+
+def test_polshyn_public_run_hf_records_minus_full_p0_h0_metadata() -> None:
+    result = _minimal_polshyn_public_run_hf_result(PolshynH0SubtractionConfig("minus_full_p0"))
+    assert result.observables["h0_subtraction_mode"] == "minus-full-p0"
+    assert result.observables["h0_subtraction_applied_sign"] == -1.0
+    assert result.artifacts is not None
+    assert result.artifacts.metadata["h0_subtraction"]["mode"] == "minus-full-p0"
+    assert result.canonical_run_result is not None
+    assert result.canonical_run_result.archive_manifest["h0_subtraction"]["mode"] == "minus-full-p0"
+
+
+def test_polshyn_public_facade_exports_h0_helpers_without_private_compact_helpers() -> None:
+    from mean_field.systems.tmbg import polshyn_supercell
+
+    assert polshyn_supercell.PolshynH0SubtractionConfig is PolshynH0SubtractionConfig
+    assert hasattr(polshyn_supercell, "apply_polshyn_h0_subtraction")
+    assert not hasattr(polshyn_supercell, "_compact_overlap_between")
 
 
 def test_polshyn_public_run_hf_metadata_only_save_is_cheap_and_loadable(tmp_path: Path) -> None:

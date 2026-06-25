@@ -18,6 +18,15 @@ from ._polshyn_filling import (
     primitive_nu_from_counts,
     reference_diagonal_for_projected_indices,
 )
+from ._polshyn_h0 import (
+    PolshynH0SubtractionConfig,
+    PolshynH0SubtractionResult,
+    apply_polshyn_h0_subtraction,
+    basis_with_polshyn_h0_correction,
+    compute_polshyn_active_reference_h0_correction,
+    compute_polshyn_minus_full_p0_h0_correction,
+    polshyn_reference_projector_blocks,
+)
 from ._polshyn_reconstruction import reconstruct_polshyn_wang_hf_micro_wavefunctions
 from ._polshyn_wang import (
     build_wang_hf_problem,
@@ -42,13 +51,19 @@ from ._polshyn_wang import (
 __all__ = [
     "PolshynDoubledCell",
     "PolshynFillingSummary",
+    "PolshynH0SubtractionConfig",
+    "PolshynH0SubtractionResult",
     "PolshynProjectedBasis",
     "PolshynRunHFConfig",
     "PolshynWangHFState",
+    "apply_polshyn_h0_subtraction",
+    "basis_with_polshyn_h0_correction",
     "build_polshyn_projected_basis",
     "build_wang_hf_problem",
     "build_wang_overlap_blocks",
     "cdw_density_blocks",
+    "compute_polshyn_active_reference_h0_correction",
+    "compute_polshyn_minus_full_p0_h0_correction",
     "estimate_fermi_level_from_sector_energies",
     "flatten_sector_blocks",
     "moire_cell_area_nm2",
@@ -56,6 +71,7 @@ __all__ = [
     "overlap_blocks_with_hartree_q0_zeroed",
     "polshyn_doubled_cell",
     "polshyn_nu_7over2_filling_summary",
+    "polshyn_reference_projector_blocks",
     "polshyn_wang_hf_bundle_to_hf_run_result",
     "primitive_nu_from_counts",
     "reconstruct_polshyn_wang_hf_micro_wavefunctions",
