@@ -3012,7 +3012,7 @@ This is still software/API validation only. Paper-level TMBG/Polshyn Chern valid
 
 Commit in this continuation:
 
-- pending: promote Polshyn h0-subtraction API
+- `d4b6e3b Add Polshyn h0 subtraction API`
 
 ### Scope
 
