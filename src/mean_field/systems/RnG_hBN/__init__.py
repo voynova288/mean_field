@@ -123,10 +123,10 @@ from .sewing import (
     rlg_hbn_spin_flavor_reciprocal_shift_sewing_transform,
 )
 from .topology import (
-    TopologyResult,
-    compute_topology_from_eigenvectors,
-    compute_topology_from_grid_result,
-    compute_topology_on_grid,
+    FHSState,
+    fhs_state_from_eigenvectors,
+    fhs_state_from_grid_result,
+    fhs_state_on_grid,
 )
 from .tdhf import (
     RLGhBNTDHFInteraction,
@@ -183,7 +183,7 @@ __all__ = [
     "RLG_HBN_FORM_FACTOR_CONVENTION_VERSION",
     "ScreenedInterlayerPotentialResult",
     "ScreeningIteration",
-    "TopologyResult",
+    "FHSState",
     "ValidationCheck",
     "ValidationReport",
     "active_band_indices_for_interaction",
@@ -225,9 +225,9 @@ __all__ = [
     "compute_rlg_hbn_oda_parameter",
     "compute_bands_along_path",
     "compute_bands_on_grid",
-    "compute_topology_from_eigenvectors",
-    "compute_topology_from_grid_result",
-    "compute_topology_on_grid",
+    "fhs_state_from_eigenvectors",
+    "fhs_state_from_grid_result",
+    "fhs_state_on_grid",
     "compute_valence_layer_charge",
     "compute_valence_charge_background",
     "diagonalize_hamiltonian",

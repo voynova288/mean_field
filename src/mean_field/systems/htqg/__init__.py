@@ -17,6 +17,7 @@ from .hamiltonian import build_hamiltonian, diagonalize_hamiltonian
 from .lattice import HTQGLattice, build_htqg_lattice, build_standard_kpath
 from .model import HTQGModel
 from .params import HTQGParams
+from .topology import FHSState, fhs_state_from_eigenvectors, fhs_state_from_grid_result, fhs_state_on_grid, htqg_basis_sewing
 
 __all__ = [
     "HTQGCommensurateGeometry",
@@ -24,6 +25,7 @@ __all__ = [
     "HTQGLattice",
     "HTQGParams",
     "HTQGModel",
+    "FHSState",
     "all_domains",
     "build_commensurate_geometry",
     "build_hamiltonian",
@@ -32,8 +34,12 @@ __all__ = [
     "canonical_domain_key",
     "commensurate_twist_angles_deg",
     "commensurate_twist_angles_rad",
+    "fhs_state_from_eigenvectors",
+    "fhs_state_from_grid_result",
+    "fhs_state_on_grid",
     "diagonalize_hamiltonian",
     "domain_displacements",
     "fujimoto_2025_fig2_checkpoint",
+    "htqg_basis_sewing",
     "representative_domains",
 ]

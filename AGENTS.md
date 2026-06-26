@@ -5,9 +5,9 @@
 这个库应被维护成“通用框架 + 体系适配层 + 分析工作区”：
 
 - 通用 Hartree-Fock 框架在 `src/mean_field/core/hf`。SCF/ODA/占据/投影重叠/相互作用拼装等可复用逻辑应留在这里，不要写进某个具体体系。
-- 通用量子几何分析框架在 `src/analysis`：`topology` 负责 Berry connection、plaquette flux、Chern；`response_derivative_gauge.py` 是按 WannierBerri 约定整理的规范安全求导器，可被不同响应/量子几何问题复用。
-- `src/analysis/shift_current/` 是通用 shift-current API；旧的 `src/analysis/shift_current_htg` / `src/analysis/shift_current_tbg` 工作区已清理。体系相关适配应放在 `src/mean_field/systems/<system>`，历史复现/audit 文档留在 ignored local reports/internal workspace，不要把图像复现状态当成通用公式已经验证完成。
-- 不同物理体系应在 `src/mean_field/systems/<system>` 中接入通用 HF 框架和通用分析框架。体系目录负责 Hamiltonian、基底/规范、参数、sewing、投影窗口、历史 API 适配；不要在体系目录重复实现通用 SCF loop、FHS plaquette 或 WannierBerri generalized-derivative 公式。
+- 通用拓扑分析框架在 `src/analysis`：`topology` 只负责 FHS/Wilson link、Berry plaquette flux、Chern；`response_derivative_gauge.py` 是按 WannierBerri 约定整理的规范安全求导器，可被不同响应/量子几何问题复用。
+- `src/analysis/shift_current/` 是通用 shift-current API；`src/analysis/injection_current/` 是通用 injection-current / CPGE API；`src/analysis/optical/` 是以后光学响应工作优先接入的统一前门，按 `kind="shift_current"` 或 `kind="injection_current"` 分发到底层公式。旧的 `src/analysis/shift_current_htg` / `src/analysis/shift_current_tbg` 工作区已清理。体系相关适配应放在 `src/mean_field/systems/<system>`，历史复现/audit 文档留在 ignored local reports/internal workspace，不要把图像复现状态当成通用公式已经验证完成。
+- 不同物理体系应在 `src/mean_field/systems/<system>` 中接入通用 HF 框架和通用分析框架。体系目录负责 Hamiltonian、基底/规范、参数、投影窗口、历史 API 适配，并把本征态打包成统一 `FHSState`（band/flavor 指标 + `BlockSewingSpec` 基底标记）；不要在体系目录重复实现通用 SCF loop、topology sewing、FHS plaquette、Chern 积分或 WannierBerri generalized-derivative 公式。
 
 ## 复杂逻辑必须先理解
 
@@ -22,7 +22,7 @@
 ## 通用框架边界
 
 - 修改 `src/mean_field/core/hf` 前先读 `docs/architecture.md`，并确认变更不引入体系依赖。
-- 修改拓扑/Berry 几何前先读 `docs/topology_framework.md`，优先扩展 `src/analysis/topology`，不要在体系目录复制 `_unit_link`、determinant-link、plaquette loop 或 Chern 积分。
+- 修改拓扑/Berry flux 前先读 `docs/topology_framework.md`。`src/analysis/topology` 只保留 `FHSState -> generic sewing -> FHS/Wilson link -> plaquette flux -> Chern`；不要在体系目录复制 topology sewing、normalized-link、determinant-link、plaquette loop 或 Chern 积分。
 - 修改响应求导、shift vector、Berry connection generalized derivative 前先读 `src/analysis/RESPONSE_DERIVATIVE_GAUGE.md`。不要对原始本征矢相位或 `np.angle(A_mn)` 做裸差分；使用 WannierBerri-style covariant/generalized derivative 或 Wilson-link 检查。
 - 新体系应先实现 `src/mean_field/systems/<system>` 的物理层和适配层，再接入 `core/hf`、`analysis/topology`、`analysis/response_derivative_gauge.py`。只有通用能力不足时才修改通用框架。
 - 不要为每次诊断、每张 paper panel 或每组参数新增一个 tracked 脚本。优先使用/扩展 `scripts/mean_field_tools.py`、`scripts/mean_field_tools.jl`、`scripts/submit_mean_field.sbatch`、`src/mean_field/cli.py` 和已有 devtool；详细规则见 `docs/script_surface_policy.md`。
@@ -34,3 +34,9 @@
 拓扑网格重算、HF 自洽、响应函数网格积分、BLAS/eigensolver-heavy 验证都必须走 Slurm，不能在 login 节点运行。login 节点只用于读文件、编辑、轻量语法检查和提交/查看队列。
 
 不要通过后处理缩放、筛选跃迁、调坐标、裁图或视觉 overlay 来“修复”核心物理或公式问题。先修正并验证核心实现，只展示来自已验证计算链的结果。
+
+## Mean-field/HF 硬性禁令
+
+- HF/mean-field 默认能带图只能使用保存的自洽 SCF k-grid Hamiltonian/eigenvalues 上的精确 k 点。除非用户明确要求且已经先用 SCF 点验证，否则禁止画 off-grid/target-path reconstructed HF bands、nearest-grid path 或任何平滑后处理 paper-style band。
+- 如果当前 SCF mesh 上没有足够高对称路径精确点，必须报告这个限制，不能为了“给图”而造图。
+- 未收敛 HF、reference/background/normal-ordering 未推导清楚、或路径/能量零点未对齐时，禁止与论文图作正面复现比较。

@@ -23,7 +23,7 @@ from .tbg import (
     dirac_block,
     moire_coupling_matrix,
 )
-from .topology import TopologyResult, compute_topology_from_eigenvectors, compute_topology_from_grid_result, compute_topology_on_grid
+from .topology import FHSState, fhs_state_from_eigenvectors, fhs_state_from_grid_result, fhs_state_on_grid
 
 __all__ = [
     'ATMGModel',
@@ -34,7 +34,7 @@ __all__ = [
     'MappedSpectrumResult',
     'PathBandsResult',
     'TBGCouplingEntry',
-    'TopologyResult',
+    'FHSState',
     'analytic_singular_values',
     'build_W_matrix',
     'build_atmg_lattice',
@@ -50,9 +50,9 @@ __all__ = [
     'build_tbg_hamiltonian',
     'compute_bands_along_path',
     'compute_bands_on_grid',
-    'compute_topology_from_eigenvectors',
-    'compute_topology_from_grid_result',
-    'compute_topology_on_grid',
+    'fhs_state_from_eigenvectors',
+    'fhs_state_from_grid_result',
+    'fhs_state_on_grid',
     'diagonalize_hamiltonian',
     'diagonalize_tbg_hamiltonian',
     'dirac_block',

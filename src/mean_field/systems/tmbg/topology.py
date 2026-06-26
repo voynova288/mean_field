@@ -2,24 +2,44 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from analysis.topology import TopologyResult, make_topology_adapter
+from analysis.topology import FHSState, fhs_state_from_grid_result as _state_from_grid, fhs_state_from_wavefunctions
+
 from .bands import GridBandsResult, compute_bands_on_grid
 from .lattice import TMBGLattice
 from .params import TMBGParameters
 
 
-def compute_topology_from_eigenvectors(eigenvectors, band_indices: int | Iterable[int], *, valley: int = 1, k_grid_frac=None) -> TopologyResult:
-    return make_topology_adapter(system="tmbg", valley=valley)["from_eigenvectors"](eigenvectors, band_indices, k_grid_frac=k_grid_frac)
+def fhs_state_from_eigenvectors(eigenvectors, band_indices: int | Iterable[int], *, valley: int = 1, k_grid_frac=None) -> FHSState:
+    return fhs_state_from_wavefunctions(eigenvectors, band_indices, k_grid_frac=k_grid_frac, system="tmbg", valley=valley, reported_indices=band_indices)
 
 
-def compute_topology_from_grid_result(grid_result: GridBandsResult, band_indices: int | Iterable[int], *, valley: int = 1) -> TopologyResult:
-    return make_topology_adapter(system="tmbg", valley=valley)["from_grid_result"](grid_result, band_indices)
+def fhs_state_from_grid_result(grid_result: GridBandsResult, band_indices: int | Iterable[int], *, valley: int = 1) -> FHSState:
+    return _state_from_grid(grid_result, band_indices, system="tmbg", valley=valley)
 
 
-def compute_topology_on_grid(mesh_size: int, lattice: TMBGLattice, params: TMBGParameters, band_indices: int | Iterable[int], *, valley: int = 1, endpoint: bool = False, n_bands: int | None = None) -> TopologyResult:
-    def grid_builder(trial_mesh: int, frac_shift: tuple[float, float], resolved_n_bands: int) -> GridBandsResult:
-        return compute_bands_on_grid(trial_mesh, lattice, params, valley=valley, n_bands=resolved_n_bands, return_eigenvectors=True, endpoint=endpoint, frac_shift=frac_shift)
-    return make_topology_adapter(system="tmbg", valley=valley, grid_builder=grid_builder)["on_grid"](mesh_size, band_indices, n_bands=n_bands)
+def fhs_state_on_grid(
+    mesh_size: int,
+    lattice: TMBGLattice,
+    params: TMBGParameters,
+    band_indices: int | Iterable[int],
+    *,
+    valley: int = 1,
+    endpoint: bool = False,
+    n_bands: int | None = None,
+) -> FHSState:
+    requested = tuple([int(band_indices)] if isinstance(band_indices, int) else [int(x) for x in band_indices])
+    resolved_n_bands = max(requested) + 1 if n_bands is None else int(n_bands)
+    grid = compute_bands_on_grid(
+        int(mesh_size),
+        lattice,
+        params,
+        valley=valley,
+        n_bands=resolved_n_bands,
+        return_eigenvectors=True,
+        endpoint=endpoint,
+        frac_shift=(0.0, 0.0),
+    )
+    return fhs_state_from_grid_result(grid, requested, valley=valley)
 
 
-__all__ = ["TopologyResult", "compute_topology_from_eigenvectors", "compute_topology_from_grid_result", "compute_topology_on_grid"]
+__all__ = ["FHSState", "fhs_state_from_eigenvectors", "fhs_state_from_grid_result", "fhs_state_on_grid"]

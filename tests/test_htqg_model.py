@@ -16,6 +16,8 @@ from mean_field.systems.htqg import (
     fujimoto_2025_fig2_checkpoint,
 )
 from mean_field.systems.htqg.validation import run_lightweight_validation
+from analysis.topology import compute_lattice_topology
+from mean_field.systems.htqg.topology import fhs_state_from_eigenvectors, fhs_state_from_grid_result
 
 
 def _light_params() -> HTQGParams:
@@ -93,3 +95,71 @@ def test_htqg_model_band_helpers_return_central_band_shapes() -> None:
     assert grid.energies.shape == (2, 2, 4)
     assert grid.eigenvectors is None
     assert tuple(grid.band_indices) == (2, 3, 4, 5)
+
+
+def test_htqg_realistic_fhs_chern_matches_fig1_chern_checkpoint() -> None:
+    """Actual-parameter HTQG topology check through FHSState -> common FHS."""
+
+    mesh_size = 9
+    model = HTQGModel.default(
+        theta_deg=2.25,
+        n_shells=6,
+        domain="alpha_beta_gamma",
+        params=HTQGParams.realistic(kappa=0.6),
+        valley=1,
+    )
+    grid = model.grid_bands(
+        mesh_size,
+        central_band_count=4,
+        return_eigenvectors=True,
+        frac_shift=(0.5 / mesh_size, 0.5 / mesh_size),
+    )
+
+    assert tuple(grid.band_indices) == (506, 507, 508, 509)
+    valence = compute_lattice_topology(fhs_state_from_grid_result(
+        grid,
+        507,
+        lattice=model.lattice,
+        domain="alpha_beta_gamma",
+        valley=1,
+        metadata={"checkpoint": "reports/htqg_fig1_chern_comparison_20260611.md"},
+    ))
+    valence_from_vectors = compute_lattice_topology(fhs_state_from_eigenvectors(
+        grid.eigenvectors,
+        1,
+        lattice=model.lattice,
+        domain="alpha_beta_gamma",
+        valley=1,
+        k_grid_frac=grid.k_grid_frac,
+        metadata={"checkpoint": "reports/htqg_fig1_chern_comparison_20260611.md", "column_index": 1},
+    ))
+    conduction = compute_lattice_topology(fhs_state_from_grid_result(
+        grid,
+        508,
+        lattice=model.lattice,
+        domain="alpha_beta_gamma",
+        valley=1,
+        metadata={"checkpoint": "reports/htqg_fig1_chern_comparison_20260611.md"},
+    ))
+
+    assert valence.band_indices == (507,)
+    assert valence.rounded_chern_number == -2
+    assert valence.chern_number == pytest.approx(-2.0, abs=1.0e-10)
+    assert valence.min_link_magnitude > 0.5
+    assert valence.metadata["boundary_sewing"] is True
+    assert valence.metadata["absolute_band_indices"] == [507]
+
+    assert valence_from_vectors.band_indices == (1,)
+    assert valence_from_vectors.rounded_chern_number == valence.rounded_chern_number
+    assert valence_from_vectors.chern_number == pytest.approx(valence.chern_number, abs=1.0e-12)
+    np.testing.assert_allclose(valence_from_vectors.berry_curvature, valence.berry_curvature, atol=1.0e-12, rtol=0.0)
+
+    assert conduction.band_indices == (508,)
+    assert conduction.rounded_chern_number == 0
+    assert conduction.chern_number == pytest.approx(0.0, abs=1.0e-10)
+    assert conduction.min_link_magnitude > 0.5
+    assert conduction.metadata["boundary_sewing"] is True
+    assert conduction.metadata["absolute_band_indices"] == [508]
+
+    assert float(np.sum(valence.berry_curvature) / (2.0 * np.pi)) == pytest.approx(valence.chern_number)
+    assert float(np.sum(conduction.berry_curvature) / (2.0 * np.pi)) == pytest.approx(conduction.chern_number)

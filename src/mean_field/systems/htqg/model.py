@@ -11,6 +11,7 @@ from .domains import HTQGDomain, domain_displacements
 from .hamiltonian import build_hamiltonian, diagonalize_hamiltonian
 from .lattice import HTQGLattice, build_htqg_lattice, build_standard_kpath
 from .params import DEFAULT_THETA_DEG, HTQGParams
+from .topology import FHSState, fhs_state_on_grid
 
 
 @dataclass(frozen=True)
@@ -164,5 +165,30 @@ class HTQGModel:
     def grid_bands(self, mesh_size: int, **kwargs) -> GridBandsResult:
         return self.bands_on_grid(mesh_size, **kwargs)
 
+
+    def fhs_state_on_grid(
+        self,
+        mesh_size: int,
+        band_indices: int | tuple[int, ...],
+        *,
+        valley: int | None = None,
+        endpoint: bool = False,
+        central_band_count: int | None = None,
+        frac_shift: tuple[float, float] | None = None,
+        use_boundary_sewing: bool = True,
+    ) -> FHSState:
+        resolved_valley = self.valley if valley is None else int(valley)
+        return fhs_state_on_grid(
+            mesh_size,
+            self.lattice,
+            self.params,
+            band_indices,
+            domain=self.domain,
+            valley=resolved_valley,
+            endpoint=endpoint,
+            central_band_count=central_band_count,
+            frac_shift=frac_shift,
+            use_boundary_sewing=use_boundary_sewing,
+        )
 
 __all__ = ["HTQGModel"]

@@ -11,7 +11,7 @@ from .charge_background import ChargeBackgroundResult, compute_valence_charge_ba
 from .hamiltonian import build_hamiltonian, diagonalize_hamiltonian, flat_band_indices, hamiltonian_dimension
 from .lattice import RLGhBNLattice, build_kpath_from_nodes, build_rlg_hbn_lattice, build_standard_kpath
 from .params import RLGhBNParams
-from .topology import TopologyResult, compute_topology_on_grid
+from .topology import FHSState, fhs_state_on_grid
 
 
 @dataclass(frozen=True)
@@ -153,7 +153,7 @@ class RLGhBNModel:
             frac_shift=frac_shift,
         )
 
-    def topology_on_grid(
+    def fhs_state_on_grid(
         self,
         mesh_size: int,
         band_indices: int | tuple[int, ...],
@@ -161,8 +161,8 @@ class RLGhBNModel:
         valley: int = 1,
         endpoint: bool = False,
         n_bands: int | None = None,
-    ) -> TopologyResult:
-        return compute_topology_on_grid(
+    ) -> FHSState:
+        return fhs_state_on_grid(
             mesh_size,
             self.lattice,
             self.params,
