@@ -241,8 +241,9 @@ class TDBGModel:
             frac_shift=frac_shift,
         )
 
-    def topology_on_grid(self, mesh_size: int, band_indices, **kwargs):
-        from .topology import compute_topology_on_grid
+    def fhs_state_on_grid(self, mesh_size: int, band_indices, **kwargs):
+        from .topology import fhs_state_on_grid
+
         if kwargs.get("valley") is None:
             kwargs["valley"] = self.params.valley
-        return compute_topology_on_grid(mesh_size, self.lattice, self.params, band_indices, **kwargs)
+        return fhs_state_on_grid(mesh_size, self.lattice, self.params, band_indices, **kwargs)

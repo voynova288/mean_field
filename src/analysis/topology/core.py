@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-"""System-independent lattice Berry-geometry utilities.
+"""Minimal FHS/Wilson-link Berry curvature and Chern-number utilities.
 
-The routines in this module know only about wavefunctions on a two-dimensional
-momentum mesh.  System-specific code is responsible for producing those
-wavefunctions, choosing/labeling the state columns, and supplying any boundary
-sewing map needed to compare states across the Brillouin-zone torus.
+This module is intentionally small.  The only topology algorithm kept here is:
+
+1. build normalized Fukui-Hatsugai-Suzuki/Wilson link variables on a 2D torus;
+2. compute plaquette Berry flux from those links;
+3. integrate that Berry flux to a Chern number.
+
+No projector-QGT, Fubini-Study metric, paper-target registry, wavefunction layout
+adapter, or system wrapper factory belongs in this directory.
 """
 
 from dataclasses import dataclass, field
@@ -16,27 +20,152 @@ import numpy as np
 LinkMethod = Literal["polar", "determinant"]
 SewingTransform = Callable[[np.ndarray], np.ndarray]
 
-@dataclass(frozen=True)
-class WavefunctionIndex:
-    """Metadata that identifies which wavefunction columns were used.
 
-    The numerical FHS calculation is system independent once a selected
-    wavefunction array is available.  This record preserves the physical meaning
-    of the selected columns: ordinary Hamiltonian band indices, a Chern-basis
-    label, a flavor index, or any other system-specific state label.
+@dataclass(frozen=True)
+class BlockSewingSpec:
+    """Generic target-side boundary sewing for block-major bases.
+
+    ``block_coordinates`` labels the reciprocal/momentum block coordinate for
+    each block in the first basis axis.  ``local_block_size`` is the number of
+    internal orbitals in each block.  Optional ``block_labels`` (for example a
+    sector/flavor label embedded in the basis) must match under translations.
+    This covers G-shell plane-wave bases and q-site bases without system-local
+    FHS/sewing algorithms.
     """
 
-    indices: tuple[int, ...]
-    role: str = "band"
-    labels: tuple[str, ...] = ()
+    block_coordinates: np.ndarray
+    local_block_size: int
+    translations: tuple[tuple[float, ...], tuple[float, ...]]
+    block_labels: np.ndarray | None = None
+    atol: float = 1.0e-8
+
+
+def _as_2d_float_array(values: np.ndarray, *, name: str) -> np.ndarray:
+    arr = np.asarray(values, dtype=float)
+    if arr.ndim != 2:
+        raise ValueError(f"{name} must be rank-2, got shape {arr.shape}")
+    if arr.shape[0] <= 0 or arr.shape[1] <= 0:
+        raise ValueError(f"{name} must be non-empty, got shape {arr.shape}")
+    return arr
+
+
+def _block_translation_transform(spec: BlockSewingSpec, translation: tuple[float, ...]) -> SewingTransform:
+    coords = _as_2d_float_array(spec.block_coordinates, name="block_coordinates")
+    shift = np.asarray(translation, dtype=float).reshape(-1)
+    if shift.shape != (coords.shape[1],):
+        raise ValueError(f"translation shape {shift.shape} does not match coordinate dimension {coords.shape[1]}")
+    labels = None if spec.block_labels is None else np.asarray(spec.block_labels)
+    if labels is not None and labels.shape[0] != coords.shape[0]:
+        raise ValueError("block_labels must have one entry per block")
+    local_block_size = int(spec.local_block_size)
+    if local_block_size <= 0:
+        raise ValueError("local_block_size must be positive")
+    source_indices = np.full(coords.shape[0], -1, dtype=int)
+    for target_idx, target_coord in enumerate(coords):
+        source_coord = target_coord + shift
+        matches = np.linalg.norm(coords - source_coord[None, :], axis=1) <= float(spec.atol)
+        if labels is not None:
+            matches &= labels == labels[target_idx]
+        found = np.flatnonzero(matches)
+        if found.size:
+            source_indices[target_idx] = int(found[0])
+    valid = source_indices >= 0
+
+    def apply(vector: np.ndarray) -> np.ndarray:
+        arr = np.asarray(vector, dtype=np.complex128)
+        expected = local_block_size * coords.shape[0]
+        if arr.shape[0] != expected:
+            raise ValueError(f"Expected first axis {expected}, got {arr.shape[0]}")
+        reshaped = arr.reshape((coords.shape[0], local_block_size) + arr.shape[1:], order="C")
+        out = np.zeros_like(reshaped)
+        out[valid] = reshaped[source_indices[valid]]
+        return out.reshape(arr.shape, order="C")
+
+    return apply
+
+
+def sewing_transforms_from_block_spec(spec: BlockSewingSpec) -> tuple[SewingTransform, SewingTransform]:
+    """Build the two generic target-side seam transforms for an FHS torus."""
+
+    if len(spec.translations) != 2:
+        raise ValueError("BlockSewingSpec.translations must contain exactly two translations")
+    return (_block_translation_transform(spec, spec.translations[0]), _block_translation_transform(spec, spec.translations[1]))
+
+
+@dataclass(frozen=True)
+class FHSState:
+    """Canonical eigenstate input for state -> FHS Berry flux -> Chern.
+
+    The selected state axes are band and optional flavor.  Existing band-only
+    wavefunction grids use ``state_indices``; future canonical grids may attach
+    explicit flavor metadata in ``metadata`` without changing the FHS algorithm.
+    Boundary sewing is either given explicitly or generated generically from
+    ``basis_sewing``.
+    """
+
+    wavefunctions: np.ndarray
+    state_indices: tuple[int, ...] | None = None
+    k_grid_frac: np.ndarray | None = None
+    sewing_transforms: Sequence[SewingTransform | None] | None = None
+    basis_sewing: BlockSewingSpec | None = None
+    link_method: LinkMethod = "polar"
+    orientation_sign: float = 1.0
+    atol: float = 1.0e-14
+    regularization: float = 1.0e-12
     system: str | None = None
     valley: int | None = None
+    labels: tuple[str, ...] = ()
+    reported_indices: tuple[int, ...] | None = None
     metadata: Mapping[str, object] = field(default_factory=dict)
 
-    def to_dict(self) -> dict[str, object]:
+
+@dataclass(frozen=True)
+class LinkVariables:
+    """Normalized FHS/Wilson link variables for one band or one subspace."""
+
+    link_1: np.ndarray
+    link_2: np.ndarray
+    min_link_magnitude: float
+
+    @property
+    def berry_connection(self) -> np.ndarray:
+        """Discrete link phases with shape ``(2, mesh_1, mesh_2)``."""
+
+        return np.stack((np.angle(self.link_1), np.angle(self.link_2)), axis=0)
+
+
+@dataclass(frozen=True)
+class LatticeTopologyResult:
+    """FHS Berry flux and Chern number on a 2D momentum mesh."""
+
+    state_indices: tuple[int, ...]
+    k_grid_frac: np.ndarray
+    berry_connection: np.ndarray
+    berry_curvature: np.ndarray
+    chern_number: float
+    rounded_chern_number: int
+    min_link_magnitude: float
+    link_1: np.ndarray
+    link_2: np.ndarray
+    system: str | None = None
+    valley: int | None = None
+    labels: tuple[str, ...] = ()
+    reported_indices: tuple[int, ...] | None = None
+    metadata: Mapping[str, object] = field(default_factory=dict)
+
+    @property
+    def band_indices(self) -> tuple[int, ...]:
+        """Compatibility alias for system wrappers that use band labels."""
+
+        return self.state_indices if self.reported_indices is None else self.reported_indices
+
+    @property
+    def index_metadata(self) -> dict[str, object]:
+        """Compatibility metadata payload for existing system wrappers."""
+
         payload: dict[str, object] = {
-            "indices": [int(index) for index in self.indices],
-            "role": str(self.role),
+            "indices": [int(index) for index in self.state_indices],
+            "reported_indices": [int(index) for index in self.band_indices],
             "labels": [str(label) for label in self.labels],
         }
         if self.system is not None:
@@ -46,57 +175,6 @@ class WavefunctionIndex:
         if self.metadata:
             payload["metadata"] = dict(self.metadata)
         return payload
-
-
-@dataclass(frozen=True)
-class LinkVariables:
-    """U(1) link variables for a selected line bundle or subspace."""
-
-    link_1: np.ndarray
-    link_2: np.ndarray
-    min_link_magnitude: float
-
-    @property
-    def berry_connection(self) -> np.ndarray:
-        """Discrete Berry connection phases with shape ``(2, mesh_1, mesh_2)``."""
-
-        return np.stack((np.angle(self.link_1), np.angle(self.link_2)), axis=0)
-
-
-@dataclass(frozen=True)
-class DirectBandGapReport:
-    """Direct gap between two ordered state columns over a momentum mesh."""
-
-    lower_index: int
-    upper_index: int
-    min_gap: float
-    max_gap: float
-    min_gap_location: tuple[int, ...]
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "lower_index": int(self.lower_index),
-            "upper_index": int(self.upper_index),
-            "min_gap": float(self.min_gap),
-            "max_gap": float(self.max_gap),
-            "min_gap_location": [int(v) for v in self.min_gap_location],
-        }
-
-
-@dataclass(frozen=True)
-class LatticeTopologyResult:
-    """Berry connection, plaquette flux, and Chern number on a 2D mesh."""
-
-    wavefunction_index: WavefunctionIndex
-    k_grid_frac: np.ndarray
-    berry_connection: np.ndarray
-    berry_curvature: np.ndarray
-    chern_number: float
-    rounded_chern_number: int
-    min_link_magnitude: float
-    link_1: np.ndarray
-    link_2: np.ndarray
-    metadata: Mapping[str, object] = field(default_factory=dict)
 
     @property
     def integer_residual(self) -> float:
@@ -108,7 +186,11 @@ class LatticeTopologyResult:
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "wavefunction_index": self.wavefunction_index.to_dict(),
+            "state_indices": [int(index) for index in self.state_indices],
+            "band_indices": [int(index) for index in self.band_indices],
+            "system": None if self.system is None else str(self.system),
+            "valley": None if self.valley is None else int(self.valley),
+            "labels": [str(label) for label in self.labels],
             "chern_number": float(self.chern_number),
             "rounded_chern_number": int(self.rounded_chern_number),
             "integer_residual": float(self.integer_residual),
@@ -118,7 +200,7 @@ class LatticeTopologyResult:
 
 
 def normalize_state_indices(indices: int | Iterable[int]) -> tuple[int, ...]:
-    """Normalize one or more state-column indices and reject ambiguous input."""
+    """Normalize selected state-column indices."""
 
     if isinstance(indices, (int, np.integer)):
         normalized = (int(indices),)
@@ -133,181 +215,26 @@ def normalize_state_indices(indices: int | Iterable[int]) -> tuple[int, ...]:
     return normalized
 
 
-def _coerce_state_energies(energies: np.ndarray) -> np.ndarray:
-    arr = np.asarray(energies, dtype=float)
-    if arr.ndim < 2:
-        raise ValueError(f"Expected energies with shape (n_states, mesh...), got {arr.shape}")
-    if arr.shape[0] <= 0:
-        raise ValueError("Expected at least one state in the energy array.")
-    return arr
-
-
-def direct_band_gap_report(energies: np.ndarray, lower_index: int, upper_index: int) -> DirectBandGapReport:
-    """Return min/max direct gap between two ordered state columns.
-
-    ``energies`` is interpreted as ``(n_states, mesh...)``.  This helper is
-    intentionally system-independent; systems decide whether the state ordering
-    is energy-sorted, band-labeled, HF-sorted, etc.
-    """
-
-    arr = _coerce_state_energies(energies)
-    lower = int(lower_index)
-    upper = int(upper_index)
-    if lower < 0 or upper < 0 or lower >= arr.shape[0] or upper >= arr.shape[0]:
-        raise ValueError(f"Gap indices {(lower, upper)} exceed energy state axis {arr.shape[0]}")
-    gap = np.asarray(arr[upper] - arr[lower], dtype=float)
-    flat_min = int(np.argmin(gap))
-    return DirectBandGapReport(
-        lower_index=lower,
-        upper_index=upper,
-        min_gap=float(np.min(gap)),
-        max_gap=float(np.max(gap)),
-        min_gap_location=tuple(int(v) for v in np.unravel_index(flat_min, gap.shape)),
-    )
-
-
-def adjacent_direct_gap_reports(
-    energies: np.ndarray,
-    state_indices: int | Iterable[int],
-) -> tuple[DirectBandGapReport, ...]:
-    """Return direct-gap reports for adjacent entries in ``state_indices``."""
-
-    indices = normalize_state_indices(state_indices)
-    return tuple(direct_band_gap_report(energies, left, right) for left, right in zip(indices[:-1], indices[1:]))
-
-
-def split_state_indices_by_direct_gaps(
-    energies: np.ndarray,
-    state_indices: int | Iterable[int],
-    *,
-    min_gap: float,
-) -> tuple[tuple[int, ...], ...]:
-    """Split ordered states into subspace groups using everywhere-open gaps.
-
-    Adjacent states are separated into different groups only if the direct gap
-    ``E[next]-E[current]`` is greater than ``min_gap`` at every mesh point.
-    Otherwise they remain in the same multi-band subspace, which is the safe
-    choice for crossing or nearly-crossing bands.
-    """
-
-    indices = normalize_state_indices(state_indices)
-    if len(indices) == 1:
-        return (indices,)
-    groups: list[tuple[int, ...]] = []
-    current: list[int] = [indices[0]]
-    for gap in adjacent_direct_gap_reports(energies, indices):
-        if float(gap.min_gap) > float(min_gap):
-            groups.append(tuple(current))
-            current = [int(gap.upper_index)]
-        else:
-            current.append(int(gap.upper_index))
-    groups.append(tuple(current))
-    return tuple(groups)
-
-
-def wavefunction_index_for_state_group(
-    base_index: WavefunctionIndex | None,
-    indices: int | Iterable[int],
-    *,
-    role: str = "grouped_subspace",
-    metadata: Mapping[str, object] | None = None,
-) -> WavefunctionIndex:
-    """Build metadata for a selected single-band or multi-band group."""
-
-    normalized = normalize_state_indices(indices)
-    extra_metadata = {} if metadata is None else dict(metadata)
-    if base_index is None:
-        return WavefunctionIndex(
-            indices=normalized,
-            role=role,
-            labels=tuple(f"state_{index}" for index in normalized),
-            metadata=extra_metadata,
-        )
-    labels = tuple(
-        str(base_index.labels[index]) if index < len(base_index.labels) else f"state_{index}" for index in normalized
-    )
-    merged_metadata = dict(base_index.metadata)
-    merged_metadata.update(extra_metadata)
-    merged_metadata.setdefault("parent_indices", [int(index) for index in base_index.indices])
-    merged_metadata.setdefault("parent_role", str(base_index.role))
-    return WavefunctionIndex(
-        indices=normalized,
-        role=role,
-        labels=labels,
-        system=base_index.system,
-        valley=base_index.valley,
-        metadata=merged_metadata,
-    )
-
-
-def compute_lattice_topology_for_state_groups(
-    wavefunctions: np.ndarray,
-    groups: Iterable[int | Iterable[int]],
-    *,
-    base_index: WavefunctionIndex | None = None,
-    role: str = "grouped_subspace",
-    k_grid_frac: np.ndarray | None = None,
-    sewing_transforms: Sequence[SewingTransform | None] | None = None,
-    link_method: LinkMethod = "polar",
-    orientation_sign: float = 1.0,
-    atol: float = 1.0e-14,
-    regularization: float = 1.0e-12,
-    metadata: Mapping[str, object] | None = None,
-) -> tuple[LatticeTopologyResult, ...]:
-    """Compute Chern numbers for one or more explicit state groups.
-
-    This is a thin framework-level wrapper around ``compute_lattice_topology``
-    for the common case where band crossings require treating several columns as
-    a single determinant-link subspace.  Systems provide only wavefunctions,
-    grouping choices, labels, and sewing transforms.
-    """
-
-    results: list[LatticeTopologyResult] = []
-    for group_number, group in enumerate(groups):
-        indices = normalize_state_indices(group)
-        group_metadata = {} if metadata is None else dict(metadata)
-        group_metadata["group_number"] = int(group_number)
-        group_metadata["group_indices"] = [int(index) for index in indices]
-        index = wavefunction_index_for_state_group(base_index, indices, role=role, metadata=group_metadata)
-        results.append(
-            compute_lattice_topology(
-                wavefunctions,
-                state_indices=indices,
-                index=index,
-                k_grid_frac=k_grid_frac,
-                sewing_transforms=sewing_transforms,
-                link_method=link_method,
-                orientation_sign=orientation_sign,
-                atol=atol,
-                regularization=regularization,
-            )
-        )
-    return tuple(results)
-
-
 def default_k_grid_frac(mesh_1: int, mesh_2: int) -> np.ndarray:
-    """Return the canonical fractional grid ``(i/mesh_1, j/mesh_2)``."""
+    """Return a regular fractional torus grid with shape ``(mesh_1, mesh_2, 2)``."""
 
-    grid = np.zeros((int(mesh_1), int(mesh_2), 2), dtype=float)
-    grid[:, :, 0] = np.arange(int(mesh_1), dtype=float)[:, None] / float(mesh_1)
-    grid[:, :, 1] = np.arange(int(mesh_2), dtype=float)[None, :] / float(mesh_2)
-    return grid
+    f1 = np.arange(int(mesh_1), dtype=float) / float(mesh_1)
+    f2 = np.arange(int(mesh_2), dtype=float) / float(mesh_2)
+    return np.stack(np.meshgrid(f1, f2, indexing="ij"), axis=-1)
 
 
 def matrix_sewing_transform(matrix: np.ndarray) -> SewingTransform:
-    """Build a boundary sewing transform from a basis-space matrix."""
+    """Return a target-side boundary sewing map ``v -> matrix @ v``."""
 
     sewing_matrix = np.asarray(matrix, dtype=np.complex128)
     if sewing_matrix.ndim != 2 or sewing_matrix.shape[0] != sewing_matrix.shape[1]:
-        raise ValueError(f"Expected a square sewing matrix, got shape {sewing_matrix.shape}")
+        raise ValueError(f"Expected square sewing matrix, got shape {sewing_matrix.shape}")
 
     def apply(vectors: np.ndarray) -> np.ndarray:
-        array = np.asarray(vectors, dtype=np.complex128)
-        if array.shape[0] != sewing_matrix.shape[1]:
-            raise ValueError(
-                f"Sewing matrix dimension {sewing_matrix.shape} is incompatible with vector shape {array.shape}"
-            )
-        return sewing_matrix @ array
+        arr = np.asarray(vectors, dtype=np.complex128)
+        if arr.shape[0] != sewing_matrix.shape[1]:
+            raise ValueError(f"Expected first axis {sewing_matrix.shape[1]}, got {arr.shape[0]}")
+        return np.tensordot(sewing_matrix, arr, axes=(1, 0))
 
     return apply
 
@@ -316,47 +243,35 @@ def select_wavefunction_subspace(
     wavefunctions: np.ndarray,
     state_indices: int | Iterable[int] | None = None,
 ) -> tuple[np.ndarray, tuple[int, ...]]:
-    """Select a line bundle/subspace from a wavefunction grid.
+    """Select state columns from a wavefunction mesh.
 
-    Accepted shapes are ``(mesh_1, mesh_2, basis_dim)`` for an already-selected
-    line bundle and ``(mesh_1, mesh_2, basis_dim, n_states)`` for one or more
-    available state columns.
+    Input must be either ``(mesh_1, mesh_2, basis_dim, n_state)`` or a single
+    state bundle ``(mesh_1, mesh_2, basis_dim)``.
     """
 
-    vectors = np.asarray(wavefunctions, dtype=np.complex128)
-    if vectors.ndim == 3:
+    arr = np.asarray(wavefunctions, dtype=np.complex128)
+    if arr.ndim == 3:
         if state_indices is not None:
             normalized = normalize_state_indices(state_indices)
             if normalized != (0,):
-                raise ValueError(
-                    "A rank-3 wavefunction grid is already a line bundle; only state index 0 can be selected."
-                )
-        return vectors[:, :, :, np.newaxis], (0,)
-    if vectors.ndim != 4:
+                raise ValueError("Rank-3 wavefunctions contain only state index 0")
+        return arr[..., np.newaxis], (0,)
+    if arr.ndim != 4:
         raise ValueError(
-            "Expected wavefunctions with shape (mesh_1, mesh_2, basis_dim) or "
-            f"(mesh_1, mesh_2, basis_dim, n_states), got shape {vectors.shape}"
+            "Expected wavefunctions with shape (mesh_1, mesh_2, basis_dim, n_state) "
+            f"or (mesh_1, mesh_2, basis_dim), got {arr.shape}"
         )
-
-    if state_indices is None:
-        normalized = tuple(range(int(vectors.shape[-1])))
-    else:
-        normalized = normalize_state_indices(state_indices)
-    if max(normalized) >= vectors.shape[-1]:
-        raise ValueError(
-            f"State index {max(normalized)} exceeds the available state count {vectors.shape[-1]}"
-        )
-    return np.take(vectors, normalized, axis=-1), normalized
+    normalized = tuple(range(arr.shape[-1])) if state_indices is None else normalize_state_indices(state_indices)
+    if max(normalized) >= arr.shape[-1]:
+        raise ValueError(f"State index {max(normalized)} exceeds state axis {arr.shape[-1]}")
+    return arr[..., normalized], normalized
 
 
 def _unit_complex(value: complex, *, atol: float) -> tuple[complex, float]:
-    magnitude = abs(complex(value))
-    if magnitude <= atol:
-        raise ValueError(
-            "Encountered a near-zero overlap link while building the Berry-geometry plaquette field. "
-            "The selected line bundle or subspace is likely not isolated on this grid."
-        )
-    return complex(value) / magnitude, float(magnitude)
+    magnitude = float(abs(value))
+    if magnitude <= float(atol):
+        return 1.0 + 0.0j, magnitude
+    return complex(value / magnitude), magnitude
 
 
 def _link_from_overlap(
@@ -366,31 +281,19 @@ def _link_from_overlap(
     atol: float,
     regularization: float,
 ) -> tuple[complex, float]:
-    if overlap_matrix.shape == (1, 1):
-        return _unit_complex(complex(overlap_matrix[0, 0]), atol=atol)
-
+    overlap = np.asarray(overlap_matrix, dtype=np.complex128)
+    if overlap.shape == (1, 1):
+        return _unit_complex(complex(overlap[0, 0]), atol=atol)
     if method == "determinant":
-        determinant = complex(np.linalg.det(overlap_matrix))
-        return _unit_complex(determinant, atol=atol)
-
+        det = complex(np.linalg.det(overlap))
+        return _unit_complex(det, atol=atol)
     if method != "polar":
-        raise ValueError("link_method must be 'polar' or 'determinant'")
-
-    singular_values = np.linalg.svd(overlap_matrix, compute_uv=False)
-    min_singular = float(np.min(singular_values)) if singular_values.size else 0.0
-    working = np.asarray(overlap_matrix, dtype=np.complex128)
-    if min_singular <= atol:
-        if regularization <= 0.0:
-            raise ValueError(
-                "Encountered a near-singular subspace overlap while building the Berry-geometry plaquette field. "
-                "Try a finer mesh, a shifted mesh, or enable a small regularization."
-            )
-        working = working + float(regularization) * np.eye(working.shape[0], dtype=np.complex128)
-    u_mat, _, vh_mat = np.linalg.svd(working, full_matrices=False)
-    phase_matrix = u_mat @ vh_mat
-    phase_det = complex(np.linalg.det(phase_matrix))
-    link, _ = _unit_complex(phase_det, atol=atol)
-    return link, min_singular
+        raise ValueError(f"Unknown link_method {method!r}")
+    u, singular_values, vh = np.linalg.svd(overlap, full_matrices=False)
+    unitary = u @ vh
+    det = complex(np.linalg.det(unitary))
+    unit, _ = _unit_complex(det, atol=atol)
+    return unit, float(np.min(singular_values))
 
 
 def _compute_link(
@@ -403,15 +306,16 @@ def _compute_link(
 ) -> tuple[complex, float]:
     left = np.asarray(left_vectors, dtype=np.complex128)
     right = np.asarray(right_vectors, dtype=np.complex128)
+    if left.shape != right.shape:
+        raise ValueError(f"Link endpoints must have matching shapes, got {left.shape} and {right.shape}")
     if left.ndim == 1:
         left = left[:, np.newaxis]
-    if right.ndim == 1:
         right = right[:, np.newaxis]
-    if left.ndim != 2 or right.ndim != 2:
-        raise ValueError(f"Expected selected vectors to be rank 1 or 2, got {left.shape} and {right.shape}")
-    if left.shape != right.shape:
-        raise ValueError(f"Cannot link subspaces with different shapes: {left.shape} and {right.shape}")
-    overlap = left.conjugate().T @ right
+    if left.ndim != 2:
+        raise ValueError(f"Expected endpoint vectors with shape (basis, n_state), got {left.shape}")
+    overlap = left.conj().T @ right
+    if regularization > 0.0 and overlap.shape[0] > 1:
+        overlap = overlap + float(regularization) * np.eye(overlap.shape[0], dtype=np.complex128)
     return _link_from_overlap(overlap, method=method, atol=atol, regularization=regularization)
 
 
@@ -433,27 +337,23 @@ def compute_link_variables(
     atol: float = 1.0e-14,
     regularization: float = 1.0e-12,
 ) -> LinkVariables:
-    """Compute normalized U(1) links for a selected subspace on a torus mesh.
+    """Compute normalized FHS/Wilson links on a 2D torus mesh.
 
-    ``selected_vectors`` must have shape ``(mesh_1, mesh_2, basis_dim, n_sel)``
-    or ``(mesh_1, mesh_2, basis_dim)``.  Boundary sewing transforms are applied
-    only when the forward link wraps from the last mesh point back to zero.
+    Boundary sewing transforms are target-side maps applied only to wrapped
+    forward links, e.g. ``last -> 0`` along each mesh axis.
     """
 
     selected, _ = select_wavefunction_subspace(selected_vectors, None)
     mesh_1, mesh_2 = selected.shape[:2]
     sew_1, sew_2 = _normalize_sewing_transforms(sewing_transforms)
-
     link_1 = np.zeros((mesh_1, mesh_2), dtype=np.complex128)
     link_2 = np.zeros((mesh_1, mesh_2), dtype=np.complex128)
     min_link = float("inf")
-
     for i in range(mesh_1):
         ip = (i + 1) % mesh_1
         for j in range(mesh_2):
             jp = (j + 1) % mesh_2
             left = selected[i, j]
-
             target_1 = selected[ip, j]
             if i == mesh_1 - 1 and sew_1 is not None:
                 target_1 = sew_1(target_1)
@@ -466,7 +366,6 @@ def compute_link_variables(
             )
             link_1[i, j] = value_1
             min_link = min(min_link, float(magnitude_1))
-
             target_2 = selected[i, jp]
             if j == mesh_2 - 1 and sew_2 is not None:
                 target_2 = sew_2(target_2)
@@ -479,23 +378,20 @@ def compute_link_variables(
             )
             link_2[i, j] = value_2
             min_link = min(min_link, float(magnitude_2))
-
     return LinkVariables(link_1=link_1, link_2=link_2, min_link_magnitude=float(min_link))
 
 
 def berry_curvature_from_links(link_1: np.ndarray, link_2: np.ndarray) -> np.ndarray:
-    """Return the FHS Berry flux through each plaquette.
+    """Return FHS Berry plaquette flux from normalized link variables.
 
-    The output is a dimensionless phase in ``(-pi, pi]`` per plaquette; summing
-    it and dividing by ``2*pi`` gives the Chern number in the same orientation as
-    the two mesh directions.
+    The returned array is the dimensionless plaquette phase in ``(-pi, pi]``.
+    Chern number is obtained only by summing this flux and dividing by ``2π``.
     """
 
     u1 = np.asarray(link_1, dtype=np.complex128)
     u2 = np.asarray(link_2, dtype=np.complex128)
     if u1.shape != u2.shape or u1.ndim != 2:
         raise ValueError(f"Expected two rank-2 link arrays with the same shape, got {u1.shape} and {u2.shape}")
-
     mesh_1, mesh_2 = u1.shape
     curvature = np.zeros((mesh_1, mesh_2), dtype=float)
     for i in range(mesh_1):
@@ -508,35 +404,153 @@ def berry_curvature_from_links(link_1: np.ndarray, link_2: np.ndarray) -> np.nda
 
 
 def chern_number_from_berry_curvature(berry_curvature: np.ndarray) -> float:
-    """Integrate dimensionless plaquette Berry flux to a Chern number."""
+    """Integrate FHS Berry plaquette flux to a Chern number."""
 
     return float(np.sum(np.asarray(berry_curvature, dtype=float)) / (2.0 * np.pi))
 
 
-def compute_lattice_topology(
+def fhs_state_from_wavefunctions(
     wavefunctions: np.ndarray,
     state_indices: int | Iterable[int] | None = None,
     *,
-    index: WavefunctionIndex | None = None,
+    k_grid_frac: np.ndarray | None = None,
+    sewing_transforms: Sequence[SewingTransform | None] | None = None,
+    basis_sewing: BlockSewingSpec | None = None,
+    link_method: LinkMethod = "polar",
+    orientation_sign: float = 1.0,
+    atol: float = 1.0e-14,
+    regularization: float = 1.0e-12,
+    system: str | None = None,
+    valley: int | None = None,
+    labels: Iterable[str] = (),
+    metadata: Mapping[str, object] | None = None,
+    reported_indices: int | Iterable[int] | None = None,
+) -> FHSState:
+    """Package wavefunctions and sewing metadata as the sole FHS input state."""
+
+    return FHSState(
+        wavefunctions=np.asarray(wavefunctions, dtype=np.complex128),
+        state_indices=None if state_indices is None else normalize_state_indices(state_indices),
+        k_grid_frac=None if k_grid_frac is None else np.asarray(k_grid_frac, dtype=float),
+        sewing_transforms=sewing_transforms,
+        basis_sewing=basis_sewing,
+        link_method=link_method,
+        orientation_sign=float(orientation_sign),
+        atol=float(atol),
+        regularization=float(regularization),
+        system=None if system is None else str(system),
+        valley=None if valley is None else int(valley),
+        labels=tuple(str(label) for label in labels),
+        reported_indices=None if reported_indices is None else normalize_state_indices(reported_indices),
+        metadata={} if metadata is None else dict(metadata),
+    )
+
+
+def fhs_state_from_grid_result(
+    grid_result: object,
+    state_indices: int | Iterable[int],
+    *,
+    sewing_transforms: Sequence[SewingTransform | None] | None = None,
+    basis_sewing: BlockSewingSpec | None = None,
+    link_method: LinkMethod = "polar",
+    orientation_sign: float = 1.0,
+    atol: float = 1.0e-14,
+    regularization: float = 1.0e-12,
+    system: str | None = None,
+    valley: int | None = None,
+    labels: Iterable[str] = (),
+    metadata: Mapping[str, object] | None = None,
+) -> FHSState:
+    """Build an FHS state from a grid object with eigenvectors and band labels.
+
+    If ``grid_result.band_indices`` is present, ``state_indices`` are interpreted
+    as physical band labels and mapped to eigenvector columns here in the common
+    layer.  System modules should not duplicate this mapping.
+    """
+
+    eigenvectors = getattr(grid_result, "eigenvectors", None)
+    if eigenvectors is None:
+        raise ValueError("Grid eigenvectors are required for FHS topology. Recompute with return_eigenvectors=True.")
+    requested = normalize_state_indices(state_indices)
+    available = tuple(int(index) for index in getattr(grid_result, "band_indices", ()) or ())
+    if available:
+        positions = {band: pos for pos, band in enumerate(available)}
+        missing = [band for band in requested if band not in positions]
+        if missing:
+            raise ValueError(f"Requested band labels {missing} are not available in grid_result.band_indices={available}")
+        columns = tuple(int(positions[band]) for band in requested)
+        reported = requested
+        grid_metadata = {
+            "absolute_band_indices": list(requested),
+            "column_indices": list(columns),
+            "grid_result_band_indices": list(available),
+        }
+    else:
+        columns = requested
+        reported = requested
+        grid_metadata = {"column_indices": list(columns)}
+    merged = dict(grid_metadata)
+    if metadata:
+        merged.update(dict(metadata))
+    return fhs_state_from_wavefunctions(
+        eigenvectors,
+        columns,
+        k_grid_frac=getattr(grid_result, "k_grid_frac", None),
+        sewing_transforms=sewing_transforms,
+        basis_sewing=basis_sewing,
+        link_method=link_method,
+        orientation_sign=orientation_sign,
+        atol=atol,
+        regularization=regularization,
+        system=system,
+        valley=valley,
+        labels=labels,
+        reported_indices=reported,
+        metadata=merged,
+    )
+
+
+def compute_lattice_topology(
+    wavefunctions: FHSState | np.ndarray,
+    state_indices: int | Iterable[int] | None = None,
+    *,
     k_grid_frac: np.ndarray | None = None,
     sewing_transforms: Sequence[SewingTransform | None] | None = None,
     link_method: LinkMethod = "polar",
     orientation_sign: float = 1.0,
     atol: float = 1.0e-14,
     regularization: float = 1.0e-12,
+    system: str | None = None,
+    valley: int | None = None,
+    labels: Iterable[str] = (),
     metadata: Mapping[str, object] | None = None,
+    reported_indices: int | Iterable[int] | None = None,
 ) -> LatticeTopologyResult:
-    """Compute discrete Berry connection, plaquette flux, and Chern number.
+    """Compute FHS Berry plaquette flux and Chern number for selected states."""
 
-    All system-specific meaning is carried by ``index`` and optional boundary
-    sewing transforms.  Without sewing transforms the function assumes the input
-    wavefunction gauge is already periodic on the mesh torus.
-    """
+    if isinstance(wavefunctions, FHSState):
+        state = wavefunctions
+        wavefunctions = state.wavefunctions
+        state_indices = state.state_indices
+        k_grid_frac = state.k_grid_frac
+        sewing_transforms = state.sewing_transforms
+        if sewing_transforms is None and state.basis_sewing is not None:
+            sewing_transforms = sewing_transforms_from_block_spec(state.basis_sewing)
+        link_method = state.link_method
+        orientation_sign = state.orientation_sign
+        atol = state.atol
+        regularization = state.regularization
+        system = state.system
+        valley = state.valley
+        labels = state.labels
+        metadata = state.metadata
+        reported_indices = state.reported_indices
 
     selected, normalized = select_wavefunction_subspace(wavefunctions, state_indices)
+    reported = None if reported_indices is None else normalize_state_indices(reported_indices)
     mesh_1, mesh_2 = selected.shape[:2]
-    resolved_index = index if index is not None else WavefunctionIndex(indices=normalized)
-
+    if float(orientation_sign) not in {-1.0, 1.0}:
+        raise ValueError("orientation_sign must be +1 or -1")
     links = compute_link_variables(
         selected,
         sewing_transforms=sewing_transforms,
@@ -544,16 +558,16 @@ def compute_lattice_topology(
         atol=atol,
         regularization=regularization,
     )
-    sign = float(orientation_sign)
-    if sign not in (-1.0, 1.0): raise ValueError(f"orientation_sign must be +1 or -1, got {orientation_sign!r}")
-    link_1 = links.link_1 if sign > 0.0 else links.link_1.conjugate()
-    link_2 = links.link_2 if sign > 0.0 else links.link_2.conjugate()
+    link_1 = np.asarray(links.link_1, dtype=np.complex128)
+    link_2 = np.asarray(links.link_2, dtype=np.complex128)
+    if float(orientation_sign) == -1.0:
+        link_1 = link_1.conjugate()
+        link_2 = link_2.conjugate()
     curvature = berry_curvature_from_links(link_1, link_2)
     chern = chern_number_from_berry_curvature(curvature)
     grid = default_k_grid_frac(mesh_1, mesh_2) if k_grid_frac is None else np.asarray(k_grid_frac, dtype=float)
-
     return LatticeTopologyResult(
-        wavefunction_index=resolved_index,
+        state_indices=normalized,
         k_grid_frac=grid,
         berry_connection=np.stack((np.angle(link_1), np.angle(link_2)), axis=0),
         berry_curvature=curvature,
@@ -562,5 +576,33 @@ def compute_lattice_topology(
         min_link_magnitude=float(links.min_link_magnitude),
         link_1=link_1,
         link_2=link_2,
+        system=None if system is None else str(system),
+        valley=None if valley is None else int(valley),
+        labels=tuple(str(label) for label in labels),
+        reported_indices=reported,
         metadata={} if metadata is None else dict(metadata),
     )
+
+
+TopologyResult = LatticeTopologyResult
+
+__all__ = [
+    "BlockSewingSpec",
+    "FHSState",
+    "LatticeTopologyResult",
+    "LinkMethod",
+    "LinkVariables",
+    "SewingTransform",
+    "TopologyResult",
+    "berry_curvature_from_links",
+    "chern_number_from_berry_curvature",
+    "compute_lattice_topology",
+    "compute_link_variables",
+    "fhs_state_from_grid_result",
+    "fhs_state_from_wavefunctions",
+    "default_k_grid_frac",
+    "matrix_sewing_transform",
+    "normalize_state_indices",
+    "select_wavefunction_subspace",
+    "sewing_transforms_from_block_spec",
+]

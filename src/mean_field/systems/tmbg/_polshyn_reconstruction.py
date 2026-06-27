@@ -6,7 +6,7 @@ The public ``polshyn_supercell`` facade re-exports the reconstruction entry
 point for explicit flat-k diagnostics.  Returned bundles deliberately remain
 flat and topology-ineligible because this facade does not attach torus grid
 shape or sewing transforms.  Topology workflows must use
-``mean_field.systems.tmbg.topology.compute_polshyn_projected_hf_topology``,
+``mean_field.systems.tmbg.topology.fhs_state_from_polshyn_projected_hf``,
 which owns the doubled-cell reshape/sewing boundary before delegating to the
 common FHS core; paper-level Chern validation remains a separate Slurm target.
 """
@@ -388,7 +388,7 @@ def _metadata(
         "grid_shape_attached": False,
         "sewing_available": False,
         "sewing_transforms_attached": False,
-        "sewing_blocker": "public flat-k diagnostic facade does not attach torus sewing; use mean_field.systems.tmbg.topology.compute_polshyn_projected_hf_topology for the reviewed doubled-cell topology adapter",
+        "sewing_blocker": "public flat-k diagnostic facade does not attach torus sewing; use mean_field.systems.tmbg.topology.fhs_state_from_polshyn_projected_hf for the reviewed doubled-cell topology adapter",
         "topology_status": "topology-ineligible-flat-diagnostic",
         "topology_eligible": False,
         "topology_ineligible_reason": "flat-k reconstructed bundles are not validated torus bundles and do not carry doubled-cell sewing transforms",

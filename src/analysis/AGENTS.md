@@ -8,13 +8,13 @@ Applies to common analysis and response helpers under `src/analysis`.
 
 - Gauge-safe generalized-derivative conventions: `RESPONSE_DERIVATIVE_GAUGE.md` and `optical_response/gauge.py`.
 - Generic shift-current API: `optical_response/shift_current.py` and compatibility shims under `shift_current/`.
-- Minimal topology APIs: FHS core `topology/core.py`; wavefunction-grid canonicalization `topology/wavefunction.py`; system-facing adapter `topology/system.py`; archived concrete system wrappers/projected-HF reconstruction/QGT helpers/paper workflows, if explicitly needed: `../../local_archive/retired_surface/topology_untracked_20260622/` or `../../local_archive/optional_features/topology_quantum_geometry_20260625/`.
+- Minimal topology APIs: `topology/core.py` only owns `FHSState`, generic `BlockSewingSpec` boundary sewing, FHS/Wilson links, Berry plaquette flux, and Chern integration; archived QGT/paper workflows, if explicitly needed: `../../local_archive/retired_surface/topology_untracked_20260622/` or `../../local_archive/optional_features/topology_quantum_geometry_20260625/`.
 
 ## Local Guidance
 
 - `optical_response/gauge.py` is the reusable WannierBerri-style derivative facade for Berry connections, generalized derivatives, shift vectors, and gauge/subspace checks; implementation is split across `optical_response/gauge_*` modules. `response_derivative_gauge.py` is only a compatibility shim.
 - `optical_response/` is the common shift-current/optical-response layer: components, named WannierBerri/Joya conventions, Fermi occupations, Lorentzian conventions, heatmap accumulation, one-k-point tensor APIs, and lightweight reference/toy checks. Historical `shift_current/` paths re-export this API for compatibility.
-- `topology/` is a reviewed common API for FHS link/plaquette/Chern calculations, generic wavefunction-grid layout canonicalization, and a thin system-facing adapter for already-built eigenvector grids. Do not restore concrete system wrappers, projected-HF reconstruction helpers, QGT helpers, or paper-specific topology workflows wholesale; reintroduce them only after deciding their public boundary and validation target.
+- `topology/` is a reviewed common API for `FHSState -> generic boundary sewing -> FHS link -> plaquette flux -> Chern`. System directories may build `FHSState` objects with metadata and `BlockSewingSpec`, but must not expose system-side `compute_topology_*` calculators, topology result wrappers, or duplicated sewing/FHS/Chern algorithms.
 - The old `shift_current_htg/` and `shift_current_tbg` analysis workspaces have been retired. Put hTG/TBG system adapters under `mean_field.systems`, reusable math under `optical_response/`, and historical paper audits in ignored local reports/internal workspaces.
 - Never differentiate raw eigenvector phases or raw `np.angle(A_mn)` values. Use covariant/generalized derivatives or Wilson-link validation.
 

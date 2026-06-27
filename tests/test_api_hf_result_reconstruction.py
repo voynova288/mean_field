@@ -7,7 +7,6 @@ import numpy as np
 import pytest
 
 from mean_field.api import HFConfig, HFResult, ModelRecord, WavefunctionBundle
-from analysis.topology import compute_system_topology_from_bundle
 from mean_field.core.contracts import (
     DensityState as ContractDensityState,
     HamiltonianParts as ContractHamiltonianParts,
@@ -146,8 +145,10 @@ def test_hfresult_reconstruct_micro_wavefunctions_uses_canonical_dense_array_fal
     assert "system-specific sewing" in bundle.metadata["uncertainty"]
     assert bundle.metadata["topology_eligible"] is False
     assert "no system sewing/grid topology adapter" in bundle.metadata["topology_ineligible_reason"]
-    with pytest.raises(ValueError, match="topology_eligible=False"):
-        compute_system_topology_from_bundle(bundle, 0, system="toy")
+    # Flat reconstructed bundles are deliberately not topology inputs; callers
+    # must use a system-specific FHSState builder that reshapes/sews a torus grid.
+    assert bundle.wavefunctions.ndim == 3
+    assert bundle.metadata["topology_eligible"] is False
     assert bundle.convention.wavefunction_axis_order == "k,microscopic_basis,hf_state"
 
 def test_hfresult_reconstruct_micro_wavefunctions_supports_selected_canonical_fallback_and_guard() -> None:

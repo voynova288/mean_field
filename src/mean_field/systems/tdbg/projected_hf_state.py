@@ -503,10 +503,10 @@ class TDBGProjectedHFResult:
                 "core_reconstruction_sewing_transforms_count": int(len(core_bundle.sewing_transforms)),
                 "sewing_transforms_available": False,
                 "sewing_transforms_count": 0,
-                "sewing_policy": "not attached to public flat WavefunctionBundle; use mean_field.systems.tdbg.topology.compute_projected_hf_topology",
+                "sewing_policy": "not attached to public flat WavefunctionBundle; use mean_field.systems.tdbg.topology.fhs_state_from_projected_hf",
                 "topology_eligible": False,
-                "topology_eligibility_scope": "public WavefunctionBundle is flat (nk,basis,state) and does not carry sewing_transforms; use mean_field.systems.tdbg.topology.compute_projected_hf_topology for FHS topology",
-                "topology_ineligible_reason": "public API WavefunctionBundle drops core sewing transforms and is not reshaped to (mesh,mesh,basis,state); TDBG topology must use mean_field.systems.tdbg.topology.compute_projected_hf_topology, which reconstructs, reshapes, and passes sewing transforms explicitly",
+                "topology_eligibility_scope": "public WavefunctionBundle is flat (nk,basis,state) and does not carry sewing_transforms; use mean_field.systems.tdbg.topology.fhs_state_from_projected_hf for FHS topology",
+                "topology_ineligible_reason": "public API WavefunctionBundle drops core sewing transforms and is not reshaped to (mesh,mesh,basis,state); TDBG topology must use mean_field.systems.tdbg.topology.fhs_state_from_projected_hf, which reconstructs, reshapes, and passes sewing transforms explicitly",
             }
         )
         from mean_field.api import ConventionBundle, WavefunctionBundle

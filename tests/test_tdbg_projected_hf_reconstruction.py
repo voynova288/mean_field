@@ -180,7 +180,7 @@ def test_tdbg_result_reconstructs_micro_wavefunctions_by_manual_contraction() ->
     assert bundle.metadata["sewing_policy"].startswith("not attached to public flat")
     assert bundle.metadata["sewing_transforms_entrypoint"].endswith("projected_hf_boundary_sewing_transforms")
     assert bundle.metadata["topology_eligible"] is False
-    assert "compute_projected_hf_topology" in bundle.metadata["topology_ineligible_reason"]
+    assert "fhs_state_from_projected_hf" in bundle.metadata["topology_ineligible_reason"]
     assert bundle.metadata["sewing_transforms_count"] == 0
     assert bundle.metadata["canonical_micro_basis_materialized"] is False
     assert bundle.metadata["selected_hf_state_indices"] == list(range(data.nt))

@@ -5,7 +5,6 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from analysis.topology import assert_topology_eligible, compute_system_topology_from_bundle
 from mean_field.core.hf import ProjectedWavefunctionBasis
 from mean_field.systems.RnG_hBN.hf import (
     RLGhBNHartreeFockState,
@@ -354,10 +353,10 @@ def test_polshyn_public_reconstruction_keeps_flat_k_order_and_records_missing_se
     assert bundle.basis_metadata["topology_status"] == "topology-ineligible-flat-diagnostic"
     assert bundle.basis_metadata["topology_eligible"] is False
     assert "sewing" in bundle.basis_metadata["topology_ineligible_reason"]
-    with pytest.raises(ValueError, match="topology_eligible=False.*flat-k reconstructed bundles"):
-        assert_topology_eligible(bundle, context="polshyn-public-diagnostic")
-    with pytest.raises(ValueError, match="topology_eligible=False.*flat-k reconstructed bundles"):
-        compute_system_topology_from_bundle(bundle, 0, system="tmbg_polshyn")
+    # The public flat-k diagnostic bundle is not itself a topology/FHS input;
+    # physical topology must use mean_field.systems.tmbg.topology FHSState builders.
+    assert bundle.psi_micro.ndim == 3
+    assert bundle.basis_metadata["topology_eligible"] is False
     assert bundle.basis_metadata["embedding_shape"] == [2, 3]
     assert bundle.basis_metadata["selected_hf_state_indices"] == list(range(8))
     assert bundle.basis_metadata["n_reconstructed_states"] == 8
