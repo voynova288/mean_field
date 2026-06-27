@@ -23,7 +23,7 @@ from .tbg import (
     dirac_block,
     moire_coupling_matrix,
 )
-from .topology import FHSState, fhs_state_from_eigenvectors, fhs_state_from_grid_result, fhs_state_on_grid
+from .topology import FHSState, atmg_basis_sewing, fhs_state_from_eigenvectors, fhs_state_from_grid_result, fhs_state_on_grid
 
 __all__ = [
     'ATMGModel',
@@ -53,6 +53,7 @@ __all__ = [
     'fhs_state_from_eigenvectors',
     'fhs_state_from_grid_result',
     'fhs_state_on_grid',
+    'atmg_basis_sewing',
     'diagonalize_hamiltonian',
     'diagonalize_tbg_hamiltonian',
     'dirac_block',

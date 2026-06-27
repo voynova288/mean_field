@@ -156,6 +156,8 @@ class ATMGModel:
         valley: int = 1,
         endpoint: bool = False,
         n_bands: int | None = None,
+        frac_shift: tuple[float, float] = (0.0, 0.0),
+        use_boundary_sewing: bool = True,
     ) -> FHSState:
         return fhs_state_on_grid(
             mesh_size,
@@ -165,6 +167,8 @@ class ATMGModel:
             valley=valley,
             endpoint=endpoint,
             n_bands=n_bands,
+            frac_shift=frac_shift,
+            use_boundary_sewing=use_boundary_sewing,
         )
 
 

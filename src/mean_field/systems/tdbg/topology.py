@@ -73,6 +73,7 @@ def fhs_state_on_grid(
     valley: int = 1,
     endpoint: bool = False,
     n_bands: int | None = None,
+    frac_shift: tuple[float, float] = (0.0, 0.0),
     boundary_sewing: bool = True,
 ) -> FHSState:
     requested = tuple([int(band_indices)] if isinstance(band_indices, int) else [int(x) for x in band_indices])
@@ -85,7 +86,7 @@ def fhs_state_on_grid(
         n_bands=resolved_n_bands,
         return_eigenvectors=True,
         endpoint=endpoint,
-        frac_shift=(0.0, 0.0),
+        frac_shift=frac_shift,
     )
     basis_sewing = tdbg_basis_sewing(lattice) if boundary_sewing else None
     return fhs_state_from_grid_result(

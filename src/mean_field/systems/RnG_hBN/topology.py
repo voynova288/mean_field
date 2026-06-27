@@ -95,6 +95,7 @@ def fhs_state_on_grid(
     valley: int = 1,
     endpoint: bool = False,
     n_bands: int | None = None,
+    frac_shift: tuple[float, float] = (0.0, 0.0),
     basis_sewing: BlockSewingSpec | None = None,
     use_boundary_sewing: bool = True,
     orientation_sign: float | None = None,
@@ -110,7 +111,7 @@ def fhs_state_on_grid(
         n_bands=resolved_n_bands,
         return_eigenvectors=True,
         endpoint=endpoint,
-        frac_shift=(0.0, 0.0),
+        frac_shift=frac_shift,
     )
     return fhs_state_from_grid_result(
         grid,

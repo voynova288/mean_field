@@ -14,7 +14,7 @@ from .hamiltonian import (
 from .lattice import TMBGLattice, build_kpath_from_nodes, build_moire_k_grid, build_standard_kpath, build_tmbg_lattice
 from .model import TMBGModel
 from .params import TMBGParameters, VALID_BERNAL_CONVENTIONS, VALID_BLG_STACKINGS, default_omega, default_omega_prime, hopping_to_velocity
-from .topology import FHSState, fhs_state_from_eigenvectors, fhs_state_from_grid_result, fhs_state_on_grid
+from .topology import FHSState, fhs_state_from_eigenvectors, fhs_state_from_grid_result, fhs_state_on_grid, tmbg_basis_sewing
 
 __all__ = [
     "GridBandsResult",
@@ -39,6 +39,7 @@ __all__ = [
     "fhs_state_from_eigenvectors",
     "fhs_state_from_grid_result",
     "fhs_state_on_grid",
+    "tmbg_basis_sewing",
     "default_omega",
     "default_omega_prime",
     "diagonalize_hamiltonian",

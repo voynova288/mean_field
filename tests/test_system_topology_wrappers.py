@@ -13,7 +13,10 @@ from analysis.topology import (
     sewing_transforms_from_block_spec,
 )
 from mean_field.core.bands import GridBandsResult
+from mean_field.systems.RnG_hBN import RLGhBNModel
+from mean_field.systems.atmg import ATMGModel, ATMGParameters
 from mean_field.systems.tdbg import TDBGModel, TDBGParameters
+from mean_field.systems.tmbg import TMBGModel, TMBGParameters
 import mean_field.systems.RnG_hBN.topology as rlg_topology
 import mean_field.systems.atmg.topology as atmg_topology
 import mean_field.systems.htqg.topology as htqg_topology
@@ -141,20 +144,96 @@ def test_tdbg_actual_state_fhs_chern_uses_common_topology_pipeline() -> None:
     )
     conduction_band = model.matrix_dim // 2
 
-    chern_k = compute_lattice_topology(
-        model.fhs_state_on_grid(5, conduction_band, valley=1, n_bands=conduction_band + 1)
-    )
-    chern_kprime = compute_lattice_topology(
-        model.fhs_state_on_grid(5, conduction_band, valley=-1, n_bands=conduction_band + 1)
-    )
+    for mesh in (5, 7):
+        frac_shift = (0.37 / mesh, 0.19 / mesh)
+        chern_k = compute_lattice_topology(
+            model.fhs_state_on_grid(mesh, conduction_band, valley=1, n_bands=conduction_band + 1, frac_shift=frac_shift)
+        )
+        chern_kprime = compute_lattice_topology(
+            model.fhs_state_on_grid(mesh, conduction_band, valley=-1, n_bands=conduction_band + 1, frac_shift=frac_shift)
+        )
 
-    assert chern_k.chern_number == pytest.approx(1.0, abs=1.0e-8)
-    assert chern_kprime.chern_number == pytest.approx(-1.0, abs=1.0e-8)
-    assert chern_k.metadata["boundary_sewing"] is True
-    assert chern_k.min_link_magnitude > 0.1
+        assert chern_k.chern_number == pytest.approx(1.0, abs=1.0e-8)
+        assert chern_kprime.chern_number == pytest.approx(-1.0, abs=1.0e-8)
+        assert chern_k.metadata["boundary_sewing"] is True
+        assert chern_k.min_link_magnitude > 0.2
+        assert chern_kprime.min_link_magnitude > 0.2
+
+
+def test_tmbg_actual_shell_converged_subspaces_use_common_topology_pipeline() -> None:
+    model = TMBGModel.from_config(
+        1.05,
+        n_shells=2,
+        params=TMBGParameters.minimal(interlayer_potential=0.0),
+    )
+    conduction_band = model.lattice.matrix_dim // 2
+
+    for mesh in (5, 7):
+        frac_shift = (0.37 / mesh, 0.19 / mesh)
+        conduction = compute_lattice_topology(
+            model.fhs_state_on_grid(mesh, conduction_band, valley=1, n_bands=conduction_band + 1, frac_shift=frac_shift)
+        )
+        flat_pair = compute_lattice_topology(
+            model.fhs_state_on_grid(mesh, (conduction_band - 1, conduction_band), valley=1, n_bands=conduction_band + 1, frac_shift=frac_shift)
+        )
+
+        assert conduction.rounded_chern_number == 1
+        assert conduction.chern_number == pytest.approx(1.0, abs=1.0e-8)
+        assert conduction.min_link_magnitude > 0.2
+        assert flat_pair.rounded_chern_number == -1
+        assert flat_pair.chern_number == pytest.approx(-1.0, abs=1.0e-8)
+        assert flat_pair.min_link_magnitude > 0.08
+
+
+def test_atmg_actual_chiral_central_subspace_uses_common_topology_pipeline() -> None:
+    model = ATMGModel.from_config(
+        3,
+        1.05,
+        n_shells=2,
+        params=ATMGParameters.chiral(3, 1.05),
+    )
+    conduction_band = model.matrix_dim // 2
+
+    for mesh in (5, 7):
+        frac_shift = (0.37 / mesh, 0.19 / mesh)
+        central_pair = compute_lattice_topology(
+            model.fhs_state_on_grid(mesh, (conduction_band - 1, conduction_band), valley=1, n_bands=conduction_band + 1, frac_shift=frac_shift)
+        )
+
+        assert central_pair.rounded_chern_number == 0
+        assert central_pair.chern_number == pytest.approx(0.0, abs=1.0e-8)
+        assert central_pair.min_link_magnitude > 0.6
+
+
+def test_rlg_hbn_actual_central_pair_uses_common_topology_pipeline() -> None:
+    model = RLGhBNModel.from_config(
+        layer_count=5,
+        xi=1,
+        theta_deg=0.77,
+        shell_count=2,
+        displacement_field_mev=0.0,
+    )
+    valence_band, conduction_band = model.flat_band_indices
+
+    for mesh in (5, 7):
+        frac_shift = (0.37 / mesh, 0.19 / mesh)
+        central_pair = compute_lattice_topology(
+            model.fhs_state_on_grid(mesh, (valence_band, conduction_band), valley=1, n_bands=conduction_band + 1, frac_shift=frac_shift)
+        )
+
+        assert central_pair.rounded_chern_number == -4
+        assert central_pair.chern_number == pytest.approx(-4.0, abs=1.0e-8)
+        assert central_pair.min_link_magnitude > 0.09
 
 
 def test_generic_basis_sewing_specs_are_metadata_not_topology_calculators() -> None:
+    tmbg_spec = tmbg_topology.tmbg_basis_sewing(
+        SimpleNamespace(g_indices=np.asarray([[0, 0], [1, 0]], dtype=int))
+    )
+    atmg_spec = atmg_topology.atmg_basis_sewing(
+        SimpleNamespace(g_indices=np.asarray([[0, 0], [1, 0]], dtype=int)),
+        SimpleNamespace(n_layers=4),
+    )
     tdbg_spec = tdbg_topology.tdbg_basis_sewing(
         SimpleNamespace(
             q_sites=np.asarray([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=float),
@@ -170,6 +249,14 @@ def test_generic_basis_sewing_specs_are_metadata_not_topology_calculators() -> N
     htqg_spec = htqg_topology.htqg_basis_sewing(
         SimpleNamespace(g_indices=np.asarray([[0, 0], [1, 0]], dtype=int))
     )
+
+    assert isinstance(tmbg_spec, BlockSewingSpec)
+    assert tmbg_spec.local_block_size == 6
+    assert tmbg_spec.translations == ((1.0, 0.0), (0.0, 1.0))
+
+    assert isinstance(atmg_spec, BlockSewingSpec)
+    assert atmg_spec.local_block_size == 8
+    assert atmg_spec.translations == ((1.0, 0.0), (0.0, 1.0))
 
     assert isinstance(tdbg_spec, BlockSewingSpec)
     assert tdbg_spec.local_block_size == 4

@@ -161,6 +161,7 @@ class RLGhBNModel:
         valley: int = 1,
         endpoint: bool = False,
         n_bands: int | None = None,
+        frac_shift: tuple[float, float] = (0.0, 0.0),
     ) -> FHSState:
         return fhs_state_on_grid(
             mesh_size,
@@ -170,6 +171,7 @@ class RLGhBNModel:
             valley=valley,
             endpoint=endpoint,
             n_bands=n_bands,
+            frac_shift=frac_shift,
         )
 
     def valence_charge_background(

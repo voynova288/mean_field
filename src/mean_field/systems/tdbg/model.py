@@ -250,6 +250,7 @@ class TDBGModel:
         valley: int | None = None,
         endpoint: bool = False,
         n_bands: int | None = None,
+        frac_shift: tuple[float, float] = (0.0, 0.0),
         boundary_sewing: bool = True,
     ) -> FHSState:
         resolved_valley = self.params.valley if valley is None else int(valley)
@@ -261,5 +262,6 @@ class TDBGModel:
             valley=resolved_valley,
             endpoint=endpoint,
             n_bands=n_bands,
+            frac_shift=frac_shift,
             boundary_sewing=boundary_sewing,
         )
