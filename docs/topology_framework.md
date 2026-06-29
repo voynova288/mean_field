@@ -85,7 +85,9 @@ System modules must not:
   `BlockSewingSpec`.
 
 Current state builders route TMBG, TDBG, RLG-hBN, ATMG, and HTQG states into the
-common FHS core. TDBG/RLG-hBN/HTQG use generic `BlockSewingSpec` for seam sewing.
+common FHS core. All five system topology adapters use generic `BlockSewingSpec`
+metadata for seam sewing; the common topology layer generates the actual seam
+maps.
 
 ## Berry curvature convention
 
@@ -102,15 +104,30 @@ C = sum(berry_curvature) / (2π)
 Tracked topology tests compute Chern numbers only through
 `analysis.topology.compute_lattice_topology(FHSState)`.
 
+- TMBG: Park Fig. 2 current-code checks on `test001` use the state-only path
+  `TMBGModel.fhs_state_on_grid(...) -> compute_lattice_topology(state)` with
+  generic TMBG basis sewing.  At `theta=1.21`, `n_shells=5`, mesh 9, valley K,
+  the observed Chern numbers match the saved paper oracle: δ=0 central pair
+  `(326,327)` has `C=-1`; δ=+60 meV valence/conduction have `C=-2,+1`;
+  δ=-40 meV valence/conduction have `C=+1,-2`.
 - TDBG: AB-BA high-D single-valley conduction band state gives the Liu-2022
   single-valley Chern signs on the sewn torus.
+- ATMG: tracked tests exercise an actual reduced chiral L3 central two-band
+  subspace through the common pipeline with nonsingular links.  This is a
+  reduced code-path validation, not a paper-local ATMG topology claim; L3+
+  single-band scans with near-zero link magnitude must not be reported as
+  physical Chern numbers.
+- RLG-hBN: tracked tests exercise an actual reduced non-HF central pair and the
+  physical valley-signed plane-wave block sewing through the common pipeline.
+  This is not the Fig. 6 HF paper gate.  The xi1 saved HF sector remains a
+  positive control, but xi0 paper-local `C=0` still requires a fresh explicit
+  flavor-sector Slurm rerun and current state-only FHS postprocess.
 - HTQG: actual Fujimoto-style checkpoint in `tests/test_htqg_model.py` uses
   realistic parameters, shell-6 plane-wave basis, mesh-9 FHS grid, generic
   HTQG basis sewing, and `reports/htqg_fig1_chern_comparison_20260611.md`:
-  αβγ K-valley valence `C=-2`, conduction `C=0`.
-- RLG-hBN: common generic block-sewing tests verify the physical valley-signed
-  plane-wave block relabeling used by the state builder; full paper-local RLG
-  topology claims still require the separate saved-target/Slurm validation gate.
+  αβγ K-valley valence `C=-2`, conduction `C=0`.  This validates integrated
+  FHS Chern only; paper-local Ω(k) morphology requires a separate target,
+  normalization, and convergence check.
 
 ## Out of scope
 
