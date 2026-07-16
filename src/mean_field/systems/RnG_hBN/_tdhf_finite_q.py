@@ -170,6 +170,17 @@ def build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs(
     ``q``, the returned Liouvillian is the Eq. D19 partner block
     ``[[A(q), B(q)], [-B(-q)*, -A(-q)*]]``; correspondingly the reported B
     residual checks ``B(q)=B(-q)^T`` rather than the q=0-only ``B(q)=B(q)^T``.
+
+    The implemented Eq. D12/D18 term map is:
+
+    * ``A_direct``: ``V[p(k+q), h'(k'), h(k), p'(k'+q)]``;
+    * ``A_exchange``: ``-V[p(k+q), h'(k'), p'(k'+q), h(k)]``;
+    * ``B_direct``: ``V[p(k+q), p'(k'-q), h(k), h'(k')]``;
+    * ``B_exchange``: ``-V[p(k+q), p'(k'-q), h'(k'), h(k)]``.
+
+    For wrapped momenta the physical Coulomb transfer is still the original
+    Umklapp ``G`` plus the physical momentum difference; only the stored
+    form-factor key changes by the integer reciprocal wrap of each leg.
     """
 
     _reject_zero_literal_q0_fock_env()

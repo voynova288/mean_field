@@ -5,6 +5,7 @@ from ._hf_reference import *  # noqa: F401,F403
 from ._hf_types import *  # noqa: F401,F403
 from ._hf_basis import *  # noqa: F401,F403
 from ._hf_interaction_path import *  # noqa: F401,F403
+from ._hf_c3_quotient import *  # noqa: F401,F403
 
 def compute_rlg_hbn_oda_parameter(
     state: RLGhBNHartreeFockState,
@@ -356,6 +357,7 @@ def build_rlg_hbn_hf_problem(
     overlap_blocks: RLGhBNLayerOverlapBlockSet,
     *,
     beta: float = 1.0,
+    c3_quotient_context: RLGhBNHFC3QuotientInteractionContext | None = None,
     initial_density: np.ndarray | None = None,
     step_callback: Callable[[RLGhBNHartreeFockState, HartreeFockStepResult], None] | None = None,
 ) -> HartreeFockProblem:
@@ -406,20 +408,29 @@ def build_rlg_hbn_hf_problem(
             observables={"occupation_mask": occupation_mask},
         )
 
-    kernel = HartreeFockKernel(
-        interaction_builder=lambda density: build_rlg_hbn_hf_interaction_hamiltonian(
+    if c3_quotient_context is None:
+        interaction_builder = lambda density: build_rlg_hbn_hf_interaction_hamiltonian(
             density,
             overlap_blocks,
             v0=state.v0,
             beta=beta,
-        ),
+        )
+    else:
+        interaction_builder = lambda density: build_rlg_hbn_hf_c3_quotient_interaction_components(
+            density,
+            c3_quotient_context,
+            v0=state.v0,
+            beta=beta,
+        ).total
+
+    kernel = HartreeFockKernel(
+        interaction_builder=interaction_builder,
         density_builder=build_density,
         energy_functional=compute_hf_energy,
-        oda_parameterizer=lambda state_obj, delta_density: compute_rlg_hbn_oda_parameter(
+        oda_parameterizer=lambda state_obj, delta_density: compute_oda_parameter(
             state_obj,  # type: ignore[arg-type]
             delta_density,
-            overlap_blocks,
-            beta=beta,
+            interaction_builder=interaction_builder,
         ),
         hamiltonian_postprocessor=_hermitize_blocks_inplace,
         density_postprocessor=_hermitize_blocks_inplace,
@@ -445,6 +456,7 @@ def run_rlg_hbn_hartree_fock(
     oda_stall_threshold: float = 1.0e-3,
     max_oda_lambda: float | None = None,
     occupation_counts: tuple[int, ...] | None = None,
+    c3_quotient_interaction: bool = True,
     initial_density: np.ndarray | None = None,
     step_callback: Callable[[RLGhBNHartreeFockState, HartreeFockStepResult], None] | None = None,
 ) -> RLGhBNHartreeFockRun:
@@ -466,10 +478,32 @@ def run_rlg_hbn_hartree_fock(
         occupation_counts=resolved_counts,
     )
     resolved_blocks = overlap_blocks if overlap_blocks is not None else build_rlg_hbn_layer_overlap_blocks(basis_data)
+    quotient_context = (
+        build_rlg_hbn_hf_c3_quotient_interaction_context(
+            basis_data,
+            resolved_blocks,
+        )
+        if bool(c3_quotient_interaction)
+        and basis_data.mesh_size > 0
+        and basis_data.periodic_reciprocal_shifts is not None
+        else None
+    )
+    state.diagnostics.update(
+        {
+            "hf_c3_quotient_interaction_enabled": float(quotient_context is not None),
+            "hf_c3_quotient_fixed_source_count": float(
+                0 if quotient_context is None else len(quotient_context.fixed_sources)
+            ),
+            "hf_c3_quotient_fock_key_count": float(
+                0 if quotient_context is None else len(quotient_context.ordinary_fock_weights)
+            ),
+        }
+    )
     problem = build_rlg_hbn_hf_problem(
         state,
         resolved_blocks,
         beta=beta,
+        c3_quotient_context=quotient_context,
         initial_density=initial_density,
         step_callback=step_callback,
     )

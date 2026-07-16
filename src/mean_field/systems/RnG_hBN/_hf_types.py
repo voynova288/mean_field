@@ -23,6 +23,8 @@ class RLGhBNProjectedBasisData:
     moire_cell_area_nm2: float
     physical_h0: np.ndarray | None = None
     fixed_remote_hamiltonian: np.ndarray | None = None
+    periodic_reciprocal_shifts: tuple[tuple[int, int], ...] | None = None
+    c3_fixed_representative_pairs: tuple[tuple[int, int], ...] = ()
 
     @property
     def nk(self) -> int:

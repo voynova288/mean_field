@@ -246,12 +246,80 @@ def build_moire_k_grid(
     )
 
 
+
+def center_reciprocal_fractional_coordinates(frac: np.ndarray) -> np.ndarray:
+    """Return repeated-zone fractional coordinates centered on ``Gamma_M``.
+
+    Finite-q TDHF uses a discrete torus q-sector label.  For paper-style
+    dispersion maps, the q mesh should be shown in the repeated-zone square
+    centered at ``Gamma_M``; it should **not** be Wigner-Seitz folded into the
+    mBZ.  This helper maps each reciprocal-basis component to ``[-1/2, 1/2)``
+    componentwise and intentionally preserves points outside the black mBZ
+    hexagon.
+    """
+
+    values = np.asarray(frac, dtype=float)
+    return values - np.floor(values + 0.5)
+
+
+def finite_q_shift_cartesian_nm_inv(
+    lattice: RLGhBNLattice,
+    q_shift: tuple[int, int] | np.ndarray,
+    mesh_shape: tuple[int, int] | np.ndarray,
+    *,
+    centered: bool = True,
+) -> np.ndarray:
+    """Convert a discrete finite-q mesh shift to Cartesian q in nm^-1.
+
+    ``q_shift=(i,j)`` denotes the q-sector ``i/N1 * g_m1 + j/N2 * g_m2``.
+    With ``centered=True`` (the paper-map default), the fractional coordinates
+    are first mapped componentwise to ``[-1/2, 1/2)``.  This is a repeated-zone
+    centering convention, not Wigner-Seitz folding; the black mBZ hexagon should
+    be overlaid separately.
+    """
+
+    shift = np.asarray(q_shift, dtype=float)
+    mesh = np.asarray(mesh_shape, dtype=float)
+    if shift.shape != (2,) or mesh.shape != (2,):
+        raise ValueError(
+            f"q_shift and mesh_shape must be length-2 arrays, got {shift.shape} and {mesh.shape}"
+        )
+    if np.any(mesh <= 0):
+        raise ValueError(f"mesh_shape entries must be positive, got {mesh_shape}")
+    frac = shift / mesh
+    if centered:
+        frac = center_reciprocal_fractional_coordinates(frac)
+    q_complex = complex(frac[0] * lattice.g_m1 + frac[1] * lattice.g_m2)
+    return _xy_from_complex(q_complex)
+
+
+def mbz_hexagon_vertices_nm_inv(lattice: RLGhBNLattice) -> np.ndarray:
+    """Return closed Cartesian vertices of the first mBZ hexagon in nm^-1."""
+
+    b1 = _xy_from_complex(lattice.g_m1)
+    b2 = _xy_from_complex(lattice.g_m2)
+    return np.asarray(
+        [
+            (2.0 * b1 + b2) / 3.0,
+            (b1 + 2.0 * b2) / 3.0,
+            (-b1 + b2) / 3.0,
+            -(2.0 * b1 + b2) / 3.0,
+            -(b1 + 2.0 * b2) / 3.0,
+            (b1 - b2) / 3.0,
+            (2.0 * b1 + b2) / 3.0,
+        ],
+        dtype=float,
+    )
+
 __all__ = [
     "RLGhBNLattice",
     "build_kpath_from_nodes",
     "build_moire_k_grid",
     "build_rlg_hbn_lattice",
     "build_standard_kpath",
+    "mbz_hexagon_vertices_nm_inv",
+    "finite_q_shift_cartesian_nm_inv",
+    "center_reciprocal_fractional_coordinates",
     "rotate_complex",
     "rotation_matrix",
 ]

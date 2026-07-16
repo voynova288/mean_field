@@ -42,6 +42,204 @@ def _fold_k_to_centered_cell(k_tilde: complex, lattice: RLGhBNLattice) -> tuple[
     k_can = complex(k_tilde - int(shift[0]) * lattice.g_m1 - int(shift[1]) * lattice.g_m2)
     return k_can, (int(shift[0]), int(shift[1]))
 
+def _reciprocal_vector_from_fractional_for_gauge(
+    lattice: RLGhBNLattice,
+    frac: tuple[float, float] | np.ndarray,
+) -> complex:
+    values = np.asarray(frac, dtype=float).reshape(2)
+    return complex(float(values[0]) * lattice.g_m1 + float(values[1]) * lattice.g_m2)
+
+def _wigner_seitz_reciprocal_shift_for_gauge(
+    lattice: RLGhBNLattice,
+    frac: tuple[float, float] | np.ndarray,
+) -> tuple[int, int]:
+    values = np.asarray(frac, dtype=float).reshape(2)
+    nearest = np.rint(values).astype(int)
+    best_key: tuple[float, int, int, int, int] | None = None
+    best_shift: tuple[int, int] | None = None
+    for dm in range(int(nearest[0]) - 2, int(nearest[0]) + 3):
+        for dn in range(int(nearest[1]) - 2, int(nearest[1]) + 3):
+            candidate = (float(values[0] - dm), float(values[1] - dn))
+            norm = abs(_reciprocal_vector_from_fractional_for_gauge(lattice, candidate))
+            key = (
+                round(float(norm), 14),
+                abs(int(dm)) + abs(int(dn)),
+                int(dm) * int(dm) + int(dn) * int(dn),
+                int(dm),
+                int(dn),
+            )
+            if best_key is None or key < best_key:
+                best_key = key
+                best_shift = (int(dm), int(dn))
+    if best_shift is None:
+        raise RuntimeError("failed to determine Wigner-Seitz reciprocal shift")
+    return best_shift
+
+def _c3_reciprocal_shift(shift: tuple[int, int] | np.ndarray) -> tuple[int, int]:
+    values = np.asarray(shift, dtype=int).reshape(2)
+    return (-int(values[1]), int(values[0]) - int(values[1]))
+
+def _c3_transform_raw_components(
+    vector: np.ndarray,
+    basis_data: RLGhBNProjectedBasisData,
+    *,
+    valley: int,
+    source_total_shift: tuple[int, int],
+    target_total_shift: tuple[int, int],
+) -> np.ndarray:
+    """Apply the microscopic C3 action between periodic-gauge representatives."""
+
+    basis = basis_data.basis
+    nx, ny = basis.grid_shape
+    origin = basis_data.reciprocal_grid_origin
+    local_size = int(basis.local_basis_size)
+    omega = np.exp(2.0j * np.pi / 3.0)
+    positions = {
+        (int(origin[0]) + ix, int(origin[1]) + iy): (ix, iy)
+        for ix in range(nx)
+        for iy in range(ny)
+    }
+    c3_source = _c3_reciprocal_shift(source_total_shift)
+    delta = (
+        int(target_total_shift[0]) - int(c3_source[0]),
+        int(target_total_shift[1]) - int(c3_source[1]),
+    )
+    valley_sign = int(valley)
+    raw_offset = (-valley_sign * delta[0], -valley_sign * delta[1])
+    source = np.asarray(vector, dtype=np.complex128).reshape(
+        (local_size, nx, ny),
+        order="F",
+    )
+    target = np.zeros_like(source)
+    for ix in range(nx):
+        for iy in range(ny):
+            raw = (int(origin[0]) + ix, int(origin[1]) + iy)
+            mapped = _c3_reciprocal_shift(raw)
+            target_pair = (mapped[0] + raw_offset[0], mapped[1] + raw_offset[1])
+            if target_pair not in positions:
+                continue
+            tx, ty = positions[target_pair]
+            for local_index in range(local_size):
+                layer = local_index // 2
+                sublattice = local_index % 2
+                phase = omega ** (layer + sublattice)
+                if valley_sign == -1:
+                    phase = np.conj(phase)
+                target[local_index, tx, ty] = phase * source[local_index, ix, iy]
+    return target.reshape(np.asarray(vector).shape, order="F")
+
+
+def _c3_mesh_pair_and_representative_shift(
+    pair: tuple[int, int] | np.ndarray,
+    mesh_size: int,
+) -> tuple[tuple[int, int], tuple[int, int]]:
+    values = np.asarray(pair, dtype=int).reshape(2)
+    mesh = int(mesh_size)
+    if mesh <= 0:
+        raise ValueError(f"mesh_size must be positive, got {mesh_size}")
+    raw = (-int(values[1]), int(values[0]) - int(values[1]))
+    stored = (raw[0] % mesh, raw[1] % mesh)
+    representative_shift = ((stored[0] - raw[0]) // mesh, (stored[1] - raw[1]) // mesh)
+    return stored, (int(representative_shift[0]), int(representative_shift[1]))
+
+def _pair_to_k_index(pair: tuple[int, int], mesh_size: int) -> int:
+    return int(pair[0]) * int(mesh_size) + int(pair[1])
+
+def _k_index_to_pair(index: int, mesh_size: int) -> tuple[int, int]:
+    return (int(index) // int(mesh_size), int(index) % int(mesh_size))
+
+def _c3_equivariant_reciprocal_shifts_for_mesh(
+    mesh_size: int,
+    lattice: RLGhBNLattice,
+) -> tuple[tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]]:
+    """Return a C3-equivariant reciprocal shift gauge for a regular square mesh.
+
+    For stored C3 torus representatives ``k' = C3 k + R``, ordinary C3
+    three-cycles can use integer shifts satisfying ``S(k') = C3 S(k) + R``.
+    Nonzero C3-fixed torus sectors cannot satisfy that equation with one
+    integer representative; they are returned separately so remote Fock can
+    average over their three reciprocal representatives.
+    """
+
+    mesh = int(mesh_size)
+    if mesh <= 0:
+        raise ValueError(f"mesh_size must be positive, got {mesh_size}")
+    shifts: dict[tuple[int, int], tuple[int, int]] = {}
+    impossible: set[tuple[int, int]] = set()
+    seen: set[tuple[int, int]] = set()
+    for i in range(mesh):
+        for j in range(mesh):
+            start = (int(i), int(j))
+            if start in seen:
+                continue
+            orbit: list[tuple[int, int]] = []
+            representative_shifts: list[tuple[int, int]] = []
+            current = start
+            while current not in orbit:
+                orbit.append(current)
+                seen.add(current)
+                next_pair, representative_shift = _c3_mesh_pair_and_representative_shift(current, mesh)
+                representative_shifts.append(representative_shift)
+                current = next_pair
+            values: list[tuple[int, int]] = [
+                _wigner_seitz_reciprocal_shift_for_gauge(
+                    lattice,
+                    np.asarray(orbit[0], dtype=float) / float(mesh),
+                )
+            ]
+            for idx in range(len(orbit) - 1):
+                c3_value = _c3_reciprocal_shift(values[-1])
+                rep = representative_shifts[idx]
+                values.append((int(c3_value[0]) + int(rep[0]), int(c3_value[1]) + int(rep[1])))
+            closure_c3 = _c3_reciprocal_shift(values[-1])
+            closure_rep = representative_shifts[-1]
+            closure = (int(closure_c3[0]) + int(closure_rep[0]), int(closure_c3[1]) + int(closure_rep[1]))
+            if closure != values[0]:
+                impossible.update(orbit)
+            for pair_value, shift_value in zip(orbit, values, strict=True):
+                shifts[pair_value] = shift_value
+    ordered = tuple(shifts[_k_index_to_pair(index, mesh)] for index in range(mesh * mesh))
+    return ordered, tuple(sorted(impossible))
+
+def _regular_zero_shift_c3_reciprocal_shifts(
+    *,
+    mesh_size: int,
+    k_grid_frac: np.ndarray,
+    lattice: RLGhBNLattice,
+) -> tuple[tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]] | None:
+    mesh = int(mesh_size)
+    if mesh <= 0:
+        return None
+    frac = np.asarray(k_grid_frac, dtype=float)
+    if frac.shape != (mesh * mesh, 2):
+        return None
+    expected = np.asarray(
+        [[i / float(mesh), j / float(mesh)] for i in range(mesh) for j in range(mesh)],
+        dtype=float,
+    )
+    if not np.allclose(frac, expected, atol=1.0e-12, rtol=0.0):
+        return None
+    return _c3_equivariant_reciprocal_shifts_for_mesh(mesh, lattice)
+
+def _c3_fixed_representative_shift_orbit(
+    representative_shift: tuple[int, int],
+    *,
+    seed: tuple[int, int] = (0, 0),
+) -> tuple[tuple[int, int], ...]:
+    values: list[tuple[int, int]] = []
+    current = (int(seed[0]), int(seed[1]))
+    for _ in range(3):
+        if current in values:
+            break
+        values.append(current)
+        c3_current = _c3_reciprocal_shift(current)
+        current = (
+            int(c3_current[0]) + int(representative_shift[0]),
+            int(c3_current[1]) + int(representative_shift[1]),
+        )
+    return tuple(values)
+
+
 
 def _raw_pair_from_canonical_pair(
     canonical_pair: tuple[int, int] | np.ndarray,
@@ -172,6 +370,9 @@ def _build_projected_basis_for_indices(
     screening: ScreenedInterlayerPotentialResult | None,
     name: str,
     build_h0: bool = True,
+    reciprocal_shifts: tuple[tuple[int, int], ...] | None = None,
+    c3_fixed_representative_pairs: tuple[tuple[int, int], ...] = (),
+    periodic_gauge_padding: int | None = None,
 ) -> RLGhBNProjectedBasisData:
     resolved_kvec = np.asarray(kvec, dtype=np.complex128).reshape(-1)
     resolved_indices = tuple(int(value) for value in band_indices)
@@ -188,9 +389,16 @@ def _build_projected_basis_for_indices(
         )
 
     n_projected = len(resolved_indices)
+    resolved_padding = (
+        int(RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING)
+        if periodic_gauge_padding is None
+        else int(periodic_gauge_padding)
+    )
+    if resolved_padding < 0:
+        raise ValueError(f"periodic_gauge_padding must be non-negative, got {periodic_gauge_padding}")
     grid_shape, origin, positions = _rectangular_g_embedding(
         basis_model.lattice,
-        padding=RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING,
+        padding=resolved_padding,
     )
     nx, ny = grid_shape
     local_basis_size = int(2 * basis_model.params.layer_count)
@@ -209,11 +417,28 @@ def _build_projected_basis_for_indices(
     )
 
     index_array = np.asarray(resolved_indices, dtype=int)
-    folded_k = tuple(_fold_k_to_centered_cell(complex(kval), basis_model.lattice) for kval in resolved_kvec)
-    canonical_kvec = np.asarray([entry[0] for entry in folded_k], dtype=np.complex128)
-    reciprocal_shifts = tuple(entry[1] for entry in folded_k)
+    if reciprocal_shifts is None:
+        folded_k = tuple(_fold_k_to_centered_cell(complex(kval), basis_model.lattice) for kval in resolved_kvec)
+        canonical_kvec = np.asarray([entry[0] for entry in folded_k], dtype=np.complex128)
+        resolved_reciprocal_shifts = tuple(entry[1] for entry in folded_k)
+    else:
+        resolved_reciprocal_shifts = tuple(
+            (int(shift[0]), int(shift[1])) for shift in reciprocal_shifts
+        )
+        if len(resolved_reciprocal_shifts) != resolved_kvec.size:
+            raise ValueError(
+                "reciprocal_shifts length must match kvec size: "
+                f"{len(resolved_reciprocal_shifts)} != {resolved_kvec.size}"
+            )
+        canonical_kvec = np.asarray(
+            [
+                complex(kval - int(shift[0]) * basis_model.lattice.g_m1 - int(shift[1]) * basis_model.lattice.g_m2)
+                for kval, shift in zip(resolved_kvec, resolved_reciprocal_shifts, strict=True)
+            ],
+            dtype=np.complex128,
+        )
     for iflavor, valley in enumerate(resolved_valleys):
-        for ik, (k_can, reciprocal_shift) in enumerate(zip(canonical_kvec, reciprocal_shifts, strict=True)):
+        for ik, (k_can, reciprocal_shift) in enumerate(zip(canonical_kvec, resolved_reciprocal_shifts, strict=True)):
             evals, evecs = diagonalize_hamiltonian(
                 complex(k_can),
                 basis_model.lattice,
@@ -287,6 +512,10 @@ def _build_projected_basis_for_indices(
         moire_cell_area_nm2=moire_cell_area_nm2(basis_model),
         physical_h0=h0.copy(),
         fixed_remote_hamiltonian=np.zeros_like(h0),
+        periodic_reciprocal_shifts=resolved_reciprocal_shifts,
+        c3_fixed_representative_pairs=tuple(
+            (int(pair[0]), int(pair[1])) for pair in c3_fixed_representative_pairs
+        ),
     )
 
 
@@ -306,22 +535,63 @@ def _remote_band_indices_and_average_weights(
     return tuple(remote_indices), np.asarray(weights, dtype=float)
 
 
-def _remote_average_density_delta(remote_basis_data: RLGhBNProjectedBasisData, weights: np.ndarray) -> np.ndarray:
+def _remote_average_nt_weights(remote_basis_data: RLGhBNProjectedBasisData, weights: np.ndarray) -> np.ndarray:
     weights = np.asarray(weights, dtype=float).reshape(-1)
     if weights.size != remote_basis_data.n_band:
         raise ValueError(
             f"Expected {remote_basis_data.n_band} remote weights, got {weights.size}"
         )
-    density = np.zeros((remote_basis_data.nt, remote_basis_data.nt, remote_basis_data.nk), dtype=np.complex128)
+    nt_weights = np.zeros(remote_basis_data.nt, dtype=float)
     idx = np.arange(remote_basis_data.nt, dtype=int).reshape(
         (remote_basis_data.basis.n_spin, remote_basis_data.basis.n_flavor, remote_basis_data.n_band),
         order="F",
     )
+    for ispin in range(remote_basis_data.basis.n_spin):
+        for iflavor in range(remote_basis_data.basis.n_flavor):
+            nt_weights[idx[ispin, iflavor, :]] = weights
+    return nt_weights
+
+def _remote_average_density_delta(remote_basis_data: RLGhBNProjectedBasisData, weights: np.ndarray) -> np.ndarray:
+    nt_weights = _remote_average_nt_weights(remote_basis_data, weights)
+    density = np.zeros((remote_basis_data.nt, remote_basis_data.nt, remote_basis_data.nk), dtype=np.complex128)
+    diagonal = np.arange(remote_basis_data.nt, dtype=int)
     for ik in range(remote_basis_data.nk):
-        for ispin in range(remote_basis_data.basis.n_spin):
-            for iflavor in range(remote_basis_data.basis.n_flavor):
-                density[idx[ispin, iflavor, :], idx[ispin, iflavor, :], ik] = weights
+        density[diagonal, diagonal, ik] = nt_weights
     return density
+
+def _contract_remote_diagonal_fock_term(
+    left_overlap: np.ndarray,
+    nt_weights: np.ndarray,
+    coeff_matrix: np.ndarray,
+    right_overlap: np.ndarray,
+) -> np.ndarray:
+    """Contract a Fock term for a k-independent diagonal remote density.
+
+    Remote-average source density is diagonal in the projected remote-band
+    basis with the same weights at every source k.  Using the generic
+    ``_contract_layer_fock_term`` would sum over a full source density matrix
+    and is unnecessarily expensive for Fig. S45-sized remote windows.
+    """
+
+    left = np.asarray(left_overlap, dtype=np.complex128)
+    right = np.asarray(right_overlap, dtype=np.complex128)
+    coeff = np.asarray(coeff_matrix, dtype=float)
+    weights = np.asarray(nt_weights, dtype=float).reshape(-1)
+    nt_target, nk_target, nt_source, nk_source = left.shape
+    if right.shape != left.shape:
+        raise ValueError(f"Expected right_overlap shape {left.shape}, got {right.shape}")
+    if coeff.shape != (nk_target, nk_source):
+        raise ValueError(f"Expected coeff_matrix shape {(nk_target, nk_source)}, got {coeff.shape}")
+    if weights.shape != (nt_source,):
+        raise ValueError(f"Expected nt_weights shape {(nt_source,)}, got {weights.shape}")
+    return np.einsum(
+        "ts,atcs,c,btcs->abt",
+        coeff,
+        left,
+        weights,
+        np.conj(right),
+        optimize=True,
+    )
 
 
 def _prepare_remote_average_source(
@@ -348,6 +618,8 @@ def _prepare_remote_average_source(
         screening=None,
         name="rlg_hbn_screened_remote",
         build_h0=False,
+        reciprocal_shifts=source_basis_data.periodic_reciprocal_shifts,
+        c3_fixed_representative_pairs=source_basis_data.c3_fixed_representative_pairs,
     )
     return _RLGhBNRemoteAverageSource(
         basis_data=remote_basis_data,
@@ -394,6 +666,81 @@ def _slice_projected_basis_data_bands(
         active_band_indices=tuple(int(value) for value in basis_data.active_band_indices[start:stop]),
         physical_h0=None,
         fixed_remote_hamiltonian=None,
+    )
+
+def _slice_projected_basis_data_kpoints(
+    basis_data: RLGhBNProjectedBasisData,
+    indices: np.ndarray | list[int] | tuple[int, ...],
+) -> RLGhBNProjectedBasisData:
+    resolved = np.asarray(indices, dtype=int).reshape(-1)
+    if resolved.size == 0:
+        raise ValueError("At least one k point is required")
+    if np.min(resolved) < 0 or np.max(resolved) >= basis_data.nk:
+        raise ValueError(f"k-point indices out of range for nk={basis_data.nk}: {resolved.tolist()}")
+    basis = ProjectedWavefunctionBasis(
+        wavefunctions=np.asarray(basis_data.basis.wavefunctions[:, :, :, resolved], dtype=np.complex128),
+        grid_shape=basis_data.basis.grid_shape,
+        n_spin=basis_data.basis.n_spin,
+        local_basis_size=basis_data.basis.local_basis_size,
+        name=f"{basis_data.basis.name}_k_slice",
+        boundary_mode=basis_data.basis.boundary_mode,
+        component_groups=basis_data.basis.component_groups,
+    )
+    h0 = np.asarray(basis_data.h0[:, :, resolved], dtype=np.complex128)
+    periodic_shifts = (
+        None
+        if basis_data.periodic_reciprocal_shifts is None
+        else tuple(basis_data.periodic_reciprocal_shifts[int(index)] for index in resolved)
+    )
+    return replace(
+        basis_data,
+        kvec=np.asarray(basis_data.kvec[resolved], dtype=np.complex128),
+        k_grid_frac=np.asarray(basis_data.k_grid_frac[resolved], dtype=float),
+        basis=basis,
+        h0=h0,
+        band_energies=np.asarray(basis_data.band_energies[:, :, resolved], dtype=float),
+        physical_h0=None if basis_data.physical_h0 is None else np.asarray(basis_data.physical_h0[:, :, resolved], dtype=np.complex128),
+        fixed_remote_hamiltonian=(
+            None
+            if basis_data.fixed_remote_hamiltonian is None
+            else np.asarray(basis_data.fixed_remote_hamiltonian[:, :, resolved], dtype=np.complex128)
+        ),
+        periodic_reciprocal_shifts=periodic_shifts,
+    )
+
+def _build_c3_fixed_remote_representative_source(
+    source_basis_data: RLGhBNProjectedBasisData,
+    remote_basis_data: RLGhBNProjectedBasisData,
+    fixed_pair: tuple[int, int],
+) -> RLGhBNProjectedBasisData:
+    mesh = int(source_basis_data.mesh_size)
+    if mesh <= 0:
+        raise ValueError("C3 fixed-sector representative source requires a regular mesh")
+    source_index = _pair_to_k_index(fixed_pair, mesh)
+    if source_index < 0 or source_index >= source_basis_data.nk:
+        raise ValueError(f"fixed_pair={fixed_pair} is outside mesh_size={mesh}")
+    c3_pair, representative_shift = _c3_mesh_pair_and_representative_shift(fixed_pair, mesh)
+    if c3_pair != fixed_pair:
+        raise ValueError(f"fixed_pair={fixed_pair} is not C3-fixed; maps to {c3_pair}")
+    representative_orbit = _c3_fixed_representative_shift_orbit(representative_shift)
+    return _build_projected_basis_for_indices(
+        physical_model=remote_basis_data.model,
+        basis_model=remote_basis_data.basis_model,
+        interaction=remote_basis_data.interaction,
+        kvec=np.repeat(np.asarray(source_basis_data.kvec[source_index], dtype=np.complex128), len(representative_orbit)),
+        band_indices=remote_basis_data.active_band_indices,
+        valleys=remote_basis_data.valleys,
+        mesh_size=source_basis_data.mesh_size,
+        k_grid_frac=np.repeat(
+            np.asarray(source_basis_data.k_grid_frac[source_index], dtype=float).reshape(1, 2),
+            len(representative_orbit),
+            axis=0,
+        ),
+        screening=None,
+        name=f"{remote_basis_data.basis.name}_fixed_c3_{fixed_pair[0]}_{fixed_pair[1]}",
+        build_h0=False,
+        reciprocal_shifts=representative_orbit,
+        c3_fixed_representative_pairs=(fixed_pair,),
     )
 
 
@@ -486,9 +833,10 @@ def _remote_average_hamiltonian_from_source(
     beta: float = 1.0,
 ) -> np.ndarray:
     from ._hf_interaction_path import (
-        _contract_layer_fock_term,
+        _fock_overlap_shift_for_physical_transfer,
         build_rlg_hbn_layer_overlap_blocks,
         build_rlg_hbn_layer_overlap_blocks_between,
+        fock_transfer_wrap_masks_between,
         interaction_shifts_for_cutoff,
     )
 
@@ -525,6 +873,37 @@ def _remote_average_hamiltonian_from_source(
     layer_spacing = float(source_basis_data.basis_model.params.layer_spacing_nm)
     chunk_size = _remote_average_chunk_size(remote_basis_data.n_band)
 
+    fixed_pairs = tuple(remote_basis_data.c3_fixed_representative_pairs)
+    use_fixed_sector_repair = (
+        target_basis_data.periodic_reciprocal_shifts is not None
+        and remote_basis_data.periodic_reciprocal_shifts is not None
+        and source_basis_data.mesh_size > 0
+        and bool(fixed_pairs)
+    )
+    source_groups: list[tuple[RLGhBNProjectedBasisData, np.ndarray]] = []
+    if use_fixed_sector_repair:
+        mesh = int(source_basis_data.mesh_size)
+        fixed_indices = {_pair_to_k_index(pair, mesh) for pair in fixed_pairs}
+        ordinary_indices = [index for index in range(remote_basis_data.nk) if index not in fixed_indices]
+        if ordinary_indices:
+            source_groups.append((_slice_projected_basis_data_kpoints(remote_basis_data, ordinary_indices), remote_weights))
+        for fixed_pair in fixed_pairs:
+            source_groups.append(
+                (
+                    _build_c3_fixed_remote_representative_source(
+                        source_basis_data,
+                        remote_basis_data,
+                        fixed_pair,
+                    ),
+                    remote_weights / 3.0,
+                )
+            )
+    else:
+        source_groups.append((remote_basis_data, remote_weights))
+
+    # Hartree uses the physical shell G directly and the diagonal remote
+    # density trace.  The same fixed-sector representative average used for
+    # Fock is needed here too once the active/remote bases use the C3 gauge.
     for shift, gvec in zip(resolved_shifts, gvecs, strict=True):
         target_layer_diagonal = target_blocks.layer_diagonal_overlaps[shift]
         hartree_kernel = layer_coulomb_matrix_mev_nm2(
@@ -533,40 +912,78 @@ def _remote_average_hamiltonian_from_source(
             source_basis_data.interaction,
             layer_spacing_nm=layer_spacing,
         )
-        layer_traces = _layer_traces_for_diagonal_band_weights(
-            remote_basis_data.basis,
-            remote_weights,
-            shift[0],
-            shift[1],
-            layer_count=layer_count,
-            valleys=remote_basis_data.valleys,
-        )
+        layer_traces = np.zeros(layer_count, dtype=np.complex128)
+        for source_group, group_weights in source_groups:
+            layer_traces += _layer_traces_for_diagonal_band_weights(
+                source_group.basis,
+                group_weights,
+                shift[0],
+                shift[1],
+                layer_count=layer_count,
+                valleys=source_group.valleys,
+            )
         for target_layer in range(layer_count):
             prefactor = scale * complex(np.dot(hartree_kernel[target_layer, :], layer_traces))
             if prefactor != 0.0:
                 hamiltonian += prefactor * target_layer_diagonal[target_layer]
 
-        for start in range(0, remote_basis_data.n_band, chunk_size):
-            stop = min(start + chunk_size, remote_basis_data.n_band)
-            chunk_basis_data = _slice_projected_basis_data_bands(remote_basis_data, start, stop)
-            chunk_density = _remote_average_density_delta(chunk_basis_data, remote_weights[start:stop])
+    # Fock uses the internal transfer k_target-k_source.  A finite G shell is
+    # C3-covariant only when this internal transfer is represented in the first
+    # mBZ.  For wrap W with delta_ws=delta-W, physical shell G is read from
+    # cached overlap key H=G-W so that delta+H = delta_ws+G.
+    def accumulate_fock_from_source_group(
+        source_group: RLGhBNProjectedBasisData,
+        group_weights: np.ndarray,
+    ) -> None:
+        group_weights = np.asarray(group_weights, dtype=float).reshape(-1)
+        if group_weights.size != source_group.n_band:
+            raise ValueError(f"Expected {source_group.n_band} remote weights, got {group_weights.size}")
+        fock_wrap_masks = fock_transfer_wrap_masks_between(target_basis_data, source_group)
+        all_fock_keys = tuple(
+            sorted(
+                {
+                    _fock_overlap_shift_for_physical_transfer(shift, wrap)
+                    for shift in resolved_shifts
+                    for wrap in fock_wrap_masks
+                }
+            )
+        )
+        fock_key_by_shift_wrap = {
+            (shift, wrap): _fock_overlap_shift_for_physical_transfer(shift, wrap)
+            for shift in resolved_shifts
+            for wrap in fock_wrap_masks
+        }
+        for start in range(0, source_group.n_band, chunk_size):
+            stop = min(start + chunk_size, source_group.n_band)
+            chunk_basis_data = _slice_projected_basis_data_bands(source_group, start, stop)
+            chunk_weights = _remote_average_nt_weights(chunk_basis_data, group_weights[start:stop])
             target_source_blocks = build_rlg_hbn_layer_overlap_blocks_between(
                 target_basis_data,
                 chunk_basis_data,
-                shifts=(shift,),
+                shifts=all_fock_keys,
             )
-            target_source_layer_overlap = target_source_blocks.layer_overlaps[shift]
-            fock_kernel = _maybe_zero_literal_q0_fock_kernel(shift, target_source_blocks.fock_layer_coulomb[shift])
-            for target_layer in range(layer_count):
-                for source_layer in range(layer_count):
-                    coeff = scale * fock_kernel[:, :, target_layer, source_layer]
-                    if np.any(coeff != 0.0):
-                        hamiltonian -= _contract_layer_fock_term(
-                            target_source_layer_overlap[target_layer],
-                            chunk_density,
-                            coeff,
-                            target_source_layer_overlap[source_layer],
-                        )
+            for shift in resolved_shifts:
+                for wrap, pair_mask in fock_wrap_masks.items():
+                    fock_key = fock_key_by_shift_wrap[(shift, wrap)]
+                    target_source_layer_overlap = target_source_blocks.layer_overlaps[fock_key]
+                    fock_kernel = _maybe_zero_literal_q0_fock_kernel(
+                        fock_key,
+                        target_source_blocks.fock_layer_coulomb[fock_key],
+                    )
+                    masked = np.asarray(pair_mask, dtype=float)
+                    for target_layer in range(layer_count):
+                        for source_layer in range(layer_count):
+                            coeff = scale * fock_kernel[:, :, target_layer, source_layer] * masked
+                            if np.any(coeff != 0.0):
+                                hamiltonian[:] -= _contract_remote_diagonal_fock_term(
+                                    target_source_layer_overlap[target_layer],
+                                    chunk_weights,
+                                    coeff,
+                                    target_source_layer_overlap[source_layer],
+                                )
+
+    for source_group, group_weights in source_groups:
+        accumulate_fock_from_source_group(source_group, group_weights)
 
     _hermitize_blocks_inplace(hamiltonian)
     return hamiltonian
@@ -633,6 +1050,17 @@ def build_rlg_hbn_projected_basis(
     k_grid_frac, kvec_grid = build_moire_k_grid(basis_model.lattice, resolved_mesh, endpoint=False, frac_shift=frac_shift)
     kvec = np.asarray(kvec_grid.reshape(-1), dtype=np.complex128)
     active_indices = active_band_indices_for_interaction(basis_model, resolved_interaction)
+    flattened_k_grid_frac = np.asarray(k_grid_frac, dtype=float).reshape(-1, 2)
+    c3_shift_data = _regular_zero_shift_c3_reciprocal_shifts(
+        mesh_size=int(resolved_mesh),
+        k_grid_frac=flattened_k_grid_frac,
+        lattice=basis_model.lattice,
+    )
+    if c3_shift_data is None:
+        periodic_reciprocal_shifts = None
+        c3_fixed_representative_pairs: tuple[tuple[int, int], ...] = ()
+    else:
+        periodic_reciprocal_shifts, c3_fixed_representative_pairs = c3_shift_data
     basis_data = _build_projected_basis_for_indices(
         physical_model=model,
         basis_model=basis_model,
@@ -641,9 +1069,11 @@ def build_rlg_hbn_projected_basis(
         band_indices=active_indices,
         valleys=resolved_valleys,
         mesh_size=int(resolved_mesh),
-        k_grid_frac=np.asarray(k_grid_frac, dtype=float).reshape(-1, 2),
+        k_grid_frac=flattened_k_grid_frac,
         screening=screening,
         name="rlg_hbn_screened_active",
+        reciprocal_shifts=periodic_reciprocal_shifts,
+        c3_fixed_representative_pairs=c3_fixed_representative_pairs,
     )
     fixed_remote = build_rlg_hbn_remote_average_hamiltonian(basis_data)
     completed = replace(

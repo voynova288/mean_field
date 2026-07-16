@@ -150,6 +150,118 @@ def interaction_shifts_for_cutoff(
     entries.sort(key=lambda item: (item[0], item[1] * item[1] + item[2] * item[2], item[1], item[2]))
     return tuple((m, n) for _, m, n in entries)
 
+def _reciprocal_vector_from_fractional(lattice: RLGhBNLattice, frac: tuple[float, float] | np.ndarray) -> complex:
+    values = np.asarray(frac, dtype=float).reshape(2)
+    return complex(float(values[0]) * lattice.g_m1 + float(values[1]) * lattice.g_m2)
+
+def _wigner_seitz_reciprocal_wrap(
+    lattice: RLGhBNLattice,
+    frac_delta: tuple[float, float] | np.ndarray,
+) -> tuple[tuple[float, float], tuple[int, int]]:
+    """Fold a reciprocal-basis displacement into the first mBZ.
+
+    The finite reciprocal shell used in Fock contractions is C3-covariant only
+    when the internal transfer ``k_target-k_source`` is represented in the
+    first Wigner-Seitz mBZ before adding shell vectors ``G``.  This helper
+    returns ``(delta_ws, wrap)`` such that ``delta_ws = frac_delta - wrap``.
+    The deterministic tie-break is only for exact boundary points; all choices
+    are reciprocal-lattice-equivalent, but callers must use the returned wrap
+    consistently when choosing the cached form-factor key.
+    """
+
+    delta = np.asarray(frac_delta, dtype=float).reshape(2)
+    # The mesh displacements used here lie in (-1, 1)^2.  Searching a small
+    # neighborhood around the nearest integer is enough and avoids imposing a
+    # componentwise-centered convention, which is not C3-covariant for a
+    # triangular reciprocal lattice.
+    nearest = np.rint(delta).astype(int)
+    best_key: tuple[float, int, int, int, int] | None = None
+    best_delta: tuple[float, float] | None = None
+    best_wrap: tuple[int, int] | None = None
+    for dm in range(int(nearest[0]) - 2, int(nearest[0]) + 3):
+        for dn in range(int(nearest[1]) - 2, int(nearest[1]) + 3):
+            candidate = (float(delta[0] - dm), float(delta[1] - dn))
+            norm = abs(_reciprocal_vector_from_fractional(lattice, candidate))
+            key = (round(float(norm), 14), abs(int(dm)) + abs(int(dn)), int(dm) * int(dm) + int(dn) * int(dn), int(dm), int(dn))
+            if best_key is None or key < best_key:
+                best_key = key
+                best_delta = candidate
+                best_wrap = (int(dm), int(dn))
+    if best_delta is None or best_wrap is None:
+        raise RuntimeError("failed to determine Wigner-Seitz reciprocal wrap")
+    return best_delta, best_wrap
+
+def _fock_overlap_shift_for_physical_transfer(
+    physical_shift: tuple[int, int],
+    wrap: tuple[int, int],
+) -> tuple[int, int]:
+    """Cached overlap key for a WS-folded Fock transfer.
+
+    If ``delta = k_target-k_source`` and ``delta_ws = delta-wrap``, a physical
+    shell vector ``G`` contributes transfer ``delta_ws+G``.  Since cached
+    overlaps are addressed by a key ``H`` through ``delta+H``, the corresponding
+    form-factor key is ``H=G-wrap``.
+    """
+
+    return (int(physical_shift[0]) - int(wrap[0]), int(physical_shift[1]) - int(wrap[1]))
+
+
+def fock_transfer_wrap_masks_between(
+    target_basis_data: RLGhBNProjectedBasisData,
+    source_basis_data: RLGhBNProjectedBasisData,
+    *,
+    tie_atol: float = 1.0e-12,
+) -> dict[tuple[int, int], np.ndarray]:
+    """Group target/source k pairs by WS wrap, averaging exact boundary ties.
+
+    The returned masks have shape ``(nk_target, nk_source)`` and floating
+    weights.  For a physical Fock shell vector ``G`` and wrap ``W``, callers
+    should use cached overlap key ``G-W`` so that the cached transfer
+    ``(k_t-k_s)+(G-W)`` equals the C3-covariant representative
+    ``(k_t-k_s-W)+G``.
+
+    Boundary points can have several equally short WS wraps on a triangular
+    reciprocal lattice.  A deterministic single tie-break is not C3-covariant;
+    averaging equally over all shortest wraps preserves the C3 orbit sum.
+    """
+
+    target_frac = np.asarray(
+        [_reciprocal_fractional_coordinates(complex(k), target_basis_data.basis_model.lattice) for k in target_basis_data.kvec],
+        dtype=float,
+    )
+    source_frac = np.asarray(
+        [_reciprocal_fractional_coordinates(complex(k), source_basis_data.basis_model.lattice) for k in source_basis_data.kvec],
+        dtype=float,
+    )
+    if target_frac.shape != (target_basis_data.nk, 2) or source_frac.shape != (source_basis_data.nk, 2):
+        raise ValueError(
+            "Unexpected reciprocal fractional coordinate shapes: "
+            f"target={target_frac.shape}, source={source_frac.shape}"
+        )
+    masks: dict[tuple[int, int], np.ndarray] = {}
+    for kt in range(target_basis_data.nk):
+        for ks in range(source_basis_data.nk):
+            delta = target_frac[kt] - source_frac[ks]
+            nearest = np.rint(delta).astype(int)
+            candidates: list[tuple[float, tuple[int, int]]] = []
+            for dm in range(int(nearest[0]) - 2, int(nearest[0]) + 3):
+                for dn in range(int(nearest[1]) - 2, int(nearest[1]) + 3):
+                    wrap = (int(dm), int(dn))
+                    norm = abs(
+                        _reciprocal_vector_from_fractional(
+                            source_basis_data.basis_model.lattice,
+                            delta - np.asarray(wrap, dtype=float),
+                        )
+                    )
+                    candidates.append((float(norm), wrap))
+            best = min(value for value, _wrap in candidates)
+            wraps = sorted({wrap for value, wrap in candidates if abs(value - best) <= float(tie_atol)})
+            weight = 1.0 / float(len(wraps))
+            for wrap in wraps:
+                if wrap not in masks:
+                    masks[wrap] = np.zeros((target_basis_data.nk, source_basis_data.nk), dtype=float)
+                masks[wrap][kt, ks] += weight
+    return masks
 
 def _layer_coulomb_tensor_for_qvals(
     qvals: np.ndarray,

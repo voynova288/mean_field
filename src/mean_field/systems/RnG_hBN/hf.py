@@ -35,6 +35,12 @@ from ._hf_basis import (
     build_rlg_hbn_projected_basis_for_kvec,
     build_rlg_hbn_remote_average_hamiltonian,
 )
+from ._hf_c3_quotient import (
+    RLG_HBN_HF_INTERACTION_CONVENTION_VERSION,
+    RLGhBNHFC3QuotientInteractionContext,
+    build_rlg_hbn_hf_c3_quotient_interaction_components,
+    build_rlg_hbn_hf_c3_quotient_interaction_context,
+)
 from ._hf_interaction_path import (
     build_rlg_hbn_hf_interaction_hamiltonian,
     build_rlg_hbn_interaction_components,
@@ -64,6 +70,7 @@ from .model import RLGhBNModel
 
 __all__ = [
     "RLGhBNGroundStateScan",
+    "RLGhBNHFC3QuotientInteractionContext",
     "RLGhBNHFPathResult",
     "RLGhBNHartreeFockRun",
     "RLGhBNHartreeFockState",
@@ -75,10 +82,13 @@ __all__ = [
     "RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING",
     "RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION",
     "RLG_HBN_FORM_FACTOR_CONVENTION_VERSION",
+    "RLG_HBN_HF_INTERACTION_CONVENTION_VERSION",
     "VALLEY_SEQUENCE",
     "active_band_indices_for_interaction",
     "average_scheme_density_delta",
     "build_rlg_hbn_density_from_hamiltonian",
+    "build_rlg_hbn_hf_c3_quotient_interaction_components",
+    "build_rlg_hbn_hf_c3_quotient_interaction_context",
     "build_rlg_hbn_hf_interaction_hamiltonian",
     "build_rlg_hbn_hf_problem",
     "build_rlg_hbn_interaction_components",

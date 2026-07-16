@@ -29,6 +29,12 @@ from ._tdhf_finite_q import (
     build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs,
     build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs,
 )
+from ._tdhf_quotient_orbit import (
+    RLGhBNTDHFQuotientCycleResult,
+    RLGhBNTDHFQuotientOrbitResult,
+    build_rlg_hbn_tdhf_c3_quotient_cycle,
+    build_rlg_hbn_tdhf_c3_quotient_orbit,
+)
 from ._tdhf_dispatch import (
     build_rlg_hbn_tdhf_q_matrices,
     build_rlg_hbn_tdhf_q_matrices_from_canonical_hf,
@@ -41,8 +47,12 @@ __all__ = [
     "RLGhBNTDHFFiniteQSupport",
     "RLGhBNTDHFMomentumShift",
     "RLGhBNTDHFOrbitals",
+    "RLGhBNTDHFQuotientCycleResult",
+    "RLGhBNTDHFQuotientOrbitResult",
     "build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs",
     "build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs",
+    "build_rlg_hbn_tdhf_c3_quotient_cycle",
+    "build_rlg_hbn_tdhf_c3_quotient_orbit",
     "build_rlg_hbn_tdhf_interaction",
     "build_rlg_hbn_tdhf_orbitals",
     "build_rlg_hbn_tdhf_orbitals_from_canonical_hf",

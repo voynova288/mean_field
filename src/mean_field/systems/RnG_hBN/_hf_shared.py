@@ -51,7 +51,7 @@ else:
 
 
 VALLEY_SEQUENCE = (1, -1)
-RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION = "centered_cell_reciprocal_relabel_pad1_v2"
+RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION = "c3_equivariant_reciprocal_relabel_fixedrep_v3"
 RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING = 1
 RLG_HBN_FORM_FACTOR_CONVENTION_VERSION = "physical_q_plus_g_valley_signed_raw_shift_v2"
 

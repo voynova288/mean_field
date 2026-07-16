@@ -12,6 +12,7 @@ import numpy as np
 
 from ...core.hf import ProjectedWavefunctionBasis
 from ...core.io import write_json_artifact
+from ._hf_basis import _regular_zero_shift_c3_reciprocal_shifts
 from .hf import (
     RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
     RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING,
@@ -323,6 +324,16 @@ def save_projected_basis_cache(
     np.save(tmp_path / "valleys.npy", np.asarray(basis_data.valleys, dtype=int))
     np.save(tmp_path / "reciprocal_grid_shape.npy", np.asarray(basis_data.reciprocal_grid_shape, dtype=int))
     np.save(tmp_path / "reciprocal_grid_origin.npy", np.asarray(basis_data.reciprocal_grid_origin, dtype=int))
+    np.save(
+        tmp_path / "periodic_reciprocal_shifts.npy",
+        np.empty((0, 2), dtype=int)
+        if basis_data.periodic_reciprocal_shifts is None
+        else np.asarray(basis_data.periodic_reciprocal_shifts, dtype=int).reshape(-1, 2),
+    )
+    np.save(
+        tmp_path / "c3_fixed_representative_pairs.npy",
+        np.asarray(basis_data.c3_fixed_representative_pairs, dtype=int).reshape(-1, 2),
+    )
     np.save(tmp_path / "moire_cell_area_nm2.npy", np.asarray([basis_data.moire_cell_area_nm2], dtype=float))
     if basis_data.screening is not None:
         _write_json(tmp_path / "screening_result.json", screening_result_to_dict(basis_data.screening))
@@ -381,6 +392,43 @@ def load_projected_basis_cache(cache_dir: Path, key: str) -> RLGhBNProjectedBasi
         screening = screening_result_from_dict(_read_json(path / "screening_result.json"))
     wavefunctions = np.load(path / "wavefunctions.npy")
     reciprocal_grid_shape = tuple(int(value) for value in np.load(path / "reciprocal_grid_shape.npy").reshape(-1))
+    k_grid_frac = np.asarray(np.load(path / "k_grid_frac.npy"), dtype=float)
+    mesh_size = int(extra.get("mesh_size", interaction.k_mesh_size))
+    periodic_path = path / "periodic_reciprocal_shifts.npy"
+    fixed_path = path / "c3_fixed_representative_pairs.npy"
+    if periodic_path.exists() and fixed_path.exists():
+        periodic_array = np.asarray(np.load(periodic_path), dtype=int).reshape(-1, 2)
+        fixed_array = np.asarray(np.load(fixed_path), dtype=int).reshape(-1, 2)
+        periodic_reciprocal_shifts = (
+            None
+            if periodic_array.size == 0
+            else tuple((int(pair[0]), int(pair[1])) for pair in periodic_array)
+        )
+        c3_fixed_representative_pairs = tuple(
+            (int(pair[0]), int(pair[1])) for pair in fixed_array
+        )
+    else:
+        # v3 caches written before these arrays were serialized still contain
+        # enough geometry to recover exactly the metadata used by the builder.
+        # Stale pre-v3 caches have already been rejected above.
+        derived = _regular_zero_shift_c3_reciprocal_shifts(
+            mesh_size=mesh_size,
+            k_grid_frac=k_grid_frac,
+            lattice=basis_model.lattice,
+        )
+        if derived is None:
+            periodic_reciprocal_shifts = None
+            c3_fixed_representative_pairs = ()
+        else:
+            periodic_reciprocal_shifts, c3_fixed_representative_pairs = derived
+    if (
+        periodic_reciprocal_shifts is not None
+        and len(periodic_reciprocal_shifts) != int(wavefunctions.shape[-1])
+    ):
+        raise RLGhBNCacheMiss(
+            "Basis cache periodic reciprocal-shift count does not match nk: "
+            f"{len(periodic_reciprocal_shifts)} != {int(wavefunctions.shape[-1])}"
+        )
     basis = ProjectedWavefunctionBasis(
         wavefunctions=np.asarray(wavefunctions, dtype=np.complex128),
         grid_shape=reciprocal_grid_shape,  # type: ignore[arg-type]
@@ -394,9 +442,9 @@ def load_projected_basis_cache(cache_dir: Path, key: str) -> RLGhBNProjectedBasi
         basis_model=basis_model,
         interaction=interaction,
         screening=screening,
-        mesh_size=int(extra.get("mesh_size", interaction.k_mesh_size)),
+        mesh_size=mesh_size,
         kvec=_complex_from_pairs(np.load(path / "kvec_complex_pairs.npy")),
-        k_grid_frac=np.asarray(np.load(path / "k_grid_frac.npy"), dtype=float),
+        k_grid_frac=k_grid_frac,
         basis=basis,
         h0=np.asarray(np.load(path / "h0.npy"), dtype=np.complex128),
         band_energies=np.asarray(np.load(path / "band_energies.npy"), dtype=float),
@@ -408,6 +456,8 @@ def load_projected_basis_cache(cache_dir: Path, key: str) -> RLGhBNProjectedBasi
         moire_cell_area_nm2=float(np.load(path / "moire_cell_area_nm2.npy").reshape(-1)[0]),
         physical_h0=np.asarray(np.load(path / "physical_h0.npy"), dtype=np.complex128),
         fixed_remote_hamiltonian=np.asarray(np.load(path / "fixed_remote_hamiltonian.npy"), dtype=np.complex128),
+        periodic_reciprocal_shifts=periodic_reciprocal_shifts,
+        c3_fixed_representative_pairs=c3_fixed_representative_pairs,
     )
 
 
