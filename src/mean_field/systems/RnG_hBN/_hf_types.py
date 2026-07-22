@@ -129,10 +129,25 @@ class RLGhBNHartreeFockState:
 
 
 @dataclass(frozen=True)
+class RLGhBNHFInteractionProvenance:
+    convention: str
+    quotient_enabled: bool
+    beta: float
+    physical_shifts: tuple[tuple[int, int], ...]
+    zero_literal_q0_fock: bool
+    basis_periodic_gauge: str
+    basis_periodic_gauge_padding: int
+    form_factor_convention: str
+    basis_cache_key: str | None = None
+    overlap_cache_key: str | None = None
+
+
+@dataclass(frozen=True)
 class RLGhBNHartreeFockRun(HartreeFockRun):
     state: RLGhBNHartreeFockState
     overlap_blocks: RLGhBNLayerOverlapBlockSet
     basis_data: RLGhBNProjectedBasisData
+    interaction_provenance: RLGhBNHFInteractionProvenance | None = None
 
 
 @dataclass(frozen=True)

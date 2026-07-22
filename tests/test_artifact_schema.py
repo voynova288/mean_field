@@ -733,7 +733,12 @@ def test_rlg_hbn_hf_archive_records_density_convention_metadata(tmp_path) -> Non
         flat_band_indices=np.asarray([0, 1], dtype=int),
     )
     archive = tmp_path / "hf_run_state.npz"
-    _save_state_archive(archive, SimpleNamespace(state=state, basis_data=basis_data), {"energy_mev": [], "err": [], "oda": []})
+    _save_state_archive(
+        archive,
+        SimpleNamespace(state=state, basis_data=basis_data),
+        {"energy_mev": [], "err": [], "oda": []},
+        require_interaction_provenance=False,
+    )
 
     with np.load(archive, allow_pickle=False) as payload:
         assert payload["density_convention"].item() == "stored_delta"

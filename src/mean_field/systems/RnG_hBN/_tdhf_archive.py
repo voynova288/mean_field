@@ -73,6 +73,18 @@ def load_rlg_hbn_tdhf_run_from_archive(
         }
     )
 
+    interaction_provenance = _archive_interaction_provenance(
+        archive,
+        basis_cache_key=basis_key,
+        overlap_cache_key=overlap_key,
+    )
+    if interaction_provenance is not None and interaction_provenance.physical_shifts != tuple(
+        (int(x), int(y)) for x, y in overlap_blocks.shifts
+    ):
+        raise ValueError(
+            "HF archive interaction physical shifts do not match the restored overlap cache"
+        )
+
     return RLGhBNHartreeFockRun(
         state=state,
         iter_energy=np.asarray(archive.get("iter_energy_mev", np.asarray([], dtype=float)), dtype=float),
@@ -84,6 +96,7 @@ def load_rlg_hbn_tdhf_run_from_archive(
         exit_reason=str(summary.get("exit_reason", "loaded_archive")),
         overlap_blocks=overlap_blocks,
         basis_data=basis_data,
+        interaction_provenance=interaction_provenance,
     )
 
 
@@ -117,6 +130,68 @@ def _archive_bool(archive: dict[str, np.ndarray], key: str, *, default: bool) ->
     if isinstance(item, np.integer | int):
         return bool(int(item))
     return str(item).strip().lower() not in {"", "0", "false", "no", "off"}
+
+
+def _archive_interaction_provenance(
+    archive: dict[str, np.ndarray],
+    *,
+    basis_cache_key: str,
+    overlap_cache_key: str,
+) -> RLGhBNHFInteractionProvenance | None:
+    convention = _archive_string(archive, "hf_interaction_convention")
+    if not convention:
+        return None
+    required = (
+        "hf_quotient_enabled",
+        "hf_beta",
+        "hf_physical_shifts",
+        "zero_literal_q0_fock",
+        "hf_basis_periodic_gauge",
+        "hf_basis_periodic_gauge_padding",
+        "hf_form_factor_convention",
+    )
+    missing = [key for key in required if key not in archive]
+    if missing:
+        raise ValueError(
+            f"HF archive has partial interaction provenance; missing {missing}"
+        )
+    shifts = np.asarray(archive["hf_physical_shifts"], dtype=int)
+    if shifts.ndim != 2 or shifts.shape[1] != 2:
+        raise ValueError(
+            f"hf_physical_shifts must have shape (n,2), got {shifts.shape}"
+        )
+    return RLGhBNHFInteractionProvenance(
+        convention=convention,
+        quotient_enabled=_archive_bool(
+            archive,
+            "hf_quotient_enabled",
+            default=False,
+        ),
+        beta=_archive_scalar_float(archive, "hf_beta", default=float("nan")),
+        physical_shifts=tuple((int(x), int(y)) for x, y in shifts),
+        zero_literal_q0_fock=_archive_bool(
+            archive,
+            "zero_literal_q0_fock",
+            default=False,
+        ),
+        basis_periodic_gauge=_archive_string(
+            archive,
+            "hf_basis_periodic_gauge",
+        ),
+        basis_periodic_gauge_padding=int(
+            _archive_scalar_float(
+                archive,
+                "hf_basis_periodic_gauge_padding",
+                default=-1.0,
+            )
+        ),
+        form_factor_convention=_archive_string(
+            archive,
+            "hf_form_factor_convention",
+        ),
+        basis_cache_key=str(basis_cache_key),
+        overlap_cache_key=str(overlap_cache_key),
+    )
 
 
 def _assign_archive_array(

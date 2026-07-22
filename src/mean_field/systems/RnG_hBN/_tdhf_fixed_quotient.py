@@ -18,7 +18,17 @@ from ._hf_basis import (
     _raw_pair_from_canonical_pair,
     _rlg_hbn_layer_local_indices,
 )
-from ._hf_shared import shift_wavefunction_grid
+from ._hf_c3_quotient import (
+    RLG_HBN_HF_INTERACTION_CONVENTION_VERSION,
+    RLGhBNHFC3QuotientInteractionContext,
+    build_rlg_hbn_hf_c3_quotient_interaction_context,
+)
+from ._hf_shared import (
+    RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING,
+    RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
+    RLG_HBN_FORM_FACTOR_CONVENTION_VERSION,
+    shift_wavefunction_grid,
+)
 from ._hf_types import RLGhBNHartreeFockRun, RLGhBNProjectedBasisData
 from ._tdhf_pairs import _mesh_shape_from_k_grid_frac, _shift_k_index_with_wrap
 from ._tdhf_types import RLGhBNTDHFOrbitals
@@ -623,6 +633,77 @@ def sparse_fixed_leg_vector(
     return result
 
 
+def sparse_quotient_leg_vector(
+    context: RLGhBNTDHFSparseFixedContext,
+    periodic_basis_data: RLGhBNProjectedBasisData,
+    orbitals: RLGhBNTDHFOrbitals,
+    *,
+    local_index: int,
+    node: int,
+    fixed_transform_maps: Mapping[int, Mapping[tuple[int, int], np.ndarray]],
+) -> np.ndarray:
+    """Lift one HF orbital into the common microscopic grid used by finite-q.
+
+    Ordinary torus-boundary legs use the exact periodic-gauge relabel of the
+    saved HF orbital.  Re-solving at ``k + G_wrap`` produces an equivalent
+    active subspace in a generally rotated active-band frame, so reusing the
+    stored HF coefficients in that frame is incorrect.  Fixed legs retain the
+    explicit three-copy frame and its derived coefficient transform.
+    """
+
+    key = context.builder.node_keys[int(node)]
+    transforms = fixed_transform_maps.get(int(key.stored_k))
+    if transforms is None:
+        if (
+            context.basis_data.basis.wavefunctions.shape[0]
+            != periodic_basis_data.basis.wavefunctions.shape[0]
+        ):
+            raise RuntimeError(
+                "sparse and periodic basis views have incompatible component dimensions"
+            )
+        return _hf_full_vector_in_periodic_gauge(
+            periodic_basis_data,
+            orbitals,
+            local_index=int(local_index),
+            k_index=int(key.stored_k),
+            wrap=(int(key.wrap[0]), int(key.wrap[1])),
+        )
+
+    base_rep = (
+        int(key.reciprocal_shift[0]) - int(key.wrap[0]),
+        int(key.reciprocal_shift[1]) - int(key.wrap[1]),
+    )
+    transform = transforms.get(base_rep)
+    if transform is None:
+        raise RuntimeError(
+            "missing fixed-copy coefficient transform: "
+            f"stored_k={key.stored_k}, base_rep={base_rep}"
+        )
+    coefficients = np.asarray(transform, dtype=np.complex128) @ np.asarray(
+        orbitals.eigenvectors[:, int(local_index), int(key.stored_k)],
+        dtype=np.complex128,
+    )
+    basis_data = context.basis_data
+    n_spin = int(orbitals.n_spin)
+    n_flavor = int(orbitals.n_eta)
+    component_dim = int(basis_data.basis.wavefunctions.shape[0])
+    result = np.zeros(n_spin * n_flavor * component_dim, dtype=np.complex128)
+    for basis_local, coefficient in enumerate(coefficients):
+        if coefficient == 0.0:
+            continue
+        spin, flavor, band = _local_to_spin_flavor_band(
+            basis_local,
+            n_spin=n_spin,
+            n_flavor=n_flavor,
+        )
+        offset = (spin * n_flavor + flavor) * component_dim
+        result[offset : offset + component_dim] += coefficient * np.asarray(
+            basis_data.basis.wavefunctions[:, band, flavor, int(node)],
+            dtype=np.complex128,
+        )
+    return result
+
+
 def sparse_layer_form_factor(
     basis_data: RLGhBNProjectedBasisData,
     bra_vector: np.ndarray,
@@ -827,6 +908,32 @@ def _ws_wraps(
     return tuple((wrap, weight) for wrap in wraps)
 
 
+def _expanded_node_transfer_vector(
+    lattice: object,
+    fractional_coordinates: np.ndarray,
+    left_node: int,
+    right_node: int,
+    shift: tuple[int, int],
+    *,
+    tolerance: float,
+) -> complex:
+    frac = np.asarray(fractional_coordinates, dtype=float)
+    fractional_q = (
+        frac[int(left_node)]
+        - frac[int(right_node)]
+        + np.asarray((int(shift[0]), int(shift[1])), dtype=float)
+    )
+    fractional_q = np.where(
+        np.abs(fractional_q) <= float(tolerance),
+        0.0,
+        fractional_q,
+    )
+    return complex(
+        float(fractional_q[0]) * lattice.g_m1
+        + float(fractional_q[1]) * lattice.g_m2
+    )
+
+
 class RLGhBNTDHFSparseMicroscopicEvaluator:
     """On-demand fixed-leg interaction evaluator with actual-node WS exchange."""
 
@@ -899,11 +1006,13 @@ class RLGhBNTDHFSparseMicroscopicEvaluator:
         )
         value = self.kernel_cache.get(key)
         if value is None:
-            g_vector = key[2][0] * self.lattice.g_m1 + key[2][1] * self.lattice.g_m2
-            q_value = complex(
-                self.basis_data.kvec[key[0]]
-                - self.basis_data.kvec[key[1]]
-                + g_vector
+            q_value = _expanded_node_transfer_vector(
+                self.lattice,
+                self.frac,
+                key[0],
+                key[1],
+                key[2],
+                tolerance=self.transfer_tolerance,
             )
             value = layer_coulomb_matrix_mev_nm2(
                 abs(q_value),
@@ -1246,6 +1355,387 @@ def _hf_full_vector_in_periodic_gauge(
         offset = (spin * n_flavor + flavor) * component_dim
         result[offset : offset + component_dim] += coefficient * shifted
     return result
+
+
+@dataclass(frozen=True)
+class RLGhBNTDHFFiniteQQuotientContext:
+    """Prepared source data shared by all finite-q quotient sectors of one run."""
+
+    run: RLGhBNHartreeFockRun
+    hf_context: RLGhBNHFC3QuotientInteractionContext
+    periodic_basis_data: RLGhBNProjectedBasisData
+    physical_shifts: tuple[tuple[int, int], ...]
+    beta: float
+    periodic_gauge_padding: int
+    fixed_transform_maps: Mapping[
+        int, Mapping[tuple[int, int], np.ndarray]
+    ]
+    fixed_copy_index_maps: Mapping[
+        int, Mapping[tuple[int, int], int]
+    ]
+    source_provenance_validated: bool
+
+
+@dataclass(frozen=True)
+class RLGhBNTDHFFiniteQQuotientSector:
+    """Microscopic branch candidates and evaluator for one signed q sector."""
+
+    pairs: tuple[object, ...]
+    pair_keys: tuple[tuple[int, int, int], ...]
+    plus_candidates: tuple[
+        tuple[tuple[RLGhBNTDHFSparsePairState, float], ...], ...
+    ]
+    minus_candidates: tuple[
+        tuple[tuple[RLGhBNTDHFSparsePairState, float], ...], ...
+    ]
+    one_body: np.ndarray
+    evaluator: RLGhBNTDHFSparseMicroscopicEvaluator
+    sparse_context: RLGhBNTDHFSparseFixedContext
+    leg_vector_cache_count: int
+
+
+def build_rlg_hbn_tdhf_finite_q_quotient_context(
+    run: RLGhBNHartreeFockRun,
+    *,
+    periodic_gauge_padding: int = 2,
+    beta: float | None = None,
+    require_provenance: bool = True,
+) -> RLGhBNTDHFFiniteQQuotientContext:
+    """Prepare the shared variational-HF finite-q microscopic lift.
+
+    This context does not assemble a response matrix.  It fixes the exact HF
+    interaction provenance, analytic ordinary periodic lift, and explicit
+    fixed-copy transforms once so multiple signed q sectors can reuse them.
+    """
+
+    if require_provenance and not run.converged:
+        raise ValueError("finite-q quotient response requires a converged HF run")
+    if not np.isclose(
+        float(run.state.v0),
+        float(run.basis_data.v0),
+        rtol=0.0,
+        atol=1.0e-15,
+    ):
+        raise ValueError("finite-q quotient response found inconsistent state/basis v0")
+    hf_context = build_rlg_hbn_hf_c3_quotient_interaction_context(
+        run.basis_data,
+        run.overlap_blocks,
+    )
+    provenance = run.interaction_provenance
+    resolved_beta = (
+        float(provenance.beta)
+        if beta is None and provenance is not None
+        else (1.0 if beta is None else float(beta))
+    )
+    if require_provenance:
+        if provenance is None:
+            raise ValueError(
+                "finite-q quotient response requires typed HF interaction provenance"
+            )
+        mismatches: dict[str, object] = {}
+        if provenance.convention != RLG_HBN_HF_INTERACTION_CONVENTION_VERSION:
+            mismatches["convention"] = provenance.convention
+        if not provenance.quotient_enabled:
+            mismatches["quotient_enabled"] = provenance.quotient_enabled
+        if not np.isclose(
+            float(provenance.beta), resolved_beta, rtol=0.0, atol=1.0e-15
+        ):
+            mismatches["beta"] = provenance.beta
+        if tuple(provenance.physical_shifts) != tuple(hf_context.physical_shifts):
+            mismatches["physical_shifts"] = provenance.physical_shifts
+        if provenance.zero_literal_q0_fock:
+            mismatches["zero_literal_q0_fock"] = True
+        if provenance.basis_periodic_gauge != RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION:
+            mismatches["basis_periodic_gauge"] = provenance.basis_periodic_gauge
+        if provenance.basis_periodic_gauge_padding != int(
+            RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING
+        ):
+            mismatches["basis_periodic_gauge_padding"] = (
+                provenance.basis_periodic_gauge_padding
+            )
+        if provenance.form_factor_convention != RLG_HBN_FORM_FACTOR_CONVENTION_VERSION:
+            mismatches["form_factor_convention"] = provenance.form_factor_convention
+        if not provenance.basis_cache_key:
+            mismatches["basis_cache_key"] = provenance.basis_cache_key
+        if not provenance.overlap_cache_key:
+            mismatches["overlap_cache_key"] = provenance.overlap_cache_key
+        if mismatches:
+            raise ValueError(
+                "HF run provenance does not match the finite-q quotient lift: "
+                f"{mismatches}"
+            )
+        physical_shifts = tuple(
+            (int(value[0]), int(value[1]))
+            for value in provenance.physical_shifts
+        )
+    else:
+        physical_shifts = tuple(
+            (int(value[0]), int(value[1]))
+            for value in hf_context.physical_shifts
+        )
+    periodic_basis_data = build_periodic_gauge_basis_view(
+        run,
+        periodic_gauge_padding=int(periodic_gauge_padding),
+        name="rlg_hbn_finite_q_quotient_periodic_view",
+    )
+    fixed_transform_maps = {
+        int(source.source_index): {
+            tuple(
+                int(value)
+                for value in source.source_basis.periodic_reciprocal_shifts[copy]
+            ): np.asarray(transform, dtype=np.complex128)
+            for copy, transform in enumerate(source.copy_transforms)
+        }
+        for source in hf_context.fixed_sources
+    }
+    fixed_copy_index_maps = {
+        int(source.source_index): {
+            tuple(
+                int(value)
+                for value in source.source_basis.periodic_reciprocal_shifts[copy]
+            ): int(copy)
+            for copy in range(len(source.copy_transforms))
+        }
+        for source in hf_context.fixed_sources
+    }
+    return RLGhBNTDHFFiniteQQuotientContext(
+        run=run,
+        hf_context=hf_context,
+        periodic_basis_data=periodic_basis_data,
+        physical_shifts=physical_shifts,
+        beta=resolved_beta,
+        periodic_gauge_padding=int(periodic_gauge_padding),
+        fixed_transform_maps=fixed_transform_maps,
+        fixed_copy_index_maps=fixed_copy_index_maps,
+        source_provenance_validated=bool(require_provenance),
+    )
+
+
+def _finite_q_quotient_pair_candidates(
+    prepared: RLGhBNTDHFFiniteQQuotientContext,
+    sparse_context: RLGhBNTDHFSparseFixedContext,
+    orbitals: RLGhBNTDHFOrbitals,
+    *,
+    role: str,
+    pair_index: int,
+    vector_cache: dict[tuple[int, int], np.ndarray],
+) -> tuple[tuple[RLGhBNTDHFSparsePairState, float], ...]:
+    bra_local, ket_local, bra_nodes, ket_nodes = _endpoint_nodes(
+        sparse_context,
+        role=role,
+        pair_index=int(pair_index),
+    )
+    if role == "plus":
+        p_local, p_nodes = bra_local, bra_nodes
+        h_local, h_nodes = ket_local, ket_nodes
+    elif role == "minus":
+        p_local, p_nodes = ket_local, ket_nodes
+        h_local, h_nodes = bra_local, bra_nodes
+    else:
+        raise ValueError(f"role must be plus or minus, got {role!r}")
+    states: list[RLGhBNTDHFSparsePairState] = []
+    for p_node in p_nodes:
+        for h_node in h_nodes:
+            p_node_key = sparse_context.builder.node_keys[int(p_node)]
+            h_node_key = sparse_context.builder.node_keys[int(h_node)]
+            p_copy_map = prepared.fixed_copy_index_maps.get(
+                int(p_node_key.stored_k)
+            )
+            h_copy_map = prepared.fixed_copy_index_maps.get(
+                int(h_node_key.stored_k)
+            )
+            if p_copy_map is not None and h_copy_map is not None:
+                p_base_rep = (
+                    int(p_node_key.reciprocal_shift[0])
+                    - int(p_node_key.wrap[0]),
+                    int(p_node_key.reciprocal_shift[1])
+                    - int(p_node_key.wrap[1]),
+                )
+                h_base_rep = (
+                    int(h_node_key.reciprocal_shift[0])
+                    - int(h_node_key.wrap[0]),
+                    int(h_node_key.reciprocal_shift[1])
+                    - int(h_node_key.wrap[1]),
+                )
+                if p_copy_map[p_base_rep] != h_copy_map[h_base_rep]:
+                    continue
+            p_key = (int(p_local), int(p_node))
+            h_key = (int(h_local), int(h_node))
+            if p_key not in vector_cache:
+                vector_cache[p_key] = sparse_quotient_leg_vector(
+                    sparse_context,
+                    prepared.periodic_basis_data,
+                    orbitals,
+                    local_index=p_key[0],
+                    node=p_key[1],
+                    fixed_transform_maps=prepared.fixed_transform_maps,
+                )
+            if h_key not in vector_cache:
+                vector_cache[h_key] = sparse_quotient_leg_vector(
+                    sparse_context,
+                    prepared.periodic_basis_data,
+                    orbitals,
+                    local_index=h_key[0],
+                    node=h_key[1],
+                    fixed_transform_maps=prepared.fixed_transform_maps,
+                )
+            states.append(
+                RLGhBNTDHFSparsePairState(
+                    p_tag=(role, "p", *p_key),
+                    h_tag=(role, "h", *h_key),
+                    p_vector=vector_cache[p_key],
+                    h_vector=vector_cache[h_key],
+                    p_node=p_key[1],
+                    h_node=h_key[1],
+                )
+            )
+    if not states:
+        raise RuntimeError(
+            f"no finite-q quotient branches for role={role}, pair={pair_index}"
+        )
+    weight = 1.0 / float(len(states))
+    return tuple((state, weight) for state in states)
+
+
+def _finite_q_pair_key(
+    orbitals: RLGhBNTDHFOrbitals,
+    pair: object,
+) -> tuple[int, int, int]:
+    p_local, _p_k = orbitals.decode_global_index(pair.particle)
+    h_local, h_k = orbitals.decode_global_index(pair.hole)
+    return int(p_local), int(h_local), int(h_k)
+
+
+def build_rlg_hbn_tdhf_finite_q_quotient_sector(
+    prepared: RLGhBNTDHFFiniteQQuotientContext,
+    orbitals: RLGhBNTDHFOrbitals,
+    pairs: Sequence[object],
+    q_shift: tuple[int, int],
+) -> RLGhBNTDHFFiniteQQuotientSector:
+    """Build endpoint-paired branch states for one signed q sector."""
+
+    if prepared.run.basis_data is not prepared.hf_context.basis_data:
+        raise ValueError("finite-q quotient context basis identity mismatch")
+    ph_pairs = tuple(pairs)
+    sparse_context = build_sparse_fixed_context(
+        prepared.run,
+        orbitals,
+        ph_pairs,
+        (int(q_shift[0]), int(q_shift[1])),
+        periodic_gauge_padding=prepared.periodic_gauge_padding,
+    )
+    evaluator = RLGhBNTDHFSparseMicroscopicEvaluator(
+        prepared.run,
+        sparse_context,
+        prepared.physical_shifts,
+        beta=prepared.beta,
+    )
+    vector_cache: dict[tuple[int, int], np.ndarray] = {}
+    plus_candidates = tuple(
+        _finite_q_quotient_pair_candidates(
+            prepared,
+            sparse_context,
+            orbitals,
+            role="plus",
+            pair_index=index,
+            vector_cache=vector_cache,
+        )
+        for index in range(len(ph_pairs))
+    )
+    minus_candidates = tuple(
+        _finite_q_quotient_pair_candidates(
+            prepared,
+            sparse_context,
+            orbitals,
+            role="minus",
+            pair_index=index,
+            vector_cache=vector_cache,
+        )
+        for index in range(len(ph_pairs))
+    )
+    one_body = np.empty(len(ph_pairs), dtype=float)
+    for index, pair in enumerate(ph_pairs):
+        p_local, p_k = orbitals.decode_global_index(pair.particle)
+        h_local, h_k = orbitals.decode_global_index(pair.hole)
+        one_body[index] = (
+            float(orbitals.energies[p_local, p_k])
+            - float(orbitals.energies[h_local, h_k])
+        )
+    return RLGhBNTDHFFiniteQQuotientSector(
+        pairs=ph_pairs,
+        pair_keys=tuple(
+            _finite_q_pair_key(orbitals, pair) for pair in ph_pairs
+        ),
+        plus_candidates=plus_candidates,
+        minus_candidates=minus_candidates,
+        one_body=one_body,
+        evaluator=evaluator,
+        sparse_context=sparse_context,
+        leg_vector_cache_count=len(vector_cache),
+    )
+
+
+def _average_finite_q_quotient_candidates(
+    left_candidates: tuple[tuple[RLGhBNTDHFSparsePairState, float], ...],
+    right_candidates: tuple[tuple[RLGhBNTDHFSparsePairState, float], ...],
+    evaluator: Callable[
+        [RLGhBNTDHFSparsePairState, RLGhBNTDHFSparsePairState], complex
+    ],
+) -> complex:
+    total = 0.0 + 0.0j
+    for left, left_weight in left_candidates:
+        for right, right_weight in right_candidates:
+            total += (
+                float(left_weight)
+                * float(right_weight)
+                * complex(evaluator(left, right))
+            )
+    return complex(total)
+
+
+def assemble_rlg_hbn_tdhf_finite_q_quotient_sector(
+    sector: RLGhBNTDHFFiniteQQuotientSector,
+) -> dict[str, np.ndarray]:
+    """Assemble raw A/B components without Hermitization or symmetrization."""
+
+    count = len(sector.pairs)
+    a_direct = np.zeros((count, count), dtype=np.complex128)
+    a_exchange = np.zeros_like(a_direct)
+    b_direct = np.zeros_like(a_direct)
+    b_exchange = np.zeros_like(a_direct)
+    for row in range(count):
+        for column in range(count):
+            a_direct[row, column] = _average_finite_q_quotient_candidates(
+                sector.plus_candidates[row],
+                sector.plus_candidates[column],
+                sector.evaluator.a_direct,
+            )
+            a_exchange[row, column] = _average_finite_q_quotient_candidates(
+                sector.plus_candidates[row],
+                sector.plus_candidates[column],
+                sector.evaluator.a_exchange,
+            )
+            b_direct[row, column] = _average_finite_q_quotient_candidates(
+                sector.plus_candidates[row],
+                sector.minus_candidates[column],
+                sector.evaluator.b_direct,
+            )
+            b_exchange[row, column] = _average_finite_q_quotient_candidates(
+                sector.plus_candidates[row],
+                sector.minus_candidates[column],
+                sector.evaluator.b_exchange,
+            )
+    a = a_direct + a_exchange
+    a[np.diag_indices_from(a)] += sector.one_body
+    b = b_direct + b_exchange
+    return {
+        "A": a,
+        "B": b,
+        "A_direct": a_direct,
+        "A_exchange": a_exchange,
+        "B_direct": b_direct,
+        "B_exchange": b_exchange,
+    }
 
 
 def _c3_transform_full_vector(

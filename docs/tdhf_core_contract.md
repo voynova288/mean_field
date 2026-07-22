@@ -7,7 +7,7 @@ Reference papers and planning notes are local/internal inputs; this public note 
 The reusable TDHF/RPA implementation lives in `src/mean_field/core/hf/tdhf.py`. It is system agnostic and adds only the layer needed after a converged HF calculation:
 
 1. fixed collective-momentum particle-hole basis construction;
-2. dense debug assembly of `A`, `B`, and `L = [[A, B], [-B*, -A*]]`;
+2. dense debug assembly of `A`, `B`, and q=0 `L = [[A, B], [-B*, -A*]]`; system adapters must use the signed-q partner form `[[A(q),B(q)],[-B(-q)*,-A(-q)*]]` at nonzero q;
 3. ordinary non-Hermitian diagonalization of `L`;
 4. eta-metric normalization with `eta = diag(+1, -1)`;
 5. flavor-channel grouping helpers.
@@ -77,12 +77,15 @@ Implemented in the RLG/hBN system adapter:
 - vectorized q=0 dense assembly via `build_rlg_hbn_tdhf_q0_matrices_from_pairs(..., assembly="vectorized")`, grouping ph pairs by k and using NumPy/BLAS compiled kernels for layer form-factor contractions instead of calling `V_hf` element-by-element in Python;
 - q=0 runner dense-memory guard (`--max-pairs`, `--max-dense-memory-gb`) and shortcut guard so the fully polarized simplification is not applied to mixed `--channel all` blocks;
 - local lightweight regression coverage for fixed-q pair construction, dense q=0 smoke assembly, vectorized-vs-generic assembly parity (including multi-k synthetic blocks), direct HF-basis form-factor contraction against a manual expression, distinct Umklapp/full-Q kernel contributions, momentum conservation, all-channel shortcut blocking, and q=0 Fock-diagnostic env/archive guard;
-- finite-q support introspection via `rlg_hbn_tdhf_finite_q_mode_support(...)`, which states that the canonical bridge only supplies parity-checked orbitals and that RLG/hBN `V_hf`, finite-q wrapping, direct/B terms, and q/-q pair-sector policy remain system-layer responsibilities.
+- finite-q support introspection via `rlg_hbn_tdhf_finite_q_mode_support(...)`; RLG/hBN form factors, wrapping, quotient branches, and signed q/-q policy remain system-layer responsibilities;
+- typed-provenance variational-v2 finite-q assembly via `build_rlg_hbn_tdhf_finite_q_quotient_context(...)`, `build_rlg_hbn_tdhf_finite_q_quotient_matrix_pair_from_pairs(...)`, and the +q-only compatibility wrapper `build_rlg_hbn_tdhf_finite_q_quotient_matrices_from_pairs(...)`: ordinary wrapped legs use analytic periodic relabelling, fixed endpoints use three same-puncture-copy branches with tangent weight `1/3`, and the two Hessian legs are independently summed;
+- independently returned +q/-q Liouvillians without post-hoc Hermitization/symmetrization, with legacy pair assembly still fail-closed for typed quotient archives;
+- complete raw non-Hermitian diagnostics in `TDHFSpectrum`: raw eigenvalues, eta norms, and eigensolver residuals, in addition to selected positive-metric modes;
+- actual 12x12 validation for intraflavor, intervalley, and interspin channels: q=0 strict HF-response parity, independent generic-q C3 anchors, signed fixed self sectors, q/-q particle-hole pairing, eta norms, solver residuals, interspin SU(2) Goldstone/Ward checks, and deterministic 26-orbit C3+inversion expansion to 144 points per channel.
 
 Not yet implemented:
 
-- full finite-q RLG/hBN direct/B/intraflavor TDHF assembly: the existing legacy system path covers only the conduction-only fully spin-valley-polarized flavor-flip exchange shortcut, and no canonical bridge should fabricate the missing `V_hf`/q/-q pair-sector policy;
-- a finite-difference Fock/Hartree derivative test tying the stored-projector HF Hamiltonian response directly to `V_hf`;
+- a generic canonical-HF bridge for the RLG/hBN finite-q quotient (the validated API currently requires the system-specific typed archive/context);
 - iterative block/matvec eigensolver for large 12x12 R5G/hBN sectors beyond dense channel pilots;
 - MA-TBG system adapter and Goldstone-counting workflow;
 - Slurm-scale Checkpoint A/B/C reproductions.

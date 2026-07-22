@@ -32,6 +32,7 @@ from ...core.hf import (
 )
 from .cache import load_layer_overlap_blocks_cache, load_projected_basis_cache
 from .hf import (
+    RLGhBNHFInteractionProvenance,
     RLGhBNHartreeFockRun,
     RLGhBNHartreeFockState,
     RLGhBNLayerOverlapBlockSet,

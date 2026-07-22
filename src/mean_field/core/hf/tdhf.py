@@ -104,9 +104,9 @@ class TDHFSpectrum:
     """Positive-metric TDHF modes returned by :func:`solve_tdhf_liouvillian`.
 
     Arrays are mode-major: ``X[mode, pair]`` and ``Y[mode, pair]``.
-    ``raw_eigenvalues`` contains the complete non-Hermitian spectrum for
-    stability and +/- pairing diagnostics; ``eigenvalues`` contains only the
-    selected positive branch.
+    ``raw_eigenvalues``, ``raw_eta_norms``, and ``raw_residuals`` retain
+    complete non-Hermitian stability diagnostics; ``eigenvalues`` contains
+    only the selected positive branch.
     """
 
     eigenvalues: np.ndarray
@@ -117,11 +117,49 @@ class TDHFSpectrum:
     residuals: np.ndarray
     selected_indices: np.ndarray
     raw_eigenvalues: np.ndarray
+    raw_eta_norms: np.ndarray
+    raw_residuals: np.ndarray
     pairing_residual: float
 
     @property
     def amplitudes(self) -> np.ndarray:
         return np.concatenate([self.X, self.Y], axis=1)
+
+
+@dataclass(frozen=True)
+class TDHFStabilityClassification:
+    """Paper-style stability/masking classification for a TDHF spectrum.
+
+    Stable RPA/TDHF sectors should provide one real positive-metric branch per
+    particle-hole pair, up to exactly zero modes.  Missing positive-metric
+    branches indicate that the lowest physical branch has become negative (or
+    otherwise left the selected positive branch); complex raw eigenvalues signal
+    a dynamical instability.  This dataclass is intentionally system-agnostic so
+    paper-specific plotting code can apply a reproducible mask without encoding
+    physical-system conventions in ``core.hf``.
+    """
+
+    stable: bool
+    complex_eigenvalues: bool
+    missing_positive_metric_modes: bool
+    nonfinite_eigenvalues: bool
+    nonfinite_selected_energies: bool
+    negative_selected_energy: bool
+    structure_ok: bool
+    n_pairs: int
+    selected_count: int
+    zero_mode_branches: int
+    complex_count: int
+    lowest_energy: float | None
+    imag_tol: float
+    energy_tol: float
+    reason: str
+
+    @property
+    def masked(self) -> bool:
+        """Whether this sector should be masked in a lowest-mode stability plot."""
+
+        return not self.stable
 
 
 @dataclass(frozen=True)
@@ -483,6 +521,15 @@ def solve_tdhf_liouvillian(
         raise ValueError("n_pairs does not match the Liouvillian dimension")
 
     raw_eigenvalues, raw_eigenvectors = scipy_linalg.eig(matrix)
+    raw_eta_norms = np.real(
+        np.sum(np.abs(raw_eigenvectors[:n_pairs]) ** 2, axis=0)
+        - np.sum(np.abs(raw_eigenvectors[n_pairs:]) ** 2, axis=0)
+    ).astype(float, copy=False)
+    raw_residuals = np.linalg.norm(
+        matrix @ raw_eigenvectors
+        - raw_eigenvectors * raw_eigenvalues[np.newaxis, :],
+        axis=0,
+    ).astype(float, copy=False)
     real_parts = np.real(raw_eigenvalues)
     imag_parts = np.imag(raw_eigenvalues)
     real_mask = real_parts >= (-energy_tol if include_zero_modes else energy_tol)
@@ -538,7 +585,123 @@ def solve_tdhf_liouvillian(
         residuals=residual_array,
         selected_indices=selected_index_array,
         raw_eigenvalues=raw_eigenvalues,
+        raw_eta_norms=raw_eta_norms,
+        raw_residuals=raw_residuals,
         pairing_residual=eigenvalue_pairing_residual(raw_eigenvalues),
+    )
+
+
+def classify_tdhf_stability(
+    raw_eigenvalues: Sequence[complex] | np.ndarray,
+    selected_energies: Sequence[float] | np.ndarray,
+    *,
+    n_pairs: int,
+    structure_ok: bool = True,
+    imag_tol: float = 1.0e-8,
+    energy_tol: float = 1.0e-10,
+    require_full_positive_metric_count: bool = True,
+) -> TDHFStabilityClassification:
+    """Classify whether a TDHF sector has a stable lowest physical branch.
+
+    This helper is designed for paper-style finite-q maps where negative or
+    complex collective-mode energies should be masked instead of replaced by a
+    higher positive branch.  It uses only generic TDHF data:
+
+    - any raw eigenvalue with imaginary part larger than ``imag_tol`` is a
+      dynamical instability;
+    - fewer selected positive-metric modes than ``n_pairs`` means at least one
+      physical branch is missing from the positive branch, consistent with a
+      negative lowest branch (exact zero-mode pairs are allowed);
+    - non-finite spectra or failed matrix-structure checks are masked.
+
+    ``selected_energies`` should be the positive-metric branch returned by
+    :func:`solve_tdhf_liouvillian` (usually ``spectrum.energies``).
+    """
+
+    resolved_n_pairs = int(n_pairs)
+    if resolved_n_pairs < 0:
+        raise ValueError(f"n_pairs must be non-negative, got {n_pairs}")
+    raw = np.asarray(raw_eigenvalues, dtype=np.complex128).reshape(-1)
+    energies = np.asarray(selected_energies, dtype=float).reshape(-1)
+    selected_count = int(energies.size)
+
+    finite_raw_mask = np.isfinite(raw.real) & np.isfinite(raw.imag)
+    nonfinite_eigenvalues = bool(np.any(~finite_raw_mask))
+    finite_raw = raw[finite_raw_mask]
+    complex_mask = np.abs(np.imag(finite_raw)) > float(imag_tol)
+    complex_count = int(np.count_nonzero(complex_mask))
+    complex_eigenvalues = complex_count > 0
+
+    real_raw = finite_raw[~complex_mask]
+    zero_mode_count = int(np.count_nonzero(np.abs(np.real(real_raw)) <= float(energy_tol)))
+    zero_mode_branches = zero_mode_count // 2
+
+    finite_energy_mask = np.isfinite(energies)
+    nonfinite_selected_energies = bool(np.any(~finite_energy_mask))
+    finite_energies = energies[finite_energy_mask]
+    lowest_energy = float(np.min(finite_energies)) if finite_energies.size else None
+    negative_selected_energy = bool(lowest_energy is not None and lowest_energy < -float(energy_tol))
+
+    missing_positive_metric_modes = bool(
+        require_full_positive_metric_count and selected_count + zero_mode_branches < resolved_n_pairs
+    )
+    reasons: list[str] = []
+    if not bool(structure_ok):
+        reasons.append("tdhf_structure_check_failed")
+    if nonfinite_eigenvalues:
+        reasons.append("nonfinite_raw_eigenvalues")
+    if complex_eigenvalues:
+        reasons.append(f"complex_raw_eigenvalues={complex_count}")
+    if nonfinite_selected_energies:
+        reasons.append("nonfinite_selected_energies")
+    if negative_selected_energy:
+        reasons.append("negative_selected_energy")
+    if missing_positive_metric_modes:
+        reasons.append(
+            "selected_positive_metric_modes_plus_zero_branches="
+            f"{selected_count + zero_mode_branches} < n_pairs={resolved_n_pairs}"
+        )
+
+    stable = not reasons
+    return TDHFStabilityClassification(
+        stable=stable,
+        complex_eigenvalues=complex_eigenvalues,
+        missing_positive_metric_modes=missing_positive_metric_modes,
+        nonfinite_eigenvalues=nonfinite_eigenvalues,
+        nonfinite_selected_energies=nonfinite_selected_energies,
+        negative_selected_energy=negative_selected_energy,
+        structure_ok=bool(structure_ok),
+        n_pairs=resolved_n_pairs,
+        selected_count=selected_count,
+        zero_mode_branches=zero_mode_branches,
+        complex_count=complex_count,
+        lowest_energy=lowest_energy,
+        imag_tol=float(imag_tol),
+        energy_tol=float(energy_tol),
+        reason="stable" if stable else "; ".join(reasons),
+    )
+
+
+def classify_tdhf_spectrum_stability(
+    spectrum: TDHFSpectrum,
+    *,
+    n_pairs: int | None = None,
+    structure: TDHFStructureResiduals | None = None,
+    imag_tol: float = 1.0e-8,
+    energy_tol: float = 1.0e-10,
+    require_full_positive_metric_count: bool = True,
+) -> TDHFStabilityClassification:
+    """Classify stability of a solved :class:`TDHFSpectrum`."""
+
+    inferred_n_pairs = int(n_pairs) if n_pairs is not None else int(np.asarray(spectrum.raw_eigenvalues).size // 2)
+    return classify_tdhf_stability(
+        spectrum.raw_eigenvalues,
+        spectrum.energies,
+        n_pairs=inferred_n_pairs,
+        structure_ok=True if structure is None else structure.ok,
+        imag_tol=imag_tol,
+        energy_tol=energy_tol,
+        require_full_positive_metric_count=require_full_positive_metric_count,
     )
 
 

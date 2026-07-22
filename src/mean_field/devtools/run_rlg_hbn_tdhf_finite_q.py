@@ -10,6 +10,7 @@ import socket
 from time import perf_counter
 
 import numpy as np
+from scipy.optimize import linear_sum_assignment
 
 from mean_field.core.hf import solve_tdhf_matrices, split_pair_indices_by_flavor_channel
 from mean_field.devtools._runtime import ensure_not_running_compute_on_login_node, write_json
@@ -19,6 +20,8 @@ from mean_field.systems.RnG_hBN import (
     build_rlg_hbn_tdhf_c3_quotient_cycle,
     build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs,
     build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs,
+    build_rlg_hbn_tdhf_finite_q_quotient_context,
+    build_rlg_hbn_tdhf_finite_q_quotient_matrix_pair_from_pairs,
     build_rlg_hbn_tdhf_orbitals,
     build_rlg_hbn_tdhf_q_pairs,
     center_reciprocal_fractional_coordinates,
@@ -69,8 +72,9 @@ def _parse_q_shifts(text: str) -> tuple[tuple[int, int], ...]:
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Run dense finite-q RLG/hBN TDHF/RPA postprocessing for supported channels: "
-            "full intraflavor Eq. D19 A/B and conduction-only flavor-flip shortcuts."
+            "Run dense finite-q RLG/hBN TDHF/RPA postprocessing. Typed variational-"
+            "quotient archives use the microscopic all-channel signed-q matrix API; "
+            "legacy archives retain the older intraflavor/shortcut paths."
         )
     )
     parser.add_argument("--hf-archive", type=Path, required=True, help="Path to hf_run_state.npz or hf_ground_state.npz.")
@@ -104,10 +108,11 @@ def _parse_args() -> argparse.Namespace:
         "--c3-quotient-provider",
         action="store_true",
         help=(
-            "Use the pre-assembly source-form-factor C3 quotient provider for intraflavor blocks. "
-            "This opt-in path builds and validates complete C3 momentum cycles."
+            "Deprecated compatibility flag. Typed quotient archives automatically use "
+            "the derived microscopic finite-q quotient API for every channel."
         ),
     )
+    parser.add_argument("--periodic-gauge-padding", type=int, default=2)
     parser.add_argument("--max-pairs", type=int, default=4096, help="Refuse dense assembly above this ph-pair count.")
     parser.add_argument("--max-dense-memory-gb", type=float, default=8.0, help="Conservative dense TDHF memory estimate limit per q/channel block.")
     parser.add_argument("--structure-tolerance", type=float, default=1.0e-6)
@@ -158,18 +163,53 @@ def _dense_memory_estimate_bytes(n_pairs: int, *, save_vectors: bool) -> int:
 
 def _raw_real_eigenvalue_summary(raw_eigenvalues: np.ndarray, *, imag_tol: float, energy_tol: float) -> dict[str, object]:
     values = np.asarray(raw_eigenvalues, dtype=np.complex128).reshape(-1)
-    finite_real = values[np.isfinite(values.real) & np.isfinite(values.imag) & (np.abs(values.imag) <= float(imag_tol))]
+    finite_mask = np.isfinite(values.real) & np.isfinite(values.imag)
+    finite_values = values[finite_mask]
+    complex_values = finite_values[np.abs(finite_values.imag) > float(imag_tol)]
+    finite_real = finite_values[
+        np.abs(finite_values.imag) <= float(imag_tol)
+    ]
     real_values = np.sort(finite_real.real.astype(float, copy=False))
     near_zero = real_values[np.abs(real_values) <= float(energy_tol)]
+    positive = real_values[real_values > float(energy_tol)]
+    negative = real_values[real_values < -float(energy_tol)]
     low_abs = real_values[np.argsort(np.abs(real_values))[:20]] if real_values.size else np.asarray([], dtype=float)
     return {
+        "total_count": int(values.size),
+        "finite_count": int(finite_values.size),
+        "nonfinite_count": int(values.size - finite_values.size),
         "real_count": int(real_values.size),
+        "positive_real_count": int(positive.size),
+        "negative_real_count": int(negative.size),
         "near_zero_count": int(near_zero.size),
+        "complex_count": int(complex_values.size),
+        "max_imaginary_abs_mev": (
+            float(np.max(np.abs(finite_values.imag)))
+            if finite_values.size
+            else 0.0
+        ),
         "near_zero_eigenvalues_mev": [float(value) for value in near_zero[:40]],
         "lowest_abs_real_eigenvalues_mev": [float(value) for value in low_abs],
         "lowest_real_eigenvalues_mev": [float(value) for value in real_values[:20]],
         "highest_real_eigenvalues_mev": [float(value) for value in real_values[-20:]],
     }
+
+
+def _spectrum_assignment_residual(
+    left: np.ndarray,
+    right: np.ndarray,
+) -> float:
+    left_values = np.asarray(left, dtype=np.complex128).reshape(-1)
+    right_values = np.asarray(right, dtype=np.complex128).reshape(-1)
+    if left_values.size != right_values.size:
+        raise ValueError(
+            f"spectrum sizes differ: {left_values.size} != {right_values.size}"
+        )
+    if left_values.size == 0:
+        return 0.0
+    cost = np.abs(left_values[:, None] - right_values[None, :])
+    rows, columns = linear_sum_assignment(cost)
+    return float(np.max(cost[rows, columns]))
 
 
 def _filter_pairs(pairs, channel: str):
@@ -250,6 +290,7 @@ def main() -> None:
         "umklapp_completion": str(args.umklapp_completion),
         "beta": float(args.beta),
         "c3_quotient_provider": bool(args.c3_quotient_provider),
+        "periodic_gauge_padding": int(args.periodic_gauge_padding),
         "max_pairs": int(args.max_pairs),
         "max_dense_memory_gb": float(args.max_dense_memory_gb),
         "structure_tolerance": float(args.structure_tolerance),
@@ -280,10 +321,34 @@ def main() -> None:
         cache_dir=args.cache_dir,
         summary_path=args.summary_path,
     )
+    if not run.converged and not args.allow_unconverged:
+        raise SystemExit(
+            "Refusing finite-q TDHF because the restored HF run is not converged"
+        )
     orbitals = build_rlg_hbn_tdhf_orbitals(run.state)
-    physical_shifts = tuple((int(g[0]), int(g[1])) for g in run.overlap_blocks.shifts)
     mesh_shape = _mesh_shape_from_frac(run.basis_data.k_grid_frac)
-    if bool(args.c3_quotient_provider):
+    provenance = run.interaction_provenance
+    typed_quotient = bool(
+        provenance is not None and provenance.quotient_enabled
+    )
+    prepared_quotient = None
+    if typed_quotient:
+        if str(args.umklapp_completion) == "allow-incomplete":
+            raise SystemExit(
+                "Typed quotient finite-q assembly forbids diagnostic incomplete Umklapp sums"
+            )
+        prepared_quotient = build_rlg_hbn_tdhf_finite_q_quotient_context(
+            run,
+            periodic_gauge_padding=int(args.periodic_gauge_padding),
+            beta=float(args.beta),
+            require_provenance=True,
+        )
+        physical_shifts = tuple(prepared_quotient.physical_shifts)
+    else:
+        physical_shifts = tuple(
+            (int(g[0]), int(g[1])) for g in run.overlap_blocks.shifts
+        )
+    if bool(args.c3_quotient_provider) and not typed_quotient:
         if mesh_shape[0] != mesh_shape[1]:
             raise SystemExit(
                 "--c3-quotient-provider requires a square regular momentum mesh"
@@ -292,6 +357,13 @@ def main() -> None:
             raise SystemExit(
                 "--c3-quotient-provider forbids --umklapp-completion allow-incomplete"
             )
+    config_payload["typed_finite_q_quotient"] = typed_quotient
+    config_payload["finite_q_matrix_api"] = (
+        "build_rlg_hbn_tdhf_finite_q_quotient_matrix_pair_from_pairs"
+        if typed_quotient
+        else "legacy_pair_assembly"
+    )
+    write_json(output_dir / "tdhf_finite_q_config.json", config_payload)
     block_summaries: list[dict[str, object]] = []
     quotient_matrix_cache: dict[tuple[int, int], object] = {}
     quotient_cycle_metadata: dict[tuple[int, int], dict[str, object]] = {}
@@ -314,100 +386,172 @@ def main() -> None:
                     f"--max-dense-memory-gb={float(args.max_dense_memory_gb):.2f}."
                 )
 
-            if str(channel) == "intraflavor":
-                required_shifts = required_rlg_hbn_tdhf_full_finite_q_overlap_shifts(
-                    orbitals,
-                    run.basis_data,
-                    pairs,
-                    q_shift,
-                    physical_shifts=physical_shifts,
-                )
-            else:
-                required_shifts = required_rlg_hbn_tdhf_finite_q_overlap_shifts(
-                    orbitals,
-                    run.basis_data,
-                    pairs,
-                    q_shift,
-                    physical_shifts=physical_shifts,
-                )
-            available = set(tuple(int(v) for v in key) for key in run.overlap_blocks.layer_overlaps)
-            missing = tuple(shift for shift in required_shifts if shift not in available)
-            if missing and str(args.umklapp_completion) == "strict":
-                raise SystemExit(
-                    f"Missing finite-q wrapped overlap shifts for q={q_shift} channel={channel}: {list(missing)[:20]}. "
-                    "Rerun with --umklapp-completion build on a compute node to construct closure keys."
-                )
-            run_for_block = run
-            built_missing = False
-            if missing and str(args.umklapp_completion) == "build":
-                # Accumulate closure overlap keys across q/channel blocks.  A full
-                # 12x12 S45 mesh repeatedly needs overlapping wrapped keys; merging
-                # into the active run avoids rebuilding the same overlap blocks for
-                # later blocks while keeping ``physical_shifts`` fixed to the original
-                # Coulomb-cutoff shell.
-                run = _run_with_completed_umklapp(run, tuple(sorted(missing)))
+            if typed_quotient:
+                required_shifts = tuple(physical_shifts)
+                missing: tuple[tuple[int, int], ...] = ()
                 run_for_block = run
-                built_missing = True
-
-            quotient_block_meta: dict[str, object] | None = None
-            if str(channel) == "intraflavor" and bool(args.c3_quotient_provider):
-                q_key = (
-                    int(q_shift[0]) % int(mesh_shape[0]),
-                    int(q_shift[1]) % int(mesh_shape[1]),
+                built_missing = False
+                signed_matrices = (
+                    build_rlg_hbn_tdhf_finite_q_quotient_matrix_pair_from_pairs(
+                        run,
+                        orbitals,
+                        pairs,
+                        q_shift,
+                        prepared_context=prepared_quotient,
+                        beta=float(args.beta),
+                        periodic_gauge_padding=int(args.periodic_gauge_padding),
+                        structure_tolerance=float(args.structure_tolerance),
+                        physical_shifts=physical_shifts,
+                        require_provenance=True,
+                    )
                 )
-                representative = _c3_orbit_representative(q_key, int(mesh_shape[0]))
-                if q_key not in quotient_matrix_cache:
-                    cycle = build_rlg_hbn_tdhf_c3_quotient_cycle(
+                matrices = signed_matrices.plus
+                partner_matrices = signed_matrices.minus
+                quotient_block_meta: dict[str, object] | None = {
+                    "matrix_api": (
+                        "build_rlg_hbn_tdhf_finite_q_quotient_matrix_pair_from_pairs"
+                    ),
+                    "ordinary_boundary_lift": (
+                        "analytic_periodic_gauge_relabel_v1"
+                    ),
+                    "fixed_fixed_branch_rule": "same_puncture_copy_v1",
+                    "fixed_branch_weight": 1.0 / 3.0,
+                    "source_provenance_validated": True,
+                }
+            else:
+                if str(channel) == "intraflavor":
+                    required_shifts = required_rlg_hbn_tdhf_full_finite_q_overlap_shifts(
+                        orbitals,
+                        run.basis_data,
+                        pairs,
+                        q_shift,
+                        physical_shifts=physical_shifts,
+                    )
+                else:
+                    required_shifts = required_rlg_hbn_tdhf_finite_q_overlap_shifts(
+                        orbitals,
+                        run.basis_data,
+                        pairs,
+                        q_shift,
+                        physical_shifts=physical_shifts,
+                    )
+                available = set(
+                    tuple(int(v) for v in key)
+                    for key in run.overlap_blocks.layer_overlaps
+                )
+                missing = tuple(
+                    shift for shift in required_shifts if shift not in available
+                )
+                if missing and str(args.umklapp_completion) == "strict":
+                    raise SystemExit(
+                        f"Missing finite-q wrapped overlap shifts for q={q_shift} channel={channel}: {list(missing)[:20]}. "
+                        "Rerun with --umklapp-completion build on a compute node to construct closure keys."
+                    )
+                run_for_block = run
+                built_missing = False
+                if missing and str(args.umklapp_completion) == "build":
+                    run = _run_with_completed_umklapp(run, tuple(sorted(missing)))
+                    run_for_block = run
+                    built_missing = True
+
+                quotient_block_meta = None
+                if str(channel) == "intraflavor" and bool(
+                    args.c3_quotient_provider
+                ):
+                    q_key = (
+                        int(q_shift[0]) % int(mesh_shape[0]),
+                        int(q_shift[1]) % int(mesh_shape[1]),
+                    )
+                    representative = _c3_orbit_representative(
+                        q_key, int(mesh_shape[0])
+                    )
+                    if q_key not in quotient_matrix_cache:
+                        cycle = build_rlg_hbn_tdhf_c3_quotient_cycle(
+                            run_for_block,
+                            orbitals,
+                            representative,
+                            beta=float(args.beta),
+                            physical_shifts=physical_shifts,
+                            structure_tolerance=float(args.structure_tolerance),
+                            closure_tolerance=1.0e-9,
+                        )
+                        quotient_matrix_cache.update(cycle.matrices)
+                        cycle_meta = {
+                            "representative_shift": [
+                                int(x) for x in representative
+                            ],
+                            "cycle_shifts": [
+                                [int(x) for x in shift]
+                                for shift in cycle.shifts
+                            ],
+                            "closure_residuals": {
+                                name: float(value)
+                                for name, value in cycle.closure_residuals.items()
+                            },
+                            "step_metadata": [
+                                step.metadata for step in cycle.steps
+                            ],
+                        }
+                        for cycle_shift in cycle.shifts:
+                            quotient_cycle_metadata[cycle_shift] = cycle_meta
+                    matrices = quotient_matrix_cache[q_key]
+                    quotient_block_meta = quotient_cycle_metadata[q_key]
+                elif str(channel) == "intraflavor":
+                    matrices = build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs(
                         run_for_block,
                         orbitals,
-                        representative,
+                        pairs,
+                        q_shift,
                         beta=float(args.beta),
-                        physical_shifts=physical_shifts,
                         structure_tolerance=float(args.structure_tolerance),
-                        closure_tolerance=1.0e-9,
+                        require_complete_umklapp=(
+                            str(args.umklapp_completion) != "allow-incomplete"
+                        ),
+                        physical_shifts=physical_shifts,
                     )
-                    quotient_matrix_cache.update(cycle.matrices)
-                    cycle_meta = {
-                        "representative_shift": [int(x) for x in representative],
-                        "cycle_shifts": [[int(x) for x in shift] for shift in cycle.shifts],
-                        "closure_residuals": {
-                            name: float(value)
-                            for name, value in cycle.closure_residuals.items()
-                        },
-                        "step_metadata": [step.metadata for step in cycle.steps],
-                    }
-                    for cycle_shift in cycle.shifts:
-                        quotient_cycle_metadata[cycle_shift] = cycle_meta
-                matrices = quotient_matrix_cache[q_key]
-                quotient_block_meta = quotient_cycle_metadata[q_key]
-            elif str(channel) == "intraflavor":
-                matrices = build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs(
-                    run_for_block,
-                    orbitals,
-                    pairs,
-                    q_shift,
-                    beta=float(args.beta),
-                    structure_tolerance=float(args.structure_tolerance),
-                    require_complete_umklapp=str(args.umklapp_completion) != "allow-incomplete",
-                    physical_shifts=physical_shifts,
-                )
-            else:
-                matrices = build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs(
-                    run_for_block,
-                    orbitals,
-                    pairs,
-                    q_shift,
-                    beta=float(args.beta),
-                    structure_tolerance=float(args.structure_tolerance),
-                    require_complete_umklapp=str(args.umklapp_completion) != "allow-incomplete",
-                    physical_shifts=physical_shifts,
-                )
+                else:
+                    matrices = build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs(
+                        run_for_block,
+                        orbitals,
+                        pairs,
+                        q_shift,
+                        beta=float(args.beta),
+                        structure_tolerance=float(args.structure_tolerance),
+                        require_complete_umklapp=(
+                            str(args.umklapp_completion) != "allow-incomplete"
+                        ),
+                        physical_shifts=physical_shifts,
+                    )
+                partner_matrices = None
             spectrum = solve_tdhf_matrices(
                 matrices,
                 energy_tol=float(args.energy_tol),
                 imag_tol=float(args.imag_tol),
                 norm_tol=float(args.norm_tol),
             )
+            if partner_matrices is None:
+                partner_spectrum = None
+                particle_hole_q_minus_residual = None
+                quartet_residual = None
+            elif tuple(int(v) for v in q_shift) == (0, 0):
+                partner_spectrum = spectrum
+                particle_hole_q_minus_residual = _spectrum_assignment_residual(
+                    spectrum.raw_eigenvalues,
+                    -np.conj(spectrum.raw_eigenvalues),
+                )
+                quartet_residual = particle_hole_q_minus_residual
+            else:
+                partner_spectrum = solve_tdhf_matrices(
+                    partner_matrices,
+                    energy_tol=float(args.energy_tol),
+                    imag_tol=float(args.imag_tol),
+                    norm_tol=float(args.norm_tol),
+                )
+                particle_hole_q_minus_residual = _spectrum_assignment_residual(
+                    spectrum.raw_eigenvalues,
+                    -np.conj(partner_spectrum.raw_eigenvalues),
+                )
+                quartet_residual = particle_hole_q_minus_residual
 
             pair_particle = np.asarray([pair.particle for pair in matrices.pairs], dtype=int)
             pair_hole = np.asarray([pair.hole for pair in matrices.pairs], dtype=int)
@@ -434,6 +578,8 @@ def main() -> None:
                 "eta_norms": spectrum.eta_norms,
                 "residuals": spectrum.residuals,
                 "raw_eigenvalues": spectrum.raw_eigenvalues,
+                "raw_eta_norms": spectrum.raw_eta_norms,
+                "raw_solver_residuals": spectrum.raw_residuals,
                 "selected_indices": spectrum.selected_indices,
                 "pair_particle": pair_particle,
                 "pair_hole": pair_hole,
@@ -444,13 +590,34 @@ def main() -> None:
                 "q_centered_frac": q_centered_frac,
                 "q_cartesian_nm_inv": q_cartesian_nm_inv,
             }
+            if partner_spectrum is not None:
+                arrays.update(
+                    {
+                        "minus_q_shift": -q_array,
+                        "minus_energies_mev": partner_spectrum.energies,
+                        "minus_eigenvalues": partner_spectrum.eigenvalues,
+                        "minus_eta_norms": partner_spectrum.eta_norms,
+                        "minus_residuals": partner_spectrum.residuals,
+                        "minus_raw_eigenvalues": partner_spectrum.raw_eigenvalues,
+                        "minus_raw_eta_norms": partner_spectrum.raw_eta_norms,
+                        "minus_raw_solver_residuals": partner_spectrum.raw_residuals,
+                        "minus_selected_indices": partner_spectrum.selected_indices,
+                    }
+                )
             if not args.no_save_matrices:
                 arrays["A"] = matrices.A
                 arrays["B"] = matrices.B
                 arrays["L"] = matrices.L
+                if partner_matrices is not None:
+                    arrays["A_minus_q"] = partner_matrices.A
+                    arrays["B_minus_q"] = partner_matrices.B
+                    arrays["L_minus_q"] = partner_matrices.L
             if not args.no_save_vectors:
                 arrays["X"] = spectrum.X
                 arrays["Y"] = spectrum.Y
+                if partner_spectrum is not None:
+                    arrays["X_minus_q"] = partner_spectrum.X
+                    arrays["Y_minus_q"] = partner_spectrum.Y
             spectrum_name = f"tdhf_finite_q_{channel}_{_q_label(q_shift)}_spectrum.npz"
             spectrum_path = output_dir / spectrum_name
             _atomic_savez(spectrum_path, **arrays)
@@ -476,7 +643,10 @@ def main() -> None:
                     "spectrum_npz": str(spectrum_path),
                     "liouvillian_convention": (
                         "finite_q_partner_plus_minus"
-                        if str(channel) == "intraflavor" and tuple(int(v) for v in q_shift) != (0, 0)
+                        if (
+                            typed_quotient or str(channel) == "intraflavor"
+                        )
+                        and tuple(int(v) for v in q_shift) != (0, 0)
                         else "standard_q0_style"
                     ),
                     "structure": {
@@ -494,8 +664,38 @@ def main() -> None:
                             imag_tol=float(args.imag_tol),
                             energy_tol=max(float(args.energy_tol), 1.0e-6),
                         ),
-                        "pairing_residual": float(spectrum.pairing_residual),
+                        "same_q_plus_minus_nonreciprocity_diagnostic_mev": float(
+                            spectrum.pairing_residual
+                        ),
+                        "particle_hole_q_minus_assignment_residual_mev": (
+                            None
+                            if particle_hole_q_minus_residual is None
+                            else float(particle_hole_q_minus_residual)
+                        ),
+                        "quartet_residual_mev": (
+                            None
+                            if quartet_residual is None
+                            else float(quartet_residual)
+                        ),
+                        "minus_raw_eigenvalue_summary": (
+                            None
+                            if partner_spectrum is None
+                            else _raw_real_eigenvalue_summary(
+                                partner_spectrum.raw_eigenvalues,
+                                imag_tol=float(args.imag_tol),
+                                energy_tol=max(float(args.energy_tol), 1.0e-6),
+                            )
+                        ),
                         "max_residual": float(np.max(spectrum.residuals)) if spectrum.residuals.size else 0.0,
+                        "raw_eta_norm_range": [
+                            float(np.min(spectrum.raw_eta_norms)),
+                            float(np.max(spectrum.raw_eta_norms)),
+                        ] if spectrum.raw_eta_norms.size else [0.0, 0.0],
+                        "max_raw_solver_residual": (
+                            float(np.max(spectrum.raw_residuals))
+                            if spectrum.raw_residuals.size
+                            else 0.0
+                        ),
                     },
                 }
             )
@@ -507,10 +707,20 @@ def main() -> None:
         "channels": list(args.channels),
         "q_shifts": [list(q) for q in args.q_shifts],
         "umklapp_completion": str(args.umklapp_completion),
-        "scope": "full finite-q intraflavor Eq. D19 A/B plus conduction-only fully spin-valley-polarized flavor-flip exchange shortcuts",
+        "scope": (
+            "typed variational-v2 microscopic finite-q quotient matrices for separated channels"
+            if typed_quotient
+            else "legacy full intraflavor plus polarized flavor-flip shortcuts"
+        ),
         "implemented_channels": list(FINITE_Q_CHANNELS),
-        "remaining_limitations": "all-channel mixed finite-q blocks are not assembled; use separated intraflavor/intervalley/interspin channels",
-        "c3_quotient_provider": bool(args.c3_quotient_provider),
+        "remaining_limitations": (
+            "separated channels only; mixed all-channel blocks and iterative eigensolvers are not assembled"
+        ),
+        "typed_finite_q_quotient": typed_quotient,
+        "finite_q_matrix_api": config_payload["finite_q_matrix_api"],
+        "c3_quotient_provider_compatibility_flag": bool(
+            args.c3_quotient_provider
+        ),
         "physical_shifts": [list(s) for s in physical_shifts],
         "mesh_shape": [int(mesh_shape[0]), int(mesh_shape[1])],
         "q_coordinate_convention": "q_shift / mesh_shape is centered componentwise to [-1/2, 1/2) and converted with the RLG/hBN moire reciprocal vectors to Cartesian nm^-1; do not Wigner-Seitz fold Fig. S45 q-mesh points",

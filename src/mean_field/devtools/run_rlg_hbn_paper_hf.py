@@ -15,7 +15,7 @@ from mean_field.core.hf import summarize_hf_state_archive, validate_hf_archive_s
 # canonical sidecar/archive tests and the parallel-merge metadata tool.  It must
 # not run HF, build projected bases, or import mean_field.systems.RnG_hBN.
 
-RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION = "centered_cell_reciprocal_relabel_pad1_v2"
+RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION = "c3_equivariant_reciprocal_relabel_fixedrep_v3"
 RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING = 1
 RLG_HBN_FORM_FACTOR_CONVENTION_VERSION = "physical_q_plus_g_valley_signed_raw_shift_v2"
 
@@ -293,8 +293,14 @@ def _save_state_archive(
     trace: dict[str, list[float] | list[int]],
     *,
     cache_metadata: dict[str, object] | None = None,
+    require_interaction_provenance: bool = True,
 ) -> None:
     iter_energy, iter_err, iter_oda = _trace_arrays(trace)
+    provenance = getattr(run, "interaction_provenance", None)
+    if provenance is None and bool(require_interaction_provenance):
+        raise ValueError(
+            "Refusing to save an RLG/hBN HF archive without typed interaction provenance"
+        )
     payload = {
         "density": np.asarray(run.state.density, dtype=np.complex128),
         "hamiltonian": np.asarray(run.state.hamiltonian, dtype=np.complex128),
@@ -304,9 +310,24 @@ def _save_state_archive(
         "density_convention": np.asarray("stored_delta"),
         "density_axis_order": np.asarray("abk"),
         "reference_density_convention": np.asarray(str(run.state.scheme)),
-        "basis_periodic_gauge": np.asarray(RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION),
-        "basis_periodic_gauge_padding": np.asarray([int(RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING)], dtype=int),
-        "form_factor_convention": np.asarray(RLG_HBN_FORM_FACTOR_CONVENTION_VERSION),
+        "basis_periodic_gauge": np.asarray(
+            RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION
+            if provenance is None
+            else str(provenance.basis_periodic_gauge)
+        ),
+        "basis_periodic_gauge_padding": np.asarray(
+            [
+                int(RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING)
+                if provenance is None
+                else int(provenance.basis_periodic_gauge_padding)
+            ],
+            dtype=int,
+        ),
+        "form_factor_convention": np.asarray(
+            RLG_HBN_FORM_FACTOR_CONVENTION_VERSION
+            if provenance is None
+            else str(provenance.form_factor_convention)
+        ),
         "nu": np.asarray([float(run.state.nu)], dtype=float),
         "active_valence_bands": np.asarray([int(run.state.active_valence_bands)], dtype=int),
         "scheme": np.asarray(str(run.state.scheme)),
@@ -327,6 +348,39 @@ def _save_state_archive(
         "iter_err": iter_err,
         "iter_oda": iter_oda,
     }
+    if provenance is not None:
+        payload.update(
+            {
+                "hf_interaction_convention": np.asarray(str(provenance.convention)),
+                "hf_quotient_enabled": np.asarray(
+                    [bool(provenance.quotient_enabled)],
+                    dtype=bool,
+                ),
+                "hf_beta": np.asarray([float(provenance.beta)], dtype=float),
+                "hf_physical_shifts": np.asarray(
+                    provenance.physical_shifts,
+                    dtype=int,
+                ).reshape(-1, 2),
+                "zero_literal_q0_fock": np.asarray(
+                    [bool(provenance.zero_literal_q0_fock)],
+                    dtype=bool,
+                ),
+                "hf_basis_periodic_gauge": np.asarray(
+                    str(provenance.basis_periodic_gauge)
+                ),
+                "hf_basis_periodic_gauge_padding": np.asarray(
+                    [int(provenance.basis_periodic_gauge_padding)],
+                    dtype=int,
+                ),
+                "hf_form_factor_convention": np.asarray(
+                    str(provenance.form_factor_convention)
+                ),
+            }
+        )
+        if provenance.basis_cache_key:
+            payload["cache_key_basis"] = np.asarray(provenance.basis_cache_key)
+        if provenance.overlap_cache_key:
+            payload["cache_key_overlap"] = np.asarray(provenance.overlap_cache_key)
     if cache_metadata:
         for key, value in cache_metadata.items():
             if isinstance(value, (str, Path)):
@@ -335,6 +389,17 @@ def _save_state_archive(
                 payload[key] = np.asarray("")
             else:
                 payload[key] = np.asarray(value)
+    if bool(require_interaction_provenance):
+        missing_cache_keys = [
+            key
+            for key in ("cache_key_basis", "cache_key_overlap")
+            if key not in payload or not str(np.asarray(payload[key]).reshape(-1)[0])
+        ]
+        if missing_cache_keys:
+            raise ValueError(
+                "Refusing to save a TDHF-source HF archive without cache keys: "
+                f"{missing_cache_keys}"
+            )
     _atomic_savez(path, **payload)
 
 

@@ -5,6 +5,239 @@ from ._tdhf_support import *  # noqa: F401,F403
 from ._tdhf_types import *  # noqa: F401,F403
 from ._tdhf_pairs import *  # noqa: F401,F403
 from ._tdhf_q0 import *  # noqa: F401,F403
+from ._tdhf_fixed_quotient import (
+    RLGhBNTDHFFiniteQQuotientContext,
+    _finite_q_pair_key,
+    assemble_rlg_hbn_tdhf_finite_q_quotient_sector,
+    build_rlg_hbn_tdhf_finite_q_quotient_context,
+    build_rlg_hbn_tdhf_finite_q_quotient_sector,
+)
+
+
+@dataclass(frozen=True)
+class RLGhBNTDHFFiniteQQuotientMatrixPair:
+    """Independently assembled signed q/-q matrices sharing one pair-key order."""
+
+    plus: TDHFMatrices
+    minus: TDHFMatrices
+    q_shift: tuple[int, int]
+    minus_q_shift: tuple[int, int]
+
+
+def build_rlg_hbn_tdhf_finite_q_quotient_matrix_pair_from_pairs(
+    run: RLGhBNHartreeFockRun,
+    orbitals: RLGhBNTDHFOrbitals,
+    pairs: tuple[ParticleHolePair, ...],
+    q_shift: tuple[int, int] | RLGhBNTDHFMomentumShift,
+    *,
+    minus_pairs: tuple[ParticleHolePair, ...] | None = None,
+    prepared_context: RLGhBNTDHFFiniteQQuotientContext | None = None,
+    beta: float | None = None,
+    periodic_gauge_padding: int = 2,
+    structure_tolerance: float = 1.0e-8,
+    physical_shifts: Sequence[tuple[int, int]] | None = None,
+    require_provenance: bool = True,
+) -> RLGhBNTDHFFiniteQQuotientMatrixPair:
+    """Build both signed variational-v2 finite-q Hessians microscopically.
+
+    Ordinary wrapped legs use the exact torus-periodic relabel of the saved HF
+    orbital. Fixed endpoints use three endpoint-paired puncture branches with
+    weight 1/3 per tangent; the two Hessian legs are summed independently.
+    The returned nonzero-q Liouvillian is
+    ``[[A(q), B(q)], [-B(-q)*, -A(-q)*]]``. No block is transported,
+    averaged, Hermitized, or symmetrized after assembly.
+    """
+
+    mesh_shape = _mesh_shape_from_k_grid_frac(run.basis_data.k_grid_frac)
+    if isinstance(q_shift, RLGhBNTDHFMomentumShift):
+        if tuple(q_shift.mesh_shape) != tuple(mesh_shape):
+            raise ValueError(
+                f"q_shift mesh {q_shift.mesh_shape} does not match basis mesh {mesh_shape}"
+            )
+        shift = tuple(int(value) for value in q_shift.shift)
+    else:
+        shift = (int(q_shift[0]), int(q_shift[1]))
+    ph_pairs = tuple(pairs)
+    prepared = (
+        build_rlg_hbn_tdhf_finite_q_quotient_context(
+            run,
+            periodic_gauge_padding=int(periodic_gauge_padding),
+            beta=beta,
+            require_provenance=bool(require_provenance),
+        )
+        if prepared_context is None
+        else prepared_context
+    )
+    if prepared.run is not run:
+        raise ValueError("prepared finite-q quotient context belongs to another HF run")
+    if require_provenance and not prepared.source_provenance_validated:
+        raise ValueError(
+            "production finite-q quotient assembly requires a provenance-validated context"
+        )
+    if beta is not None and not np.isclose(
+        float(beta), float(prepared.beta), rtol=0.0, atol=1.0e-15
+    ):
+        raise ValueError(f"beta={beta} does not match prepared beta={prepared.beta}")
+    if physical_shifts is not None:
+        supplied_shifts = tuple(
+            (int(value[0]), int(value[1])) for value in physical_shifts
+        )
+        if supplied_shifts != tuple(prepared.physical_shifts):
+            raise ValueError(
+                "physical_shifts do not match the typed HF quotient provenance"
+            )
+
+    positive_sector = build_rlg_hbn_tdhf_finite_q_quotient_sector(
+        prepared,
+        orbitals,
+        ph_pairs,
+        shift,
+    )
+    positive = assemble_rlg_hbn_tdhf_finite_q_quotient_sector(positive_sector)
+    minus_shift = (-shift[0], -shift[1])
+    if shift == (0, 0):
+        resolved_minus_pairs = ph_pairs
+        negative_sector = positive_sector
+        negative = positive
+    else:
+        if minus_pairs is None:
+            source_keys = positive_sector.pair_keys
+            source_key_set = set(source_keys)
+            all_minus = build_rlg_hbn_tdhf_q_pairs(
+                orbitals,
+                run.basis_data,
+                minus_shift,
+            )
+            pair_by_key: dict[tuple[int, int, int], ParticleHolePair] = {}
+            for pair in all_minus:
+                key = _finite_q_pair_key(orbitals, pair)
+                if key in source_key_set:
+                    if key in pair_by_key:
+                        raise ValueError(f"duplicate -q pair key {key}")
+                    pair_by_key[key] = pair
+            missing = [key for key in source_keys if key not in pair_by_key]
+            if missing:
+                raise ValueError(f"-q pair space is missing keys: {missing[:10]}")
+            resolved_minus_pairs = tuple(pair_by_key[key] for key in source_keys)
+        else:
+            pair_by_key = {
+                _finite_q_pair_key(orbitals, pair): pair
+                for pair in tuple(minus_pairs)
+            }
+            source_keys = positive_sector.pair_keys
+            if set(pair_by_key) != set(source_keys):
+                raise ValueError("supplied -q pair-key set differs from +q pair-key set")
+            resolved_minus_pairs = tuple(pair_by_key[key] for key in source_keys)
+        negative_sector = build_rlg_hbn_tdhf_finite_q_quotient_sector(
+            prepared,
+            orbitals,
+            resolved_minus_pairs,
+            minus_shift,
+        )
+        if negative_sector.pair_keys != positive_sector.pair_keys:
+            raise ValueError("ordered +q/-q pair keys differ")
+        negative = assemble_rlg_hbn_tdhf_finite_q_quotient_sector(
+            negative_sector
+        )
+
+    A = np.asarray(positive["A"], dtype=np.complex128)
+    B = np.asarray(positive["B"], dtype=np.complex128)
+    A_minus = np.asarray(negative["A"], dtype=np.complex128)
+    B_minus = np.asarray(negative["B"], dtype=np.complex128)
+    L = np.block(
+        [[A, B], [-np.conj(B_minus), -np.conj(A_minus)]]
+    )
+    a_residual = max(
+        float(np.max(np.abs(A - A.conj().T))) if A.size else 0.0,
+        float(np.max(np.abs(A_minus - A_minus.conj().T)))
+        if A_minus.size
+        else 0.0,
+    )
+    b_residual = (
+        float(np.max(np.abs(B - B_minus.T))) if B.size else 0.0
+    )
+    structure = TDHFStructureResiduals(
+        a_hermitian=a_residual,
+        b_symmetric=b_residual,
+        particle_hole_symmetry=0.0,
+        tolerance=float(structure_tolerance),
+    )
+    if max(a_residual, b_residual) > float(structure_tolerance):
+        raise ValueError(
+            "finite-q quotient structure gate failed before return: "
+            f"A={a_residual}, B={b_residual}, tolerance={structure_tolerance}"
+        )
+    L_minus = np.block(
+        [[A_minus, B_minus], [-np.conj(B), -np.conj(A)]]
+    )
+    plus_matrices = TDHFMatrices(
+        pairs=ph_pairs,
+        A=A,
+        B=B,
+        L=L,
+        structure=structure,
+    )
+    minus_matrices_result = TDHFMatrices(
+        pairs=resolved_minus_pairs,
+        A=A_minus,
+        B=B_minus,
+        L=L_minus,
+        structure=structure,
+    )
+    return RLGhBNTDHFFiniteQQuotientMatrixPair(
+        plus=plus_matrices,
+        minus=minus_matrices_result,
+        q_shift=shift,
+        minus_q_shift=minus_shift,
+    )
+
+
+def build_rlg_hbn_tdhf_finite_q_quotient_matrices_from_pairs(
+    run: RLGhBNHartreeFockRun,
+    orbitals: RLGhBNTDHFOrbitals,
+    pairs: tuple[ParticleHolePair, ...],
+    q_shift: tuple[int, int] | RLGhBNTDHFMomentumShift,
+    *,
+    minus_pairs: tuple[ParticleHolePair, ...] | None = None,
+    prepared_context: RLGhBNTDHFFiniteQQuotientContext | None = None,
+    beta: float | None = None,
+    periodic_gauge_padding: int = 2,
+    structure_tolerance: float = 1.0e-8,
+    physical_shifts: Sequence[tuple[int, int]] | None = None,
+    require_provenance: bool = True,
+) -> TDHFMatrices:
+    """Return the +q member of the independently assembled signed pair."""
+
+    result = build_rlg_hbn_tdhf_finite_q_quotient_matrix_pair_from_pairs(
+        run,
+        orbitals,
+        pairs,
+        q_shift,
+        minus_pairs=minus_pairs,
+        prepared_context=prepared_context,
+        beta=beta,
+        periodic_gauge_padding=periodic_gauge_padding,
+        structure_tolerance=structure_tolerance,
+        physical_shifts=physical_shifts,
+        require_provenance=require_provenance,
+    )
+    return result.plus
+
+
+def _reject_typed_quotient_source_without_derived_finite_q_lift(
+    run: RLGhBNHartreeFockRun,
+) -> None:
+    provenance = getattr(run, "interaction_provenance", None)
+    if provenance is None or not bool(provenance.quotient_enabled):
+        return
+    raise NotImplementedError(
+        "The legacy pair-assembly TDHF path does not differentiate the typed "
+        f"HF quotient {provenance.convention!r}. Use the derived "
+        "build_rlg_hbn_tdhf_finite_q_quotient_matrices_from_pairs API "
+        "(including q=0), or apply_rlg_hbn_hf_quotient_response for direct "
+        "q=0 tangent derivatives."
+    )
+
 
 def build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs(
     run: RLGhBNHartreeFockRun,
@@ -36,6 +269,7 @@ def build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs(
     """
 
     _reject_zero_literal_q0_fock_env()
+    _reject_typed_quotient_source_without_derived_finite_q_lift(run)
     _assert_finite_q_shortcut_is_safe(run, tuple(pairs))
     mesh_shape = _mesh_shape_from_k_grid_frac(run.basis_data.k_grid_frac)
     if isinstance(q_shift, RLGhBNTDHFMomentumShift):
@@ -185,6 +419,7 @@ def build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs(
 
     _reject_zero_literal_q0_fock_env()
     ph_pairs = tuple(pairs)
+    _reject_typed_quotient_source_without_derived_finite_q_lift(run)
     _assert_finite_q_intraflavor_pairs(ph_pairs)
     mesh_shape = _mesh_shape_from_k_grid_frac(run.basis_data.k_grid_frac)
     if isinstance(q_shift, RLGhBNTDHFMomentumShift):

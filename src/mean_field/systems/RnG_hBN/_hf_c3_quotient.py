@@ -24,7 +24,9 @@ from ._hf_types import (
 )
 
 
-RLG_HBN_HF_INTERACTION_CONVENTION_VERSION = "actual_node_ws_fixed_source_copy_v1"
+RLG_HBN_HF_INTERACTION_CONVENTION_VERSION = (
+    "actual_node_ws_fixed_variational_copy_v2"
+)
 
 
 @dataclass(frozen=True)
@@ -40,8 +42,26 @@ class _RLGhBNHFFixedSourceContext:
 
 
 @dataclass(frozen=True)
+class _RLGhBNHFFockContractionContext:
+    overlaps: dict[tuple[int, int], np.ndarray]
+    kernels: dict[tuple[int, int], np.ndarray]
+    weights: dict[tuple[int, int], np.ndarray]
+
+
+@dataclass(frozen=True)
+class _RLGhBNHFFixedTargetContext:
+    pair: tuple[int, int]
+    target_index: int
+    target_basis: RLGhBNProjectedBasisData
+    copy_transforms: tuple[np.ndarray, np.ndarray, np.ndarray]
+    hartree_blocks: RLGhBNLayerOverlapBlockSet
+    ordinary_fock: _RLGhBNHFFockContractionContext
+    fixed_fock: tuple[_RLGhBNHFFockContractionContext, ...]
+
+
+@dataclass(frozen=True)
 class RLGhBNHFC3QuotientInteractionContext:
-    """Precomputed actual-node WS and fixed-source data for one HF run."""
+    """Precomputed lift-contract-descend data for one variational HF quotient."""
 
     basis_data: RLGhBNProjectedBasisData
     base_blocks: RLGhBNLayerOverlapBlockSet
@@ -51,6 +71,7 @@ class RLGhBNHFC3QuotientInteractionContext:
     ordinary_fock_kernels: dict[tuple[int, int], np.ndarray]
     ordinary_fock_weights: dict[tuple[int, int], np.ndarray]
     fixed_sources: tuple[_RLGhBNHFFixedSourceContext, ...]
+    fixed_targets: tuple[_RLGhBNHFFixedTargetContext, ...]
 
 
 
@@ -79,6 +100,26 @@ def _fock_weights_by_overlap_key(
             result[key] += np.asarray(mask, dtype=float)
     return result
 
+
+
+def _build_fock_contraction_context(
+    target_basis: RLGhBNProjectedBasisData,
+    source_basis: RLGhBNProjectedBasisData,
+    physical_shifts: tuple[tuple[int, int], ...],
+) -> _RLGhBNHFFockContractionContext:
+    wrap_masks = fock_transfer_wrap_masks_between(target_basis, source_basis)
+    weights = _fock_weights_by_overlap_key(physical_shifts, wrap_masks)
+    keys = tuple(sorted(weights))
+    blocks = build_rlg_hbn_layer_overlap_blocks_between(
+        target_basis,
+        source_basis,
+        shifts=keys,
+    )
+    return _RLGhBNHFFockContractionContext(
+        overlaps=dict(blocks.layer_overlaps),
+        kernels=dict(blocks.fock_layer_coulomb),
+        weights=weights,
+    )
 
 
 def _fixed_copy_sewing(
@@ -160,13 +201,10 @@ def _build_fixed_source_context(
         source_basis,
         shifts=physical_shifts,
     )
-    wrap_masks = fock_transfer_wrap_masks_between(basis_data, source_basis)
-    fock_weights = _fock_weights_by_overlap_key(physical_shifts, wrap_masks)
-    fock_keys = tuple(sorted(fock_weights))
-    fock_blocks = build_rlg_hbn_layer_overlap_blocks_between(
+    fock = _build_fock_contraction_context(
         basis_data,
         source_basis,
-        shifts=fock_keys,
+        physical_shifts,
     )
     mesh = int(basis_data.mesh_size)
     return _RLGhBNHFFixedSourceContext(
@@ -175,11 +213,42 @@ def _build_fixed_source_context(
         source_basis=source_basis,
         copy_transforms=copy_transforms,
         hartree_blocks=hartree_blocks,
-        fock_overlaps=dict(fock_blocks.layer_overlaps),
-        fock_kernels=dict(fock_blocks.fock_layer_coulomb),
-        fock_weights=fock_weights,
+        fock_overlaps=fock.overlaps,
+        fock_kernels=fock.kernels,
+        fock_weights=fock.weights,
     )
 
+
+
+def _build_fixed_target_context(
+    basis_data: RLGhBNProjectedBasisData,
+    physical_shifts: tuple[tuple[int, int], ...],
+    target_source: _RLGhBNHFFixedSourceContext,
+    fixed_sources: tuple[_RLGhBNHFFixedSourceContext, ...],
+) -> _RLGhBNHFFixedTargetContext:
+    target_basis = target_source.source_basis
+    ordinary_fock = _build_fock_contraction_context(
+        target_basis,
+        basis_data,
+        physical_shifts,
+    )
+    fixed_fock = tuple(
+        _build_fock_contraction_context(
+            target_basis,
+            source.source_basis,
+            physical_shifts,
+        )
+        for source in fixed_sources
+    )
+    return _RLGhBNHFFixedTargetContext(
+        pair=target_source.pair,
+        target_index=target_source.source_index,
+        target_basis=target_basis,
+        copy_transforms=target_source.copy_transforms,
+        hartree_blocks=target_source.hartree_blocks,
+        ordinary_fock=ordinary_fock,
+        fixed_fock=fixed_fock,
+    )
 
 
 def build_rlg_hbn_hf_c3_quotient_interaction_context(
@@ -190,10 +259,11 @@ def build_rlg_hbn_hf_c3_quotient_interaction_context(
 ) -> RLGhBNHFC3QuotientInteractionContext:
     """Precompute the C3-covariant HF contraction provider.
 
-    Ordinary source nodes use actual-node Wigner-Seitz transfer folding with
-    exact boundary-tie averaging. Nonzero C3-fixed source nodes are replaced by
-    their three periodic-gauge representatives before any Hartree/Fock
-    contraction; each transported density copy carries weight ``1/3``.
+    Ordinary nodes use actual-node Wigner-Seitz transfer folding with exact
+    boundary-tie averaging. Nonzero C3-fixed source densities are injected into
+    their three periodic-gauge representatives with weight ``1/3``. Responses
+    at fixed target copies are then descended with the pairing-adjoint map, so
+    the active interaction is the variational quotient ``L^sharp V L``.
     """
 
     if basis_data.mesh_size <= 0:
@@ -227,6 +297,15 @@ def build_rlg_hbn_hf_c3_quotient_interaction_context(
         )
         for pair in fixed_pairs
     )
+    fixed_targets = tuple(
+        _build_fixed_target_context(
+            basis_data,
+            resolved_physical,
+            target_source,
+            fixed_sources,
+        )
+        for target_source in fixed_sources
+    )
     mesh = int(basis_data.mesh_size)
     fixed_indices = tuple(sorted(int(pair[0]) * mesh + int(pair[1]) for pair in fixed_pairs))
     return RLGhBNHFC3QuotientInteractionContext(
@@ -238,6 +317,7 @@ def build_rlg_hbn_hf_c3_quotient_interaction_context(
         ordinary_fock_kernels=ordinary_kernels,
         ordinary_fock_weights=ordinary_weights,
         fixed_sources=fixed_sources,
+        fixed_targets=fixed_targets,
     )
 
 
@@ -286,7 +366,7 @@ def _contract_hartree_between(
     for shift in physical_shifts:
         target_diagonal = target_blocks.layer_diagonal_overlaps[shift]
         source_diagonal = source_blocks.layer_diagonal_overlaps[shift]
-        kernel = target_blocks.hartree_layer_coulomb[shift]
+        kernel = source_blocks.hartree_layer_coulomb[shift]
         traces = np.asarray(
             [
                 compute_density_overlap_trace_from_diagonal(
@@ -313,11 +393,105 @@ def _expanded_fixed_density(
     expected = (context.source_basis.nt, context.source_basis.nt)
     if source.shape != expected:
         raise ValueError(f"fixed density shape {source.shape} != {expected}")
+    # HF stores D[a,b]=<c_a^† c_b>-R[a,b] = P^T[a,b]-R[a,b]. The copy
+    # transforms are ket sewings, u_copy = S_copy u_source, so the stored
+    # density transforms contragrediently as S* D S^T, not S D S^†.
     expanded = np.empty((*expected, 3), dtype=np.complex128)
     for copy, transform in enumerate(context.copy_transforms):
-        expanded[:, :, copy] = transform @ source @ transform.conj().T / 3.0
+        expanded[:, :, copy] = (
+            transform.conj() @ source @ transform.T / 3.0
+        )
     return expanded
 
+
+
+def _descend_fixed_hamiltonian(
+    physical_hamiltonian: np.ndarray,
+    context: _RLGhBNHFFixedTargetContext,
+) -> np.ndarray:
+    values = np.asarray(physical_hamiltonian, dtype=np.complex128)
+    expected = (context.target_basis.nt, context.target_basis.nt, 3)
+    if values.shape != expected:
+        raise ValueError(
+            f"fixed target Hamiltonian shape {values.shape} != {expected}"
+        )
+    descended = np.zeros(expected[:2], dtype=np.complex128)
+    for copy, transform in enumerate(context.copy_transforms):
+        descended += (
+            transform.conj().T @ values[:, :, copy] @ transform / 3.0
+        )
+    return descended
+
+
+def _contract_fixed_target_physical_components(
+    ordinary_density: np.ndarray,
+    expanded_fixed_densities: tuple[np.ndarray, ...],
+    quotient: RLGhBNHFC3QuotientInteractionContext,
+    target: _RLGhBNHFFixedTargetContext,
+    *,
+    scale: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    target_shape = (target.target_basis.nt, target.target_basis.nt, 3)
+    hartree = _contract_hartree_between(
+        ordinary_density,
+        target.hartree_blocks,
+        quotient.base_blocks,
+        quotient.physical_shifts,
+        scale=scale,
+        target_shape=target_shape,
+    )
+    fock = _contract_ws_fock(
+        ordinary_density,
+        target.ordinary_fock.overlaps,
+        target.ordinary_fock.kernels,
+        target.ordinary_fock.weights,
+        scale=scale,
+        target_shape=target_shape,
+    )
+    for source, expanded_density, fock_context in zip(
+        quotient.fixed_sources,
+        expanded_fixed_densities,
+        target.fixed_fock,
+        strict=True,
+    ):
+        hartree += _contract_hartree_between(
+            expanded_density,
+            target.hartree_blocks,
+            source.hartree_blocks,
+            quotient.physical_shifts,
+            scale=scale,
+            target_shape=target_shape,
+        )
+        fock += _contract_ws_fock(
+            expanded_density,
+            fock_context.overlaps,
+            fock_context.kernels,
+            fock_context.weights,
+            scale=scale,
+            target_shape=target_shape,
+        )
+    return hartree, fock
+
+
+def _contract_fixed_target_components(
+    ordinary_density: np.ndarray,
+    expanded_fixed_densities: tuple[np.ndarray, ...],
+    quotient: RLGhBNHFC3QuotientInteractionContext,
+    target: _RLGhBNHFFixedTargetContext,
+    *,
+    scale: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    hartree, fock = _contract_fixed_target_physical_components(
+        ordinary_density,
+        expanded_fixed_densities,
+        quotient,
+        target,
+        scale=scale,
+    )
+    return (
+        _descend_fixed_hamiltonian(hartree, target),
+        _descend_fixed_hamiltonian(fock, target),
+    )
 
 
 def build_rlg_hbn_hf_c3_quotient_interaction_components(
@@ -327,7 +501,7 @@ def build_rlg_hbn_hf_c3_quotient_interaction_components(
     v0: float,
     beta: float = 1.0,
 ) -> RLGhBNInteractionComponents:
-    """Contract HF Hartree/Fock terms from WS-folded and fixed-copy sources."""
+    """Apply the variational fixed-copy quotient ``L^sharp V L``."""
 
     density = np.asarray(density_delta, dtype=np.complex128)
     basis_data = context.basis_data
@@ -355,11 +529,15 @@ def build_rlg_hbn_hf_c3_quotient_interaction_components(
         scale=scale,
         target_shape=expected,
     )
-    for fixed in context.fixed_sources:
-        expanded_density = _expanded_fixed_density(
-            density[:, :, fixed.source_index],
-            fixed,
-        )
+    expanded_fixed_densities = tuple(
+        _expanded_fixed_density(density[:, :, fixed.source_index], fixed)
+        for fixed in context.fixed_sources
+    )
+    for fixed, expanded_density in zip(
+        context.fixed_sources,
+        expanded_fixed_densities,
+        strict=True,
+    ):
         hartree += _contract_hartree_between(
             expanded_density,
             context.base_blocks,
@@ -376,6 +554,23 @@ def build_rlg_hbn_hf_c3_quotient_interaction_components(
             scale=scale,
             target_shape=expected,
         )
+
+    # Ordinary target blocks already represent one quotient coordinate. Fixed
+    # target coordinates represent three physical copies, so replace their
+    # base-target values by the pairing-adjoint descent of all physical target
+    # copy responses. This chain-rule step makes the active kernel L^sharp V L
+    # rather than the non-variational source-only map V L.
+    for target in context.fixed_targets:
+        target_hartree, target_fock = _contract_fixed_target_components(
+            ordinary_density,
+            expanded_fixed_densities,
+            context,
+            target,
+            scale=scale,
+        )
+        hartree[:, :, target.target_index] = target_hartree
+        fock[:, :, target.target_index] = target_fock
+
     return RLGhBNInteractionComponents(
         hartree=hartree,
         fock=fock,

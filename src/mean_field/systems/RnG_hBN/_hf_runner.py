@@ -6,6 +6,7 @@ from ._hf_types import *  # noqa: F401,F403
 from ._hf_basis import *  # noqa: F401,F403
 from ._hf_interaction_path import *  # noqa: F401,F403
 from ._hf_c3_quotient import *  # noqa: F401,F403
+from ._hf_shared import _rlg_hbn_zero_literal_q0_fock
 
 def compute_rlg_hbn_oda_parameter(
     state: RLGhBNHartreeFockState,
@@ -517,6 +518,24 @@ def run_rlg_hbn_hartree_fock(
         max_oda_lambda=max_oda_lambda,
     )
     _update_rlg_hbn_diagnostics_from_density(state)
+    interaction_provenance = RLGhBNHFInteractionProvenance(
+        convention=(
+            RLG_HBN_HF_INTERACTION_CONVENTION_VERSION
+            if quotient_context is not None
+            else "actual_node_ws_unquotiented_v1"
+        ),
+        quotient_enabled=bool(quotient_context is not None),
+        beta=float(beta),
+        physical_shifts=(
+            tuple(quotient_context.physical_shifts)
+            if quotient_context is not None
+            else tuple((int(x), int(y)) for x, y in resolved_blocks.shifts)
+        ),
+        zero_literal_q0_fock=bool(_rlg_hbn_zero_literal_q0_fock()),
+        basis_periodic_gauge=RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
+        basis_periodic_gauge_padding=int(RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING),
+        form_factor_convention=RLG_HBN_FORM_FACTOR_CONVENTION_VERSION,
+    )
     return RLGhBNHartreeFockRun(
         state=state,
         iter_energy=core_run.iter_energy,
@@ -528,6 +547,7 @@ def run_rlg_hbn_hartree_fock(
         exit_reason=core_run.exit_reason,
         overlap_blocks=resolved_blocks,
         basis_data=basis_data,
+        interaction_provenance=interaction_provenance,
     )
 
 

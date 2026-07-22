@@ -23,6 +23,7 @@ from ._hf_reference import (
 )
 from ._hf_types import (
     RLGhBNGroundStateScan,
+    RLGhBNHFInteractionProvenance,
     RLGhBNHFPathResult,
     RLGhBNHartreeFockRun,
     RLGhBNHartreeFockState,
@@ -40,6 +41,13 @@ from ._hf_c3_quotient import (
     RLGhBNHFC3QuotientInteractionContext,
     build_rlg_hbn_hf_c3_quotient_interaction_components,
     build_rlg_hbn_hf_c3_quotient_interaction_context,
+)
+from ._hf_response_finite_q import (
+    RLGhBNFiniteQDensityTangent,
+    RLGhBNFiniteQDensityTangentRole,
+    RLGhBNFiniteQResponse,
+    apply_rlg_hbn_hf_quotient_response,
+    validate_rlg_hbn_hf_quotient_source_closure,
 )
 from ._hf_interaction_path import (
     build_rlg_hbn_hf_interaction_hamiltonian,
@@ -69,8 +77,12 @@ from .interaction import RLGhBNInteractionParams
 from .model import RLGhBNModel
 
 __all__ = [
+    "RLGhBNFiniteQDensityTangent",
+    "RLGhBNFiniteQDensityTangentRole",
+    "RLGhBNFiniteQResponse",
     "RLGhBNGroundStateScan",
     "RLGhBNHFC3QuotientInteractionContext",
+    "RLGhBNHFInteractionProvenance",
     "RLGhBNHFPathResult",
     "RLGhBNHartreeFockRun",
     "RLGhBNHartreeFockState",
@@ -85,6 +97,7 @@ __all__ = [
     "RLG_HBN_HF_INTERACTION_CONVENTION_VERSION",
     "VALLEY_SEQUENCE",
     "active_band_indices_for_interaction",
+    "apply_rlg_hbn_hf_quotient_response",
     "average_scheme_density_delta",
     "build_rlg_hbn_density_from_hamiltonian",
     "build_rlg_hbn_hf_c3_quotient_interaction_components",
@@ -120,4 +133,5 @@ __all__ = [
     "rlg_hbn_reference_density",
     "run_rlg_hbn_hartree_fock",
     "scan_rlg_hbn_ground_state",
+    "validate_rlg_hbn_hf_quotient_source_closure",
 ]

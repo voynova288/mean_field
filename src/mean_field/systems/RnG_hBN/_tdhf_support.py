@@ -41,17 +41,70 @@ def rlg_hbn_tdhf_finite_q_mode_support(
     *,
     shortcut_exchange_only: bool = True,
     canonical_boundary: bool = False,
+    typed_quotient: bool = False,
 ) -> RLGhBNTDHFFiniteQSupport:
     """Describe whether an RLG/hBN finite-q TDHF mode is implemented.
 
-    This helper is intentionally conservative: it reports only the legacy
-    system code paths that actually exist.  In particular, a canonical HF input
-    does not supply finite-q direct/B-term formulas or construct ``V_hf``; it
-    only supplies parity-checked HF orbitals before the system adapter builds
-    the already-implemented flavor-flip exchange shortcut.
+    The default reports legacy/canonical compatibility paths. Pass
+    ``typed_quotient=True`` for the validated variational-v2 archive path;
+    generic canonical HF inputs still do not construct the system-specific
+    finite-q quotient context.
     """
 
     channel_key = str(channel)
+    if typed_quotient:
+        blockers = []
+        if canonical_boundary:
+            blockers.append(
+                "typed finite-q quotient assembly requires the RLG/hBN typed archive/context, not the generic canonical boundary"
+            )
+        if channel_key == "all":
+            blockers.append(
+                "typed finite-q quotient assembly requires separated intraflavor/intervalley/interspin blocks"
+            )
+        elif channel_key not in FINITE_Q_KNOWN_CHANNELS:
+            blockers.append(
+                f"unknown finite-q channel {channel_key!r}; expected one of {FINITE_Q_KNOWN_CHANNELS}."
+            )
+        supported = not blockers
+        return RLGhBNTDHFFiniteQSupport(
+            supported=supported,
+            channel=channel_key,
+            canonical_boundary=bool(canonical_boundary),
+            shortcut_exchange_only=False,
+            supported_terms=(
+                (
+                    "hf_energy_difference",
+                    "finite_q_A_direct",
+                    "finite_q_A_exchange",
+                    "finite_q_B_direct",
+                    "finite_q_B_exchange",
+                    "signed_q_minus_q_liouvillian",
+                )
+                if supported
+                else ()
+            ),
+            unsupported_terms=(),
+            runtime_guards=(
+                "typed_interaction_provenance",
+                "converged_stationary_hf_source",
+                "analytic_periodic_ordinary_lift",
+                "three_same_copy_fixed_branches",
+                "independent_signed_q_minus_q_assembly",
+            ),
+            blockers=tuple(blockers),
+            evidence=(
+                "build_rlg_hbn_tdhf_finite_q_quotient_matrices_from_pairs",
+                "strict q0 HF quotient-response parity",
+                "independent actual 12x12 generic/self C3 gates",
+                "raw q/-q particle-hole and interspin Goldstone gates",
+            ),
+            reason=(
+                "Typed variational-v2 RLG/hBN finite-q quotient assembly is available for this separated channel."
+                if supported
+                else " ".join(blockers)
+            ),
+        )
     blockers: list[str] = []
     unsupported_terms = (
         ()
