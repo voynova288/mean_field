@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+
 from ._hf_shared import *  # noqa: F401,F403
 from ._hf_reference import *  # noqa: F401,F403
 from ._hf_types import *  # noqa: F401,F403
@@ -479,16 +481,33 @@ def run_rlg_hbn_hartree_fock(
         occupation_counts=resolved_counts,
     )
     resolved_blocks = overlap_blocks if overlap_blocks is not None else build_rlg_hbn_layer_overlap_blocks(basis_data)
-    quotient_context = (
-        build_rlg_hbn_hf_c3_quotient_interaction_context(
+    expected_physical_shifts = interaction_shifts_for_cutoff(
+        basis_data.basis_model.lattice,
+        basis_data.interaction,
+    )
+    if tuple(resolved_blocks.shifts) != tuple(expected_physical_shifts):
+        raise ValueError(
+            "HF overlap physical shifts do not equal the configured fixed-|G| shell: "
+            f"got {resolved_blocks.shifts}, expected {expected_physical_shifts}"
+        )
+    if len(set(resolved_blocks.shifts)) != len(resolved_blocks.shifts):
+        raise ValueError("HF physical shift shell contains duplicate G vectors")
+    if {
+        (-int(shift[0]), -int(shift[1])) for shift in resolved_blocks.shifts
+    } != set(resolved_blocks.shifts):
+        raise ValueError("HF physical shift shell is not closed under G -> -G")
+    if bool(c3_quotient_interaction):
+        if basis_data.mesh_size <= 0 or basis_data.periodic_reciprocal_shifts is None:
+            raise ValueError(
+                "quotient HF was explicitly requested but the basis has no periodic "
+                "reciprocal-shift metadata"
+            )
+        quotient_context = build_rlg_hbn_hf_c3_quotient_interaction_context(
             basis_data,
             resolved_blocks,
         )
-        if bool(c3_quotient_interaction)
-        and basis_data.mesh_size > 0
-        and basis_data.periodic_reciprocal_shifts is not None
-        else None
-    )
+    else:
+        quotient_context = None
     state.diagnostics.update(
         {
             "hf_c3_quotient_interaction_enabled": float(quotient_context is not None),
@@ -522,7 +541,7 @@ def run_rlg_hbn_hartree_fock(
         convention=(
             RLG_HBN_HF_INTERACTION_CONVENTION_VERSION
             if quotient_context is not None
-            else "actual_node_ws_unquotiented_v1"
+            else RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION
         ),
         quotient_enabled=bool(quotient_context is not None),
         beta=float(beta),
@@ -535,6 +554,18 @@ def run_rlg_hbn_hartree_fock(
         basis_periodic_gauge=RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
         basis_periodic_gauge_padding=int(RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING),
         form_factor_convention=RLG_HBN_FORM_FACTOR_CONVENTION_VERSION,
+        remote_h0_policy=RLG_HBN_REMOTE_H0_POLICY_VERSION,
+        remote_h0_sha256=(
+            ""
+            if basis_data.fixed_remote_hamiltonian is None
+            else hashlib.sha256(
+                np.ascontiguousarray(
+                    basis_data.fixed_remote_hamiltonian,
+                    dtype=np.complex128,
+                ).view(np.uint8)
+            ).hexdigest()
+        ),
+        physical_shift_policy=RLG_HBN_HF_PHYSICAL_SHIFT_POLICY_VERSION,
     )
     return RLGhBNHartreeFockRun(
         state=state,

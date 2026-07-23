@@ -31,10 +31,13 @@ from ._tdhf_fixed_quotient import (
 )
 from ._tdhf_finite_q import (
     RLGhBNTDHFFiniteQQuotientMatrixPair,
+    RLGhBNTDHFFiniteQSingleRepresentativeMatrixPair,
     build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs,
     build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs,
     build_rlg_hbn_tdhf_finite_q_quotient_matrix_pair_from_pairs,
     build_rlg_hbn_tdhf_finite_q_quotient_matrices_from_pairs,
+    build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs,
+    build_rlg_hbn_tdhf_finite_q_single_representative_matrices_from_pairs,
 )
 from ._tdhf_quotient_orbit import (
     RLGhBNTDHFQuotientCycleResult,
@@ -58,11 +61,14 @@ __all__ = [
     "RLGhBNTDHFQuotientOrbitResult",
     "RLGhBNTDHFFiniteQQuotientContext",
     "RLGhBNTDHFFiniteQQuotientMatrixPair",
+    "RLGhBNTDHFFiniteQSingleRepresentativeMatrixPair",
     "build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs",
     "build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs",
     "build_rlg_hbn_tdhf_finite_q_quotient_context",
     "build_rlg_hbn_tdhf_finite_q_quotient_matrix_pair_from_pairs",
     "build_rlg_hbn_tdhf_finite_q_quotient_matrices_from_pairs",
+    "build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs",
+    "build_rlg_hbn_tdhf_finite_q_single_representative_matrices_from_pairs",
     "build_rlg_hbn_tdhf_c3_quotient_cycle",
     "build_rlg_hbn_tdhf_c3_quotient_orbit",
     "build_rlg_hbn_tdhf_interaction",

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+import hashlib
 from types import SimpleNamespace
 
 import numpy as np
@@ -19,12 +21,22 @@ from mean_field.systems.RnG_hBN._tdhf_fixed_quotient import (
 )
 from mean_field.devtools.run_rlg_hbn_tdhf_q0 import _shortcut_decision
 from mean_field.systems.RnG_hBN import (
+    RLGhBNFiniteQDensityTangent,
+    RLGhBNHFInteractionProvenance,
     RLGhBNHartreeFockRun,
     RLGhBNHartreeFockState,
     RLGhBNInteractionParams,
+    RLGhBNLayerOverlapBlockSet,
     RLGhBNModel,
     RLGhBNTDHFInteraction,
     RLGhBNTDHFOrbitals,
+    RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING,
+    RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
+    RLG_HBN_FORM_FACTOR_CONVENTION_VERSION,
+    RLG_HBN_HF_PHYSICAL_SHIFT_POLICY_VERSION,
+    RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION,
+    RLG_HBN_REMOTE_H0_POLICY_VERSION,
+    apply_rlg_hbn_hf_single_representative_response,
     build_rlg_hbn_hf_c3_quotient_interaction_components,
     build_rlg_hbn_hf_c3_quotient_interaction_context,
     build_rlg_hbn_hf_interaction_hamiltonian,
@@ -36,6 +48,7 @@ from mean_field.systems.RnG_hBN import (
     build_rlg_hbn_tdhf_c3_quotient_orbit,
     build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs,
     build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs,
+    build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs,
     build_rlg_hbn_tdhf_interaction,
     build_rlg_hbn_tdhf_orbitals,
     build_rlg_hbn_tdhf_orbitals_from_canonical_hf,
@@ -49,6 +62,7 @@ from mean_field.systems.RnG_hBN import (
     center_reciprocal_fractional_coordinates,
     finite_q_shift_cartesian_nm_inv,
     initialize_rlg_hbn_density,
+    interaction_shifts_for_cutoff,
     load_or_build_projected_basis,
     load_projected_basis_cache,
     mbz_hexagon_vertices_nm_inv,
@@ -56,7 +70,9 @@ from mean_field.systems.RnG_hBN import (
     rlg_hbn_flavor_occupation_counts_for_init_mode,
     rlg_hbn_hf_run_to_hf_run_result,
     rlg_hbn_reference_density,
+    run_rlg_hbn_hartree_fock,
     rlg_hbn_tdhf_finite_q_mode_support,
+    validate_rlg_hbn_hf_single_representative_source_closure,
     validate_rlg_hbn_tdhf_canonical_orbital_parity,
 )
 
@@ -116,6 +132,76 @@ def _tiny_flavor_polarized_run(
         basis_data=basis_data,
     )
 
+
+
+def _typed_single_representative_tiny_run(
+    *,
+    k_mesh_size: int = 1,
+    mesh_size: int = 1,
+    active_conduction_bands: int = 1,
+) -> RLGhBNHartreeFockRun:
+    run = _tiny_flavor_polarized_run(
+        k_mesh_size=k_mesh_size,
+        mesh_size=mesh_size,
+        active_conduction_bands=active_conduction_bands,
+    )
+    physical_shifts = interaction_shifts_for_cutoff(
+        run.basis_data.basis_model.lattice,
+        run.basis_data.interaction,
+    )
+    physical_blocks = build_rlg_hbn_layer_overlap_blocks(
+        run.basis_data,
+        shifts=physical_shifts,
+    )
+    cache_blocks = build_rlg_hbn_layer_overlap_blocks(
+        run.basis_data,
+        shifts=((0, 0), (-1, 0), (1, 0)),
+    )
+    overlap_blocks = RLGhBNLayerOverlapBlockSet(
+        shifts=physical_blocks.shifts,
+        gvecs=physical_blocks.gvecs,
+        layer_overlaps={
+            **physical_blocks.layer_overlaps,
+            **cache_blocks.layer_overlaps,
+        },
+        layer_diagonal_overlaps={
+            **physical_blocks.layer_diagonal_overlaps,
+            **cache_blocks.layer_diagonal_overlaps,
+        },
+        hartree_layer_coulomb={
+            **physical_blocks.hartree_layer_coulomb,
+            **cache_blocks.hartree_layer_coulomb,
+        },
+        fock_layer_coulomb={
+            **physical_blocks.fock_layer_coulomb,
+            **cache_blocks.fock_layer_coulomb,
+        },
+    )
+    provenance = RLGhBNHFInteractionProvenance(
+        convention=(
+            RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION
+        ),
+        quotient_enabled=False,
+        beta=1.0,
+        physical_shifts=tuple(physical_shifts),
+        zero_literal_q0_fock=False,
+        basis_periodic_gauge=RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
+        basis_periodic_gauge_padding=RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING,
+        form_factor_convention=RLG_HBN_FORM_FACTOR_CONVENTION_VERSION,
+        remote_h0_policy=RLG_HBN_REMOTE_H0_POLICY_VERSION,
+        remote_h0_sha256=hashlib.sha256(
+            np.ascontiguousarray(
+                run.basis_data.fixed_remote_hamiltonian,
+                dtype=np.complex128,
+            ).view(np.uint8)
+        ).hexdigest(),
+        physical_shift_policy=RLG_HBN_HF_PHYSICAL_SHIFT_POLICY_VERSION,
+    )
+    return replace(
+        run,
+        overlap_blocks=overlap_blocks,
+        interaction_provenance=provenance,
+    )
 
 
 def _canonical_ready_tiny_run(*, k_mesh_size: int = 1, mesh_size: int = 1) -> RLGhBNHartreeFockRun:
@@ -902,6 +988,253 @@ def test_rlg_hbn_tdhf_q_matrices_reports_precise_blockers_for_unsupported_finite
         )
     with pytest.raises(ValueError, match="unknown finite-q channel"):
         build_rlg_hbn_tdhf_q_matrices(run, (1, 0), channel="bogus")  # type: ignore[arg-type]
+
+
+def test_rlg_hbn_single_representative_active_functional_is_pairing_self_adjoint() -> None:
+    model = RLGhBNModel.from_config(
+        layer_count=3,
+        xi=1,
+        theta_deg=0.77,
+        displacement_field_mev=24.0,
+        shell_count=1,
+    )
+    interaction = RLGhBNInteractionParams(
+        active_valence_bands=0,
+        active_conduction_bands=1,
+        k_mesh_size=2,
+        interaction_cutoff_q1=2.0,
+        use_screened_basis=False,
+    )
+    basis_data = build_rlg_hbn_projected_basis(model, interaction, mesh_size=2)
+    blocks = build_rlg_hbn_layer_overlap_blocks(basis_data)
+    rng = np.random.default_rng(20260722)
+
+    def hermitian_density() -> np.ndarray:
+        raw = rng.normal(size=basis_data.h0.shape) + 1.0j * rng.normal(
+            size=basis_data.h0.shape
+        )
+        return 0.5 * (raw + raw.swapaxes(0, 1).conj())
+
+    left = hermitian_density()
+    right = hermitian_density()
+    k_left = build_rlg_hbn_hf_interaction_hamiltonian(
+        left, blocks, v0=basis_data.v0
+    )
+    k_right = build_rlg_hbn_hf_interaction_hamiltonian(
+        right, blocks, v0=basis_data.v0
+    )
+    pairing_left = np.einsum("abk,abk->", k_left, right, optimize=True)
+    pairing_right = np.einsum("abk,abk->", left, k_right, optimize=True)
+    np.testing.assert_allclose(
+        pairing_left, pairing_right, rtol=1.0e-11, atol=1.0e-11
+    )
+
+    epsilon = 1.0e-6
+
+    def interaction_energy(density: np.ndarray) -> float:
+        response = build_rlg_hbn_hf_interaction_hamiltonian(
+            density, blocks, v0=basis_data.v0
+        )
+        return float(
+            0.5
+            * np.einsum("abk,abk->", response, density, optimize=True).real
+            / basis_data.nk
+        )
+
+    finite_difference = (
+        interaction_energy(left + epsilon * right)
+        - interaction_energy(left - epsilon * right)
+    ) / (2.0 * epsilon)
+    np.testing.assert_allclose(
+        finite_difference,
+        pairing_left.real / basis_data.nk,
+        rtol=2.0e-8,
+        atol=2.0e-8,
+    )
+
+
+def test_rlg_hbn_single_representative_runner_selection_is_explicit_and_typed() -> None:
+    run = _typed_single_representative_tiny_run()
+    fresh = run_rlg_hbn_hartree_fock(
+        run.basis_data,
+        overlap_blocks=RLGhBNLayerOverlapBlockSet(
+            shifts=run.overlap_blocks.shifts,
+            gvecs=run.overlap_blocks.gvecs,
+            layer_overlaps={
+                shift: run.overlap_blocks.layer_overlaps[shift]
+                for shift in run.overlap_blocks.shifts
+            },
+            layer_diagonal_overlaps={
+                shift: run.overlap_blocks.layer_diagonal_overlaps[shift]
+                for shift in run.overlap_blocks.shifts
+            },
+            hartree_layer_coulomb={
+                shift: run.overlap_blocks.hartree_layer_coulomb[shift]
+                for shift in run.overlap_blocks.shifts
+            },
+            fock_layer_coulomb={
+                shift: run.overlap_blocks.fock_layer_coulomb[shift]
+                for shift in run.overlap_blocks.shifts
+            },
+        ),
+        nu=1.0,
+        init_mode="flavor",
+        seed=1,
+        max_iter=1,
+        precision=1.0e-12,
+        c3_quotient_interaction=False,
+    )
+    assert fresh.interaction_provenance is not None
+    assert (
+        fresh.interaction_provenance.convention
+        == RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION
+    )
+    assert not fresh.interaction_provenance.quotient_enabled
+    assert fresh.interaction_provenance.remote_h0_policy == RLG_HBN_REMOTE_H0_POLICY_VERSION
+    assert len(fresh.interaction_provenance.remote_h0_sha256) == 64
+    assert (
+        fresh.interaction_provenance.physical_shift_policy
+        == RLG_HBN_HF_PHYSICAL_SHIFT_POLICY_VERSION
+    )
+
+
+def test_rlg_hbn_hf_single_representative_source_closure_is_fail_closed() -> None:
+    run = _typed_single_representative_tiny_run()
+    run.state.hamiltonian[:, :, :] = (
+        run.state.h0
+        + build_rlg_hbn_hf_interaction_hamiltonian(
+            run.state.density,
+            run.overlap_blocks,
+            v0=run.state.v0,
+        )
+    )
+    converged = replace(run, converged=True)
+    metrics = validate_rlg_hbn_hf_single_representative_source_closure(
+        converged,
+        closure_tolerance_mev=1.0e-12,
+        stationarity_tolerance_mev=1.0e6,
+    )
+    assert metrics["hamiltonian_closure_mev"] < 1.0e-12
+    assert metrics["h0_basis_residual_mev"] == 0.0
+
+    assert converged.interaction_provenance is not None
+    bad_provenance = replace(
+        converged.interaction_provenance,
+        remote_h0_sha256="0" * 64,
+    )
+    with pytest.raises(ValueError, match="remote_h0_sha256"):
+        validate_rlg_hbn_hf_single_representative_source_closure(
+            replace(converged, interaction_provenance=bad_provenance),
+            stationarity_tolerance_mev=1.0e6,
+        )
+
+
+def test_rlg_hbn_hf_single_representative_q0_response_uses_source_kernel() -> None:
+    run = _typed_single_representative_tiny_run()
+    rng = np.random.default_rng(17)
+    tangent_blocks = rng.normal(size=run.state.density.shape) + 1.0j * rng.normal(
+        size=run.state.density.shape
+    )
+    tangent = RLGhBNFiniteQDensityTangent(
+        q_shift=(0, 0),
+        target_k=np.arange(run.state.nk, dtype=int),
+        source_k=np.arange(run.state.nk, dtype=int),
+        blocks=tangent_blocks,
+        role="ph",
+    )
+    response = apply_rlg_hbn_hf_single_representative_response(
+        run,
+        tangent,
+        require_converged=False,
+        require_provenance=True,
+    )
+    expected = build_rlg_hbn_hf_interaction_hamiltonian(
+        tangent_blocks,
+        run.overlap_blocks,
+        v0=run.state.v0,
+    )
+    np.testing.assert_allclose(response.total, expected, rtol=1.0e-12, atol=1.0e-12)
+    assert response.provenance["source_provenance_validated"]
+
+
+def test_rlg_hbn_tdhf_single_representative_signed_q0_api_is_typed() -> None:
+    run = _typed_single_representative_tiny_run()
+    orbitals = build_rlg_hbn_tdhf_orbitals(run.state)
+    all_pairs = build_rlg_hbn_tdhf_q_pairs(orbitals, run.basis_data, (0, 0))
+    groups = split_pair_indices_by_flavor_channel(all_pairs)
+    pairs = tuple(all_pairs[int(index)] for index in groups["intervalley"])
+
+    result = build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs(
+        run,
+        orbitals,
+        pairs,
+        (0, 0),
+        channel="intervalley",
+        require_provenance=True,
+    )
+
+    assert result.q_shift == (0, 0)
+    assert result.minus_q_shift == (0, 0)
+    assert result.channel == "intervalley"
+    np.testing.assert_allclose(result.plus.A, result.minus.A)
+    np.testing.assert_allclose(result.plus.B, result.minus.B)
+    np.testing.assert_allclose(result.plus.L, result.minus.L)
+    assert result.plus.structure.ok
+
+
+def test_rlg_hbn_tdhf_single_representative_signed_nonzero_q_uses_independent_partner() -> None:
+    run = _typed_single_representative_tiny_run(
+        k_mesh_size=3,
+        mesh_size=3,
+        active_conduction_bands=2,
+    )
+    orbitals = build_rlg_hbn_tdhf_orbitals(run.state)
+    all_pairs = build_rlg_hbn_tdhf_q_pairs(orbitals, run.basis_data, (1, 0))
+    groups = split_pair_indices_by_flavor_channel(all_pairs)
+    pairs = tuple(all_pairs[int(index)] for index in groups["intraflavor"])
+
+    result = build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs(
+        run,
+        orbitals,
+        pairs,
+        (1, 0),
+        channel="intraflavor",
+        require_provenance=True,
+    )
+    n_pairs = len(pairs)
+    np.testing.assert_allclose(
+        result.plus.L[:n_pairs, :n_pairs], result.plus.A
+    )
+    np.testing.assert_allclose(
+        result.plus.L[:n_pairs, n_pairs:], result.plus.B
+    )
+    np.testing.assert_allclose(
+        result.plus.L[n_pairs:, :n_pairs], -result.minus.B.conj()
+    )
+    np.testing.assert_allclose(
+        result.plus.L[n_pairs:, n_pairs:], -result.minus.A.conj()
+    )
+    np.testing.assert_allclose(
+        result.plus.B, result.minus.B.T, rtol=1.0e-12, atol=1.0e-12
+    )
+    assert result.plus.structure.ok
+    assert result.plus.pairs[0].particle != result.minus.pairs[0].particle
+
+    with pytest.raises(ValueError, match="converged"):
+        build_rlg_hbn_tdhf_q_matrices(
+            run,
+            (1, 0),
+            channel="intraflavor",
+        )
+    dispatched = build_rlg_hbn_tdhf_q_matrices(
+        run,
+        (1, 0),
+        channel="intraflavor",
+        require_single_representative_source_closure=False,
+    )
+    np.testing.assert_allclose(dispatched.A, result.plus.A)
+    np.testing.assert_allclose(dispatched.B, result.plus.B)
+    np.testing.assert_allclose(dispatched.L, result.plus.L)
 
 
 def test_rlg_hbn_tdhf_interaction_callable_and_dense_q0_smoke() -> None:

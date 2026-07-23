@@ -375,6 +375,15 @@ def _save_state_archive(
                 "hf_form_factor_convention": np.asarray(
                     str(provenance.form_factor_convention)
                 ),
+                "hf_remote_h0_policy": np.asarray(
+                    str(provenance.remote_h0_policy)
+                ),
+                "hf_remote_h0_sha256": np.asarray(
+                    str(provenance.remote_h0_sha256)
+                ),
+                "hf_physical_shift_policy": np.asarray(
+                    str(provenance.physical_shift_policy)
+                ),
             }
         )
         if provenance.basis_cache_key:

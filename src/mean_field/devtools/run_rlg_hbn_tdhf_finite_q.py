@@ -16,12 +16,14 @@ from mean_field.core.hf import solve_tdhf_matrices, split_pair_indices_by_flavor
 from mean_field.devtools._runtime import ensure_not_running_compute_on_login_node, write_json
 from mean_field.systems.RnG_hBN import (
     RLGhBNLayerOverlapBlockSet,
+    RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION,
     build_rlg_hbn_layer_overlap_blocks,
     build_rlg_hbn_tdhf_c3_quotient_cycle,
     build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs,
     build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs,
     build_rlg_hbn_tdhf_finite_q_quotient_context,
     build_rlg_hbn_tdhf_finite_q_quotient_matrix_pair_from_pairs,
+    build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs,
     build_rlg_hbn_tdhf_orbitals,
     build_rlg_hbn_tdhf_q_pairs,
     center_reciprocal_fractional_coordinates,
@@ -29,6 +31,7 @@ from mean_field.systems.RnG_hBN import (
     load_rlg_hbn_tdhf_run_from_archive,
     required_rlg_hbn_tdhf_finite_q_overlap_shifts,
     required_rlg_hbn_tdhf_full_finite_q_overlap_shifts,
+    validate_rlg_hbn_hf_single_representative_source_closure,
 )
 from mean_field.workflows import collect_slurm_metadata
 
@@ -120,6 +123,14 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--energy-tol", type=float, default=1.0e-10)
     parser.add_argument("--norm-tol", type=float, default=1.0e-10)
     parser.add_argument("--allow-unconverged", action="store_true", help="Do not reject archives whose summary says converged=false.")
+    parser.add_argument(
+        "--allow-untyped-legacy",
+        action="store_true",
+        help=(
+            "Diagnostic only: permit an archive without typed HF interaction "
+            "provenance. Production runs fail closed by default."
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true", help="Write/print resolved config only; do not load cache or solve TDHF.")
     parser.add_argument("--no-save-vectors", action="store_true", help="Do not store X/Y mode vectors in NPZ outputs.")
     parser.add_argument(
@@ -298,6 +309,7 @@ def main() -> None:
         "energy_tol": float(args.energy_tol),
         "norm_tol": float(args.norm_tol),
         "allow_unconverged": bool(args.allow_unconverged),
+        "allow_untyped_legacy": bool(args.allow_untyped_legacy),
         "dry_run": bool(args.dry_run),
         "save_vectors": not bool(args.no_save_vectors),
         "save_matrices": not bool(args.no_save_matrices),
@@ -331,7 +343,26 @@ def main() -> None:
     typed_quotient = bool(
         provenance is not None and provenance.quotient_enabled
     )
+    typed_single_representative = bool(
+        provenance is not None
+        and not provenance.quotient_enabled
+        and provenance.convention
+        == RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION
+    )
+    if provenance is None and not bool(args.allow_untyped_legacy):
+        raise SystemExit(
+            "Refusing untyped legacy HF archive; pass --allow-untyped-legacy "
+            "only for an explicitly diagnostic run"
+        )
+    if provenance is not None and not (
+        typed_quotient or typed_single_representative
+    ):
+        raise SystemExit(
+            "Refusing unsupported typed HF interaction convention "
+            f"{provenance.convention!r}"
+        )
     prepared_quotient = None
+    single_representative_source_closure = None
     if typed_quotient:
         if str(args.umklapp_completion) == "allow-incomplete":
             raise SystemExit(
@@ -348,6 +379,20 @@ def main() -> None:
         physical_shifts = tuple(
             (int(g[0]), int(g[1])) for g in run.overlap_blocks.shifts
         )
+        if typed_single_representative:
+            if str(args.umklapp_completion) == "allow-incomplete":
+                raise SystemExit(
+                    "Typed single-representative finite-q assembly forbids "
+                    "diagnostic incomplete Umklapp sums"
+                )
+            single_representative_source_closure = (
+                validate_rlg_hbn_hf_single_representative_source_closure(run)
+            )
+    if bool(args.c3_quotient_provider) and typed_single_representative:
+        raise SystemExit(
+            "--c3-quotient-provider is incompatible with the typed "
+            "single-representative functional"
+        )
     if bool(args.c3_quotient_provider) and not typed_quotient:
         if mesh_shape[0] != mesh_shape[1]:
             raise SystemExit(
@@ -358,10 +403,17 @@ def main() -> None:
                 "--c3-quotient-provider forbids --umklapp-completion allow-incomplete"
             )
     config_payload["typed_finite_q_quotient"] = typed_quotient
+    config_payload["typed_finite_q_single_representative"] = (
+        typed_single_representative
+    )
     config_payload["finite_q_matrix_api"] = (
         "build_rlg_hbn_tdhf_finite_q_quotient_matrix_pair_from_pairs"
         if typed_quotient
-        else "legacy_pair_assembly"
+        else (
+            "build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs"
+            if typed_single_representative
+            else "legacy_pair_assembly"
+        )
     )
     write_json(output_dir / "tdhf_finite_q_config.json", config_payload)
     block_summaries: list[dict[str, object]] = []
@@ -455,7 +507,33 @@ def main() -> None:
                     built_missing = True
 
                 quotient_block_meta = None
-                if str(channel) == "intraflavor" and bool(
+                if typed_single_representative:
+                    signed_matrices = (
+                        build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs(
+                            run_for_block,
+                            orbitals,
+                            pairs,
+                            q_shift,
+                            channel=str(channel),
+                            beta=float(args.beta),
+                            structure_tolerance=float(args.structure_tolerance),
+                            require_complete_umklapp=True,
+                            physical_shifts=physical_shifts,
+                            require_provenance=True,
+                        )
+                    )
+                    matrices = signed_matrices.plus
+                    partner_matrices = signed_matrices.minus
+                    quotient_block_meta = {
+                        "matrix_api": (
+                            "build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs"
+                        ),
+                        "finite_cutoff_rule": "fixed_physical_G_shell",
+                        "fixed_node_rule": "single_stored_torus_representative",
+                        "source_provenance_validated": True,
+                        "source_closure": single_representative_source_closure,
+                    }
+                elif str(channel) == "intraflavor" and bool(
                     args.c3_quotient_provider
                 ):
                     q_key = (
@@ -522,7 +600,8 @@ def main() -> None:
                         ),
                         physical_shifts=physical_shifts,
                     )
-                partner_matrices = None
+                if not typed_single_representative:
+                    partner_matrices = None
             spectrum = solve_tdhf_matrices(
                 matrices,
                 energy_tol=float(args.energy_tol),
@@ -591,9 +670,38 @@ def main() -> None:
                 "q_cartesian_nm_inv": q_cartesian_nm_inv,
             }
             if partner_spectrum is not None:
+                assert partner_matrices is not None
+                minus_pair_particle = np.asarray(
+                    [pair.particle for pair in partner_matrices.pairs], dtype=int
+                )
+                minus_pair_hole = np.asarray(
+                    [pair.hole for pair in partner_matrices.pairs], dtype=int
+                )
+                minus_pair_particle_k = np.asarray(
+                    [
+                        pair.particle_momentum
+                        if pair.particle_momentum is not None
+                        else -1
+                        for pair in partner_matrices.pairs
+                    ],
+                    dtype=int,
+                )
+                minus_pair_hole_k = np.asarray(
+                    [
+                        pair.hole_momentum
+                        if pair.hole_momentum is not None
+                        else -1
+                        for pair in partner_matrices.pairs
+                    ],
+                    dtype=int,
+                )
                 arrays.update(
                     {
                         "minus_q_shift": -q_array,
+                        "minus_pair_particle": minus_pair_particle,
+                        "minus_pair_hole": minus_pair_hole,
+                        "minus_pair_particle_k": minus_pair_particle_k,
+                        "minus_pair_hole_k": minus_pair_hole_k,
                         "minus_energies_mev": partner_spectrum.energies,
                         "minus_eigenvalues": partner_spectrum.eigenvalues,
                         "minus_eta_norms": partner_spectrum.eta_norms,
@@ -639,13 +747,18 @@ def main() -> None:
                     "required_overlap_shifts": [list(s) for s in required_shifts],
                     "missing_overlap_shifts": [list(s) for s in missing],
                     "built_missing_overlap_shifts": bool(built_missing),
-                    "c3_quotient_provider": quotient_block_meta,
+                    "c3_quotient_provider": (
+                        quotient_block_meta if typed_quotient else None
+                    ),
+                    "single_representative_provider": (
+                        quotient_block_meta
+                        if typed_single_representative
+                        else None
+                    ),
                     "spectrum_npz": str(spectrum_path),
                     "liouvillian_convention": (
                         "finite_q_partner_plus_minus"
-                        if (
-                            typed_quotient or str(channel) == "intraflavor"
-                        )
+                        if partner_matrices is not None
                         and tuple(int(v) for v in q_shift) != (0, 0)
                         else "standard_q0_style"
                     ),
@@ -710,14 +823,22 @@ def main() -> None:
         "scope": (
             "typed variational-v2 microscopic finite-q quotient matrices for separated channels"
             if typed_quotient
-            else "legacy full intraflavor plus polarized flavor-flip shortcuts"
+            else (
+                "typed fixed-G single-representative signed finite-q matrices for separated channels"
+                if typed_single_representative
+                else "legacy full intraflavor plus polarized flavor-flip shortcuts"
+            )
         ),
         "implemented_channels": list(FINITE_Q_CHANNELS),
         "remaining_limitations": (
             "separated channels only; mixed all-channel blocks and iterative eigensolvers are not assembled"
         ),
         "typed_finite_q_quotient": typed_quotient,
+        "typed_finite_q_single_representative": typed_single_representative,
         "finite_q_matrix_api": config_payload["finite_q_matrix_api"],
+        "single_representative_source_closure": (
+            single_representative_source_closure
+        ),
         "c3_quotient_provider_compatibility_flag": bool(
             args.c3_quotient_provider
         ),

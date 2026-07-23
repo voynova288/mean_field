@@ -4,6 +4,10 @@ from ._hf_shared import *  # noqa: F401,F403
 from ._hf_reference import *  # noqa: F401,F403
 from ._hf_types import *  # noqa: F401,F403
 
+
+RLG_HBN_REMOTE_H0_POLICY_VERSION = "actual_node_ws_c3_fixed_copy_average_v1"
+
+
 def _rectangular_g_embedding(
     lattice: RLGhBNLattice,
     *,

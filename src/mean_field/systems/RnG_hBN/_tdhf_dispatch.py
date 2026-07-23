@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from ._hf_interaction_path import (
+    RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION,
+)
+from ._hf_response_finite_q import (
+    validate_rlg_hbn_hf_single_representative_source_closure,
+)
 from ._tdhf_shared import *  # noqa: F401,F403
 from ._tdhf_support import *  # noqa: F401,F403
 from ._tdhf_types import *  # noqa: F401,F403
@@ -17,6 +23,7 @@ def build_rlg_hbn_tdhf_q_matrices(
     max_pairs: int = 4096,
     structure_tolerance: float = 1.0e-6,
     shortcut_exchange_only: bool = True,
+    require_single_representative_source_closure: bool = True,
 ) -> TDHFMatrices:
     """Build a dense finite-q TDHF matrix for one supported RLG/hBN channel."""
 
@@ -34,6 +41,24 @@ def build_rlg_hbn_tdhf_q_matrices(
         raise ValueError(
             f"finite-q TDHF sector has {len(pairs)} ph pairs, exceeding max_pairs={max_pairs}; "
             "use channel filtering or raise the explicit Slurm-side limit."
+        )
+    provenance = run.interaction_provenance
+    if (
+        provenance is not None
+        and provenance.convention
+        == RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION
+    ):
+        if require_single_representative_source_closure:
+            validate_rlg_hbn_hf_single_representative_source_closure(run)
+        return build_rlg_hbn_tdhf_finite_q_single_representative_matrices_from_pairs(
+            run,
+            orbitals,
+            pairs,
+            q_shift,
+            channel=channel_key,
+            beta=beta,
+            structure_tolerance=structure_tolerance,
+            require_provenance=True,
         )
     if channel_key == "intraflavor":
         return build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs(
@@ -71,6 +96,7 @@ def build_rlg_hbn_tdhf_q_matrices_from_canonical_hf(
     flavor_resolution_tolerance: float = 1.0e-8,
     require_complete_umklapp: bool = True,
     physical_shifts: Sequence[tuple[int, int]] | None = None,
+    require_single_representative_source_closure: bool = True,
 ) -> TDHFMatrices:
     """Finite-q TDHF matrices using canonical HFState/HFRunResult orbitals.
 
@@ -106,6 +132,26 @@ def build_rlg_hbn_tdhf_q_matrices_from_canonical_hf(
         raise ValueError(
             f"finite-q TDHF sector has {len(pairs)} ph pairs, exceeding max_pairs={max_pairs}; "
             "use channel filtering or raise the explicit Slurm-side limit."
+        )
+    provenance = run.interaction_provenance
+    if (
+        provenance is not None
+        and provenance.convention
+        == RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION
+    ):
+        if require_single_representative_source_closure:
+            validate_rlg_hbn_hf_single_representative_source_closure(run)
+        return build_rlg_hbn_tdhf_finite_q_single_representative_matrices_from_pairs(
+            run,
+            orbitals,
+            pairs,
+            q_shift,
+            channel=channel_key,
+            beta=beta,
+            structure_tolerance=structure_tolerance,
+            require_complete_umklapp=require_complete_umklapp,
+            physical_shifts=physical_shifts,
+            require_provenance=True,
         )
     if channel_key == "intraflavor":
         return build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs(

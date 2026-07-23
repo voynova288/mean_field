@@ -5,6 +5,9 @@ from ._tdhf_support import *  # noqa: F401,F403
 from ._tdhf_types import *  # noqa: F401,F403
 from ._tdhf_pairs import *  # noqa: F401,F403
 from ._tdhf_q0 import *  # noqa: F401,F403
+from ._hf_response_finite_q import (
+    validate_rlg_hbn_hf_single_representative_provenance,
+)
 from ._tdhf_fixed_quotient import (
     RLGhBNTDHFFiniteQQuotientContext,
     _finite_q_pair_key,
@@ -22,6 +25,17 @@ class RLGhBNTDHFFiniteQQuotientMatrixPair:
     minus: TDHFMatrices
     q_shift: tuple[int, int]
     minus_q_shift: tuple[int, int]
+
+
+@dataclass(frozen=True)
+class RLGhBNTDHFFiniteQSingleRepresentativeMatrixPair:
+    """Signed matrices derived from the fixed-G single-representative functional."""
+
+    plus: TDHFMatrices
+    minus: TDHFMatrices
+    q_shift: tuple[int, int]
+    minus_q_shift: tuple[int, int]
+    channel: FiniteQChannel
 
 
 def build_rlg_hbn_tdhf_finite_q_quotient_matrix_pair_from_pairs(
@@ -218,6 +232,202 @@ def build_rlg_hbn_tdhf_finite_q_quotient_matrices_from_pairs(
         beta=beta,
         periodic_gauge_padding=periodic_gauge_padding,
         structure_tolerance=structure_tolerance,
+        physical_shifts=physical_shifts,
+        require_provenance=require_provenance,
+    )
+    return result.plus
+
+
+def build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs(
+    run: RLGhBNHartreeFockRun,
+    orbitals: RLGhBNTDHFOrbitals,
+    pairs: tuple[ParticleHolePair, ...],
+    q_shift: tuple[int, int] | RLGhBNTDHFMomentumShift,
+    *,
+    channel: FiniteQChannel,
+    minus_pairs: tuple[ParticleHolePair, ...] | None = None,
+    beta: float | None = None,
+    structure_tolerance: float = 1.0e-8,
+    require_complete_umklapp: bool = True,
+    physical_shifts: Sequence[tuple[int, int]] | None = None,
+    require_provenance: bool = True,
+) -> RLGhBNTDHFFiniteQSingleRepresentativeMatrixPair:
+    """Build q and -q Hessians of one fixed-G single-representative functional.
+
+    Both signed sectors are assembled independently. The function does not
+    transport, average, Hermitize, or symmetrize assembled A/B blocks.
+    """
+
+    if channel not in FINITE_Q_FULL_CHANNELS:
+        raise ValueError(
+            f"single-representative channel must be one of "
+            f"{FINITE_Q_FULL_CHANNELS}, got {channel!r}"
+        )
+    mesh_shape = _mesh_shape_from_k_grid_frac(run.basis_data.k_grid_frac)
+    if isinstance(q_shift, RLGhBNTDHFMomentumShift):
+        if tuple(q_shift.mesh_shape) != tuple(mesh_shape):
+            raise ValueError(
+                f"q_shift mesh {q_shift.mesh_shape} does not match basis mesh "
+                f"{mesh_shape}"
+            )
+        shift = tuple(int(value) for value in q_shift.shift)
+    else:
+        shift = (int(q_shift[0]), int(q_shift[1]))
+    ph_pairs = tuple(pairs)
+    provenance = run.interaction_provenance
+    resolved_beta = (
+        float(provenance.beta)
+        if beta is None and provenance is not None
+        else (1.0 if beta is None else float(beta))
+    )
+    resolved_physical_shifts = (
+        tuple((int(value[0]), int(value[1])) for value in physical_shifts)
+        if physical_shifts is not None
+        else tuple((int(value[0]), int(value[1])) for value in run.overlap_blocks.shifts)
+    )
+    if require_provenance:
+        validate_rlg_hbn_hf_single_representative_provenance(
+            run,
+            beta=resolved_beta,
+            physical_shifts=resolved_physical_shifts,
+        )
+
+    minus_shift = (-shift[0], -shift[1])
+    if shift == (0, 0):
+        resolved_minus_pairs = ph_pairs
+    else:
+        positive_keys = tuple(_finite_q_pair_key(orbitals, pair) for pair in ph_pairs)
+        positive_key_set = set(positive_keys)
+        if minus_pairs is None:
+            all_minus = build_rlg_hbn_tdhf_q_pairs(
+                orbitals,
+                run.basis_data,
+                minus_shift,
+            )
+            candidates = _filter_rlg_hbn_tdhf_finite_q_pairs(all_minus, str(channel))
+        else:
+            candidates = tuple(minus_pairs)
+        pair_by_key: dict[tuple[int, int, int], ParticleHolePair] = {}
+        for pair in candidates:
+            key = _finite_q_pair_key(orbitals, pair)
+            if key not in positive_key_set:
+                continue
+            if key in pair_by_key:
+                raise ValueError(f"duplicate -q pair key {key}")
+            pair_by_key[key] = pair
+        missing_keys = [key for key in positive_keys if key not in pair_by_key]
+        if missing_keys:
+            raise ValueError(
+                f"-q {channel} pair space is missing keys: {missing_keys[:10]}"
+            )
+        resolved_minus_pairs = tuple(pair_by_key[key] for key in positive_keys)
+
+    def build_sector(
+        sector_pairs: tuple[ParticleHolePair, ...],
+        sector_shift: tuple[int, int],
+    ) -> TDHFMatrices:
+        if channel == "intraflavor":
+            return build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs(
+                run,
+                orbitals,
+                sector_pairs,
+                sector_shift,
+                beta=resolved_beta,
+                structure_tolerance=structure_tolerance,
+                require_complete_umklapp=require_complete_umklapp,
+                physical_shifts=resolved_physical_shifts,
+                _build_partner=True,
+            )
+        return build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs(
+            run,
+            orbitals,
+            sector_pairs,
+            sector_shift,
+            beta=resolved_beta,
+            structure_tolerance=structure_tolerance,
+            require_complete_umklapp=require_complete_umklapp,
+            physical_shifts=resolved_physical_shifts,
+        )
+
+    positive = build_sector(ph_pairs, shift)
+    negative = positive if shift == (0, 0) else build_sector(
+        resolved_minus_pairs,
+        minus_shift,
+    )
+    A = np.asarray(positive.A, dtype=np.complex128)
+    B = np.asarray(positive.B, dtype=np.complex128)
+    A_minus = np.asarray(negative.A, dtype=np.complex128)
+    B_minus = np.asarray(negative.B, dtype=np.complex128)
+    L = np.block([[A, B], [-np.conj(B_minus), -np.conj(A_minus)]])
+    L_minus = np.block([[A_minus, B_minus], [-np.conj(B), -np.conj(A)]])
+    a_residual = max(
+        float(np.max(np.abs(A - A.conj().T))) if A.size else 0.0,
+        float(np.max(np.abs(A_minus - A_minus.conj().T)))
+        if A_minus.size
+        else 0.0,
+    )
+    b_residual = (
+        float(np.max(np.abs(B - B_minus.T))) if B.size else 0.0
+    )
+    structure = TDHFStructureResiduals(
+        a_hermitian=a_residual,
+        b_symmetric=b_residual,
+        particle_hole_symmetry=0.0,
+        tolerance=float(structure_tolerance),
+    )
+    if max(a_residual, b_residual) > float(structure_tolerance):
+        raise ValueError(
+            "finite-q single-representative structure gate failed before return: "
+            f"A={a_residual}, B={b_residual}, "
+            f"tolerance={structure_tolerance}"
+        )
+    return RLGhBNTDHFFiniteQSingleRepresentativeMatrixPair(
+        plus=TDHFMatrices(
+            pairs=ph_pairs,
+            A=A,
+            B=B,
+            L=L,
+            structure=structure,
+        ),
+        minus=TDHFMatrices(
+            pairs=resolved_minus_pairs,
+            A=A_minus,
+            B=B_minus,
+            L=L_minus,
+            structure=structure,
+        ),
+        q_shift=shift,
+        minus_q_shift=minus_shift,
+        channel=channel,
+    )
+
+
+def build_rlg_hbn_tdhf_finite_q_single_representative_matrices_from_pairs(
+    run: RLGhBNHartreeFockRun,
+    orbitals: RLGhBNTDHFOrbitals,
+    pairs: tuple[ParticleHolePair, ...],
+    q_shift: tuple[int, int] | RLGhBNTDHFMomentumShift,
+    *,
+    channel: FiniteQChannel,
+    minus_pairs: tuple[ParticleHolePair, ...] | None = None,
+    beta: float | None = None,
+    structure_tolerance: float = 1.0e-8,
+    require_complete_umklapp: bool = True,
+    physical_shifts: Sequence[tuple[int, int]] | None = None,
+    require_provenance: bool = True,
+) -> TDHFMatrices:
+    """Return the +q member of the signed single-representative pair."""
+
+    result = build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs(
+        run,
+        orbitals,
+        pairs,
+        q_shift,
+        channel=channel,
+        minus_pairs=minus_pairs,
+        beta=beta,
+        structure_tolerance=structure_tolerance,
+        require_complete_umklapp=require_complete_umklapp,
         physical_shifts=physical_shifts,
         require_provenance=require_provenance,
     )

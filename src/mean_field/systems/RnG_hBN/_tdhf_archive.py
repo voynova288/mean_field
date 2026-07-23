@@ -189,6 +189,18 @@ def _archive_interaction_provenance(
             archive,
             "hf_form_factor_convention",
         ),
+        remote_h0_policy=_archive_string(
+            archive,
+            "hf_remote_h0_policy",
+        ),
+        remote_h0_sha256=_archive_string(
+            archive,
+            "hf_remote_h0_sha256",
+        ),
+        physical_shift_policy=_archive_string(
+            archive,
+            "hf_physical_shift_policy",
+        ),
         basis_cache_key=str(basis_cache_key),
         overlap_cache_key=str(overlap_cache_key),
     )

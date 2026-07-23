@@ -5,6 +5,13 @@ from ._hf_reference import *  # noqa: F401,F403
 from ._hf_types import *  # noqa: F401,F403
 from ._hf_basis import *  # noqa: F401,F403
 
+
+RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION = (
+    "fixed_g_torus_single_representative_v1"
+)
+RLG_HBN_HF_PHYSICAL_SHIFT_POLICY_VERSION = "fixed_abs_g_shell_v1"
+
+
 def _resolve_basis_valleys(n_flavor: int, valleys: tuple[int, ...] | None) -> tuple[int, ...]:
     n = int(n_flavor)
     if n <= 0:

@@ -601,3 +601,110 @@ logs/rlg_generic_q_punctured_double_branch_tiny3_20260717.log
 结论：variational-v2 HF的k-diagonal Hessian、generic punctured branch normalization、fixed endpoint map、ordinary torus-periodic lift、fresh stationary source、三个separated channels的q0 response parity、generic/self C3、q/-q结构、raw stability及interspin Goldstone均已通过；public production signed-q matrix-pair API与actual gated matrices严格一致。26个C3+inversion representatives的12x12 full mesh已完成：structure residual `<=7.03e-16 meV`、q/-q PH/quartet `<=4.78e-12 meV`；intervalley/interspin 144点全部stable，intraflavor仅三个M点有`Im omega=1.18385 meV`的complex pair。
 
 但published-raster定量比较失败：论文intraflavor有45个unstable torus sectors，而当前functional仅3个；共同stable点的intraflavor/intervalley/interspin RMSE分别为`1.691/0.730/0.775 meV`。旧untyped v2 source的flavor-flip maps更接近论文（RMSE `0.214/0.151 meV`），但它缺少typed provenance且违反accepted fixed-node/C3 contract，只能作为隔离诊断。因而当前结果必须标为validated nonreproduction，禁止以post-fit scaling、旧fixed-copy路径或mask修改冒充Fig. S45 reproduction。
+
+### 13.1 fixed-target线性one-body adjoint复核
+
+active interaction的`L^sharp V L`推导也要求检查线性one-body energy在两个非零C3-fixed target fibers上是否已经按pairing adjoint下降。Job `192593`从accepted basis cache独立重建physical `h0`与filled-remote-band Hamiltonian的三个target copies，并计算
+
+\[
+L^\sharp(\{H_r\})=\frac13\sum_{r=0}^2 S_r^\dagger H_r S_r.
+\]
+
+结果为
+
+```text
+copy-0 reconstruction              <=5.68e-14 meV
+physical h0 descent-current        <=6.59e-13 meV
+fixed-remote descent-current       <=3.44e-12 meV
+total h0 descent-current           <=3.54e-12 meV
+copy sewing unitarity              <=4.79e-15
+```
+
+因此accepted cache中的fixed-target linear term已经等于quotient gradient；不存在只做base-copy evaluation、漏掉target `L^sharp`的问题。该候选不能解释Fig. S45 mismatch，也不触发fresh HF rerun。证据：
+
+```text
+results/.../ACTUAL_FIXED_TARGET_ONE_BODY_ADJOINT_v1_185536_20260722.json
+logs/rlg_h0Lsharp_192593.out
+```
+
+### 13.2 exact quotient C3与paper finite-cutoff physics并不等价
+
+Job `192651`在同一个accepted stationary HF source上比较typed quotient intervalley Hessian和single-representative conventional exchange Hessian。26个representatives的paper RMSE从`0.7021 meV`降到`0.0777 meV`，conventional branch相对typed平均降低`0.6486 meV`。这不是A0符号错误：intervalley mode由约`55 meV` Koopman项与约`-50 meV` binding抵消，差异主要来自residual exchange Hessian。
+
+更关键的是q=0 mode wavefunction：
+
+```text
+typed quotient:
+  IPR*Nk=1.021
+  nonzero-C3-fixed endpoint weight=2.8e-29
+
+conventional same source:
+  IPR*Nk=1.006
+  fixed endpoint weight=0.01163
+```
+
+论文Fig. S44明确描述lowest intervalley mode在mBZ近乎uniform；typed quotient在两个fixed nodes强制产生exact zeros，说明branch quotient不是passive gauge relabel，而是在finite 19-RLV regulator下改变了response subspace和binding physics。这里发生的是mode reordering，而不是同一最低本征矢的微扰能移：q=0最低本征值差为`-0.53684 meV`，但矩阵差在typed最低矢上的Rayleigh shift仅`+0.000605 meV`。后续必须跟踪最低若干态overlap/principal angle。
+
+conventional hybrid仍不能升级为结果：其full A-spectrum C3 residual为`0.0130 meV`，且在quotient-stationary source上把interspin q=0 Goldstone从`2.14e-7 meV`打开到`1.591e-3 meV`。因此下一步不是把production TDHF切回legacy builder，而是先推导matching single-representative HF energy functional，重建stationary source，并同时通过Ward、paper-local wavefunction和显式finite-cutoff C3审计。
+
+证据：
+
+```text
+results/.../ACTUAL_INTERVALLEY_RESPONSE_KERNEL_CONVENTION_DISCRIMINATOR_v1_185536_20260722.json
+results/.../ACTUAL_CONVENTIONAL_KERNEL_GOLDSTONE_MISMATCH_v1_185536_20260722.json
+reports/rlg_hbn_figs45_response_kernel_physics_discriminator_20260722.md
+```
+
+### 13.3 matching single-representative source通过Ward，但generic C3失败
+
+Fresh job `192734`用同一个fixed-`|G|` single-representative active scalar functional产生HF gradient、ODA和后续Hessian；frozen remote one-body项继续使用typed C3-repaired policy。它在94次迭代后达到`9.8384e-8`，follow-up job `193021`独立重载验证：
+
+```text
+energy/gap                         -547.0919427055 / 14.5200275809 meV
+saved-H closure                     2.5121e-15 meV
+[H,P]                               5.7194e-6 meV
+projector idempotency               1.3323e-15
+```
+
+Job `193030`证明matching functional解决了旧conventional-hybrid的Ward与fixed-node矛盾：
+
+```text
+interspin Goldstone                 7.8895e-10 meV
+spin-generator Ward residual        4.5925e-6 meV
+spin-generator overlap              0.9999999999999828
+q=0 intervalley energy              2.1669489781 meV
+fixed endpoint probability          0.0116299120
+IPR*Nk                               1.0059993536
+```
+
+但jobs `193042/193043/193053`对`(1,0)->(0,1)->(-1,-1)`三条独立microscopic builds给出：
+
+```text
+signed q/-q PH residual             <=4.72e-12 meV
+assembled structure residual         <=8.01e-16 meV
+source canonical-band C3 max/mean    1.1967 / 0.5167 meV
+Koopman C3 residual                  1.604--1.980 meV
+interaction-only A C3 residual       0.0428--0.0937 meV
+full A C3 residual                   1.365--1.712 meV
+full L C3 residual                   1.563--1.848 meV
+lowest-branch spread                 0.00275--0.02897 meV
+```
+
+pair-key sets、global-index decoding、q orbit和assignment均经独立只读review复核；失败主要来自fresh source/Koopman，而非q/-q拼装。三个anchor的paper-raster RMSE已经很小（intraflavor/intervalley/interspin为`0.0572/0.0490/0.00374 meV`），但不能用最低支接近掩盖full-source C3失败。因此full mesh保持blocked，禁止assembled A/B averaging或C3 orbit copy冒充独立计算。
+
+一个数学上可能但**尚未实现、也未得到论文支持**的替代对象是full-Hilbert Reynolds average：若存在全torus、含fixed fibers的pairing-unitary C3 action `R`，可以定义
+
+\[
+K_{\rm sym}[D]=\frac13\sum_{r=0}^2 (R^\sharp)^r K_{\rm raw}[R^r D].
+\]
+
+这与quotient `L^sharp V L`不同：它不把full tangent space投影到quotient coordinate，也不在fixed source和target两端各引入`1/3`，所以不会kinematically强制fixed-point wavefunction node。若它由同一个scalar functional产生HF和Hessian，则self-adjointness与Ward可以保留。
+
+但是当前仍缺以下关键证明：
+
+1. projected `(0+4)` full-torus one-particle sewing在全部ordinary wraps和两个nonzero fixed fibers上的唯一解析定义；
+2. pairing unitarity及独立`R^3=I` closure；
+3. `h0`、fixed 13-G shell和raw interaction在该action下的逐项covariance；
+4. 论文是否真的使用full-space scalar group average，还是仅在irreducible wedge计算并复制图中q sectors。
+
+论文Appendix D只说明TDHF输入为final HF Hamiltonian和four-fermion matrix elements，并未给出irreducible-wedge/symmetry-replication或Reynolds prescription。因此在作者说明或上述四项推导闭合前，不实现该候选，也不提交另一轮昂贵HF。

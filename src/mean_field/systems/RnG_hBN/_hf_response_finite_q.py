@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 from typing import Any, Literal
 
 import numpy as np
@@ -15,6 +16,13 @@ from ._hf_shared import (
     RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING,
     RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
     RLG_HBN_FORM_FACTOR_CONVENTION_VERSION,
+)
+from ._hf_basis import RLG_HBN_REMOTE_H0_POLICY_VERSION
+from ._hf_interaction_path import (
+    RLG_HBN_HF_PHYSICAL_SHIFT_POLICY_VERSION,
+    RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION,
+    interaction_shifts_for_cutoff,
+    build_rlg_hbn_interaction_components,
 )
 from ._hf_types import RLGhBNHartreeFockRun
 
@@ -135,6 +143,197 @@ def _validate_interaction_provenance(
             "HF run interaction provenance does not match the response kernel: "
             f"{mismatches}"
         )
+
+
+def validate_rlg_hbn_hf_single_representative_provenance(
+    run: RLGhBNHartreeFockRun,
+    *,
+    beta: float | None = None,
+    physical_shifts: tuple[tuple[int, int], ...] | None = None,
+) -> dict[str, object]:
+    """Fail closed unless ``run`` uses the explicitly typed hybrid functional.
+
+    The current candidate combines the C3-repaired frozen-remote one-body term
+    with a fixed-|G|, one-stored-torus-representative active interaction. These
+    two policies are recorded separately rather than hidden behind a generic
+    ``single representative`` label.
+    """
+
+    provenance = run.interaction_provenance
+    if provenance is None:
+        raise ValueError(
+            "HF run has no typed interaction provenance; an untyped legacy archive "
+            "cannot be promoted to the single-representative production chain"
+        )
+    expected_shifts = interaction_shifts_for_cutoff(
+        run.basis_data.basis_model.lattice,
+        run.basis_data.interaction,
+    )
+    restored_shifts = tuple(
+        (int(value[0]), int(value[1])) for value in run.overlap_blocks.shifts
+    )
+    supplied_shifts = (
+        expected_shifts
+        if physical_shifts is None
+        else tuple((int(value[0]), int(value[1])) for value in physical_shifts)
+    )
+    resolved_beta = float(provenance.beta) if beta is None else float(beta)
+    mismatches: dict[str, object] = {}
+    if (
+        provenance.convention
+        != RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION
+    ):
+        mismatches["convention"] = provenance.convention
+    if provenance.quotient_enabled:
+        mismatches["quotient_enabled"] = provenance.quotient_enabled
+    if not np.isfinite(float(provenance.beta)) or not np.isfinite(resolved_beta):
+        mismatches["beta_finite"] = provenance.beta
+    elif not np.isclose(
+        float(provenance.beta), resolved_beta, rtol=0.0, atol=1.0e-15
+    ):
+        mismatches["beta"] = provenance.beta
+    if restored_shifts != expected_shifts:
+        mismatches["restored_physical_shifts"] = restored_shifts
+    if provenance.physical_shifts != expected_shifts:
+        mismatches["archive_physical_shifts"] = provenance.physical_shifts
+    if supplied_shifts != expected_shifts:
+        mismatches["supplied_physical_shifts"] = supplied_shifts
+    if provenance.zero_literal_q0_fock:
+        mismatches["zero_literal_q0_fock"] = True
+    if provenance.basis_periodic_gauge != RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION:
+        mismatches["basis_periodic_gauge"] = provenance.basis_periodic_gauge
+    if provenance.basis_periodic_gauge_padding != int(
+        RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING
+    ):
+        mismatches["basis_periodic_gauge_padding"] = (
+            provenance.basis_periodic_gauge_padding
+        )
+    if provenance.form_factor_convention != RLG_HBN_FORM_FACTOR_CONVENTION_VERSION:
+        mismatches["form_factor_convention"] = provenance.form_factor_convention
+    if provenance.remote_h0_policy != RLG_HBN_REMOTE_H0_POLICY_VERSION:
+        mismatches["remote_h0_policy"] = provenance.remote_h0_policy
+    if run.basis_data.fixed_remote_hamiltonian is None:
+        mismatches["fixed_remote_hamiltonian"] = None
+    else:
+        remote_h0_sha256 = hashlib.sha256(
+            np.ascontiguousarray(
+                run.basis_data.fixed_remote_hamiltonian,
+                dtype=np.complex128,
+            ).view(np.uint8)
+        ).hexdigest()
+        if provenance.remote_h0_sha256 != remote_h0_sha256:
+            mismatches["remote_h0_sha256"] = provenance.remote_h0_sha256
+    if (
+        provenance.physical_shift_policy
+        != RLG_HBN_HF_PHYSICAL_SHIFT_POLICY_VERSION
+    ):
+        mismatches["physical_shift_policy"] = provenance.physical_shift_policy
+    if mismatches:
+        raise ValueError(
+            "HF run interaction provenance does not match the fixed-G active / "
+            f"C3-repaired-remote response kernel: {mismatches}"
+        )
+    return {
+        "hf_interaction_convention": provenance.convention,
+        "remote_h0_policy": provenance.remote_h0_policy,
+        "remote_h0_sha256": provenance.remote_h0_sha256,
+        "physical_shift_policy": provenance.physical_shift_policy,
+        "source_provenance_validated": True,
+        "beta": resolved_beta,
+        "physical_shift_count": len(expected_shifts),
+    }
+
+
+def validate_rlg_hbn_hf_single_representative_source_closure(
+    run: RLGhBNHartreeFockRun,
+    *,
+    closure_tolerance_mev: float = 1.0e-3,
+    stationarity_tolerance_mev: float = 1.0e-3,
+) -> dict[str, float | str]:
+    """Validate saved-H closure and stationarity for the typed hybrid functional."""
+
+    if not run.converged:
+        raise ValueError(
+            "single-representative source closure requires a converged HF run"
+        )
+    provenance_metrics = validate_rlg_hbn_hf_single_representative_provenance(run)
+    provenance = run.interaction_provenance
+    assert provenance is not None
+    for name, values in (
+        ("state.h0", run.state.h0),
+        ("basis_data.h0", run.basis_data.h0),
+        ("state.density", run.state.density),
+        ("state.hamiltonian", run.state.hamiltonian),
+        ("state.reference_density", run.state.reference_density),
+    ):
+        if not np.all(np.isfinite(np.asarray(values))):
+            raise ValueError(f"single-representative source contains nonfinite {name}")
+    h0_basis_residual = float(
+        np.max(
+            np.abs(
+                np.asarray(run.state.h0, dtype=np.complex128)
+                - np.asarray(run.basis_data.h0, dtype=np.complex128)
+            )
+        )
+    )
+    components = build_rlg_hbn_interaction_components(
+        run.state.density,
+        run.overlap_blocks,
+        v0=run.state.v0,
+        beta=float(provenance.beta),
+    )
+    rebuilt = np.asarray(run.state.h0) + np.asarray(components.total)
+    closure = float(
+        np.max(np.abs(np.asarray(run.state.hamiltonian) - rebuilt))
+    )
+    stored_projector = np.asarray(run.state.density) + np.asarray(
+        run.state.reference_density
+    )
+    projector = stored_projector.transpose(1, 0, 2)
+    stationarity_values = []
+    for index in range(run.state.nk):
+        hamiltonian = np.asarray(run.state.hamiltonian)[:, :, index]
+        block = projector[:, :, index]
+        stationarity_values.append(
+            float(
+                np.max(
+                    np.abs(hamiltonian @ block - block @ hamiltonian)
+                )
+            )
+        )
+    stationarity = float(max(stationarity_values, default=0.0))
+    metrics: dict[str, float | str] = {
+        "hf_interaction_convention": str(
+            provenance_metrics["hf_interaction_convention"]
+        ),
+        "remote_h0_policy": str(provenance_metrics["remote_h0_policy"]),
+        "physical_shift_policy": str(
+            provenance_metrics["physical_shift_policy"]
+        ),
+        "hamiltonian_closure_mev": closure,
+        "h0_basis_residual_mev": h0_basis_residual,
+        "projector_commutator_mev": stationarity,
+        "closure_tolerance_mev": float(closure_tolerance_mev),
+        "stationarity_tolerance_mev": float(stationarity_tolerance_mev),
+    }
+    if not np.isfinite(closure) or not np.isfinite(stationarity):
+        raise ValueError(
+            f"single-representative source closure produced nonfinite metrics: {metrics}"
+        )
+    if h0_basis_residual > float(closure_tolerance_mev):
+        raise ValueError(
+            f"saved HF h0 differs from the restored basis h0: {metrics}"
+        )
+    if closure > float(closure_tolerance_mev):
+        raise ValueError(
+            f"saved HF Hamiltonian fails single-representative closure: {metrics}"
+        )
+    if stationarity > float(stationarity_tolerance_mev):
+        raise ValueError(
+            f"saved HF density is not stationary for the single-representative "
+            f"functional: {metrics}"
+        )
+    return metrics
 
 
 def validate_rlg_hbn_hf_quotient_source_closure(
@@ -285,10 +484,78 @@ def apply_rlg_hbn_hf_quotient_response(
     )
 
 
+def apply_rlg_hbn_hf_single_representative_response(
+    run: RLGhBNHartreeFockRun,
+    tangent: RLGhBNFiniteQDensityTangent,
+    *,
+    beta: float | None = None,
+    require_converged: bool = True,
+    require_provenance: bool = True,
+) -> RLGhBNFiniteQResponse:
+    """Apply the derivative of the fixed-G single-representative HF functional."""
+
+    if bool(require_converged) and not bool(run.converged):
+        raise ValueError(
+            "single-representative response requires a converged HF run unless "
+            "require_converged=False is explicitly requested"
+        )
+    if not np.isclose(
+        float(run.state.v0),
+        float(run.basis_data.v0),
+        rtol=0.0,
+        atol=1.0e-15,
+    ):
+        raise ValueError(
+            f"HF state/basis v0 mismatch: {run.state.v0} != {run.basis_data.v0}"
+        )
+    blocks, target_k, source_k = _validated_q0_tangent(run, tangent)
+    resolved_beta = (
+        float(run.interaction_provenance.beta)
+        if beta is None and run.interaction_provenance is not None
+        else (1.0 if beta is None else float(beta))
+    )
+    if bool(require_provenance):
+        validate_rlg_hbn_hf_single_representative_provenance(
+            run,
+            beta=resolved_beta,
+        )
+    components = build_rlg_hbn_interaction_components(
+        blocks,
+        run.overlap_blocks,
+        v0=run.state.v0,
+        beta=resolved_beta,
+    )
+    provenance = {
+        "hf_interaction_convention": (
+            RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION
+        ),
+        "source_provenance_validated": bool(require_provenance),
+        "response_scope": "q0_dense_stored_density_derivative",
+        "q_shift": [0, 0],
+        "role": str(tangent.role),
+        "target_k_count": int(target_k.size),
+        "source_k_count": int(source_k.size),
+        "physical_shift_count": len(run.overlap_blocks.shifts),
+        "beta": resolved_beta,
+        "generic_finite_q_matrix_api": (
+            "build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs"
+        ),
+    }
+    return RLGhBNFiniteQResponse(
+        hartree=np.asarray(components.hartree, dtype=np.complex128),
+        fock=np.asarray(components.fock, dtype=np.complex128),
+        total=np.asarray(components.total, dtype=np.complex128),
+        provenance=provenance,
+    )
+
+
 __all__ = [
     "RLGhBNFiniteQDensityTangent",
     "RLGhBNFiniteQDensityTangentRole",
     "RLGhBNFiniteQResponse",
     "apply_rlg_hbn_hf_quotient_response",
+    "apply_rlg_hbn_hf_single_representative_response",
     "validate_rlg_hbn_hf_quotient_source_closure",
+    "validate_rlg_hbn_hf_single_representative_provenance",
+    "validate_rlg_hbn_hf_single_representative_source_closure",
 ]

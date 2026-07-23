@@ -138,6 +138,9 @@ class RLGhBNHFInteractionProvenance:
     basis_periodic_gauge: str
     basis_periodic_gauge_padding: int
     form_factor_convention: str
+    remote_h0_policy: str = ""
+    remote_h0_sha256: str = ""
+    physical_shift_policy: str = ""
     basis_cache_key: str | None = None
     overlap_cache_key: str | None = None
 
