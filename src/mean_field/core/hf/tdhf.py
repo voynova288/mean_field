@@ -24,6 +24,7 @@ from typing import Any, Literal
 
 import numpy as np
 from scipy import linalg as scipy_linalg
+from scipy.optimize import linear_sum_assignment
 
 TDHF_TWO_BODY_CONVENTION = (
     "V[a,b,c,d] is the coefficient of c_b^† c_a^† c_c c_d "
@@ -125,6 +126,38 @@ class TDHFSpectrum:
     def amplitudes(self) -> np.ndarray:
         return np.concatenate([self.X, self.Y], axis=1)
 
+
+@dataclass(frozen=True)
+class TDHFStaticHessianAnalysis:
+    """Hermitian inertia of the signed-q static RPA Hessian ``eta L(q)``."""
+
+    H: np.ndarray
+    eigenvalues: np.ndarray
+    hermitian_residual: float
+    negative_count: int
+    zero_count: int
+    positive_count: int
+    min_eigenvalue: float
+    max_eigenvalue: float
+
+@dataclass(frozen=True)
+class TDHFSignedStabilityAnalysis:
+    """Joint static/dynamical stability analysis of independent q and -q sectors."""
+
+    static: TDHFStaticHessianAnalysis
+    plus_spectrum: TDHFSpectrum
+    minus_spectrum: TDHFSpectrum
+    signed_pairing_residual: float
+    complex_count_plus: int
+    complex_count_minus: int
+    max_abs_imag: float
+    classification: Literal[
+        "stable",
+        "goldstone",
+        "real_negative",
+        "complex",
+        "invalid",
+    ]
 
 @dataclass(frozen=True)
 class TDHFStabilityClassification:
@@ -470,7 +503,7 @@ def tdhf_metric_gram(vectors: np.ndarray, n_pairs: int | None = None) -> np.ndar
 
 
 def eigenvalue_pairing_residual(eigenvalues: np.ndarray) -> float:
-    """Max distance from each eigenvalue to its particle-hole partner ``-lambda*``."""
+    """Max same-matrix distance to ``-lambda*``; use signed-q matching at generic q."""
 
     values = np.asarray(eigenvalues, dtype=np.complex128).reshape(-1)
     if values.size == 0:
@@ -480,6 +513,240 @@ def eigenvalue_pairing_residual(eigenvalues: np.ndarray) -> float:
         distances.append(float(np.min(np.abs(values + np.conj(value)))))
     return max(distances)
 
+
+def signed_q_particle_hole_assignment_residual(
+    eigenvalues_q: np.ndarray,
+    eigenvalues_minus_q: np.ndarray,
+) -> float:
+    """One-to-one residual for ``spec L(q) = -conj(spec L(-q))``."""
+
+    values_q = np.asarray(eigenvalues_q, dtype=np.complex128).reshape(-1)
+    values_minus_q = np.asarray(
+        eigenvalues_minus_q, dtype=np.complex128
+    ).reshape(-1)
+    if values_q.size != values_minus_q.size:
+        raise ValueError(
+            "q and -q eigenvalue arrays must have the same size, got "
+            f"{values_q.size} and {values_minus_q.size}"
+        )
+    if values_q.size == 0:
+        return 0.0
+    finite = (
+        np.isfinite(values_q.real)
+        & np.isfinite(values_q.imag)
+        & np.isfinite(values_minus_q.real)
+        & np.isfinite(values_minus_q.imag)
+    )
+    if not bool(np.all(finite)):
+        return float("inf")
+    cost = np.abs(
+        values_q[:, np.newaxis]
+        + np.conj(values_minus_q)[np.newaxis, :]
+    )
+    rows, cols = linear_sum_assignment(cost)
+    return float(np.max(cost[rows, cols])) if rows.size else 0.0
+
+def build_tdhf_signed_static_hessian(
+    A_q: np.ndarray,
+    B_q: np.ndarray,
+    A_minus_q: np.ndarray,
+    B_minus_q: np.ndarray,
+) -> np.ndarray:
+    """Build ``H_stat(q) = eta L(q)`` from independent signed-q blocks.
+
+    The result is ``[[A(q),B(q)],[B(-q)*,A(-q)*]]``. Inputs are never
+    Hermitized or symmetrized.
+    """
+
+    arrays = tuple(
+        np.asarray(value, dtype=np.complex128)
+        for value in (A_q, B_q, A_minus_q, B_minus_q)
+    )
+    shape = arrays[0].shape
+    if len(shape) != 2 or shape[0] != shape[1]:
+        raise ValueError("signed-q A/B blocks must be square matrices")
+    if any(value.shape != shape for value in arrays[1:]):
+        raise ValueError("all signed-q A/B blocks must have the same shape")
+    a_q, b_q, a_minus_q, b_minus_q = arrays
+    return np.block(
+        [
+            [a_q, b_q],
+            [np.conj(b_minus_q), np.conj(a_minus_q)],
+        ]
+    )
+
+def analyze_tdhf_signed_stability(
+    plus: TDHFMatrices,
+    minus: TDHFMatrices,
+    *,
+    hessian_tol: float,
+    imag_tol: float,
+    energy_tol: float | None = None,
+    norm_tol: float = 1.0e-10,
+) -> TDHFSignedStabilityAnalysis:
+    """Analyze static negative directions and dynamical complex modes jointly.
+
+    ``plus`` and ``minus`` supply aligned A/B blocks for q and -q. Their
+    Liouvillians are rebuilt from both sectors; caller-supplied ``L`` arrays are
+    not trusted because ordinary :class:`TDHFMatrices` close particle-hole
+    symmetry within one sector. Classification precedence is ``invalid`` ->
+    ``complex`` -> ``real_negative`` -> ``goldstone`` -> ``stable``. No
+    absolute-value, real-part, or next-positive-mode substitution is used.
+    """
+
+    resolved_hessian_tol = float(hessian_tol)
+    resolved_imag_tol = float(imag_tol)
+    resolved_energy_tol = (
+        resolved_hessian_tol if energy_tol is None else float(energy_tol)
+    )
+    resolved_norm_tol = float(norm_tol)
+    if resolved_hessian_tol < 0.0 or not np.isfinite(resolved_hessian_tol):
+        raise ValueError("hessian_tol must be finite and non-negative")
+    if resolved_imag_tol < 0.0 or not np.isfinite(resolved_imag_tol):
+        raise ValueError("imag_tol must be finite and non-negative")
+    if resolved_energy_tol < 0.0 or not np.isfinite(resolved_energy_tol):
+        raise ValueError("energy_tol must be finite and non-negative")
+    if resolved_norm_tol < 0.0 or not np.isfinite(resolved_norm_tol):
+        raise ValueError("norm_tol must be finite and non-negative")
+    if len(plus.pairs) != len(minus.pairs):
+        raise ValueError("q and -q TDHF sectors must have equal pair counts")
+    if not plus.pairs:
+        raise ValueError("signed-q stability analysis requires a nonempty pair sector")
+
+    hessian = build_tdhf_signed_static_hessian(
+        plus.A,
+        plus.B,
+        minus.A,
+        minus.B,
+    )
+    hermitian_residual = _max_abs(hessian - np.conj(hessian.T))
+    finite_hessian = bool(
+        np.all(np.isfinite(hessian.real))
+        and np.all(np.isfinite(hessian.imag))
+    )
+    hessian_is_hermitian = bool(
+        finite_hessian and hermitian_residual <= resolved_hessian_tol
+    )
+    if hessian_is_hermitian:
+        static_eigenvalues = scipy_linalg.eigvalsh(hessian)
+        negative_count = int(
+            np.count_nonzero(static_eigenvalues < -resolved_hessian_tol)
+        )
+        zero_count = int(
+            np.count_nonzero(np.abs(static_eigenvalues) <= resolved_hessian_tol)
+        )
+        positive_count = int(
+            np.count_nonzero(static_eigenvalues > resolved_hessian_tol)
+        )
+        min_eigenvalue = float(static_eigenvalues[0])
+        max_eigenvalue = float(static_eigenvalues[-1])
+    else:
+        static_eigenvalues = np.asarray([], dtype=float)
+        negative_count = 0
+        zero_count = 0
+        positive_count = 0
+        min_eigenvalue = float("nan")
+        max_eigenvalue = float("nan")
+
+    static = TDHFStaticHessianAnalysis(
+        H=hessian,
+        eigenvalues=np.asarray(static_eigenvalues),
+        hermitian_residual=hermitian_residual,
+        negative_count=negative_count,
+        zero_count=zero_count,
+        positive_count=positive_count,
+        min_eigenvalue=min_eigenvalue,
+        max_eigenvalue=max_eigenvalue,
+    )
+    plus_liouvillian = np.block(
+        [
+            [plus.A, plus.B],
+            [-np.conj(minus.B), -np.conj(minus.A)],
+        ]
+    )
+    minus_liouvillian = np.block(
+        [
+            [minus.A, minus.B],
+            [-np.conj(plus.B), -np.conj(plus.A)],
+        ]
+    )
+    plus_spectrum = solve_tdhf_liouvillian(
+        plus_liouvillian,
+        n_pairs=len(plus.pairs),
+        energy_tol=resolved_energy_tol,
+        imag_tol=resolved_imag_tol,
+        norm_tol=resolved_norm_tol,
+        include_zero_modes=True,
+    )
+    minus_spectrum = solve_tdhf_liouvillian(
+        minus_liouvillian,
+        n_pairs=len(minus.pairs),
+        energy_tol=resolved_energy_tol,
+        imag_tol=resolved_imag_tol,
+        norm_tol=resolved_norm_tol,
+        include_zero_modes=True,
+    )
+    raw_plus = np.asarray(plus_spectrum.raw_eigenvalues, dtype=np.complex128)
+    raw_minus = np.asarray(minus_spectrum.raw_eigenvalues, dtype=np.complex128)
+    finite_raw = bool(
+        np.all(np.isfinite(raw_plus.real))
+        and np.all(np.isfinite(raw_plus.imag))
+        and np.all(np.isfinite(raw_minus.real))
+        and np.all(np.isfinite(raw_minus.imag))
+    )
+    complex_count_plus = int(
+        np.count_nonzero(np.abs(raw_plus.imag) > resolved_imag_tol)
+    )
+    complex_count_minus = int(
+        np.count_nonzero(np.abs(raw_minus.imag) > resolved_imag_tol)
+    )
+    max_abs_imag = (
+        float(
+            max(
+                np.max(np.abs(raw_plus.imag), initial=0.0),
+                np.max(np.abs(raw_minus.imag), initial=0.0),
+            )
+        )
+        if finite_raw
+        else float("inf")
+    )
+    signed_pairing_residual = signed_q_particle_hole_assignment_residual(
+        raw_plus,
+        raw_minus,
+    )
+
+    valid = bool(
+        hessian_is_hermitian
+        and finite_raw
+        and np.isfinite(signed_pairing_residual)
+        and signed_pairing_residual
+        <= max(resolved_hessian_tol, resolved_imag_tol)
+        and plus.structure.ok
+        and minus.structure.ok
+    )
+    if not valid:
+        classification: Literal[
+            "stable", "goldstone", "real_negative", "complex", "invalid"
+        ] = "invalid"
+    elif complex_count_plus or complex_count_minus:
+        classification = "complex"
+    elif negative_count:
+        classification = "real_negative"
+    elif zero_count:
+        classification = "goldstone"
+    else:
+        classification = "stable"
+
+    return TDHFSignedStabilityAnalysis(
+        static=static,
+        plus_spectrum=plus_spectrum,
+        minus_spectrum=minus_spectrum,
+        signed_pairing_residual=signed_pairing_residual,
+        complex_count_plus=complex_count_plus,
+        complex_count_minus=complex_count_minus,
+        max_abs_imag=max_abs_imag,
+        classification=classification,
+    )
 
 def solve_tdhf_matrices(
     matrices: TDHFMatrices,

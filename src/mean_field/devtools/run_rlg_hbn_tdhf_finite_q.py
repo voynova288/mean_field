@@ -12,7 +12,11 @@ from time import perf_counter
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-from mean_field.core.hf import solve_tdhf_matrices, split_pair_indices_by_flavor_channel
+from mean_field.core.hf import (
+    analyze_tdhf_signed_stability,
+    solve_tdhf_matrices,
+    split_pair_indices_by_flavor_channel,
+)
 from mean_field.devtools._runtime import ensure_not_running_compute_on_login_node, write_json
 from mean_field.systems.RnG_hBN import (
     RLGhBNLayerOverlapBlockSet,
@@ -120,6 +124,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--max-dense-memory-gb", type=float, default=8.0, help="Conservative dense TDHF memory estimate limit per q/channel block.")
     parser.add_argument("--structure-tolerance", type=float, default=1.0e-6)
     parser.add_argument("--imag-tol", type=float, default=1.0e-8)
+    parser.add_argument(
+        "--hessian-tol",
+        type=float,
+        default=1.0e-8,
+        help="Tolerance for signed-q static-Hessian Hermiticity and inertia.",
+    )
     parser.add_argument("--energy-tol", type=float, default=1.0e-10)
     parser.add_argument("--norm-tol", type=float, default=1.0e-10)
     parser.add_argument("--allow-unconverged", action="store_true", help="Do not reject archives whose summary says converged=false.")
@@ -306,6 +316,7 @@ def main() -> None:
         "max_dense_memory_gb": float(args.max_dense_memory_gb),
         "structure_tolerance": float(args.structure_tolerance),
         "imag_tol": float(args.imag_tol),
+        "hessian_tol": float(args.hessian_tol),
         "energy_tol": float(args.energy_tol),
         "norm_tol": float(args.norm_tol),
         "allow_unconverged": bool(args.allow_unconverged),
@@ -424,6 +435,11 @@ def main() -> None:
         for channel in args.channels:
             pairs, channel_counts = _filter_pairs(all_pairs, str(channel))
             n_pairs = int(len(pairs))
+            if n_pairs <= 0:
+                raise SystemExit(
+                    "Refusing empty finite-q TDHF sector for "
+                    f"q={q_shift} channel={channel}."
+                )
             if n_pairs > int(args.max_pairs):
                 raise SystemExit(
                     f"Refusing dense finite-q TDHF assembly for q={q_shift} channel={channel}: "
@@ -602,33 +618,30 @@ def main() -> None:
                     )
                 if not typed_single_representative:
                     partner_matrices = None
-            spectrum = solve_tdhf_matrices(
-                matrices,
-                energy_tol=float(args.energy_tol),
-                imag_tol=float(args.imag_tol),
-                norm_tol=float(args.norm_tol),
-            )
             if partner_matrices is None:
-                partner_spectrum = None
-                particle_hole_q_minus_residual = None
-                quartet_residual = None
-            elif tuple(int(v) for v in q_shift) == (0, 0):
-                partner_spectrum = spectrum
-                particle_hole_q_minus_residual = _spectrum_assignment_residual(
-                    spectrum.raw_eigenvalues,
-                    -np.conj(spectrum.raw_eigenvalues),
-                )
-                quartet_residual = particle_hole_q_minus_residual
-            else:
-                partner_spectrum = solve_tdhf_matrices(
-                    partner_matrices,
+                signed_stability = None
+                spectrum = solve_tdhf_matrices(
+                    matrices,
                     energy_tol=float(args.energy_tol),
                     imag_tol=float(args.imag_tol),
                     norm_tol=float(args.norm_tol),
                 )
-                particle_hole_q_minus_residual = _spectrum_assignment_residual(
-                    spectrum.raw_eigenvalues,
-                    -np.conj(partner_spectrum.raw_eigenvalues),
+                partner_spectrum = None
+                particle_hole_q_minus_residual = None
+                quartet_residual = None
+            else:
+                signed_stability = analyze_tdhf_signed_stability(
+                    matrices,
+                    partner_matrices,
+                    hessian_tol=float(args.hessian_tol),
+                    imag_tol=float(args.imag_tol),
+                    energy_tol=float(args.energy_tol),
+                    norm_tol=float(args.norm_tol),
+                )
+                spectrum = signed_stability.plus_spectrum
+                partner_spectrum = signed_stability.minus_spectrum
+                particle_hole_q_minus_residual = (
+                    signed_stability.signed_pairing_residual
                 )
                 quartet_residual = particle_hole_q_minus_residual
 
@@ -669,6 +682,46 @@ def main() -> None:
                 "q_centered_frac": q_centered_frac,
                 "q_cartesian_nm_inv": q_cartesian_nm_inv,
             }
+            if signed_stability is not None:
+                arrays.update(
+                    {
+                        "static_hessian_eigenvalues_mev": (
+                            signed_stability.static.eigenvalues
+                        ),
+                        "static_hessian_inertia": np.asarray(
+                            [
+                                signed_stability.static.negative_count,
+                                signed_stability.static.zero_count,
+                                signed_stability.static.positive_count,
+                            ],
+                            dtype=int,
+                        ),
+                        "static_hessian_hermitian_residual_mev": np.asarray(
+                            signed_stability.static.hermitian_residual
+                        ),
+                        "static_hessian_min_eigenvalue_mev": np.asarray(
+                            signed_stability.static.min_eigenvalue
+                        ),
+                        "static_hessian_max_eigenvalue_mev": np.asarray(
+                            signed_stability.static.max_eigenvalue
+                        ),
+                        "signed_stability_classification": np.asarray(
+                            signed_stability.classification
+                        ),
+                        "signed_pairing_residual_mev": np.asarray(
+                            signed_stability.signed_pairing_residual
+                        ),
+                        "complex_count_plus": np.asarray(
+                            signed_stability.complex_count_plus, dtype=int
+                        ),
+                        "complex_count_minus": np.asarray(
+                            signed_stability.complex_count_minus, dtype=int
+                        ),
+                        "max_abs_imag_mev": np.asarray(
+                            signed_stability.max_abs_imag
+                        ),
+                    }
+                )
             if partner_spectrum is not None:
                 assert partner_matrices is not None
                 minus_pair_particle = np.asarray(
@@ -769,6 +822,39 @@ def main() -> None:
                         "tolerance": float(matrices.structure.tolerance),
                         "ok": bool(matrices.structure.ok),
                     },
+                    "signed_static_stability": (
+                        None
+                        if signed_stability is None
+                        else {
+                            "classification": signed_stability.classification,
+                            "hessian_hermitian_residual_mev": float(
+                                signed_stability.static.hermitian_residual
+                            ),
+                            "hessian_inertia": [
+                                signed_stability.static.negative_count,
+                                signed_stability.static.zero_count,
+                                signed_stability.static.positive_count,
+                            ],
+                            "hessian_min_eigenvalue_mev": float(
+                                signed_stability.static.min_eigenvalue
+                            ),
+                            "hessian_max_eigenvalue_mev": float(
+                                signed_stability.static.max_eigenvalue
+                            ),
+                            "complex_count_plus": (
+                                signed_stability.complex_count_plus
+                            ),
+                            "complex_count_minus": (
+                                signed_stability.complex_count_minus
+                            ),
+                            "max_abs_imag_mev": float(
+                                signed_stability.max_abs_imag
+                            ),
+                            "signed_pairing_residual_mev": float(
+                                signed_stability.signed_pairing_residual
+                            ),
+                        }
+                    ),
                     "spectrum": {
                         "selected_count": int(spectrum.energies.size),
                         "first_positive_energies_mev": [float(value) for value in spectrum.energies[:20]],
