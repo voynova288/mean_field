@@ -8,6 +8,9 @@ import numpy as np
 import pytest
 
 from mean_field.core.hf import ParticleHolePair, shift_wavefunction_grid, split_pair_indices_by_flavor_channel
+from mean_field.systems.RnG_hBN._hf_response_finite_q import (
+    _validated_single_representative_finite_q_tangent,
+)
 from mean_field.systems.RnG_hBN._tdhf_fixed_quotient import (
     RLGhBNTDHFFixedTermEvaluators,
     build_energy_assigned_c3_sewing,
@@ -36,6 +39,7 @@ from mean_field.systems.RnG_hBN import (
     RLG_HBN_HF_PHYSICAL_SHIFT_POLICY_VERSION,
     RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION,
     RLG_HBN_REMOTE_H0_POLICY_VERSION,
+    apply_rlg_hbn_hf_single_representative_finite_q_response,
     apply_rlg_hbn_hf_single_representative_response,
     build_rlg_hbn_hf_c3_quotient_interaction_components,
     build_rlg_hbn_hf_c3_quotient_interaction_context,
@@ -1156,6 +1160,62 @@ def test_rlg_hbn_hf_single_representative_q0_response_uses_source_kernel() -> No
     np.testing.assert_allclose(response.total, expected, rtol=1.0e-12, atol=1.0e-12)
     assert response.provenance["source_provenance_validated"]
 
+    generic = apply_rlg_hbn_hf_single_representative_finite_q_response(
+        run,
+        tangent,
+        require_converged=False,
+        require_provenance=True,
+    )
+    np.testing.assert_allclose(generic.hartree, response.hartree, rtol=1.0e-12, atol=1.0e-12)
+    np.testing.assert_allclose(generic.fock, response.fock, rtol=1.0e-12, atol=1.0e-12)
+    np.testing.assert_allclose(generic.total, response.total, rtol=1.0e-12, atol=1.0e-12)
+    assert generic.provenance["q_shift_raw"] == [0, 0]
+
+
+def test_rlg_hbn_hf_finite_q_tangent_preserves_signed_even_mesh_m_aliases() -> None:
+    run = _typed_single_representative_tiny_run(
+        k_mesh_size=2,
+        mesh_size=2,
+        active_conduction_bands=2,
+    )
+    base_k = np.arange(run.basis_data.nk, dtype=int)
+    blocks = np.zeros_like(run.state.density)
+
+    def shifted_indices(shift: tuple[int, int]) -> np.ndarray:
+        return np.asarray(
+            [
+                ((index // 2 + shift[0]) % 2) * 2
+                + ((index % 2 + shift[1]) % 2)
+                for index in base_k
+            ],
+            dtype=int,
+        )
+
+    for signed_m in (-1, 1):
+        tangent = RLGhBNFiniteQDensityTangent(
+            q_shift=(signed_m, 0),
+            target_k=base_k,
+            source_k=shifted_indices((signed_m, 0)),
+            blocks=blocks,
+            role="ph",
+        )
+        validated = _validated_single_representative_finite_q_tangent(
+            run, tangent
+        )
+        assert validated[3] == (signed_m, 0)
+    for invalid in (-2, 2):
+        with pytest.raises(ValueError, match="signed first-zone"):
+            _validated_single_representative_finite_q_tangent(
+                run,
+                RLGhBNFiniteQDensityTangent(
+                    q_shift=(invalid, 0),
+                    target_k=base_k,
+                    source_k=base_k,
+                    blocks=blocks,
+                    role="ph",
+                ),
+            )
+
 
 def test_rlg_hbn_tdhf_single_representative_signed_q0_api_is_typed() -> None:
     run = _typed_single_representative_tiny_run()
@@ -1259,6 +1319,159 @@ def test_rlg_hbn_tdhf_single_representative_signed_nonzero_q_uses_independent_pa
         rtol=1.0e-12,
         atol=1.0e-12,
     )
+
+    nx = ny = 3
+    base_k = np.arange(run.basis_data.nk, dtype=int)
+
+    def shifted_indices(shift: tuple[int, int]) -> np.ndarray:
+        return np.asarray(
+            [
+                ((index // ny + shift[0]) % nx) * ny
+                + ((index % ny + shift[1]) % ny)
+                for index in base_k
+            ],
+            dtype=int,
+        )
+
+    def projected_column(response_blocks: np.ndarray) -> np.ndarray:
+        values = []
+        for row_pair in pairs:
+            p_local, p_k = orbitals.decode_global_index(row_pair.particle)
+            h_local, h_k = orbitals.decode_global_index(row_pair.hole)
+            u_p = orbitals.eigenvectors[:, p_local, p_k]
+            u_h = orbitals.eigenvectors[:, h_local, h_k]
+            values.append(np.vdot(u_p, response_blocks[:, :, h_k] @ u_h))
+        return np.asarray(values, dtype=np.complex128)
+
+    plus_indices = shifted_indices((1, 0))
+    minus_indices = shifted_indices((-1, 0))
+
+    def response_parity_for_column(
+        column: int,
+    ) -> tuple[RLGhBNFiniteQDensityTangent, np.ndarray]:
+        column_pair = pairs[column]
+        p_local, p_plus_k = orbitals.decode_global_index(column_pair.particle)
+        h_local, h_k = orbitals.decode_global_index(column_pair.hole)
+        assert p_plus_k == plus_indices[h_k]
+        ph_blocks = np.zeros(
+            (run.basis_data.nt, run.basis_data.nt, run.basis_data.nk),
+            dtype=np.complex128,
+        )
+        ph_blocks[:, :, h_k] = np.outer(
+            np.conj(orbitals.eigenvectors[:, h_local, h_k]),
+            orbitals.eigenvectors[:, p_local, p_plus_k],
+        )
+        ph_tangent = RLGhBNFiniteQDensityTangent(
+            q_shift=(1, 0),
+            target_k=base_k,
+            source_k=plus_indices,
+            blocks=ph_blocks,
+            role="ph",
+        )
+        ph_response = apply_rlg_hbn_hf_single_representative_finite_q_response(
+            run,
+            ph_tangent,
+            require_converged=False,
+            require_provenance=True,
+        )
+        np.testing.assert_allclose(
+            projected_column(ph_response.hartree),
+            plus_terms["A_direct"][:, column],
+            rtol=1.0e-11,
+            atol=1.0e-11,
+        )
+        np.testing.assert_allclose(
+            projected_column(ph_response.fock),
+            plus_terms["A_exchange"][:, column],
+            rtol=1.0e-11,
+            atol=1.0e-11,
+        )
+
+        hp_blocks = np.zeros_like(ph_blocks)
+        hp_blocks[:, :, h_k] = np.outer(
+            np.conj(orbitals.eigenvectors[:, p_local, minus_indices[h_k]]),
+            orbitals.eigenvectors[:, h_local, h_k],
+        )
+        hp_response = apply_rlg_hbn_hf_single_representative_finite_q_response(
+            run,
+            RLGhBNFiniteQDensityTangent(
+                q_shift=(1, 0),
+                target_k=minus_indices,
+                source_k=base_k,
+                blocks=hp_blocks,
+                role="hp",
+            ),
+            require_converged=False,
+            require_provenance=True,
+        )
+        np.testing.assert_allclose(
+            projected_column(hp_response.hartree),
+            plus_terms["B_direct"][:, column],
+            rtol=1.0e-11,
+            atol=1.0e-11,
+        )
+        np.testing.assert_allclose(
+            projected_column(hp_response.fock),
+            plus_terms["B_exchange"][:, column],
+            rtol=1.0e-11,
+            atol=1.0e-11,
+        )
+        return ph_tangent, hp_blocks
+
+    wrapped_column = next(
+        index
+        for index, pair in enumerate(pairs)
+        if orbitals.decode_global_index(pair.hole)[1] // ny == nx - 1
+    )
+    ph_tangent, hp_blocks = response_parity_for_column(0)
+    response_parity_for_column(wrapped_column)
+
+    with pytest.raises(ValueError, match="density axis-1"):
+        apply_rlg_hbn_hf_single_representative_finite_q_response(
+            run,
+            replace(ph_tangent, source_k=base_k),
+            require_converged=False,
+            require_provenance=True,
+        )
+    with pytest.raises(ValueError, match="density axis-0"):
+        apply_rlg_hbn_hf_single_representative_finite_q_response(
+            run,
+            RLGhBNFiniteQDensityTangent(
+                q_shift=(1, 0),
+                target_k=base_k,
+                source_k=base_k,
+                blocks=hp_blocks,
+                role="hp",
+            ),
+            require_converged=False,
+            require_provenance=True,
+        )
+    with pytest.raises(ValueError, match="signed first-zone"):
+        apply_rlg_hbn_hf_single_representative_finite_q_response(
+            run,
+            replace(ph_tangent, q_shift=(3, 0)),
+            require_converged=False,
+            require_provenance=True,
+        )
+
+    removed_key = (1, 0)
+    assert removed_key in run.overlap_blocks.layer_overlaps
+    incomplete_overlaps = dict(run.overlap_blocks.layer_overlaps)
+    incomplete_overlaps.pop(removed_key)
+    incomplete_run = replace(
+        run,
+        overlap_blocks=replace(
+            run.overlap_blocks,
+            layer_overlaps=incomplete_overlaps,
+        ),
+    )
+    with pytest.raises(ValueError, match="overlap_shifts"):
+        apply_rlg_hbn_hf_single_representative_finite_q_response(
+            incomplete_run,
+            ph_tangent,
+            require_converged=False,
+            require_provenance=True,
+        )
 
     with pytest.raises(ValueError, match="converged"):
         build_rlg_hbn_tdhf_q_matrices(

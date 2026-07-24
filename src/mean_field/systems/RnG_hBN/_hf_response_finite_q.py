@@ -25,6 +25,10 @@ from ._hf_interaction_path import (
     build_rlg_hbn_interaction_components,
 )
 from ._hf_types import RLGhBNHartreeFockRun
+from ._finite_q_geometry import (
+    _mesh_shape_from_k_grid_frac,
+    _shift_k_index_with_wrap,
+)
 
 
 RLGhBNFiniteQDensityTangentRole = Literal["ph", "hp"]
@@ -36,9 +40,10 @@ class RLGhBNFiniteQDensityTangent:
 
     RLG/hBN HF stores ``ΔD[a,b]=<c_a^† c_b>-R[a,b]``. For q=0, a ph/X
     tangent therefore has orbital-basis entry ``D[h,p]=1`` while an hp/Y
-    tangent has ``D[p,h]=1``. This tangent-level API remains q=0-only;
-    generic nonzero-q lifting is provided by the finite-q quotient matrix API.
-    The endpoint arrays prevent either path from collapsing source/target k.
+    tangent has ``D[p,h]=1``. Track P exposes a generic signed finite-q
+    response on this tangent; the fixed-quotient response remains q=0-only.
+    ``target_k`` is density axis 0 (dagger) and ``source_k`` is density axis 1
+    (annihilation), so the endpoint arrays cannot collapse source/target k.
     """
 
     q_shift: tuple[int, int]
@@ -103,6 +108,267 @@ def _validated_q0_tangent(
             "q=0 dense tangent source_k must enumerate every stored k in order"
         )
     return blocks, target_k, source_k
+
+
+def _validated_single_representative_finite_q_tangent(
+    run: RLGhBNHartreeFockRun,
+    tangent: RLGhBNFiniteQDensityTangent,
+) -> tuple[
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    tuple[int, int],
+    tuple[int, int],
+    np.ndarray,
+    np.ndarray,
+]:
+    """Validate one dense stored-density q-sector without reducing raw q aliases.
+
+    ``target_k`` names the momentum fiber of density axis 0 (the dagger
+    index), and ``source_k`` names density axis 1 (the annihilation index).
+    For ``role='ph'`` these are ``k`` and ``k+q``; for ``role='hp'`` they are
+    ``k-q`` and ``k``. The returned response is always the +q Hamiltonian
+    block with output axis-0 fibers ``k+q`` and axis-1 fibers ``k``.
+    """
+
+    mesh_shape = _mesh_shape_from_k_grid_frac(run.basis_data.k_grid_frac)
+    q_values = _exact_integer_vector(tangent.q_shift, name="q_shift")
+    if q_values.shape != (2,):
+        raise ValueError(f"q_shift must have shape (2,), got {q_values.shape}")
+    q_shift = (int(q_values[0]), int(q_values[1]))
+    for axis, (value, size) in enumerate(zip(q_shift, mesh_shape, strict=True)):
+        limit = int(size) // 2
+        if value < -limit or value > limit:
+            raise ValueError(
+                "finite-q response requires a signed first-zone mesh shift; "
+                f"axis={axis} value={value} allowed=[{-limit},{limit}]"
+            )
+    if tangent.role not in ("ph", "hp"):
+        raise ValueError(f"tangent role must be 'ph' or 'hp', got {tangent.role!r}")
+    blocks = np.asarray(tangent.blocks, dtype=np.complex128)
+    expected_shape = (run.basis_data.nt, run.basis_data.nt, run.basis_data.nk)
+    if blocks.shape != expected_shape:
+        raise ValueError(
+            f"finite-q tangent blocks must have shape {expected_shape}, got {blocks.shape}"
+        )
+    if not np.all(np.isfinite(blocks)):
+        raise ValueError("finite-q tangent blocks must be finite")
+    target_k = _exact_integer_vector(tangent.target_k, name="target_k")
+    source_k = _exact_integer_vector(tangent.source_k, name="source_k")
+    expected_k = np.arange(run.basis_data.nk, dtype=int)
+    shifted_plus = np.empty_like(expected_k)
+    shifted_minus = np.empty_like(expected_k)
+    wrap_plus = np.empty((expected_k.size, 2), dtype=int)
+    wrap_minus = np.empty((expected_k.size, 2), dtype=int)
+    minus_shift = (-q_shift[0], -q_shift[1])
+    for index in expected_k:
+        shifted_plus[index], wrap_plus[index] = _shift_k_index_with_wrap(
+            int(index), q_shift, mesh_shape
+        )
+        shifted_minus[index], wrap_minus[index] = _shift_k_index_with_wrap(
+            int(index), minus_shift, mesh_shape
+        )
+    if tangent.role == "ph":
+        expected_target = expected_k
+        expected_source = shifted_plus
+    else:
+        expected_target = shifted_minus
+        expected_source = expected_k
+    if not np.array_equal(target_k, expected_target):
+        raise ValueError(
+            "finite-q tangent target_k must enumerate density axis-0 fibers "
+            f"for role={tangent.role!r}"
+        )
+    if not np.array_equal(source_k, expected_source):
+        raise ValueError(
+            "finite-q tangent source_k must enumerate density axis-1 fibers "
+            f"for role={tangent.role!r}"
+        )
+    return (
+        blocks,
+        target_k,
+        source_k,
+        q_shift,
+        mesh_shape,
+        wrap_plus,
+        wrap_minus,
+    )
+
+
+def _single_representative_finite_q_response_components(
+    run: RLGhBNHartreeFockRun,
+    blocks: np.ndarray,
+    *,
+    q_shift: tuple[int, int],
+    role: RLGhBNFiniteQDensityTangentRole,
+    wrap_plus: np.ndarray,
+    wrap_minus: np.ndarray,
+    physical_shifts: tuple[tuple[int, int], ...],
+    beta: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Contract one fixed-G stored-density q-sector into its +q HF response."""
+
+    nk = int(run.basis_data.nk)
+    nt = int(run.basis_data.nt)
+    overlap_by_shift = {
+        tuple(int(value) for value in key): np.asarray(data, dtype=np.complex128)
+        for key, data in run.overlap_blocks.layer_overlaps.items()
+    }
+    kernel_by_shift = {
+        tuple(int(value) for value in key): np.asarray(data, dtype=float)
+        for key, data in run.overlap_blocks.fock_layer_coulomb.items()
+    }
+    plus_k = np.empty(nk, dtype=int)
+    minus_k = np.empty(nk, dtype=int)
+    mesh_shape = _mesh_shape_from_k_grid_frac(run.basis_data.k_grid_frac)
+    for index in range(nk):
+        plus_k[index], _ = _shift_k_index_with_wrap(index, q_shift, mesh_shape)
+        minus_k[index], _ = _shift_k_index_with_wrap(
+            index, (-q_shift[0], -q_shift[1]), mesh_shape
+        )
+    hartree = np.zeros((nt, nt, nk), dtype=np.complex128)
+    fock = np.zeros_like(hartree)
+    active_sources = np.nonzero(
+        np.max(np.abs(blocks), axis=(0, 1)) > 0.0
+    )[0]
+    scale = float(beta) * float(run.state.v0) / float(nk)
+    missing_overlaps: set[tuple[int, int]] = set()
+    missing_kernels: set[tuple[int, int]] = set()
+
+    def add_shift(
+        left: tuple[int, int], right: tuple[int, int]
+    ) -> tuple[int, int]:
+        return left[0] + right[0], left[1] + right[1]
+
+    def sub_shift(
+        left: tuple[int, int], right: tuple[int, int]
+    ) -> tuple[int, int]:
+        return left[0] - right[0], left[1] - right[1]
+
+    for physical_shift in physical_shifts:
+        g0 = (int(physical_shift[0]), int(physical_shift[1]))
+        source_trace: np.ndarray | None = None
+        for source_base_raw in active_sources:
+            source_base = int(source_base_raw)
+            if role == "ph":
+                input_key = add_shift(
+                    g0,
+                    tuple(int(value) for value in wrap_plus[source_base]),
+                )
+                input_axis0_k = source_base
+                input_axis1_k = int(plus_k[source_base])
+            else:
+                input_key = sub_shift(
+                    g0,
+                    tuple(int(value) for value in wrap_minus[source_base]),
+                )
+                input_axis0_k = int(minus_k[source_base])
+                input_axis1_k = source_base
+            input_overlap = overlap_by_shift.get(input_key)
+            if input_overlap is None:
+                missing_overlaps.add(input_key)
+                continue
+            trace = np.einsum(
+                "ab,mba->m",
+                blocks[:, :, source_base],
+                np.conj(
+                    input_overlap[
+                        :, :, input_axis1_k, :, input_axis0_k
+                    ]
+                ),
+                optimize=True,
+            )
+            source_trace = trace if source_trace is None else source_trace + trace
+        if source_trace is None:
+            continue
+
+        for target_base in range(nk):
+            output_axis0_k = int(plus_k[target_base])
+            output_axis1_k = target_base
+            output_key = add_shift(
+                g0,
+                tuple(int(value) for value in wrap_plus[target_base]),
+            )
+            output_overlap = overlap_by_shift.get(output_key)
+            output_kernel = kernel_by_shift.get(output_key)
+            if output_overlap is None:
+                missing_overlaps.add(output_key)
+            if output_kernel is None:
+                missing_kernels.add(output_key)
+            if output_overlap is None or output_kernel is None:
+                continue
+            out_form = output_overlap[
+                :, :, output_axis0_k, :, output_axis1_k
+            ]
+            kernel = np.asarray(
+                output_kernel[output_axis0_k, output_axis1_k], dtype=float
+            )
+            hartree[:, :, target_base] += scale * np.einsum(
+                "lm,lab,m->ab",
+                kernel,
+                out_form,
+                source_trace,
+                optimize=True,
+            )
+
+            for source_base_raw in active_sources:
+                source_base = int(source_base_raw)
+                if role == "ph":
+                    input_axis0_k = source_base
+                    input_axis1_k = int(plus_k[source_base])
+                    left_key = add_shift(
+                        g0,
+                        sub_shift(
+                            tuple(int(value) for value in wrap_plus[target_base]),
+                            tuple(int(value) for value in wrap_plus[source_base]),
+                        ),
+                    )
+                    right_key = g0
+                else:
+                    input_axis0_k = int(minus_k[source_base])
+                    input_axis1_k = source_base
+                    left_key = output_key
+                    right_key = sub_shift(
+                        g0,
+                        tuple(int(value) for value in wrap_minus[source_base]),
+                    )
+                left_overlap = overlap_by_shift.get(left_key)
+                right_overlap = overlap_by_shift.get(right_key)
+                left_kernel = kernel_by_shift.get(left_key)
+                if left_overlap is None:
+                    missing_overlaps.add(left_key)
+                if left_kernel is None:
+                    missing_kernels.add(left_key)
+                if left_overlap is None or left_kernel is None:
+                    continue
+                if right_overlap is None:
+                    missing_overlaps.add(right_key)
+                    continue
+                left_form = left_overlap[
+                    :, :, output_axis0_k, :, input_axis1_k
+                ]
+                right_form = right_overlap[
+                    :, :, output_axis1_k, :, input_axis0_k
+                ]
+                kernel = np.asarray(
+                    left_kernel[output_axis0_k, input_axis1_k], dtype=float
+                )
+                fock[:, :, target_base] -= scale * np.einsum(
+                    "lm,lab,mcd,db->ac",
+                    kernel,
+                    left_form,
+                    np.conj(right_form),
+                    blocks[:, :, source_base],
+                    optimize=True,
+                )
+    if missing_overlaps or missing_kernels:
+        raise ValueError(
+            "finite-q single-representative response requires missing cache "
+            "entries: "
+            f"overlap_shifts={sorted(missing_overlaps)[:20]}, "
+            f"kernel_shifts={sorted(missing_kernels)[:20]}"
+        )
+    return hartree, fock
 
 
 def _validate_interaction_provenance(
@@ -484,6 +750,106 @@ def apply_rlg_hbn_hf_quotient_response(
     )
 
 
+def apply_rlg_hbn_hf_single_representative_finite_q_response(
+    run: RLGhBNHartreeFockRun,
+    tangent: RLGhBNFiniteQDensityTangent,
+    *,
+    beta: float | None = None,
+    require_converged: bool = True,
+    require_provenance: bool = True,
+) -> RLGhBNFiniteQResponse:
+    """Apply the fixed-G Track-P HF derivative to one signed q-sector.
+
+    The input stores density axis-0/axis-1 fibers explicitly. The output has
+    shape ``(nt, nt, nk)`` and enumerates Hamiltonian blocks with axis 0 at
+    ``k+q`` and axis 1 at ``k``. Hartree and Fock components are returned
+    separately so TDHF A/B columns can be checked term by term.
+    """
+
+    if bool(require_converged) and not bool(run.converged):
+        raise ValueError(
+            "single-representative finite-q response requires a converged HF "
+            "run unless require_converged=False is explicitly requested"
+        )
+    if not np.isclose(
+        float(run.state.v0),
+        float(run.basis_data.v0),
+        rtol=0.0,
+        atol=1.0e-15,
+    ):
+        raise ValueError(
+            f"HF state/basis v0 mismatch: {run.state.v0} != {run.basis_data.v0}"
+        )
+    (
+        blocks,
+        target_k,
+        source_k,
+        q_shift,
+        mesh_shape,
+        wrap_plus,
+        wrap_minus,
+    ) = _validated_single_representative_finite_q_tangent(run, tangent)
+    resolved_beta = (
+        float(run.interaction_provenance.beta)
+        if beta is None and run.interaction_provenance is not None
+        else (1.0 if beta is None else float(beta))
+    )
+    if bool(require_provenance):
+        validate_rlg_hbn_hf_single_representative_provenance(
+            run,
+            beta=resolved_beta,
+        )
+    physical_shifts = tuple(
+        (int(value[0]), int(value[1]))
+        for value in run.overlap_blocks.shifts
+    )
+    hartree, fock = _single_representative_finite_q_response_components(
+        run,
+        blocks,
+        q_shift=q_shift,
+        role=tangent.role,
+        wrap_plus=wrap_plus,
+        wrap_minus=wrap_minus,
+        physical_shifts=physical_shifts,
+        beta=resolved_beta,
+    )
+    total = hartree + fock
+    output_axis1_k = np.arange(run.basis_data.nk, dtype=int)
+    output_axis0_k = np.empty_like(output_axis1_k)
+    for index in output_axis1_k:
+        output_axis0_k[index], _ = _shift_k_index_with_wrap(
+            int(index), q_shift, mesh_shape
+        )
+    provenance = {
+        "hf_interaction_convention": (
+            RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION
+        ),
+        "source_provenance_validated": bool(require_provenance),
+        "response_scope": "generic_signed_q_dense_stored_density_derivative",
+        "q_shift_raw": [int(q_shift[0]), int(q_shift[1])],
+        "q_shift_torus": [
+            int(q_shift[0]) % int(mesh_shape[0]),
+            int(q_shift[1]) % int(mesh_shape[1]),
+        ],
+        "mesh_shape": [int(mesh_shape[0]), int(mesh_shape[1])],
+        "role": str(tangent.role),
+        "density_axis0_k": target_k.tolist(),
+        "density_axis1_k": source_k.tolist(),
+        "output_axis0_k": output_axis0_k.tolist(),
+        "output_axis1_k": output_axis1_k.tolist(),
+        "physical_shift_count": len(physical_shifts),
+        "physical_shifts": [list(value) for value in physical_shifts],
+        "beta": resolved_beta,
+        "post_assembly_averaging": False,
+    }
+    return RLGhBNFiniteQResponse(
+        hartree=hartree,
+        fock=fock,
+        total=total,
+        provenance=provenance,
+    )
+
+
 def apply_rlg_hbn_hf_single_representative_response(
     run: RLGhBNHartreeFockRun,
     tangent: RLGhBNFiniteQDensityTangent,
@@ -554,6 +920,7 @@ __all__ = [
     "RLGhBNFiniteQDensityTangentRole",
     "RLGhBNFiniteQResponse",
     "apply_rlg_hbn_hf_quotient_response",
+    "apply_rlg_hbn_hf_single_representative_finite_q_response",
     "apply_rlg_hbn_hf_single_representative_response",
     "validate_rlg_hbn_hf_quotient_source_closure",
     "validate_rlg_hbn_hf_single_representative_provenance",
