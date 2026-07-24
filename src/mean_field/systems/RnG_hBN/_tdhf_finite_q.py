@@ -251,6 +251,8 @@ def build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs(
     require_complete_umklapp: bool = True,
     physical_shifts: Sequence[tuple[int, int]] | None = None,
     require_provenance: bool = True,
+    _plus_term_collector: dict[str, np.ndarray] | None = None,
+    _minus_term_collector: dict[str, np.ndarray] | None = None,
 ) -> RLGhBNTDHFFiniteQSingleRepresentativeMatrixPair:
     """Build q and -q Hessians of one fixed-G single-representative functional.
 
@@ -262,6 +264,18 @@ def build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs(
         raise ValueError(
             f"single-representative channel must be one of "
             f"{FINITE_Q_FULL_CHANNELS}, got {channel!r}"
+        )
+    if (
+        _plus_term_collector is not None
+        and _plus_term_collector is _minus_term_collector
+    ):
+        raise ValueError("plus and minus term collectors must be distinct dictionaries")
+    if channel != "intraflavor" and (
+        _plus_term_collector is not None or _minus_term_collector is not None
+    ):
+        raise ValueError(
+            "term-resolved collection is currently available only for "
+            "the intraflavor channel"
         )
     mesh_shape = _mesh_shape_from_k_grid_frac(run.basis_data.k_grid_frac)
     if isinstance(q_shift, RLGhBNTDHFMomentumShift):
@@ -325,6 +339,7 @@ def build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs(
     def build_sector(
         sector_pairs: tuple[ParticleHolePair, ...],
         sector_shift: tuple[int, int],
+        term_collector: dict[str, np.ndarray] | None,
     ) -> TDHFMatrices:
         if channel == "intraflavor":
             return build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs(
@@ -336,7 +351,8 @@ def build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs(
                 structure_tolerance=structure_tolerance,
                 require_complete_umklapp=require_complete_umklapp,
                 physical_shifts=resolved_physical_shifts,
-                _build_partner=True,
+                _build_partner=False,
+                _term_collector=term_collector,
             )
         return build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs(
             run,
@@ -349,11 +365,27 @@ def build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs(
             physical_shifts=resolved_physical_shifts,
         )
 
-    positive = build_sector(ph_pairs, shift)
-    negative = positive if shift == (0, 0) else build_sector(
-        resolved_minus_pairs,
-        minus_shift,
-    )
+    positive = build_sector(ph_pairs, shift, _plus_term_collector)
+    if shift == (0, 0):
+        negative = positive
+        if _minus_term_collector is not None:
+            if _plus_term_collector is None:
+                raise ValueError(
+                    "q=0 minus term collection requires plus term collection"
+                )
+            _minus_term_collector.clear()
+            _minus_term_collector.update(
+                {
+                    name: np.asarray(value).copy()
+                    for name, value in _plus_term_collector.items()
+                }
+            )
+    else:
+        negative = build_sector(
+            resolved_minus_pairs,
+            minus_shift,
+            _minus_term_collector,
+        )
     A = np.asarray(positive.A, dtype=np.complex128)
     B = np.asarray(positive.B, dtype=np.complex128)
     A_minus = np.asarray(negative.A, dtype=np.complex128)
@@ -604,6 +636,7 @@ def build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs(
     require_complete_umklapp: bool = True,
     physical_shifts: Sequence[tuple[int, int]] | None = None,
     _build_partner: bool = True,
+    _term_collector: dict[str, np.ndarray] | None = None,
 ) -> TDHFMatrices:
     """Build full finite-q intraflavor TDHF matrices using paper Eq. D19.
 
@@ -642,6 +675,20 @@ def build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs(
     n_pairs = len(ph_pairs)
     A = np.zeros((n_pairs, n_pairs), dtype=np.complex128)
     B = np.zeros((n_pairs, n_pairs), dtype=np.complex128)
+    if _term_collector is not None:
+        _term_collector.clear()
+        _term_collector.update(
+            {
+                name: np.zeros((n_pairs, n_pairs), dtype=np.complex128)
+                for name in (
+                    "A0",
+                    "A_direct",
+                    "A_exchange",
+                    "B_direct",
+                    "B_exchange",
+                )
+            }
+        )
     if n_pairs == 0:
         L = assemble_tdhf_liouvillian(A, B)
         structure = validate_tdhf_structures(A, B, L, tolerance=structure_tolerance)
@@ -676,6 +723,8 @@ def build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs(
         wrap_plus[index] = plus_wrap
         wrap_minus[index] = minus_wrap
         A[index, index] = orbitals.energies[p_local[index], particle_k] - orbitals.energies[h_local[index], hole_k]
+        if _term_collector is not None:
+            _term_collector["A0"][index, index] = A[index, index]
 
     indices_by_hole_k = tuple(np.nonzero(h_k == ik)[0] for ik in range(orbitals.nk))
     scale = float(beta) * float(run.basis_data.v0) / float(run.basis_data.nk)
@@ -733,20 +782,26 @@ def build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs(
             if row_indices.size == 0 or int(ik) not in direct_kernel_by_k:
                 continue
             kernel = direct_kernel_by_k[int(ik)]
-            A[np.ix_(row_indices, np.arange(n_pairs))] += scale * np.einsum(
+            block = np.ix_(row_indices, np.arange(n_pairs))
+            delta_a_direct = scale * np.einsum(
                 "lm,li,mj->ij",
                 kernel,
                 plus_direct[:, row_indices],
                 np.conj(plus_direct),
                 optimize=True,
             )
-            B[np.ix_(row_indices, np.arange(n_pairs))] += scale * np.einsum(
+            delta_b_direct = scale * np.einsum(
                 "lm,li,mj->ij",
                 kernel,
                 plus_direct[:, row_indices],
                 np.conj(minus_direct),
                 optimize=True,
             )
+            A[block] += delta_a_direct
+            B[block] += delta_b_direct
+            if _term_collector is not None:
+                _term_collector["A_direct"][block] += delta_a_direct
+                _term_collector["B_direct"][block] += delta_b_direct
 
         # A-exchange: V[p(k+q), h'(k'), p'(k'+q), h(k)].
         for kt, target_indices in enumerate(indices_by_hole_k):
@@ -781,13 +836,17 @@ def build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs(
                     hh_full = u_h_target.conj().T @ hh_overlap[layer, :, kt, :, ks] @ u_h_source
                     pp[layer] = pp_full[np.ix_(p_t, p_s)]
                     hh[layer] = hh_full[np.ix_(h_t, h_s)]
-                A[np.ix_(target_indices, source_indices)] -= scale * np.einsum(
+                block = np.ix_(target_indices, source_indices)
+                delta_a_exchange = -scale * np.einsum(
                     "lm,lij,mij->ij",
                     kernel,
                     pp,
                     np.conj(hh),
                     optimize=True,
                 )
+                A[block] += delta_a_exchange
+                if _term_collector is not None:
+                    _term_collector["A_exchange"][block] += delta_a_exchange
 
         # B-exchange: V[p(k+q), p'(k'-q), h'(k'), h(k)].
         for kt, target_indices in enumerate(indices_by_hole_k):
@@ -827,13 +886,37 @@ def build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs(
                     hp_full = u_h_target.conj().T @ right_overlap[layer, :, kt, :, p_s_minus] @ u_p_minus_source
                     ph[layer] = ph_full[np.ix_(p_t, h_s)]
                     hp[layer] = hp_full[np.ix_(h_t, p_s)]
-                B[np.ix_(target_indices, source_indices)] -= scale * np.einsum(
+                block = np.ix_(target_indices, source_indices)
+                delta_b_exchange = -scale * np.einsum(
                     "lm,lij,mij->ij",
                     kernel,
                     ph,
                     np.conj(hp),
                     optimize=True,
                 )
+                B[block] += delta_b_exchange
+                if _term_collector is not None:
+                    _term_collector["B_exchange"][block] += delta_b_exchange
+
+    if _term_collector is not None:
+        reconstructed_a = (
+            _term_collector["A0"]
+            + _term_collector["A_direct"]
+            + _term_collector["A_exchange"]
+        )
+        reconstructed_b = (
+            _term_collector["B_direct"]
+            + _term_collector["B_exchange"]
+        )
+        term_residual = max(
+            float(np.max(np.abs(A - reconstructed_a))) if A.size else 0.0,
+            float(np.max(np.abs(B - reconstructed_b))) if B.size else 0.0,
+        )
+        if not np.isfinite(term_residual) or term_residual > 1.0e-10:
+            raise RuntimeError(
+                "finite-q intraflavor term collection does not reconstruct A/B: "
+                f"residual={term_residual}"
+            )
 
     if missing_shifts and require_complete_umklapp:
         preview = sorted(missing_shifts)[:10]

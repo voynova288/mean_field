@@ -1193,6 +1193,8 @@ def test_rlg_hbn_tdhf_single_representative_signed_nonzero_q_uses_independent_pa
     groups = split_pair_indices_by_flavor_channel(all_pairs)
     pairs = tuple(all_pairs[int(index)] for index in groups["intraflavor"])
 
+    plus_terms: dict[str, np.ndarray] = {}
+    minus_terms: dict[str, np.ndarray] = {}
     result = build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs(
         run,
         orbitals,
@@ -1200,6 +1202,8 @@ def test_rlg_hbn_tdhf_single_representative_signed_nonzero_q_uses_independent_pa
         (1, 0),
         channel="intraflavor",
         require_provenance=True,
+        _plus_term_collector=plus_terms,
+        _minus_term_collector=minus_terms,
     )
     n_pairs = len(pairs)
     np.testing.assert_allclose(
@@ -1219,6 +1223,42 @@ def test_rlg_hbn_tdhf_single_representative_signed_nonzero_q_uses_independent_pa
     )
     assert result.plus.structure.ok
     assert result.plus.pairs[0].particle != result.minus.pairs[0].particle
+    assert set(plus_terms) == {
+        "A0",
+        "A_direct",
+        "A_exchange",
+        "B_direct",
+        "B_exchange",
+    }
+    assert set(minus_terms) == set(plus_terms)
+    np.testing.assert_allclose(
+        plus_terms["A0"]
+        + plus_terms["A_direct"]
+        + plus_terms["A_exchange"],
+        result.plus.A,
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )
+    np.testing.assert_allclose(
+        plus_terms["B_direct"] + plus_terms["B_exchange"],
+        result.plus.B,
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )
+    np.testing.assert_allclose(
+        minus_terms["A0"]
+        + minus_terms["A_direct"]
+        + minus_terms["A_exchange"],
+        result.minus.A,
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )
+    np.testing.assert_allclose(
+        minus_terms["B_direct"] + minus_terms["B_exchange"],
+        result.minus.B,
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )
 
     with pytest.raises(ValueError, match="converged"):
         build_rlg_hbn_tdhf_q_matrices(
@@ -1235,6 +1275,47 @@ def test_rlg_hbn_tdhf_single_representative_signed_nonzero_q_uses_independent_pa
     np.testing.assert_allclose(dispatched.A, result.plus.A)
     np.testing.assert_allclose(dispatched.B, result.plus.B)
     np.testing.assert_allclose(dispatched.L, result.plus.L)
+
+
+def test_rlg_hbn_tdhf_single_representative_q0_term_collectors_match() -> None:
+    run = _typed_single_representative_tiny_run(
+        k_mesh_size=3,
+        mesh_size=3,
+        active_conduction_bands=2,
+    )
+    orbitals = build_rlg_hbn_tdhf_orbitals(run.state)
+    all_pairs = build_rlg_hbn_tdhf_q_pairs(
+        orbitals, run.basis_data, (0, 0)
+    )
+    groups = split_pair_indices_by_flavor_channel(all_pairs)
+    pairs = tuple(all_pairs[int(index)] for index in groups["intraflavor"])
+    plus_terms: dict[str, np.ndarray] = {}
+    minus_terms: dict[str, np.ndarray] = {}
+    build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs(
+        run,
+        orbitals,
+        pairs,
+        (0, 0),
+        channel="intraflavor",
+        require_provenance=True,
+        _plus_term_collector=plus_terms,
+        _minus_term_collector=minus_terms,
+    )
+    assert set(plus_terms) == set(minus_terms)
+    for name in plus_terms:
+        np.testing.assert_allclose(plus_terms[name], minus_terms[name])
+    with pytest.raises(ValueError, match="distinct dictionaries"):
+        shared_terms: dict[str, np.ndarray] = {}
+        build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs(
+            run,
+            orbitals,
+            pairs,
+            (0, 0),
+            channel="intraflavor",
+            require_provenance=True,
+            _plus_term_collector=shared_terms,
+            _minus_term_collector=shared_terms,
+        )
 
 
 def test_rlg_hbn_tdhf_interaction_callable_and_dense_q0_smoke() -> None:
