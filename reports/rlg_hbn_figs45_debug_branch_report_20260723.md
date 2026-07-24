@@ -19,7 +19,92 @@ The current best physical interpretation is therefore:
 
 This report does **not** claim a completed reproduction.
 
-## 2. Reproduction comparison figure
+## 1.1 Update 2026-07-24: Goldstone stiffness and Track P full mesh
+
+A key interpretation has been corrected. Both matching sources already pass the q=0 SU(2) Goldstone/Ward gate. The important Goldstone discrepancy is the **finite-q magnon stiffness**, not a nonzero q=0 gap. At the first shell, `|q|=0.0520429 nm^-1`:
+
+```text
+                              Omega(q)                 D=Omega/|q|^2
+paper raster                  0.13092 meV              48.34 meV nm^2
+fresh Track P                 0.13346--0.13620 meV     49.27--50.29 meV nm^2
+typed quotient                0.78709 meV              290.61 meV nm^2
+```
+
+Thus the typed quotient stiffness is about `6.01` times the paper value, while the fresh fixed-G matching source is within approximately `4%` at the three independently assembled C3-related first-shell points.
+
+The paper caption defines white sectors as **negative or complex** collective-mode energies. The 2026-07-24 runner therefore evaluates both the signed-q static Hessian
+
+```text
+H_stat(q) = [[A(q), B(q)], [B(-q)*, A(-q)*]]
+```
+
+and the raw Liouvillian spectra of independently assembled `L(q)` and `L(-q)`. Static-negative and complex classifications remain separate; their union is used only for comparison with the paper white mask.
+
+The complete Track P `12x12` mesh has now been assembled independently for all three channels with no orbit copying or post-assembly averaging. The new comparison is:
+
+![Fig. S45 paper raster versus Track P finite-cutoff hypothesis](figures/rlg_hbn_figs45_track_p_paper_finite_cutoff_hypothesis_20260724.png)
+
+Track P instability-mask result:
+
+```text
+paper intraflavor white sectors              45
+Track P static-negative sectors              35
+Track P complex sectors                      35
+Track P real-negative-only sectors            0
+true positives / false negatives             35 / 10
+false positives among 99 paper-stable q       0
+precision / recall / Jaccard             1.000 / 0.7778 / 0.7778
+max |Im Omega|                            2.97076 meV
+```
+
+This is a major improvement over the typed quotient's `3/45` white-sector recall. It also establishes that all 35 recovered Track P sectors are both static-negative and dynamically complex; the API remains capable of reporting real-negative-only sectors, but none occur in the final Track P full matrices.
+
+Stable-point comparison:
+
+```text
+channel        common-stable RMSE   mean(calc-paper)
+intraflavor          0.55948 meV          +0.51472 meV
+intervalley          0.13021 meV          +0.07635 meV
+interspin            0.04992 meV          +0.00237 meV
+```
+
+The magnon branch is quantitatively close, intervalley is improved but just above the preregistered `0.10 meV` target, and intraflavor remains systematically too high. Track P is therefore the strongest paper-reproduction hypothesis so far, but not a completed reproduction.
+
+Full-mesh C3 diagnostics also show why the calculation must not be renamed exact-C3:
+
+```text
+channel        max lowest-branch C3 spread
+intraflavor             0.48342 meV
+intervalley             0.16064 meV
+interspin               0.12620 meV
+```
+
+The smallest-q C3 orbit is much better (`0.02897/0.01331/0.00275 meV`), but the full mesh exposes larger regulator-level defects away from Gamma.
+
+Exact-M term ablation identifies the instability mechanism. Representative values over the three exact M-related sectors are:
+
+```text
+stage                         min eig(H_stat)        result
+A0 only                       +18.92 to +19.63       stable
+A0 + A_direct                 +19.02 to +19.72       stable
+A0 + A_exchange              -1.04 to -0.89         real negative, no complex pair
+A full, B=0                  +4.38 to +4.56          stable
+A full + B_direct            +0.28 to +0.50          stable
+A full + B_exchange          -2.79 to -2.58          complex, max |Im| 4.96--5.13
+full                         -0.96 to -0.81          complex, max |Im| 2.75--2.97
+```
+
+`A_exchange` alone creates real static-negative directions, but `A_direct` restabilizes the full A block. The final exact-M complex quartet is driven by `B_exchange`; `B_direct` partially restabilizes it but does not remove the instability. This separates a negative static direction from the Krein/dynamical complex instability rather than treating every paper-white point as a complex eigenvalue by definition.
+
+Auditable aggregate data committed with the report:
+
+```text
+reports/data/rlg_hbn_figs45_track_p_intraflavor_fullmesh_144q_20260724.json
+reports/data/rlg_hbn_figs45_track_p_flavorflip_fullmesh_144q_20260724.json
+reports/data/rlg_hbn_figs45_track_p_m_term_ablation_20260724.json
+```
+
+## 2. Earlier typed-quotient comparison figure
 
 ![Fig. S45 published raster versus validated calculation](figures/rlg_hbn_figs45_kappa1_validated_vs_paper_raster_paper_markers_imag_20260722.png)
 
@@ -285,9 +370,12 @@ results/RnG_hBN/tdhf_m2_pilot/single_rep_source_gates_v1_20260723/
 ```text
 full typed-quotient mesh:          structurally validated nonreproduction
 fresh matching source q=0:        pass
-fresh smallest-q checkpoints:     paper-close
-fresh signed q/-q construction:   pass
-fresh full-spectrum generic C3:   fail / active blocker
-new full mesh:                     not submitted
-true Fig. S45 reproduction:       not yet established
+fresh first-shell stiffness:      paper-close
+signed q/-q static analysis:      pass
+Track P full 144-q meshes:        completed independently
+Track P white-mask recall:        35/45, zero false positives
+Track P stable RMSE (I/V/S):      0.559/0.130/0.050 meV
+Track P exact microscopic C3:     fail / regulator-level defect
+Track C affine+WS source:         not yet generated
+true Fig. S45 reproduction:       improved substantially, not yet established
 ```

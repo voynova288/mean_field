@@ -1,0 +1,565 @@
+{
+  "archive": "/data/home/ziyuzhu/Mean_Field/results/RnG_hBN/tdhf_m2_pilot/a_v64_single_rep_hf_v1_192734/checkpoint_A_average_V64_hf/xi1_V064meV/runs/flavor_seed1/hf_run_state.npz",
+  "built_missing_overlap_shift_count": 24,
+  "description": "Term-resolved intraflavor signed static-Hessian and Liouvillian instability audit at the exact M orbit.",
+  "hessian_tol": 1e-08,
+  "imag_tol": 1e-08,
+  "physical_shift_count": 13,
+  "rows": [
+    {
+      "artifact_npz": "/data/home/ziyuzhu/Mean_Field/results/RnG_hBN/tdhf_m2_pilot/paper_finite_cutoff_hypothesis_v1_20260724/m_term_ablation/track_p_m_ablation_qm6_m6.npz",
+      "pair_count": 432,
+      "q_shift": [
+        -6,
+        -6
+      ],
+      "stages": [
+        {
+          "A_terms": [
+            "A0"
+          ],
+          "B_terms": [],
+          "classification": "stable",
+          "complex_count_minus": 0,
+          "complex_count_plus": 0,
+          "hessian_hermitian_residual_mev": 0.0,
+          "hessian_inertia": [
+            0,
+            0,
+            864
+          ],
+          "hessian_min_eigenvalue_mev": 19.62663655075378,
+          "lowest_selected_positive_metric_energy_mev": 19.62663655075378,
+          "max_abs_imag_mev": 0.0,
+          "max_raw_solver_residual": 0.0,
+          "missing_positive_metric_branch_count": 0,
+          "signed_pairing_residual_mev": 0.0,
+          "stage": "A0_only"
+        },
+        {
+          "A_terms": [
+            "A0",
+            "A_direct"
+          ],
+          "B_terms": [],
+          "classification": "stable",
+          "complex_count_minus": 0,
+          "complex_count_plus": 0,
+          "hessian_hermitian_residual_mev": 2.1677797545656835e-16,
+          "hessian_inertia": [
+            0,
+            0,
+            864
+          ],
+          "hessian_min_eigenvalue_mev": 19.7211214603626,
+          "lowest_selected_positive_metric_energy_mev": 19.721121460362905,
+          "max_abs_imag_mev": 7.473118555238402e-14,
+          "max_raw_solver_residual": 2.3897781794965147e-12,
+          "missing_positive_metric_branch_count": 0,
+          "signed_pairing_residual_mev": 2.018129816066101e-12,
+          "stage": "A0_plus_A_direct"
+        },
+        {
+          "A_terms": [
+            "A0",
+            "A_exchange"
+          ],
+          "B_terms": [],
+          "classification": "real_negative",
+          "complex_count_minus": 0,
+          "complex_count_plus": 0,
+          "hessian_hermitian_residual_mev": 7.021666937153402e-16,
+          "hessian_inertia": [
+            2,
+            0,
+            862
+          ],
+          "hessian_min_eigenvalue_mev": -0.89321627453863,
+          "lowest_selected_positive_metric_energy_mev": 1.967481246030772,
+          "max_abs_imag_mev": 5.710253711896032e-14,
+          "max_raw_solver_residual": 2.6938714303672007e-12,
+          "missing_positive_metric_branch_count": 1,
+          "signed_pairing_residual_mev": 1.9187196258974254e-12,
+          "stage": "A0_plus_A_exchange"
+        },
+        {
+          "A_terms": [
+            "A0",
+            "A_direct",
+            "A_exchange"
+          ],
+          "B_terms": [],
+          "classification": "stable",
+          "complex_count_minus": 0,
+          "complex_count_plus": 0,
+          "hessian_hermitian_residual_mev": 7.021666937153402e-16,
+          "hessian_inertia": [
+            0,
+            0,
+            864
+          ],
+          "hessian_min_eigenvalue_mev": 4.560477994035104,
+          "lowest_selected_positive_metric_energy_mev": 4.560488849185166,
+          "max_abs_imag_mev": 8.162420408250585e-14,
+          "max_raw_solver_residual": 2.490485845377457e-12,
+          "missing_positive_metric_branch_count": 0,
+          "signed_pairing_residual_mev": 2.643449458549812e-12,
+          "stage": "A_full_B0"
+        },
+        {
+          "A_terms": [
+            "A0",
+            "A_direct",
+            "A_exchange"
+          ],
+          "B_terms": [
+            "B_direct"
+          ],
+          "classification": "stable",
+          "complex_count_minus": 0,
+          "complex_count_plus": 0,
+          "hessian_hermitian_residual_mev": 7.021666937153402e-16,
+          "hessian_inertia": [
+            0,
+            0,
+            864
+          ],
+          "hessian_min_eigenvalue_mev": 0.4951721163857933,
+          "lowest_selected_positive_metric_energy_mev": 1.8338083728108827,
+          "max_abs_imag_mev": 1.2737867536016925e-13,
+          "max_raw_solver_residual": 4.045934934732581e-12,
+          "missing_positive_metric_branch_count": 0,
+          "signed_pairing_residual_mev": 3.4958755973561863e-12,
+          "stage": "A_full_plus_B_direct"
+        },
+        {
+          "A_terms": [
+            "A0",
+            "A_direct",
+            "A_exchange"
+          ],
+          "B_terms": [
+            "B_exchange"
+          ],
+          "classification": "complex",
+          "complex_count_minus": 2,
+          "complex_count_plus": 2,
+          "hessian_hermitian_residual_mev": 7.021666937153402e-16,
+          "hessian_inertia": [
+            1,
+            0,
+            863
+          ],
+          "hessian_min_eigenvalue_mev": -2.5787082042111886,
+          "lowest_selected_positive_metric_energy_mev": 7.384887228434472,
+          "max_abs_imag_mev": 4.959820925076773,
+          "max_raw_solver_residual": 3.7556123195543515e-12,
+          "missing_positive_metric_branch_count": 1,
+          "signed_pairing_residual_mev": 3.3253449129395185e-12,
+          "stage": "A_full_plus_B_exchange"
+        },
+        {
+          "A_terms": [
+            "A0",
+            "A_direct",
+            "A_exchange"
+          ],
+          "B_terms": [
+            "B_direct",
+            "B_exchange"
+          ],
+          "classification": "complex",
+          "complex_count_minus": 2,
+          "complex_count_plus": 2,
+          "hessian_hermitian_residual_mev": 7.021666937153402e-16,
+          "hessian_inertia": [
+            1,
+            0,
+            863
+          ],
+          "hessian_min_eigenvalue_mev": -0.809165813634026,
+          "lowest_selected_positive_metric_energy_mev": 10.138106039654502,
+          "max_abs_imag_mev": 2.7547018113803055,
+          "max_raw_solver_residual": 4.347804006999567e-12,
+          "missing_positive_metric_branch_count": 1,
+          "signed_pairing_residual_mev": 3.041123279426103e-12,
+          "stage": "full"
+        }
+      ]
+    },
+    {
+      "artifact_npz": "/data/home/ziyuzhu/Mean_Field/results/RnG_hBN/tdhf_m2_pilot/paper_finite_cutoff_hypothesis_v1_20260724/m_term_ablation/track_p_m_ablation_qm6_p0.npz",
+      "pair_count": 432,
+      "q_shift": [
+        -6,
+        0
+      ],
+      "stages": [
+        {
+          "A_terms": [
+            "A0"
+          ],
+          "B_terms": [],
+          "classification": "stable",
+          "complex_count_minus": 0,
+          "complex_count_plus": 0,
+          "hessian_hermitian_residual_mev": 0.0,
+          "hessian_inertia": [
+            0,
+            0,
+            864
+          ],
+          "hessian_min_eigenvalue_mev": 18.945871574340096,
+          "lowest_selected_positive_metric_energy_mev": 18.945871574340096,
+          "max_abs_imag_mev": 0.0,
+          "max_raw_solver_residual": 0.0,
+          "missing_positive_metric_branch_count": 0,
+          "signed_pairing_residual_mev": 0.0,
+          "stage": "A0_only"
+        },
+        {
+          "A_terms": [
+            "A0",
+            "A_direct"
+          ],
+          "B_terms": [],
+          "classification": "stable",
+          "complex_count_minus": 0,
+          "complex_count_plus": 0,
+          "hessian_hermitian_residual_mev": 2.0490308144984482e-16,
+          "hessian_inertia": [
+            0,
+            0,
+            864
+          ],
+          "hessian_min_eigenvalue_mev": 19.042882957089294,
+          "lowest_selected_positive_metric_energy_mev": 19.04288339573295,
+          "max_abs_imag_mev": 1.0986274509348533e-13,
+          "max_raw_solver_residual": 2.1153999158843655e-12,
+          "missing_positive_metric_branch_count": 0,
+          "signed_pairing_residual_mev": 2.0179419192650826e-12,
+          "stage": "A0_plus_A_direct"
+        },
+        {
+          "A_terms": [
+            "A0",
+            "A_exchange"
+          ],
+          "B_terms": [],
+          "classification": "real_negative",
+          "complex_count_minus": 0,
+          "complex_count_plus": 0,
+          "hessian_hermitian_residual_mev": 6.731800026102354e-16,
+          "hessian_inertia": [
+            2,
+            0,
+            862
+          ],
+          "hessian_min_eigenvalue_mev": -1.0426949099760883,
+          "lowest_selected_positive_metric_energy_mev": 1.6629646552795787,
+          "max_abs_imag_mev": 9.236590082792003e-14,
+          "max_raw_solver_residual": 2.4369210501757406e-12,
+          "missing_positive_metric_branch_count": 1,
+          "signed_pairing_residual_mev": 2.245315968126374e-12,
+          "stage": "A0_plus_A_exchange"
+        },
+        {
+          "A_terms": [
+            "A0",
+            "A_direct",
+            "A_exchange"
+          ],
+          "B_terms": [],
+          "classification": "stable",
+          "complex_count_minus": 0,
+          "complex_count_plus": 0,
+          "hessian_hermitian_residual_mev": 6.713178136967714e-16,
+          "hessian_inertia": [
+            0,
+            0,
+            864
+          ],
+          "hessian_min_eigenvalue_mev": 4.379844499822419,
+          "lowest_selected_positive_metric_energy_mev": 4.379844499822357,
+          "max_abs_imag_mev": 7.488540709154479e-14,
+          "max_raw_solver_residual": 2.3890247978755346e-12,
+          "missing_positive_metric_branch_count": 0,
+          "signed_pairing_residual_mev": 1.7621808263133396e-12,
+          "stage": "A_full_B0"
+        },
+        {
+          "A_terms": [
+            "A0",
+            "A_direct",
+            "A_exchange"
+          ],
+          "B_terms": [
+            "B_direct"
+          ],
+          "classification": "stable",
+          "complex_count_minus": 0,
+          "complex_count_plus": 0,
+          "hessian_hermitian_residual_mev": 6.713178136967714e-16,
+          "hessian_inertia": [
+            0,
+            0,
+            864
+          ],
+          "hessian_min_eigenvalue_mev": 0.2827029654791657,
+          "lowest_selected_positive_metric_energy_mev": 1.402028667383805,
+          "max_abs_imag_mev": 1.0225713229432732e-13,
+          "max_raw_solver_residual": 3.926333882220861e-12,
+          "missing_positive_metric_branch_count": 0,
+          "signed_pairing_residual_mev": 3.5527241372668746e-12,
+          "stage": "A_full_plus_B_direct"
+        },
+        {
+          "A_terms": [
+            "A0",
+            "A_direct",
+            "A_exchange"
+          ],
+          "B_terms": [
+            "B_exchange"
+          ],
+          "classification": "complex",
+          "complex_count_minus": 2,
+          "complex_count_plus": 2,
+          "hessian_hermitian_residual_mev": 6.713178136967714e-16,
+          "hessian_inertia": [
+            1,
+            0,
+            863
+          ],
+          "hessian_min_eigenvalue_mev": -2.7856999678486654,
+          "lowest_selected_positive_metric_energy_mev": 7.122685131902195,
+          "max_abs_imag_mev": 5.10238001771758,
+          "max_raw_solver_residual": 3.2303231424602723e-12,
+          "missing_positive_metric_branch_count": 1,
+          "signed_pairing_residual_mev": 2.899031294285634e-12,
+          "stage": "A_full_plus_B_exchange"
+        },
+        {
+          "A_terms": [
+            "A0",
+            "A_direct",
+            "A_exchange"
+          ],
+          "B_terms": [
+            "B_direct",
+            "B_exchange"
+          ],
+          "classification": "complex",
+          "complex_count_minus": 2,
+          "complex_count_plus": 2,
+          "hessian_hermitian_residual_mev": 6.713178136967714e-16,
+          "hessian_inertia": [
+            1,
+            0,
+            863
+          ],
+          "hessian_min_eigenvalue_mev": -0.9565711910980212,
+          "lowest_selected_positive_metric_energy_mev": 9.870534467896544,
+          "max_abs_imag_mev": 2.9707589496011186,
+          "max_raw_solver_residual": 4.181579007129307e-12,
+          "missing_positive_metric_branch_count": 1,
+          "signed_pairing_residual_mev": 4.604322247474417e-12,
+          "stage": "full"
+        }
+      ]
+    },
+    {
+      "artifact_npz": "/data/home/ziyuzhu/Mean_Field/results/RnG_hBN/tdhf_m2_pilot/paper_finite_cutoff_hypothesis_v1_20260724/m_term_ablation/track_p_m_ablation_qp0_m6.npz",
+      "pair_count": 432,
+      "q_shift": [
+        0,
+        -6
+      ],
+      "stages": [
+        {
+          "A_terms": [
+            "A0"
+          ],
+          "B_terms": [],
+          "classification": "stable",
+          "complex_count_minus": 0,
+          "complex_count_plus": 0,
+          "hessian_hermitian_residual_mev": 0.0,
+          "hessian_inertia": [
+            0,
+            0,
+            864
+          ],
+          "hessian_min_eigenvalue_mev": 18.921961279022042,
+          "lowest_selected_positive_metric_energy_mev": 18.921961279022042,
+          "max_abs_imag_mev": 0.0,
+          "max_raw_solver_residual": 0.0,
+          "missing_positive_metric_branch_count": 0,
+          "signed_pairing_residual_mev": 0.0,
+          "stage": "A0_only"
+        },
+        {
+          "A_terms": [
+            "A0",
+            "A_direct"
+          ],
+          "B_terms": [],
+          "classification": "stable",
+          "complex_count_minus": 0,
+          "complex_count_plus": 0,
+          "hessian_hermitian_residual_mev": 2.237726045655905e-16,
+          "hessian_inertia": [
+            0,
+            0,
+            864
+          ],
+          "hessian_min_eigenvalue_mev": 19.018724904300015,
+          "lowest_selected_positive_metric_energy_mev": 19.018725364907866,
+          "max_abs_imag_mev": 9.819634877623085e-14,
+          "max_raw_solver_residual": 1.6362695403270024e-12,
+          "missing_positive_metric_branch_count": 0,
+          "signed_pairing_residual_mev": 1.819780195136234e-12,
+          "stage": "A0_plus_A_direct"
+        },
+        {
+          "A_terms": [
+            "A0",
+            "A_exchange"
+          ],
+          "B_terms": [],
+          "classification": "real_negative",
+          "complex_count_minus": 0,
+          "complex_count_plus": 0,
+          "hessian_hermitian_residual_mev": 5.551115123125783e-16,
+          "hessian_inertia": [
+            2,
+            0,
+            862
+          ],
+          "hessian_min_eigenvalue_mev": -1.0278237955660963,
+          "lowest_selected_positive_metric_energy_mev": 1.6588435311839285,
+          "max_abs_imag_mev": 7.86420822074971e-14,
+          "max_raw_solver_residual": 1.6496870811977276e-12,
+          "missing_positive_metric_branch_count": 1,
+          "signed_pairing_residual_mev": 1.506352217085666e-12,
+          "stage": "A0_plus_A_exchange"
+        },
+        {
+          "A_terms": [
+            "A0",
+            "A_direct",
+            "A_exchange"
+          ],
+          "B_terms": [],
+          "classification": "stable",
+          "complex_count_minus": 0,
+          "complex_count_plus": 0,
+          "hessian_hermitian_residual_mev": 7.108895957933346e-16,
+          "hessian_inertia": [
+            0,
+            0,
+            864
+          ],
+          "hessian_min_eigenvalue_mev": 4.390966237651206,
+          "lowest_selected_positive_metric_energy_mev": 4.390966237651016,
+          "max_abs_imag_mev": 1.1011797853665258e-13,
+          "max_raw_solver_residual": 2.0477312076791434e-12,
+          "missing_positive_metric_branch_count": 0,
+          "signed_pairing_residual_mev": 2.5864057381772445e-12,
+          "stage": "A_full_B0"
+        },
+        {
+          "A_terms": [
+            "A0",
+            "A_direct",
+            "A_exchange"
+          ],
+          "B_terms": [
+            "B_direct"
+          ],
+          "classification": "stable",
+          "complex_count_minus": 0,
+          "complex_count_plus": 0,
+          "hessian_hermitian_residual_mev": 7.108895957933346e-16,
+          "hessian_inertia": [
+            0,
+            0,
+            864
+          ],
+          "hessian_min_eigenvalue_mev": 0.30785300634256185,
+          "lowest_selected_positive_metric_energy_mev": 1.4628141922661915,
+          "max_abs_imag_mev": 1.0560875317976152e-13,
+          "max_raw_solver_residual": 3.9274629026072405e-12,
+          "missing_positive_metric_branch_count": 0,
+          "signed_pairing_residual_mev": 3.211660214420871e-12,
+          "stage": "A_full_plus_B_direct"
+        },
+        {
+          "A_terms": [
+            "A0",
+            "A_direct",
+            "A_exchange"
+          ],
+          "B_terms": [
+            "B_exchange"
+          ],
+          "classification": "complex",
+          "complex_count_minus": 2,
+          "complex_count_plus": 2,
+          "hessian_hermitian_residual_mev": 7.108895957933346e-16,
+          "hessian_inertia": [
+            1,
+            0,
+            863
+          ],
+          "hessian_min_eigenvalue_mev": -2.7894785852870765,
+          "lowest_selected_positive_metric_energy_mev": 7.016737636555888,
+          "max_abs_imag_mev": 5.131136148521098,
+          "max_raw_solver_residual": 5.091068811453395e-12,
+          "missing_positive_metric_branch_count": 1,
+          "signed_pairing_residual_mev": 3.3822058544785473e-12,
+          "stage": "A_full_plus_B_exchange"
+        },
+        {
+          "A_terms": [
+            "A0",
+            "A_direct",
+            "A_exchange"
+          ],
+          "B_terms": [
+            "B_direct",
+            "B_exchange"
+          ],
+          "classification": "complex",
+          "complex_count_minus": 2,
+          "complex_count_plus": 2,
+          "hessian_hermitian_residual_mev": 7.108895957933346e-16,
+          "hessian_inertia": [
+            1,
+            0,
+            863
+          ],
+          "hessian_min_eigenvalue_mev": -0.9519446076935196,
+          "lowest_selected_positive_metric_energy_mev": 9.830785497877475,
+          "max_abs_imag_mev": 2.966798898838895,
+          "max_raw_solver_residual": 4.097740336138273e-12,
+          "missing_positive_metric_branch_count": 1,
+          "signed_pairing_residual_mev": 3.325842994242643e-12,
+          "stage": "full"
+        }
+      ]
+    }
+  ],
+  "source_closure": {
+    "closure_tolerance_mev": 0.001,
+    "h0_basis_residual_mev": 0.0,
+    "hamiltonian_closure_mev": 2.5121479338940403e-15,
+    "hf_interaction_convention": "fixed_g_torus_single_representative_v1",
+    "physical_shift_policy": "fixed_abs_g_shell_v1",
+    "projector_commutator_mev": 5.719357045741447e-06,
+    "remote_h0_policy": "actual_node_ws_c3_fixed_copy_average_v1",
+    "stationarity_tolerance_mev": 0.001
+  },
+  "status": "pass",
+  "track": "paper_finite_cutoff_hypothesis_v1"
+}
