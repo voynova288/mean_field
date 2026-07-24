@@ -146,11 +146,14 @@ def _validated_single_representative_finite_q_tangent(
     if tangent.role not in ("ph", "hp"):
         raise ValueError(f"tangent role must be 'ph' or 'hp', got {tangent.role!r}")
     blocks = np.asarray(tangent.blocks, dtype=np.complex128)
-    expected_shape = (run.basis_data.nt, run.basis_data.nt, run.basis_data.nk)
-    if blocks.shape != expected_shape:
+    expected_prefix = (run.basis_data.nt, run.basis_data.nt, run.basis_data.nk)
+    if blocks.ndim not in (3, 4) or blocks.shape[:3] != expected_prefix:
         raise ValueError(
-            f"finite-q tangent blocks must have shape {expected_shape}, got {blocks.shape}"
+            "finite-q tangent blocks must have shape "
+            f"{expected_prefix} or {expected_prefix}+(n_rhs,), got {blocks.shape}"
         )
+    if blocks.ndim == 4 and blocks.shape[3] <= 0:
+        raise ValueError("finite-q tangent batch must contain at least one RHS")
     if not np.all(np.isfinite(blocks)):
         raise ValueError("finite-q tangent blocks must be finite")
     target_k = _exact_integer_vector(tangent.target_k, name="target_k")
@@ -210,6 +213,9 @@ def _single_representative_finite_q_response_components(
 
     nk = int(run.basis_data.nk)
     nt = int(run.basis_data.nt)
+    squeeze_rhs = blocks.ndim == 3
+    batched_blocks = blocks[..., None] if squeeze_rhs else blocks
+    n_rhs = int(batched_blocks.shape[3])
     overlap_by_shift = {
         tuple(int(value) for value in key): np.asarray(data, dtype=np.complex128)
         for key, data in run.overlap_blocks.layer_overlaps.items()
@@ -226,10 +232,13 @@ def _single_representative_finite_q_response_components(
         minus_k[index], _ = _shift_k_index_with_wrap(
             index, (-q_shift[0], -q_shift[1]), mesh_shape
         )
-    hartree = np.zeros((nt, nt, nk), dtype=np.complex128)
+    hartree = np.zeros((nt, nt, nk, n_rhs), dtype=np.complex128)
     fock = np.zeros_like(hartree)
     active_sources = np.nonzero(
-        np.max(np.abs(blocks), axis=(0, 1)) > 0.0
+        np.any(
+            np.max(np.abs(batched_blocks), axis=(0, 1)) > 0.0,
+            axis=1,
+        )
     )[0]
     scale = float(beta) * float(run.state.v0) / float(nk)
     missing_overlaps: set[tuple[int, int]] = set()
@@ -269,8 +278,8 @@ def _single_representative_finite_q_response_components(
                 missing_overlaps.add(input_key)
                 continue
             trace = np.einsum(
-                "ab,mba->m",
-                blocks[:, :, source_base],
+                "abr,mba->mr",
+                batched_blocks[:, :, source_base, :],
                 np.conj(
                     input_overlap[
                         :, :, input_axis1_k, :, input_axis0_k
@@ -303,8 +312,8 @@ def _single_representative_finite_q_response_components(
             kernel = np.asarray(
                 output_kernel[output_axis0_k, output_axis1_k], dtype=float
             )
-            hartree[:, :, target_base] += scale * np.einsum(
-                "lm,lab,m->ab",
+            hartree[:, :, target_base, :] += scale * np.einsum(
+                "lm,lab,mr->abr",
                 kernel,
                 out_form,
                 source_trace,
@@ -353,12 +362,12 @@ def _single_representative_finite_q_response_components(
                 kernel = np.asarray(
                     left_kernel[output_axis0_k, input_axis1_k], dtype=float
                 )
-                fock[:, :, target_base] -= scale * np.einsum(
-                    "lm,lab,mcd,db->ac",
+                fock[:, :, target_base, :] -= scale * np.einsum(
+                    "lm,lab,mcd,dbr->acr",
                     kernel,
                     left_form,
                     np.conj(right_form),
-                    blocks[:, :, source_base],
+                    batched_blocks[:, :, source_base, :],
                     optimize=True,
                 )
     if missing_overlaps or missing_kernels:
@@ -368,6 +377,8 @@ def _single_representative_finite_q_response_components(
             f"overlap_shifts={sorted(missing_overlaps)[:20]}, "
             f"kernel_shifts={sorted(missing_kernels)[:20]}"
         )
+    if squeeze_rhs:
+        return hartree[..., 0], fock[..., 0]
     return hartree, fock
 
 

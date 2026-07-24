@@ -1392,15 +1392,16 @@ def test_rlg_hbn_tdhf_single_representative_signed_nonzero_q_uses_independent_pa
             np.conj(orbitals.eigenvectors[:, p_local, minus_indices[h_k]]),
             orbitals.eigenvectors[:, h_local, h_k],
         )
+        hp_tangent = RLGhBNFiniteQDensityTangent(
+            q_shift=(1, 0),
+            target_k=minus_indices,
+            source_k=base_k,
+            blocks=hp_blocks,
+            role="hp",
+        )
         hp_response = apply_rlg_hbn_hf_single_representative_finite_q_response(
             run,
-            RLGhBNFiniteQDensityTangent(
-                q_shift=(1, 0),
-                target_k=minus_indices,
-                source_k=base_k,
-                blocks=hp_blocks,
-                role="hp",
-            ),
+            hp_tangent,
             require_converged=False,
             require_provenance=True,
         )
@@ -1416,15 +1417,64 @@ def test_rlg_hbn_tdhf_single_representative_signed_nonzero_q_uses_independent_pa
             rtol=1.0e-11,
             atol=1.0e-11,
         )
-        return ph_tangent, hp_blocks
+        return ph_tangent, hp_tangent
 
     wrapped_column = next(
         index
         for index, pair in enumerate(pairs)
         if orbitals.decode_global_index(pair.hole)[1] // ny == nx - 1
     )
-    ph_tangent, hp_blocks = response_parity_for_column(0)
-    response_parity_for_column(wrapped_column)
+    ph_tangent, hp_tangent = response_parity_for_column(0)
+    wrapped_ph_tangent, wrapped_hp_tangent = response_parity_for_column(
+        wrapped_column
+    )
+    batched_ph = apply_rlg_hbn_hf_single_representative_finite_q_response(
+        run,
+        replace(
+            ph_tangent,
+            blocks=np.stack(
+                [ph_tangent.blocks, wrapped_ph_tangent.blocks], axis=3
+            ),
+        ),
+        require_converged=False,
+        require_provenance=True,
+    )
+    batched_hp = apply_rlg_hbn_hf_single_representative_finite_q_response(
+        run,
+        replace(
+            hp_tangent,
+            blocks=np.stack(
+                [hp_tangent.blocks, wrapped_hp_tangent.blocks], axis=3
+            ),
+        ),
+        require_converged=False,
+        require_provenance=True,
+    )
+    for rhs, column in enumerate((0, wrapped_column)):
+        np.testing.assert_allclose(
+            projected_column(batched_ph.hartree[..., rhs]),
+            plus_terms["A_direct"][:, column],
+            rtol=1.0e-11,
+            atol=1.0e-11,
+        )
+        np.testing.assert_allclose(
+            projected_column(batched_ph.fock[..., rhs]),
+            plus_terms["A_exchange"][:, column],
+            rtol=1.0e-11,
+            atol=1.0e-11,
+        )
+        np.testing.assert_allclose(
+            projected_column(batched_hp.hartree[..., rhs]),
+            plus_terms["B_direct"][:, column],
+            rtol=1.0e-11,
+            atol=1.0e-11,
+        )
+        np.testing.assert_allclose(
+            projected_column(batched_hp.fock[..., rhs]),
+            plus_terms["B_exchange"][:, column],
+            rtol=1.0e-11,
+            atol=1.0e-11,
+        )
 
     with pytest.raises(ValueError, match="density axis-1"):
         apply_rlg_hbn_hf_single_representative_finite_q_response(
@@ -1440,7 +1490,7 @@ def test_rlg_hbn_tdhf_single_representative_signed_nonzero_q_uses_independent_pa
                 q_shift=(1, 0),
                 target_k=base_k,
                 source_k=base_k,
-                blocks=hp_blocks,
+                blocks=hp_tangent.blocks,
                 role="hp",
             ),
             require_converged=False,
