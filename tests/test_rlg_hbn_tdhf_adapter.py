@@ -70,6 +70,7 @@ from mean_field.systems.RnG_hBN import (
     load_or_build_projected_basis,
     load_projected_basis_cache,
     mbz_hexagon_vertices_nm_inv,
+    project_rlg_hbn_hf_single_representative_finite_q_response,
     required_rlg_hbn_tdhf_finite_q_overlap_shifts,
     rlg_hbn_flavor_occupation_counts_for_init_mode,
     rlg_hbn_hf_run_to_hf_run_result,
@@ -1450,6 +1451,125 @@ def test_rlg_hbn_tdhf_single_representative_signed_nonzero_q_uses_independent_pa
         require_converged=False,
         require_provenance=True,
     )
+    output_bra = np.column_stack(
+        [
+            orbitals.eigenvectors[
+                :, orbitals.decode_global_index(pair.particle)[0],
+                orbitals.decode_global_index(pair.particle)[1],
+            ]
+            for pair in pairs
+        ]
+    )
+    output_ket = np.column_stack(
+        [
+            orbitals.eigenvectors[
+                :, orbitals.decode_global_index(pair.hole)[0],
+                orbitals.decode_global_index(pair.hole)[1],
+            ]
+            for pair in pairs
+        ]
+    )
+    output_base_k = np.asarray(
+        [orbitals.decode_global_index(pair.hole)[1] for pair in pairs],
+        dtype=int,
+    )
+    projected_ph = project_rlg_hbn_hf_single_representative_finite_q_response(
+        run,
+        replace(
+            ph_tangent,
+            blocks=np.stack(
+                [ph_tangent.blocks, wrapped_ph_tangent.blocks], axis=3
+            ),
+        ),
+        output_bra=output_bra,
+        output_ket=output_ket,
+        output_base_k=output_base_k,
+        require_converged=False,
+        require_provenance=True,
+    )
+    projected_hp = project_rlg_hbn_hf_single_representative_finite_q_response(
+        run,
+        replace(
+            hp_tangent,
+            blocks=np.stack(
+                [hp_tangent.blocks, wrapped_hp_tangent.blocks], axis=3
+            ),
+        ),
+        output_bra=output_bra,
+        output_ket=output_ket,
+        output_base_k=output_base_k,
+        require_converged=False,
+        require_provenance=True,
+    )
+    unbatched_projected = (
+        project_rlg_hbn_hf_single_representative_finite_q_response(
+            run,
+            ph_tangent,
+            output_bra=output_bra,
+            output_ket=output_ket,
+            output_base_k=output_base_k,
+            require_converged=False,
+            require_provenance=True,
+        )
+    )
+    assert unbatched_projected.total.shape == (len(pairs),)
+
+    rng = np.random.default_rng(71)
+    dense_blocks = rng.normal(
+        size=ph_tangent.blocks.shape + (3,)
+    ) + 1.0j * rng.normal(size=ph_tangent.blocks.shape + (3,))
+    dense_tangent = replace(ph_tangent, blocks=dense_blocks)
+    dense_full = apply_rlg_hbn_hf_single_representative_finite_q_response(
+        run,
+        dense_tangent,
+        require_converged=False,
+        require_provenance=True,
+    )
+    dense_projected = (
+        project_rlg_hbn_hf_single_representative_finite_q_response(
+            run,
+            dense_tangent,
+            output_bra=output_bra,
+            output_ket=output_ket,
+            output_base_k=output_base_k,
+            require_converged=False,
+            require_provenance=True,
+        )
+    )
+    for rhs in range(3):
+        np.testing.assert_allclose(
+            dense_projected.hartree[:, rhs],
+            projected_column(dense_full.hartree[..., rhs]),
+            rtol=1.0e-11,
+            atol=1.0e-11,
+        )
+        np.testing.assert_allclose(
+            dense_projected.fock[:, rhs],
+            projected_column(dense_full.fock[..., rhs]),
+            rtol=1.0e-11,
+            atol=1.0e-11,
+        )
+    with pytest.raises(ValueError, match="state/basis v0 mismatch"):
+        project_rlg_hbn_hf_single_representative_finite_q_response(
+            replace(run, state=replace(run.state, v0=run.state.v0 + 1.0)),
+            ph_tangent,
+            output_bra=output_bra,
+            output_ket=output_ket,
+            output_base_k=output_base_k,
+            require_converged=False,
+            require_provenance=True,
+        )
+    with pytest.raises(ValueError, match="output_bra"):
+        project_rlg_hbn_hf_single_representative_finite_q_response(
+            run,
+            ph_tangent,
+            output_bra=output_bra[:-1],
+            output_ket=output_ket,
+            output_base_k=output_base_k,
+            require_converged=False,
+            require_provenance=True,
+        )
+
     for rhs, column in enumerate((0, wrapped_column)):
         np.testing.assert_allclose(
             projected_column(batched_ph.hartree[..., rhs]),
@@ -1471,6 +1591,30 @@ def test_rlg_hbn_tdhf_single_representative_signed_nonzero_q_uses_independent_pa
         )
         np.testing.assert_allclose(
             projected_column(batched_hp.fock[..., rhs]),
+            plus_terms["B_exchange"][:, column],
+            rtol=1.0e-11,
+            atol=1.0e-11,
+        )
+        np.testing.assert_allclose(
+            projected_ph.hartree[:, rhs],
+            plus_terms["A_direct"][:, column],
+            rtol=1.0e-11,
+            atol=1.0e-11,
+        )
+        np.testing.assert_allclose(
+            projected_ph.fock[:, rhs],
+            plus_terms["A_exchange"][:, column],
+            rtol=1.0e-11,
+            atol=1.0e-11,
+        )
+        np.testing.assert_allclose(
+            projected_hp.hartree[:, rhs],
+            plus_terms["B_direct"][:, column],
+            rtol=1.0e-11,
+            atol=1.0e-11,
+        )
+        np.testing.assert_allclose(
+            projected_hp.fock[:, rhs],
             plus_terms["B_exchange"][:, column],
             rtol=1.0e-11,
             atol=1.0e-11,
