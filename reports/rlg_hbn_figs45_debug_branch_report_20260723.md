@@ -96,12 +96,45 @@ full                         -0.96 to -0.81          complex, max |Im| 2.75--2.9
 
 `A_exchange` alone creates real static-negative directions, but `A_direct` restabilizes the full A block. The final exact-M complex quartet is driven by `B_exchange`; `B_direct` partially restabilizes it but does not remove the instability. This separates a negative static direction from the Krein/dynamical complex instability rather than treating every paper-white point as a complex eigenvalue by definition.
 
+## 1.2 Generic finite-q shared-HF response and finite-difference gate
+
+Track P now has a link-resolved stored-density response API in which density axis 0/1 momentum fibers, raw signed q, torus q, physical G shell, and output fibers are explicit. The response returns Hartree and Fock components separately. A projected action performs the same contraction without materializing every `nt x nt` output block.
+
+Actual-12x12 validation against the independently maintained D12/D19 term builder passed:
+
+```text
+S1 sampled q=(1,0),(5,5),(-6,0), both signed sectors
+max component/column residual               6.00e-16 meV
+
+S2 every one of 432 columns, both signed sectors
+q=(1,0):  A_direct/A_exchange/B_direct/B_exchange
+max residual                               5.80e-16 meV
+q=(-6,0), with raw partner q=(+6,0)
+max residual                               5.55e-16 meV
+```
+
+This checks wrapped source columns, fixed-node columns, generic q, wrap-heavy q, and exact M without reconstructing `-q` from the negative branch of `L(q)`.
+
+A separate scalar-energy finite-difference gate was then performed at generic `q=(1,0)`. The density follows an exact unitary-projector path; the scalar energy includes the q=0 diagonal change and independently contracted q/-q off-diagonal sectors. Four preregistered five-point ladders were compared with `2 v^dagger H_stat v / Nk`:
+
+```text
+direction       target (meV/cell)   finest FD residual
+X only             1.22152795            +2.07e-8
+Y only             1.41176327            +2.76e-8
+X+Y                2.63329122            -1.08e-8
+X+iY               2.63329122            -1.08e-8
+max |Im E|                               1.4e-17 meV/cell
+```
+
+Thus the generic-q Track P response is now both termwise and scalar-curvature validated. It has **not** yet been promoted as a complete all-q shared production truth because the exact-M physical curvature gate remains unresolved: on the even mesh, raw `q=(-6,0)` and `-q=(+6,0)` have identical torus endpoints but distinct repeated-zone wraps. A physical density tensor cannot distinguish those raw labels without an explicit sewing/representative prescription. Averaging the two responses would be a forbidden post-assembly repair. Until that branch prescription is derived or supplied by the authors, the exact-M static negative eigenvector is a validated signed-regulator result, not yet a uniquely lifted unitary-projector curvature.
+
 Auditable aggregate data committed with the report:
 
 ```text
 reports/data/rlg_hbn_figs45_track_p_intraflavor_fullmesh_144q_20260724.json
 reports/data/rlg_hbn_figs45_track_p_flavorflip_fullmesh_144q_20260724.json
 reports/data/rlg_hbn_figs45_track_p_m_term_ablation_20260724.json
+reports/data/rlg_hbn_track_p_finite_q_response_and_fd_validation_20260724.json
 ```
 
 ## 2. Earlier typed-quotient comparison figure

@@ -1,0 +1,247 @@
+{
+  "all_column_response_validation": {
+    "max_residual_mev": 5.79553433516819e-16,
+    "q_rows": [
+      {
+        "component_max_residual_mev": {
+          "A_direct": 8.601190673046073e-17,
+          "A_exchange": 5.79553433516819e-16,
+          "B_direct": 8.009840277583555e-17,
+          "B_exchange": 1.6711069443220836e-16
+        },
+        "max_residual_mev": 5.79553433516819e-16,
+        "minus_column_count": 432,
+        "minus_q_shift": [
+          -1,
+          0
+        ],
+        "plus_column_count": 432,
+        "q_shift": [
+          1,
+          0
+        ]
+      },
+      {
+        "component_max_residual_mev": {
+          "A_direct": 1.3092278833360675e-16,
+          "A_exchange": 5.551115123125783e-16,
+          "B_direct": 1.4488835837920476e-16,
+          "B_exchange": 1.4152622167509192e-16
+        },
+        "max_residual_mev": 5.551115123125783e-16,
+        "minus_column_count": 432,
+        "minus_q_shift": [
+          6,
+          0
+        ],
+        "plus_column_count": 432,
+        "q_shift": [
+          -6,
+          0
+        ]
+      }
+    ],
+    "scope": "all-column actual-12x12 q=(1,0) and exact-M HF response parity",
+    "slurm_job": 193584,
+    "stage": "S2",
+    "status": "pass",
+    "tolerance_mev": 2e-07
+  },
+  "code_commits": {
+    "batch_response": "9fc44e8",
+    "generic_response": "7be9f26",
+    "projected_response": "634567c"
+  },
+  "exact_M_unitary_curvature_status": "blocked: q=-6 and q=+6 are torus-equivalent but retain distinct raw repeated-zone wraps; a unique physical-density sewing/representative prescription is not yet defined",
+  "sampled_response_validation": {
+    "max_residual_mev": 6.004449063730082e-16,
+    "q_rows": [
+      {
+        "component_max_residual_mev": {
+          "A_direct": 1.5581641236221424e-16,
+          "A_exchange": 6.004449063730082e-16,
+          "B_direct": 1.559322466582485e-16,
+          "B_exchange": 1.559322466582485e-16
+        },
+        "max_residual_mev": 6.004449063730082e-16,
+        "minus_column_count": 3,
+        "minus_q_shift": [
+          -1,
+          0
+        ],
+        "plus_column_count": 3,
+        "q_shift": [
+          1,
+          0
+        ]
+      },
+      {
+        "component_max_residual_mev": {
+          "A_direct": 1.1857187100668868e-16,
+          "A_exchange": 5.661048867003677e-16,
+          "B_direct": 1.3877787807814457e-16,
+          "B_exchange": 2.304886039086918e-16
+        },
+        "max_residual_mev": 5.661048867003677e-16,
+        "minus_column_count": 3,
+        "minus_q_shift": [
+          -5,
+          -5
+        ],
+        "plus_column_count": 3,
+        "q_shift": [
+          5,
+          5
+        ]
+      },
+      {
+        "component_max_residual_mev": {
+          "A_direct": 2.0206364052201328e-16,
+          "A_exchange": 5.661048867003677e-16,
+          "B_direct": 1.389512421408389e-16,
+          "B_exchange": 1.5700924586837752e-16
+        },
+        "max_residual_mev": 5.661048867003677e-16,
+        "minus_column_count": 3,
+        "minus_q_shift": [
+          6,
+          0
+        ],
+        "plus_column_count": 3,
+        "q_shift": [
+          -6,
+          0
+        ]
+      }
+    ],
+    "scope": "sampled actual-12x12 generic finite-q HF response column parity",
+    "slurm_job": 193536,
+    "stage": "S1",
+    "status": "pass",
+    "tolerance_mev": 2e-07
+  },
+  "track": "paper_finite_cutoff_hypothesis_v1",
+  "unitary_curvature_fd": {
+    "column": 0,
+    "energy0_mev_per_cell": [
+      -547.091942705535,
+      4.170400334908874e-18
+    ],
+    "q_shift": [
+      1,
+      0
+    ],
+    "rows": [
+      {
+        "direction": "X_only",
+        "finest_residual_mev_per_cell": 2.073430138693766e-08,
+        "five_point_curvatures_mev_per_cell": [
+          1.2215273992547773,
+          1.2215279214918457,
+          1.2215279551242018,
+          1.2215279753036155
+        ],
+        "ladder_last_difference_mev_per_cell": 2.0179413695586845e-08,
+        "max_abs_energy_imag_mev_per_cell": 1.2414930749024483e-17,
+        "static_hessian_target_mev_per_cell": 1.221527954569314,
+        "steps": [
+          0.04,
+          0.02,
+          0.01,
+          0.005
+        ],
+        "x": [
+          1.0,
+          0.0
+        ],
+        "y": [
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "direction": "Y_only",
+        "finest_residual_mev_per_cell": 2.756432260220265e-08,
+        "five_point_curvatures_mev_per_cell": [
+          1.4117626250372457,
+          1.4117632282998707,
+          1.411763266219168,
+          1.4117632948303556
+        ],
+        "ladder_last_difference_mev_per_cell": 2.8611187641303104e-08,
+        "max_abs_energy_imag_mev_per_cell": 1.3917701728066815e-17,
+        "static_hessian_target_mev_per_cell": 1.411763267266033,
+        "steps": [
+          0.04,
+          0.02,
+          0.01,
+          0.005
+        ],
+        "x": [
+          0.0,
+          0.0
+        ],
+        "y": [
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "direction": "X_plus_Y",
+        "finest_residual_mev_per_cell": -1.081853140405542e-08,
+        "five_point_curvatures_mev_per_cell": [
+          2.633286435388034,
+          2.6332909246444083,
+          2.6332912059956466,
+          2.6332912110168154
+        ],
+        "ladder_last_difference_mev_per_cell": 5.021168814067778e-09,
+        "max_abs_energy_imag_mev_per_cell": 9.701653621103885e-18,
+        "static_hessian_target_mev_per_cell": 2.633291221835347,
+        "steps": [
+          0.04,
+          0.02,
+          0.01,
+          0.005
+        ],
+        "x": [
+          1.0,
+          0.0
+        ],
+        "y": [
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "direction": "X_plus_iY",
+        "finest_residual_mev_per_cell": -1.081853140405542e-08,
+        "five_point_curvatures_mev_per_cell": [
+          2.6332864331083763,
+          2.633290921612759,
+          2.6332912079851662,
+          2.6332912110168154
+        ],
+        "ladder_last_difference_mev_per_cell": 3.0316491539394974e-09,
+        "max_abs_energy_imag_mev_per_cell": 9.701652702014315e-18,
+        "static_hessian_target_mev_per_cell": 2.633291221835347,
+        "steps": [
+          0.04,
+          0.02,
+          0.01,
+          0.005
+        ],
+        "x": [
+          1.0,
+          0.0
+        ],
+        "y": [
+          0.0,
+          1.0
+        ]
+      }
+    ],
+    "scope": "generic-q unitary-projector scalar-energy curvature gate",
+    "slurm_job": 193596
+  }
+}
