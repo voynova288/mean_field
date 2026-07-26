@@ -51,9 +51,102 @@
     "batch_response": "9fc44e8",
     "generic_response": "7be9f26",
     "projected_response": "634567c",
+    "provider_projected_tdhf": "915f17e",
     "track_p_provider": "47ee79a"
   },
   "exact_M_unitary_curvature_status": "blocked: q=-6 and q=+6 are torus-equivalent but retain distinct raw repeated-zone wraps; a unique physical-density sewing/representative prescription is not yet defined",
+  "provider_projected_tdhf_validation": {
+    "built_missing_overlap_shift_count": 10,
+    "interpretation": "Track-P production A/B now consumes projected provider response. The retained direct D19 formulas are diagnostic oracles only. Exact M remains explicitly signed_raw_q_regulator_v1.",
+    "max_residual_mev": 1.421085471644579e-13,
+    "provider_fingerprint": "f0885cadbcc2ae6e86ea94ea8a595d389194e0180f2575ebdc5bb0825b604635",
+    "q_rows": [
+      {
+        "matrix_residuals_mev": {
+          "A_minus": 1.421085471644579e-13,
+          "A_plus": 1.136868381807133e-13,
+          "B_minus": 1.962615573354719e-16,
+          "B_plus": 2.2301825219878386e-16
+        },
+        "max_residual_mev": 1.421085471644579e-13,
+        "minus_q_shift": [
+          -1,
+          0
+        ],
+        "minus_term_residuals_mev": {
+          "A0": 0.0,
+          "A_direct": 7.410741937918043e-17,
+          "A_exchange": 4.965068306494546e-16,
+          "B_direct": 7.919159918457851e-17,
+          "B_exchange": 1.6711069443220836e-16
+        },
+        "pair_count": 432,
+        "plus_term_residuals_mev": {
+          "A0": 0.0,
+          "A_direct": 8.601190673046073e-17,
+          "A_exchange": 5.79553433516819e-16,
+          "B_direct": 8.009840277583555e-17,
+          "B_exchange": 1.6667795129466247e-16
+        },
+        "q_shift": [
+          1,
+          0
+        ],
+        "response_scope": "signed_raw_q_regulator_v1",
+        "structure": {
+          "a_hermitian": 5.635475559608569e-16,
+          "b_symmetric": 4.99872090646597e-16,
+          "ok": true,
+          "particle_hole_symmetry": 0.0,
+          "tolerance": 1e-08
+        }
+      },
+      {
+        "matrix_residuals_mev": {
+          "A_minus": 1.1368683783097325e-13,
+          "A_plus": 8.52651287364379e-14,
+          "B_minus": 1.9441289864255276e-16,
+          "B_plus": 1.9540102647498285e-16
+        },
+        "max_residual_mev": 1.1368683783097325e-13,
+        "minus_q_shift": [
+          6,
+          0
+        ],
+        "minus_term_residuals_mev": {
+          "A0": 0.0,
+          "A_direct": 1.3092278833360675e-16,
+          "A_exchange": 5.551115123125783e-16,
+          "B_direct": 1.2794688166302258e-16,
+          "B_exchange": 1.4152622167509192e-16
+        },
+        "pair_count": 432,
+        "plus_term_residuals_mev": {
+          "A0": 0.0,
+          "A_direct": 1.2068420898913493e-16,
+          "A_exchange": 5.551115123125783e-16,
+          "B_direct": 1.4488835837920476e-16,
+          "B_exchange": 1.4152622167509192e-16
+        },
+        "q_shift": [
+          -6,
+          0
+        ],
+        "response_scope": "signed_raw_q_regulator_v1",
+        "structure": {
+          "a_hermitian": 5.85874444175896e-16,
+          "b_symmetric": 3.645561729348053e-16,
+          "ok": true,
+          "particle_hole_symmetry": 0.0,
+          "tolerance": 1e-08
+        }
+      }
+    ],
+    "response_cache_fingerprint": "5b73d0de4601e1d04f36d95d4f7d1264402d90ae58f1c7a981098f12438317c5",
+    "scope": "provider-projected Track-P TDHF vs retained D19 formula oracle",
+    "slurm_job": 194510,
+    "status": "pass"
+  },
   "sampled_response_validation": {
     "max_residual_mev": 6.004449063730082e-16,
     "q_rows": [
