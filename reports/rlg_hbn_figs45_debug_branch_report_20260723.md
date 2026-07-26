@@ -420,7 +420,11 @@ results/RnG_hBN/tdhf_m2_pilot/a_v64_single_rep_hf_v1_192734/
 results/RnG_hBN/tdhf_m2_pilot/single_rep_source_gates_v1_20260723/
 ```
 
-## 11. Status
+## 11. Track C entry gate
+
+Track C has not been launched. The local evidence establishes that an integer C3-equivariant gauge exists on ordinary orbits, while the two nonzero C3-fixed torus sectors `(4,8)` and `(8,4)` require affine raw-G closure: the 19-point support expands to 27 points under `raw -> C3 raw - R`. But the proposed `c3_affine_ws_v1` functional is not yet fully specified locally: the previously referenced reduced affine/fixed-WS diagnostic is absent, and there is no derived rule binding the 27-point fixed support, ordinary 19-point support, remote-valence Fock, scalar energy, and finite-q ph/hp lifts into one provider. Inventing that rule or reusing the Track-P source would violate the Track P/C separation. Therefore no fresh Track-C HF/TDHF Slurm job is authorized until this provider and its fixed-sector provenance are explicitly derived or supplied.
+
+## 12. Status
 
 ```text
 full typed-quotient mesh:          structurally validated nonreproduction
@@ -431,6 +435,10 @@ Track P full 144-q meshes:        completed independently
 Track P white-mask recall:        35/45, zero false positives
 Track P stable RMSE (I/V/S):      0.559/0.130/0.050 meV
 Track P exact microscopic C3:     fail / regulator-level defect
-Track C affine+WS source:         not yet generated
+Track P shared provider/TDHF:     pass, all-column actual-mesh gate
+Track P generic unitary FD:       pass
+Track P canonical raw M FD:       pass; negative projector curvature
+signed +/-M unique scalar lift:   not established; branch defect retained
+Track C affine+WS source:         blocked on fixed-sector provider definition
 true Fig. S45 reproduction:       improved substantially, not yet established
 ```
