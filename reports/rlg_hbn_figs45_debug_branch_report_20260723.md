@@ -422,7 +422,9 @@ results/RnG_hBN/tdhf_m2_pilot/single_rep_source_gates_v1_20260723/
 
 ## 11. Track C entry gate
 
-Track C has not been launched. The local evidence establishes that an integer C3-equivariant gauge exists on ordinary orbits, while the two nonzero C3-fixed torus sectors `(4,8)` and `(8,4)` require affine raw-G closure: the 19-point support expands to 27 points under `raw -> C3 raw - R`. But the proposed `c3_affine_ws_v1` functional is not yet fully specified locally: the previously referenced reduced affine/fixed-WS diagnostic is absent, and there is no derived rule binding the 27-point fixed support, ordinary 19-point support, remote-valence Fock, scalar energy, and finite-q ph/hp lifts into one provider. Inventing that rule or reusing the Track-P source would violate the Track P/C separation. Therefore no fresh Track-C HF/TDHF Slurm job is authorized until this provider and its fixed-sector provenance are explicitly derived or supplied.
+Track C has not been launched. Commits `350ceff` and `652c04e` now establish the safe one-body prerequisite. For stored `k'=C3 k+R`, the valley-aware raw action is `G_raw -> C3 G_raw - eta R`. At `(4,8)` and `(8,4)`, closing the 19-point seed gives 27 points for each valley. The resulting transient fixed parents carry exact support/permutation provenance, and their Hamiltonians obey the explicit affine C3 unitary to below `7e-13 meV` with strict two-sided unitarity gates.
+
+This does **not** define `c3_affine_ws_v1`. Commit `c1d1ed5` records a stronger obstruction. At Gamma, any invariant raw-G support retaining `G=0` has cardinality `1 mod 3`; at either obstructed fixed sector, the affine action has no integer fixed label, so every invariant support has cardinality `0 mod 3`. Hence no constant-size, single-representative finite raw-G parent can be exactly C3 closed at all three fixed sectors under the current permutation representation. Fixed-only 27-point fibers change Hilbert dimension; nearest-27 everywhere cuts a Gamma C3 orbit (including all ties gives 31 points). A valid Track C must therefore specify a variable-rank scalar, a weighted/multi-representative boundary quotient with its pairing adjoint, a converged-cutoff limit, or another finite representation. The previously referenced reduced affine/fixed-WS diagnostic is absent and local evidence does not select among these choices. Inventing one or reusing Track P would violate Track P/C separation, so no fresh Track-C HF/TDHF Slurm job is authorized.
 
 ## 12. Status
 
@@ -439,6 +441,8 @@ Track P shared provider/TDHF:     pass, all-column actual-mesh gate
 Track P generic unitary FD:       pass
 Track P canonical raw M FD:       pass; negative projector curvature
 signed +/-M unique scalar lift:   not established; branch defect retained
-Track C affine+WS source:         blocked on fixed-sector provider definition
+Track C fixed affine geometry:   pass; exact 27-point parent covariance
+Track C constant-size raw parent: impossible under stated finite-support assumptions
+Track C affine+WS source:         blocked on regulator/scalar choice
 true Fig. S45 reproduction:       improved substantially, not yet established
 ```
