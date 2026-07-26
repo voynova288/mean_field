@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from ._hf_shared import *  # noqa: F401,F403
 from ._hf_reference import rlg_hbn_reference_density
+
+if TYPE_CHECKING:
+    from ._hf_interaction_provider import RLGhBNTrackPInteractionProvider
 
 @dataclass(frozen=True)
 class RLGhBNProjectedBasisData:
@@ -143,6 +148,8 @@ class RLGhBNHFInteractionProvenance:
     physical_shift_policy: str = ""
     basis_cache_key: str | None = None
     overlap_cache_key: str | None = None
+    provider_fingerprint: str = ""
+    provider_schema_version: int = 0
 
 
 @dataclass(frozen=True)
@@ -151,6 +158,7 @@ class RLGhBNHartreeFockRun(HartreeFockRun):
     overlap_blocks: RLGhBNLayerOverlapBlockSet
     basis_data: RLGhBNProjectedBasisData
     interaction_provenance: RLGhBNHFInteractionProvenance | None = None
+    track_p_provider: RLGhBNTrackPInteractionProvider | None = None
 
 
 @dataclass(frozen=True)

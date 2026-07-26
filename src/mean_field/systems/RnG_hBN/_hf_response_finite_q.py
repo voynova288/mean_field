@@ -25,6 +25,7 @@ from ._hf_interaction_path import (
     build_rlg_hbn_interaction_components,
 )
 from ._hf_types import RLGhBNHartreeFockRun
+from ._hf_interaction_provider import RLGhBNTrackPInteractionProvider
 from ._finite_q_geometry import (
     _mesh_shape_from_k_grid_frac,
     _shift_k_index_with_wrap,
@@ -662,6 +663,33 @@ def validate_rlg_hbn_hf_single_representative_provenance(
     )
     resolved_beta = float(provenance.beta) if beta is None else float(beta)
     mismatches: dict[str, object] = {}
+    provider = run.track_p_provider
+    if not isinstance(provider, RLGhBNTrackPInteractionProvider):
+        mismatches["track_p_provider"] = type(provider).__name__
+    else:
+        if provider.basis_data is not run.basis_data:
+            mismatches["provider_basis_identity"] = False
+        if provider.overlap_blocks is not run.overlap_blocks:
+            mismatches["provider_overlap_identity"] = False
+        if not np.isclose(
+            provider.beta, resolved_beta, rtol=0.0, atol=1.0e-15
+        ):
+            mismatches["provider_beta"] = provider.beta
+        if provenance.provider_schema_version not in (0, 1):
+            mismatches["provider_schema_version"] = (
+                provenance.provider_schema_version
+            )
+        if provenance.provider_schema_version == 1:
+            if not provenance.provider_fingerprint:
+                mismatches["provider_fingerprint"] = "blank"
+            elif provenance.provider_fingerprint != provider.fingerprint:
+                mismatches["provider_fingerprint"] = provider.fingerprint
+        elif (
+            provenance.provider_fingerprint
+            and provenance.provider_fingerprint != provider.fingerprint
+        ):
+            mismatches["provider_fingerprint"] = provider.fingerprint
+        provider.validate_state(run.state)
     if (
         provenance.convention
         != RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION
@@ -724,7 +752,28 @@ def validate_rlg_hbn_hf_single_representative_provenance(
         "source_provenance_validated": True,
         "beta": resolved_beta,
         "physical_shift_count": len(expected_shifts),
+        "provider_fingerprint": provider.fingerprint,
     }
+
+
+def _require_attached_track_p_provider(
+    run: RLGhBNHartreeFockRun,
+    *,
+    beta: float,
+) -> RLGhBNTrackPInteractionProvider:
+    provider = run.track_p_provider
+    if not isinstance(provider, RLGhBNTrackPInteractionProvider):
+        raise ValueError("Track-P response requires an attached provider")
+    if provider.basis_data is not run.basis_data:
+        raise ValueError("Track-P provider is bound to a different basis object")
+    if provider.overlap_blocks is not run.overlap_blocks:
+        raise ValueError("Track-P provider is stale for the run overlap object")
+    if not np.isclose(provider.beta, float(beta), rtol=0.0, atol=1.0e-15):
+        raise ValueError(
+            f"Track-P provider beta mismatch: {provider.beta} != {float(beta)}"
+        )
+    provider.validate_state(run.state)
+    return provider
 
 
 def validate_rlg_hbn_hf_single_representative_source_closure(
@@ -759,12 +808,11 @@ def validate_rlg_hbn_hf_single_representative_source_closure(
             )
         )
     )
-    components = build_rlg_hbn_interaction_components(
-        run.state.density,
-        run.overlap_blocks,
-        v0=run.state.v0,
+    provider = _require_attached_track_p_provider(
+        run,
         beta=float(provenance.beta),
     )
+    components = provider.scf_components(run.state.density)
     rebuilt = np.asarray(run.state.h0) + np.asarray(components.total)
     closure = float(
         np.max(np.abs(np.asarray(run.state.hamiltonian) - rebuilt))
@@ -1016,10 +1064,11 @@ def apply_rlg_hbn_hf_single_representative_finite_q_response(
             run,
             beta=resolved_beta,
         )
-    physical_shifts = tuple(
-        (int(value[0]), int(value[1]))
-        for value in run.overlap_blocks.shifts
+    provider = _require_attached_track_p_provider(
+        run,
+        beta=resolved_beta,
     )
+    physical_shifts = provider.physical_shifts
     hartree, fock = _single_representative_finite_q_response_components(
         run,
         blocks,
@@ -1043,6 +1092,7 @@ def apply_rlg_hbn_hf_single_representative_finite_q_response(
         ),
         "source_provenance_validated": bool(require_provenance),
         "response_scope": "generic_signed_q_dense_stored_density_derivative",
+        "response_cache_fingerprint": provider.response_cache_fingerprint,
         "q_shift_raw": [int(q_shift[0]), int(q_shift[1])],
         "q_shift_torus": [
             int(q_shift[0]) % int(mesh_shape[0]),
@@ -1057,6 +1107,7 @@ def apply_rlg_hbn_hf_single_representative_finite_q_response(
         "physical_shift_count": len(physical_shifts),
         "physical_shifts": [list(value) for value in physical_shifts],
         "beta": resolved_beta,
+        "provider_fingerprint": provider.fingerprint,
         "post_assembly_averaging": False,
     }
     return RLGhBNFiniteQResponse(
@@ -1139,10 +1190,11 @@ def project_rlg_hbn_hf_single_representative_finite_q_response(
             run,
             beta=resolved_beta,
         )
-    physical_shifts = tuple(
-        (int(value[0]), int(value[1]))
-        for value in run.overlap_blocks.shifts
+    provider = _require_attached_track_p_provider(
+        run,
+        beta=resolved_beta,
     )
+    physical_shifts = provider.physical_shifts
     hartree, fock = _single_representative_projected_finite_q_response_components(
         run,
         blocks,
@@ -1162,6 +1214,7 @@ def project_rlg_hbn_hf_single_representative_finite_q_response(
         ),
         "source_provenance_validated": bool(require_provenance),
         "response_scope": "generic_signed_q_projected_stored_density_derivative",
+        "response_cache_fingerprint": provider.response_cache_fingerprint,
         "q_shift_raw": [int(q_shift[0]), int(q_shift[1])],
         "q_shift_torus": [
             int(q_shift[0]) % int(mesh_shape[0]),
@@ -1174,6 +1227,7 @@ def project_rlg_hbn_hf_single_representative_finite_q_response(
         "output_count": int(base_k.size),
         "physical_shift_count": len(physical_shifts),
         "beta": resolved_beta,
+        "provider_fingerprint": provider.fingerprint,
         "post_assembly_averaging": False,
     }
     return RLGhBNFiniteQResponse(
@@ -1219,24 +1273,25 @@ def apply_rlg_hbn_hf_single_representative_response(
             run,
             beta=resolved_beta,
         )
-    components = build_rlg_hbn_interaction_components(
-        blocks,
-        run.overlap_blocks,
-        v0=run.state.v0,
+    provider = _require_attached_track_p_provider(
+        run,
         beta=resolved_beta,
     )
+    components = provider.tangent_components(blocks)
     provenance = {
         "hf_interaction_convention": (
             RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION
         ),
         "source_provenance_validated": bool(require_provenance),
         "response_scope": "q0_dense_stored_density_derivative",
+        "response_cache_fingerprint": provider.response_cache_fingerprint,
         "q_shift": [0, 0],
         "role": str(tangent.role),
         "target_k_count": int(target_k.size),
         "source_k_count": int(source_k.size),
         "physical_shift_count": len(run.overlap_blocks.shifts),
         "beta": resolved_beta,
+        "provider_fingerprint": provider.fingerprint,
         "generic_finite_q_matrix_api": (
             "build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs"
         ),

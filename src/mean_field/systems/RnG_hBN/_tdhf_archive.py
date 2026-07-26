@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from ._tdhf_shared import *  # noqa: F401,F403
 from ._tdhf_types import *  # noqa: F401,F403
+from ._hf_interaction_provider import build_rlg_hbn_track_p_interaction_provider
+from ._hf_interaction_path import (
+    RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION,
+)
 
 def load_rlg_hbn_tdhf_run_from_archive(
     archive_path: str | Path,
@@ -84,6 +88,46 @@ def load_rlg_hbn_tdhf_run_from_archive(
         raise ValueError(
             "HF archive interaction physical shifts do not match the restored overlap cache"
         )
+    track_p_provider = None
+    if interaction_provenance is not None:
+        if interaction_provenance.provider_schema_version not in (0, 1):
+            raise ValueError(
+                "Unsupported HF provider schema version "
+                f"{interaction_provenance.provider_schema_version}"
+            )
+        if interaction_provenance.provider_schema_version == 1:
+            if (
+                interaction_provenance.convention
+                != RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION
+                or interaction_provenance.quotient_enabled
+            ):
+                raise ValueError(
+                    "Provider schema 1 requires the nonquotient Track-P convention"
+                )
+            if not interaction_provenance.provider_fingerprint:
+                raise ValueError(
+                    "Provider-schema HF archive has a blank provider fingerprint"
+                )
+    if (
+        interaction_provenance is not None
+        and interaction_provenance.convention
+        == RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION
+        and not interaction_provenance.quotient_enabled
+    ):
+        track_p_provider = build_rlg_hbn_track_p_interaction_provider(
+            basis_data,
+            overlap_blocks,
+            beta=interaction_provenance.beta,
+        )
+        if (
+            interaction_provenance.provider_fingerprint
+            and interaction_provenance.provider_fingerprint
+            != track_p_provider.fingerprint
+        ):
+            raise ValueError(
+                "HF archive Track-P provider fingerprint does not match restored "
+                "basis/interaction data"
+            )
 
     return RLGhBNHartreeFockRun(
         state=state,
@@ -97,6 +141,7 @@ def load_rlg_hbn_tdhf_run_from_archive(
         overlap_blocks=overlap_blocks,
         basis_data=basis_data,
         interaction_provenance=interaction_provenance,
+        track_p_provider=track_p_provider,
     )
 
 
@@ -203,6 +248,17 @@ def _archive_interaction_provenance(
         ),
         basis_cache_key=str(basis_cache_key),
         overlap_cache_key=str(overlap_cache_key),
+        provider_fingerprint=_archive_string(
+            archive,
+            "hf_provider_fingerprint",
+        ),
+        provider_schema_version=int(
+            _archive_scalar_float(
+                archive,
+                "hf_provider_schema_version",
+                default=0.0,
+            )
+        ),
     )
 
 

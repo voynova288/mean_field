@@ -301,6 +301,30 @@ def _save_state_archive(
         raise ValueError(
             "Refusing to save an RLG/hBN HF archive without typed interaction provenance"
         )
+    if provenance is not None and int(provenance.provider_schema_version) not in (0, 1):
+        raise ValueError(
+            f"Unsupported HF provider schema version {provenance.provider_schema_version}"
+        )
+    if provenance is not None and int(provenance.provider_schema_version) == 1:
+        if provenance.convention != "fixed_g_torus_single_representative_v1":
+            raise ValueError("Provider schema 1 requires the Track-P convention")
+        if bool(provenance.quotient_enabled):
+            raise ValueError("Provider schema 1 cannot describe a quotient functional")
+        provider = getattr(run, "track_p_provider", None)
+        if provider is None:
+            raise ValueError(
+                "Refusing a provider-schema archive without an attached Track-P provider"
+            )
+        if provider.basis_data is not run.basis_data:
+            raise ValueError("Archive Track-P provider basis identity mismatch")
+        if provider.overlap_blocks is not run.overlap_blocks:
+            raise ValueError("Archive Track-P provider overlap identity mismatch")
+        provider.validate_state(run.state)
+        provider.validate_integrity(recompute_hashes=True)
+        if not provenance.provider_fingerprint:
+            raise ValueError("Provider-schema archive has a blank fingerprint")
+        if provenance.provider_fingerprint != provider.fingerprint:
+            raise ValueError("Archive Track-P provider fingerprint mismatch")
     payload = {
         "density": np.asarray(run.state.density, dtype=np.complex128),
         "hamiltonian": np.asarray(run.state.hamiltonian, dtype=np.complex128),
@@ -383,6 +407,13 @@ def _save_state_archive(
                 ),
                 "hf_physical_shift_policy": np.asarray(
                     str(provenance.physical_shift_policy)
+                ),
+                "hf_provider_fingerprint": np.asarray(
+                    str(provenance.provider_fingerprint)
+                ),
+                "hf_provider_schema_version": np.asarray(
+                    [int(provenance.provider_schema_version)],
+                    dtype=int,
                 ),
             }
         )

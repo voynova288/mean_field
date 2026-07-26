@@ -7,7 +7,12 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from mean_field.core.hf import ParticleHolePair, shift_wavefunction_grid, split_pair_indices_by_flavor_channel
+from mean_field.core.hf import (
+    ParticleHolePair,
+    compute_hf_energy,
+    shift_wavefunction_grid,
+    split_pair_indices_by_flavor_channel,
+)
 from mean_field.systems.RnG_hBN._hf_response_finite_q import (
     _validated_single_representative_finite_q_tangent,
 )
@@ -64,9 +69,11 @@ from mean_field.systems.RnG_hBN import (
     build_rlg_hbn_tdhf_q0_matrices_from_pairs,
     build_rlg_hbn_tdhf_q0_pairs,
     center_reciprocal_fractional_coordinates,
+    compute_rlg_hbn_oda_parameter,
     finite_q_shift_cartesian_nm_inv,
     initialize_rlg_hbn_density,
     interaction_shifts_for_cutoff,
+    build_rlg_hbn_track_p_interaction_provider,
     load_or_build_projected_basis,
     load_projected_basis_cache,
     mbz_hexagon_vertices_nm_inv,
@@ -77,6 +84,7 @@ from mean_field.systems.RnG_hBN import (
     rlg_hbn_reference_density,
     run_rlg_hbn_hartree_fock,
     rlg_hbn_tdhf_finite_q_mode_support,
+    validate_rlg_hbn_hf_single_representative_provenance,
     validate_rlg_hbn_hf_single_representative_source_closure,
     validate_rlg_hbn_tdhf_canonical_orbital_parity,
 )
@@ -182,6 +190,11 @@ def _typed_single_representative_tiny_run(
             **cache_blocks.fock_layer_coulomb,
         },
     )
+    provider = build_rlg_hbn_track_p_interaction_provider(
+        run.basis_data,
+        overlap_blocks,
+        beta=1.0,
+    )
     provenance = RLGhBNHFInteractionProvenance(
         convention=(
             RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION
@@ -201,11 +214,14 @@ def _typed_single_representative_tiny_run(
             ).view(np.uint8)
         ).hexdigest(),
         physical_shift_policy=RLG_HBN_HF_PHYSICAL_SHIFT_POLICY_VERSION,
+        provider_fingerprint=provider.fingerprint,
+        provider_schema_version=1,
     )
     return replace(
         run,
         overlap_blocks=overlap_blocks,
         interaction_provenance=provenance,
+        track_p_provider=provider,
     )
 
 
@@ -1134,6 +1150,114 @@ def test_rlg_hbn_hf_single_representative_source_closure_is_fail_closed() -> Non
         )
 
 
+def test_rlg_hbn_track_p_provider_wires_scf_oda_energy_and_fingerprint(
+    monkeypatch,
+) -> None:
+    run = _typed_single_representative_tiny_run()
+    provider = run.track_p_provider
+    assert provider is not None
+    provider.validate_state(run.state)
+    density = np.asarray(run.state.density, dtype=np.complex128)
+    expected = build_rlg_hbn_hf_interaction_hamiltonian(
+        density,
+        run.overlap_blocks,
+        v0=run.state.v0,
+    )
+    np.testing.assert_allclose(
+        provider.scf_hamiltonian(density), expected, rtol=1.0e-12, atol=1.0e-12
+    )
+    np.testing.assert_allclose(
+        provider.tangent_hamiltonian(density),
+        expected,
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )
+    expected_energy = compute_hf_energy(expected, run.state.h0, density)
+    assert provider.energy_functional(
+        expected, run.state.h0, density
+    ) == pytest.approx(expected_energy, abs=1.0e-14)
+    delta_density = 0.125 * density
+    assert provider.oda_parameter(
+        run.state, delta_density
+    ) == pytest.approx(
+        compute_rlg_hbn_oda_parameter(
+            run.state,
+            delta_density,
+            run.overlap_blocks,
+        ),
+        abs=1.0e-14,
+    )
+    problem = build_rlg_hbn_hf_problem(
+        run.state,
+        run.overlap_blocks,
+        track_p_provider=provider,
+    )
+    assert problem.kernel.interaction_builder.__self__ is provider
+    assert problem.kernel.energy_functional.__self__ is provider
+    assert problem.kernel.oda_parameterizer.__self__ is provider
+    provider.validate_integrity(recompute_hashes=True)
+    assert provider.with_overlap_blocks(run.overlap_blocks).fingerprint == provider.fingerprint
+    physical_key = provider.physical_shifts[0]
+    physical_overlap = run.overlap_blocks.layer_overlaps[physical_key]
+    assert not physical_overlap.flags.writeable
+    with pytest.raises(ValueError):
+        physical_overlap.flat[0] = physical_overlap.flat[0]
+    replaced_overlaps = dict(run.overlap_blocks.layer_overlaps)
+    replaced_blocks = replace(
+        run.overlap_blocks,
+        layer_overlaps=replaced_overlaps,
+    )
+    replaced_provider = build_rlg_hbn_track_p_interaction_provider(
+        run.basis_data,
+        replaced_blocks,
+    )
+    replaced_overlaps[physical_key] = np.array(
+        replaced_overlaps[physical_key], copy=True
+    )
+    with pytest.raises(ValueError, match="payload identity"):
+        replaced_provider.validate_integrity()
+    with pytest.raises(ValueError, match="payload identity"):
+        validate_rlg_hbn_hf_single_representative_provenance(
+            replace(
+                run,
+                overlap_blocks=replaced_blocks,
+                track_p_provider=replaced_provider,
+            )
+        )
+    changed_beta = build_rlg_hbn_track_p_interaction_provider(
+        run.basis_data,
+        run.overlap_blocks,
+        beta=0.5,
+    )
+    assert changed_beta.fingerprint != provider.fingerprint
+    assert run.interaction_provenance is not None
+    assert run.interaction_provenance.provider_fingerprint == provider.fingerprint
+    assert run.interaction_provenance.provider_schema_version == 1
+    with pytest.raises(ValueError, match="provider_fingerprint"):
+        validate_rlg_hbn_hf_single_representative_provenance(
+            replace(
+                run,
+                interaction_provenance=replace(
+                    run.interaction_provenance,
+                    provider_fingerprint="",
+                ),
+            )
+        )
+    with pytest.raises(ValueError, match="provider_schema_version"):
+        validate_rlg_hbn_hf_single_representative_provenance(
+            replace(
+                run,
+                interaction_provenance=replace(
+                    run.interaction_provenance,
+                    provider_schema_version=2,
+                ),
+            )
+        )
+    monkeypatch.setenv("MEAN_FIELD_RLG_HBN_ZERO_LITERAL_Q0_FOCK", "1")
+    with pytest.raises(ValueError, match="runtime q=0 Fock policy"):
+        provider.scf_hamiltonian(density)
+
+
 def test_rlg_hbn_hf_single_representative_q0_response_uses_source_kernel() -> None:
     run = _typed_single_representative_tiny_run()
     rng = np.random.default_rng(17)
@@ -1171,6 +1295,19 @@ def test_rlg_hbn_hf_single_representative_q0_response_uses_source_kernel() -> No
     np.testing.assert_allclose(generic.fock, response.fock, rtol=1.0e-12, atol=1.0e-12)
     np.testing.assert_allclose(generic.total, response.total, rtol=1.0e-12, atol=1.0e-12)
     assert generic.provenance["q_shift_raw"] == [0, 0]
+    assert generic.provenance["provider_fingerprint"] == run.track_p_provider.fingerprint
+    assert (
+        generic.provenance["response_cache_fingerprint"]
+        == run.track_p_provider.response_cache_fingerprint
+    )
+    with pytest.raises(ValueError, match="provider beta mismatch"):
+        apply_rlg_hbn_hf_single_representative_response(
+            run,
+            tangent,
+            beta=0.5,
+            require_converged=False,
+            require_provenance=False,
+        )
 
 
 def test_rlg_hbn_hf_finite_q_tangent_preserves_signed_even_mesh_m_aliases() -> None:
@@ -1652,12 +1789,22 @@ def test_rlg_hbn_tdhf_single_representative_signed_nonzero_q_uses_independent_pa
     assert removed_key in run.overlap_blocks.layer_overlaps
     incomplete_overlaps = dict(run.overlap_blocks.layer_overlaps)
     incomplete_overlaps.pop(removed_key)
+    incomplete_blocks = replace(
+        run.overlap_blocks,
+        layer_overlaps=incomplete_overlaps,
+    )
+    incomplete_provider = run.track_p_provider.with_overlap_blocks(
+        incomplete_blocks
+    )
+    assert incomplete_provider.fingerprint == run.track_p_provider.fingerprint
+    assert (
+        incomplete_provider.response_cache_fingerprint
+        != run.track_p_provider.response_cache_fingerprint
+    )
     incomplete_run = replace(
         run,
-        overlap_blocks=replace(
-            run.overlap_blocks,
-            layer_overlaps=incomplete_overlaps,
-        ),
+        overlap_blocks=incomplete_blocks,
+        track_p_provider=incomplete_provider,
     )
     with pytest.raises(ValueError, match="overlap_shifts"):
         apply_rlg_hbn_hf_single_representative_finite_q_response(

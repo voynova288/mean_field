@@ -55,6 +55,11 @@ from ._hf_response_finite_q import (
     validate_rlg_hbn_hf_single_representative_provenance,
     validate_rlg_hbn_hf_single_representative_source_closure,
 )
+from ._hf_interaction_provider import (
+    RLG_HBN_TRACK_P_PROVIDER_VERSION,
+    RLGhBNTrackPInteractionProvider,
+    build_rlg_hbn_track_p_interaction_provider,
+)
 from ._hf_interaction_path import (
     RLG_HBN_HF_PHYSICAL_SHIFT_POLICY_VERSION,
     RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION,
@@ -105,6 +110,8 @@ __all__ = [
     "RLG_HBN_HF_INTERACTION_CONVENTION_VERSION",
     "RLG_HBN_HF_PHYSICAL_SHIFT_POLICY_VERSION",
     "RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION",
+    "RLG_HBN_TRACK_P_PROVIDER_VERSION",
+    "RLGhBNTrackPInteractionProvider",
     "RLG_HBN_REMOTE_H0_POLICY_VERSION",
     "VALLEY_SEQUENCE",
     "active_band_indices_for_interaction",
@@ -125,6 +132,7 @@ __all__ = [
     "build_rlg_hbn_projected_basis_for_kvec",
     "build_rlg_hbn_remote_average_hamiltonian",
     "build_rlg_hbn_target_hamiltonian",
+    "build_rlg_hbn_track_p_interaction_provider",
     "calculate_layer_projected_overlap_between",
     "compute_hf_energy",
     "compute_rlg_hbn_oda_parameter",

@@ -8,6 +8,10 @@ from ._hf_types import *  # noqa: F401,F403
 from ._hf_basis import *  # noqa: F401,F403
 from ._hf_interaction_path import *  # noqa: F401,F403
 from ._hf_c3_quotient import *  # noqa: F401,F403
+from ._hf_interaction_provider import (
+    RLGhBNTrackPInteractionProvider,
+    build_rlg_hbn_track_p_interaction_provider,
+)
 from ._hf_shared import _rlg_hbn_zero_literal_q0_fock
 
 def compute_rlg_hbn_oda_parameter(
@@ -361,6 +365,7 @@ def build_rlg_hbn_hf_problem(
     *,
     beta: float = 1.0,
     c3_quotient_context: RLGhBNHFC3QuotientInteractionContext | None = None,
+    track_p_provider: RLGhBNTrackPInteractionProvider | None = None,
     initial_density: np.ndarray | None = None,
     step_callback: Callable[[RLGhBNHartreeFockState, HartreeFockStepResult], None] | None = None,
 ) -> HartreeFockProblem:
@@ -412,29 +417,55 @@ def build_rlg_hbn_hf_problem(
         )
 
     if c3_quotient_context is None:
-        interaction_builder = lambda density: build_rlg_hbn_hf_interaction_hamiltonian(
-            density,
-            overlap_blocks,
-            v0=state.v0,
-            beta=beta,
-        )
+        if track_p_provider is None:
+            interaction_builder = lambda density: build_rlg_hbn_hf_interaction_hamiltonian(
+                density,
+                overlap_blocks,
+                v0=state.v0,
+                beta=beta,
+            )
+            energy_functional = compute_hf_energy
+            oda_parameterizer = lambda state_obj, delta_density: compute_oda_parameter(
+                state_obj,  # type: ignore[arg-type]
+                delta_density,
+                interaction_builder=interaction_builder,
+            )
+        else:
+            if track_p_provider.overlap_blocks is not overlap_blocks:
+                raise ValueError(
+                    "Track-P provider was not built from the HF problem overlaps"
+                )
+            if not np.isclose(
+                track_p_provider.beta, float(beta), rtol=0.0, atol=1.0e-15
+            ):
+                raise ValueError("Track-P provider beta does not match HF problem")
+            track_p_provider.validate_state(state)
+            interaction_builder = track_p_provider.scf_hamiltonian
+            energy_functional = track_p_provider.energy_functional
+            oda_parameterizer = track_p_provider.oda_parameter
     else:
+        if track_p_provider is not None:
+            raise ValueError(
+                "Track-P provider cannot be mixed with a quotient HF context"
+            )
         interaction_builder = lambda density: build_rlg_hbn_hf_c3_quotient_interaction_components(
             density,
             c3_quotient_context,
             v0=state.v0,
             beta=beta,
         ).total
+        energy_functional = compute_hf_energy
+        oda_parameterizer = lambda state_obj, delta_density: compute_oda_parameter(
+            state_obj,  # type: ignore[arg-type]
+            delta_density,
+            interaction_builder=interaction_builder,
+        )
 
     kernel = HartreeFockKernel(
         interaction_builder=interaction_builder,
         density_builder=build_density,
-        energy_functional=compute_hf_energy,
-        oda_parameterizer=lambda state_obj, delta_density: compute_oda_parameter(
-            state_obj,  # type: ignore[arg-type]
-            delta_density,
-            interaction_builder=interaction_builder,
-        ),
+        energy_functional=energy_functional,
+        oda_parameterizer=oda_parameterizer,
         hamiltonian_postprocessor=_hermitize_blocks_inplace,
         density_postprocessor=_hermitize_blocks_inplace,
         step_callback=step_callback,  # type: ignore[arg-type]
@@ -508,6 +539,15 @@ def run_rlg_hbn_hartree_fock(
         )
     else:
         quotient_context = None
+    track_p_provider = (
+        None
+        if quotient_context is not None
+        else build_rlg_hbn_track_p_interaction_provider(
+            basis_data,
+            resolved_blocks,
+            beta=beta,
+        )
+    )
     state.diagnostics.update(
         {
             "hf_c3_quotient_interaction_enabled": float(quotient_context is not None),
@@ -524,6 +564,7 @@ def run_rlg_hbn_hartree_fock(
         resolved_blocks,
         beta=beta,
         c3_quotient_context=quotient_context,
+        track_p_provider=track_p_provider,
         initial_density=initial_density,
         step_callback=step_callback,
     )
@@ -566,6 +607,10 @@ def run_rlg_hbn_hartree_fock(
             ).hexdigest()
         ),
         physical_shift_policy=RLG_HBN_HF_PHYSICAL_SHIFT_POLICY_VERSION,
+        provider_fingerprint=(
+            "" if track_p_provider is None else track_p_provider.fingerprint
+        ),
+        provider_schema_version=(0 if track_p_provider is None else 1),
     )
     return RLGhBNHartreeFockRun(
         state=state,
@@ -579,6 +624,7 @@ def run_rlg_hbn_hartree_fock(
         overlap_blocks=resolved_blocks,
         basis_data=basis_data,
         interaction_provenance=interaction_provenance,
+        track_p_provider=track_p_provider,
     )
 
 

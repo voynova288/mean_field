@@ -130,7 +130,16 @@ def _run_with_overlap_keys(
     if not missing:
         return run, ()
     extra = build_rlg_hbn_layer_overlap_blocks(run.basis_data, shifts=missing)
-    return replace(run, overlap_blocks=_merge_overlap_blocks(run.overlap_blocks, extra)), missing
+    merged = _merge_overlap_blocks(run.overlap_blocks, extra)
+    provider = getattr(run, "track_p_provider", None)
+    completed_provider = (
+        None if provider is None else provider.with_overlap_blocks(merged)
+    )
+    return replace(
+        run,
+        overlap_blocks=merged,
+        track_p_provider=completed_provider,
+    ), missing
 
 
 def _interaction_terms(terms: TDHFFiniteQTerms) -> dict[str, np.ndarray]:
