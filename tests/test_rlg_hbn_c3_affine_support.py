@@ -9,6 +9,7 @@ from mean_field.systems.RnG_hBN import RLGhBNModel
 from mean_field.systems.RnG_hBN._hf_basis import (
     RLG_HBN_C3_AFFINE_SUPPORT_VERSION,
     _c3_affine_raw_pair,
+    _c3_reciprocal_shift,
     build_rlg_hbn_c3_affine_fixed_supports,
     build_rlg_hbn_c3_affine_fixed_parent,
     build_rlg_hbn_c3_affine_support_unitary,
@@ -90,6 +91,58 @@ def test_rlg_hbn_c3_affine_fixed_support_closes_shell4_to_27_points() -> None:
         plus = set(by_key[(pair, 1)].support_g_indices)
         minus = set(by_key[(pair, -1)].support_g_indices)
         assert minus == {(-value[0], -value[1]) for value in plus}
+
+
+def _permutation_cycle_lengths(permutation: tuple[int, ...]) -> list[int]:
+    seen: set[int] = set()
+    lengths: list[int] = []
+    for start in range(len(permutation)):
+        if start in seen:
+            continue
+        current = start
+        length = 0
+        while current not in seen:
+            seen.add(current)
+            length += 1
+            current = int(permutation[current])
+        lengths.append(length)
+    return sorted(lengths)
+
+
+def test_rlg_hbn_c3_affine_constant_size_single_support_is_obstructed() -> None:
+    c3 = np.asarray([[0, -1], [1, -1]], dtype=int)
+    identity = np.eye(2, dtype=int)
+    np.testing.assert_array_equal(c3 @ c3 @ c3, identity)
+    np.testing.assert_array_equal(identity + c3 + c3 @ c3, np.zeros((2, 2), dtype=int))
+    fixed_operator = identity - c3
+    assert int(round(np.linalg.det(fixed_operator))) == 3
+    adjugate = np.asarray([[2, -1], [1, 1]], dtype=int)
+    for representative_shift in ((1, 1), (1, 0)):
+        for valley in (1, -1):
+            numerator = adjugate @ (
+                -valley * np.asarray(representative_shift, dtype=int)
+            )
+            assert np.any(numerator % 3 != 0)
+
+    supports = build_rlg_hbn_c3_affine_fixed_supports(
+        12, _shell4_model().lattice
+    )
+    seed = supports[0].seed_g_indices
+    seed_position = {value: index for index, value in enumerate(seed)}
+    gamma_permutation = tuple(
+        seed_position[_c3_reciprocal_shift(value)] for value in seed
+    )
+    assert _permutation_cycle_lengths(gamma_permutation) == [1] + [3] * 6
+    assert seed[gamma_permutation[seed_position[(0, 0)]]] == (0, 0)
+
+    for support in supports:
+        assert _permutation_cycle_lengths(support.c3_target_indices) == [3] * 9
+
+    # Any C3-invariant Gamma support containing G=0 has rank 1 mod 3,
+    # while either obstructed affine fixed fiber has rank 0 mod 3. A
+    # constant-size, single-representative finite support cannot satisfy both.
+    assert len(seed) % 3 == 1
+    assert all(support.support_size % 3 == 0 for support in supports)
 
 
 def test_rlg_hbn_c3_affine_fixed_parent_hamiltonian_is_covariant() -> None:
