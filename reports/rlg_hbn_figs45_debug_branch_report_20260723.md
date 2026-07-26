@@ -126,7 +126,11 @@ X+iY               2.63329122            -1.08e-8
 max |Im E|                               1.4e-17 meV/cell
 ```
 
-Thus the generic-q Track P response is now both termwise and scalar-curvature validated. It has **not** yet been promoted as a complete all-q shared production truth because the exact-M physical curvature gate remains unresolved: on the even mesh, raw `q=(-6,0)` and `-q=(+6,0)` have identical torus endpoints but distinct repeated-zone wraps. A physical density tensor cannot distinguish those raw labels without an explicit sewing/representative prescription. Averaging the two responses would be a forbidden post-assembly repair. Until that branch prescription is derived or supplied by the authors, the exact-M static negative eigenvector is a validated signed-regulator result, not yet a uniquely lifted unitary-projector curvature.
+Thus the generic-q Track P response is now both termwise and scalar-curvature validated.
+
+The executable functional is also no longer represented only by provenance strings and ad hoc lambdas. Commit `47ee79a` introduces one typed Track-P provider object shared by SCF interaction builds, ODA tangents, scalar HF energy, q=0 response, dense finite-q response, and projected finite-q response. It has separate SHA256 identities for (i) the physical fixed-G functional and (ii) the exact auxiliary overlap/kernel cache used by finite-q response. Provider arrays are read-only and identity-checked; schema-v1 archives require a nonblank matching fingerprint. An actual-12x12 post-refactor S1 replay (Slurm `194320`) retained saved-H closure `2.51e-15 meV`, `[H,P]=5.72e-6 meV`, and all sampled component residuals below `6.01e-16 meV`. The physical provider fingerprint was `f0885cad...b604635`; the completed response-cache fingerprint was `280729a6...e83d04`.
+
+It has **not** yet been promoted as a complete all-q shared production truth because the exact-M physical curvature gate remains unresolved: on the even mesh, raw `q=(-6,0)` and `-q=(+6,0)` have identical torus endpoints but distinct repeated-zone wraps. A physical density tensor cannot distinguish those raw labels without an explicit sewing/representative prescription. Averaging the two responses would be a forbidden post-assembly repair. Until that branch prescription is derived or supplied by the authors, the exact-M static negative eigenvector is a validated signed-regulator result, not yet a uniquely lifted unitary-projector curvature.
 
 Auditable aggregate data committed with the report:
 

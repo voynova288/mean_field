@@ -50,7 +50,8 @@
   "code_commits": {
     "batch_response": "9fc44e8",
     "generic_response": "7be9f26",
-    "projected_response": "634567c"
+    "projected_response": "634567c",
+    "track_p_provider": "47ee79a"
   },
   "exact_M_unitary_curvature_status": "blocked: q=-6 and q=+6 are torus-equivalent but retain distinct raw repeated-zone wraps; a unique physical-density sewing/representative prescription is not yet defined",
   "sampled_response_validation": {
@@ -121,6 +122,62 @@
     "tolerance_mev": 2e-07
   },
   "track": "paper_finite_cutoff_hypothesis_v1",
+  "track_p_provider_validation": {
+    "built_missing_overlap_shift_count": 24,
+    "contract_notes": [
+      "SCF, ODA, scalar energy, q0 tangent, dense finite-q response, and projected finite-q response are bound to one provider object.",
+      "Physical-functional and auxiliary response-cache fingerprints are separate.",
+      "Provider payload arrays are read-only and identity-checked; schema-v1 archives require a nonblank matching fingerprint."
+    ],
+    "max_residual_mev": 6.004449063730082e-16,
+    "q_rows": [
+      {
+        "max_residual_mev": 6.004449063730082e-16,
+        "minus_column_count": 3,
+        "plus_column_count": 3,
+        "provider_fingerprint": "f0885cadbcc2ae6e86ea94ea8a595d389194e0180f2575ebdc5bb0825b604635",
+        "q_shift": [
+          1,
+          0
+        ],
+        "response_cache_fingerprint": "280729a6222cb3cf2d3992a78dde8504a58103dcddced0b28e67693cace83d04"
+      },
+      {
+        "max_residual_mev": 5.661048867003677e-16,
+        "minus_column_count": 3,
+        "plus_column_count": 3,
+        "provider_fingerprint": "f0885cadbcc2ae6e86ea94ea8a595d389194e0180f2575ebdc5bb0825b604635",
+        "q_shift": [
+          5,
+          5
+        ],
+        "response_cache_fingerprint": "280729a6222cb3cf2d3992a78dde8504a58103dcddced0b28e67693cace83d04"
+      },
+      {
+        "max_residual_mev": 5.661048867003677e-16,
+        "minus_column_count": 3,
+        "plus_column_count": 3,
+        "provider_fingerprint": "f0885cadbcc2ae6e86ea94ea8a595d389194e0180f2575ebdc5bb0825b604635",
+        "q_shift": [
+          -6,
+          0
+        ],
+        "response_cache_fingerprint": "280729a6222cb3cf2d3992a78dde8504a58103dcddced0b28e67693cace83d04"
+      }
+    ],
+    "slurm_job": 194320,
+    "source_closure": {
+      "closure_tolerance_mev": 0.001,
+      "h0_basis_residual_mev": 0.0,
+      "hamiltonian_closure_mev": 2.5121479338940403e-15,
+      "hf_interaction_convention": "fixed_g_torus_single_representative_v1",
+      "physical_shift_policy": "fixed_abs_g_shell_v1",
+      "projector_commutator_mev": 5.719357045741447e-06,
+      "remote_h0_policy": "actual_node_ws_c3_fixed_copy_average_v1",
+      "stationarity_tolerance_mev": 0.001
+    },
+    "status": "pass"
+  },
   "unitary_curvature_fd": {
     "column": 0,
     "energy0_mev_per_cell": [
