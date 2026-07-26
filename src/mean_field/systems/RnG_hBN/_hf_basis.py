@@ -1,11 +1,178 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from ._hf_shared import *  # noqa: F401,F403
 from ._hf_reference import *  # noqa: F401,F403
 from ._hf_types import *  # noqa: F401,F403
 
 
 RLG_HBN_REMOTE_H0_POLICY_VERSION = "actual_node_ws_c3_fixed_copy_average_v1"
+RLG_HBN_C3_AFFINE_SUPPORT_VERSION = "c3_affine_fixed_support_v1"
+
+
+@dataclass(frozen=True)
+class RLGhBNC3AffineFixedSupport:
+    """Minimal raw-G fiber closed under a fixed-sector affine C3 action."""
+
+    mesh_pair: tuple[int, int]
+    representative_shift: tuple[int, int]
+    valley: int
+    seed_g_indices: tuple[tuple[int, int], ...]
+    support_g_indices: tuple[tuple[int, int], ...]
+    c3_target_indices: tuple[int, ...]
+    convention: str = RLG_HBN_C3_AFFINE_SUPPORT_VERSION
+
+    @property
+    def support_size(self) -> int:
+        return len(self.support_g_indices)
+
+
+def _c3_affine_raw_pair(
+    pair: tuple[int, int] | np.ndarray,
+    representative_shift: tuple[int, int] | np.ndarray,
+    *,
+    valley: int,
+) -> tuple[int, int]:
+    """Apply ``G_raw -> C3 G_raw - valley*R`` at a fixed sector."""
+
+    valley_sign = int(valley)
+    if valley_sign not in VALLEY_SEQUENCE:
+        raise ValueError(f"Expected valley in {VALLEY_SEQUENCE}, got {valley}")
+    c3_pair = _c3_reciprocal_shift(pair)
+    shift = np.asarray(representative_shift, dtype=int).reshape(2)
+    return (
+        int(c3_pair[0] - valley_sign * shift[0]),
+        int(c3_pair[1] - valley_sign * shift[1]),
+    )
+
+
+def _c3_affine_support_closure(
+    seed_g_indices: Sequence[tuple[int, int]] | np.ndarray,
+    representative_shift: tuple[int, int] | np.ndarray,
+    *,
+    valley: int,
+) -> set[tuple[int, int]]:
+    """Return the three-step affine-C3 closure of a finite raw-G seed."""
+
+    seed = {
+        (int(value[0]), int(value[1]))
+        for value in np.asarray(seed_g_indices, dtype=int).reshape(-1, 2)
+    }
+    support = set(seed)
+    current = set(seed)
+    for _ in range(2):
+        current = {
+            _c3_affine_raw_pair(
+                value, representative_shift, valley=valley
+            )
+            for value in current
+        }
+        support.update(current)
+    transformed = {
+        _c3_affine_raw_pair(
+            value, representative_shift, valley=valley
+        )
+        for value in support
+    }
+    if transformed != support:
+        raise ValueError(
+            "three-step affine C3 construction did not close the raw-G support"
+        )
+    return support
+
+
+def build_rlg_hbn_c3_affine_fixed_supports(
+    mesh_size: int,
+    lattice: RLGhBNLattice,
+    *,
+    valleys: tuple[int, ...] = VALLEY_SEQUENCE,
+) -> tuple[RLGhBNC3AffineFixedSupport, ...]:
+    """Build deterministic fixed-fiber supports without defining a HF regulator.
+
+    This geometry API proves only the one-particle raw-G closure required at
+    nonzero C3-fixed torus sectors. It does not select the interaction-transfer
+    shell, remote-valence policy, or finite-q density lift for Track C.
+    """
+
+    mesh = int(mesh_size)
+    _shifts, fixed_pairs = _c3_equivariant_reciprocal_shifts_for_mesh(
+        mesh, lattice
+    )
+    seed = tuple(
+        (int(value[0]), int(value[1]))
+        for value in np.asarray(lattice.g_indices, dtype=int)
+    )
+
+    def support_sort_key(value: tuple[int, int]) -> tuple[float, int, int, int]:
+        vector = complex(value[0] * lattice.g_m1 + value[1] * lattice.g_m2)
+        return (
+            round(abs(vector), 12),
+            int(value[0] * value[0] + value[1] * value[1]),
+            int(value[0]),
+            int(value[1]),
+        )
+
+    resolved_valleys = tuple(int(value) for value in valleys)
+    if not resolved_valleys or any(
+        value not in VALLEY_SEQUENCE for value in resolved_valleys
+    ):
+        raise ValueError(
+            f"valleys must be a nonempty subset of {VALLEY_SEQUENCE}, "
+            f"got {valleys}"
+        )
+    if len(set(resolved_valleys)) != len(resolved_valleys):
+        raise ValueError(f"valleys must not contain duplicates, got {valleys}")
+
+    results: list[RLGhBNC3AffineFixedSupport] = []
+    for pair in fixed_pairs:
+        transformed_pair, representative_shift = (
+            _c3_mesh_pair_and_representative_shift(pair, mesh)
+        )
+        if transformed_pair != pair:
+            raise ValueError(
+                f"C3-obstructed pair {pair} is not a fixed torus sector"
+            )
+        for valley in resolved_valleys:
+            support = tuple(
+                sorted(
+                    _c3_affine_support_closure(
+                        seed,
+                        representative_shift,
+                        valley=valley,
+                    ),
+                    key=support_sort_key,
+                )
+            )
+            position = {value: index for index, value in enumerate(support)}
+            # Scatter convention: source component i rotates to
+            # c3_target_indices[i] in the target vector.
+            target_indices = tuple(
+                position[
+                    _c3_affine_raw_pair(
+                        value,
+                        representative_shift,
+                        valley=valley,
+                    )
+                ]
+                for value in support
+            )
+            if sorted(target_indices) != list(range(len(support))):
+                raise ValueError(
+                    "affine C3 action is not a permutation at fixed pair "
+                    f"{pair}, valley={valley}"
+                )
+            results.append(
+                RLGhBNC3AffineFixedSupport(
+                    mesh_pair=(int(pair[0]), int(pair[1])),
+                    representative_shift=representative_shift,
+                    valley=valley,
+                    seed_g_indices=seed,
+                    support_g_indices=support,
+                    c3_target_indices=target_indices,
+                )
+            )
+    return tuple(results)
 
 
 def _rectangular_g_embedding(
