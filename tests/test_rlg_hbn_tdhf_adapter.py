@@ -13,6 +13,9 @@ from mean_field.core.hf import (
     shift_wavefunction_grid,
     split_pair_indices_by_flavor_channel,
 )
+from mean_field.systems.RnG_hBN._tdhf_finite_q import (
+    _build_rlg_hbn_tdhf_track_p_terms_from_provider,
+)
 from mean_field.systems.RnG_hBN._hf_response_finite_q import (
     _validated_single_representative_finite_q_tangent,
 )
@@ -1355,6 +1358,37 @@ def test_rlg_hbn_hf_finite_q_tangent_preserves_signed_even_mesh_m_aliases() -> N
             )
 
 
+    orbitals = build_rlg_hbn_tdhf_orbitals(run.state)
+    all_pairs = build_rlg_hbn_tdhf_q_pairs(
+        orbitals, run.basis_data, (-1, 0)
+    )
+    groups = split_pair_indices_by_flavor_channel(all_pairs)
+    pairs = tuple(all_pairs[int(index)] for index in groups["intraflavor"])
+    exact_m = build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs(
+        run,
+        orbitals,
+        pairs,
+        (-1, 0),
+        channel="intraflavor",
+    )
+    assert exact_m.q_shift == (-1, 0)
+    assert exact_m.minus_q_shift == (1, 0)
+    assert exact_m.response_scope == "signed_raw_q_regulator_v1"
+    legacy_m = build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs(
+        run,
+        orbitals,
+        exact_m.plus.pairs,
+        (-1, 0),
+        _build_partner=False,
+    )
+    np.testing.assert_allclose(
+        exact_m.plus.A, legacy_m.A, rtol=1.0e-11, atol=1.0e-11
+    )
+    np.testing.assert_allclose(
+        exact_m.plus.B, legacy_m.B, rtol=1.0e-11, atol=1.0e-11
+    )
+
+
 def test_rlg_hbn_tdhf_single_representative_signed_q0_api_is_typed() -> None:
     run = _typed_single_representative_tiny_run()
     orbitals = build_rlg_hbn_tdhf_orbitals(run.state)
@@ -1377,6 +1411,18 @@ def test_rlg_hbn_tdhf_single_representative_signed_q0_api_is_typed() -> None:
     np.testing.assert_allclose(result.plus.A, result.minus.A)
     np.testing.assert_allclose(result.plus.B, result.minus.B)
     np.testing.assert_allclose(result.plus.L, result.minus.L)
+    legacy = build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs(
+        run,
+        orbitals,
+        pairs,
+        (0, 0),
+    )
+    np.testing.assert_allclose(
+        result.plus.A, legacy.A, rtol=1.0e-11, atol=1.0e-11
+    )
+    np.testing.assert_allclose(
+        result.plus.B, legacy.B, rtol=1.0e-11, atol=1.0e-11
+    )
     assert result.plus.structure.ok
 
 
@@ -1403,6 +1449,64 @@ def test_rlg_hbn_tdhf_single_representative_signed_nonzero_q_uses_independent_pa
         _plus_term_collector=plus_terms,
         _minus_term_collector=minus_terms,
     )
+    legacy_plus_terms: dict[str, np.ndarray] = {}
+    legacy_minus_terms: dict[str, np.ndarray] = {}
+    legacy_plus = build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs(
+        run,
+        orbitals,
+        result.plus.pairs,
+        result.q_shift,
+        _build_partner=False,
+        _term_collector=legacy_plus_terms,
+    )
+    legacy_minus = build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs(
+        run,
+        orbitals,
+        result.minus.pairs,
+        result.minus_q_shift,
+        _build_partner=False,
+        _term_collector=legacy_minus_terms,
+    )
+    np.testing.assert_allclose(
+        result.plus.A, legacy_plus.A, rtol=1.0e-11, atol=1.0e-11
+    )
+    np.testing.assert_allclose(
+        result.plus.B, legacy_plus.B, rtol=1.0e-11, atol=1.0e-11
+    )
+    np.testing.assert_allclose(
+        result.minus.A, legacy_minus.A, rtol=1.0e-11, atol=1.0e-11
+    )
+    np.testing.assert_allclose(
+        result.minus.B, legacy_minus.B, rtol=1.0e-11, atol=1.0e-11
+    )
+    forced_chunk_terms = _build_rlg_hbn_tdhf_track_p_terms_from_provider(
+        run,
+        orbitals,
+        result.plus.pairs,
+        result.q_shift,
+        beta=1.0,
+        require_provenance=True,
+        chunk_size=2,
+    )
+    for name in plus_terms:
+        np.testing.assert_allclose(
+            plus_terms[name],
+            legacy_plus_terms[name],
+            rtol=1.0e-11,
+            atol=1.0e-11,
+        )
+        np.testing.assert_allclose(
+            minus_terms[name],
+            legacy_minus_terms[name],
+            rtol=1.0e-11,
+            atol=1.0e-11,
+        )
+        np.testing.assert_allclose(
+            forced_chunk_terms[name],
+            plus_terms[name],
+            rtol=1.0e-11,
+            atol=1.0e-11,
+        )
     n_pairs = len(pairs)
     np.testing.assert_allclose(
         result.plus.L[:n_pairs, :n_pairs], result.plus.A
@@ -1829,6 +1933,45 @@ def test_rlg_hbn_tdhf_single_representative_signed_nonzero_q_uses_independent_pa
     np.testing.assert_allclose(dispatched.A, result.plus.A)
     np.testing.assert_allclose(dispatched.B, result.plus.B)
     np.testing.assert_allclose(dispatched.L, result.plus.L)
+
+
+def test_rlg_hbn_tdhf_track_p_provider_matches_flavor_flip_oracle_at_nonzero_q() -> None:
+    run = _typed_single_representative_tiny_run(
+        k_mesh_size=3,
+        mesh_size=3,
+        active_conduction_bands=2,
+    )
+    orbitals = build_rlg_hbn_tdhf_orbitals(run.state)
+    all_pairs = build_rlg_hbn_tdhf_q_pairs(
+        orbitals, run.basis_data, (1, 0)
+    )
+    groups = split_pair_indices_by_flavor_channel(all_pairs)
+    pairs = tuple(
+        all_pairs[int(index)] for index in groups["intervalley"][:3]
+    )
+    result = build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs(
+        run,
+        orbitals,
+        pairs,
+        (1, 0),
+        channel="intervalley",
+    )
+    for matrices, sector_shift in (
+        (result.plus, result.q_shift),
+        (result.minus, result.minus_q_shift),
+    ):
+        legacy = build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs(
+            run,
+            orbitals,
+            matrices.pairs,
+            sector_shift,
+        )
+        np.testing.assert_allclose(
+            matrices.A, legacy.A, rtol=1.0e-11, atol=1.0e-11
+        )
+        np.testing.assert_allclose(
+            matrices.B, legacy.B, rtol=1.0e-11, atol=1.0e-11
+        )
 
 
 def test_rlg_hbn_tdhf_single_representative_q0_term_collectors_match() -> None:

@@ -6,6 +6,8 @@ from ._tdhf_types import *  # noqa: F401,F403
 from ._tdhf_pairs import *  # noqa: F401,F403
 from ._tdhf_q0 import *  # noqa: F401,F403
 from ._hf_response_finite_q import (
+    RLGhBNFiniteQDensityTangent,
+    project_rlg_hbn_hf_single_representative_finite_q_response,
     validate_rlg_hbn_hf_single_representative_provenance,
 )
 from ._tdhf_fixed_quotient import (
@@ -36,6 +38,7 @@ class RLGhBNTDHFFiniteQSingleRepresentativeMatrixPair:
     q_shift: tuple[int, int]
     minus_q_shift: tuple[int, int]
     channel: FiniteQChannel
+    response_scope: str = "signed_raw_q_regulator_v1"
 
 
 def build_rlg_hbn_tdhf_finite_q_quotient_matrix_pair_from_pairs(
@@ -238,6 +241,143 @@ def build_rlg_hbn_tdhf_finite_q_quotient_matrices_from_pairs(
     return result.plus
 
 
+def _build_rlg_hbn_tdhf_track_p_terms_from_provider(
+    run: RLGhBNHartreeFockRun,
+    orbitals: RLGhBNTDHFOrbitals,
+    pairs: tuple[ParticleHolePair, ...],
+    q_shift: tuple[int, int],
+    *,
+    beta: float,
+    require_provenance: bool,
+    chunk_size: int = 24,
+) -> dict[str, np.ndarray]:
+    """Project the bound Track-P HF derivative into all D19 columns."""
+
+    n_pairs = len(pairs)
+    terms = {
+        name: np.zeros((n_pairs, n_pairs), dtype=np.complex128)
+        for name in (
+            "A0",
+            "A_direct",
+            "A_exchange",
+            "B_direct",
+            "B_exchange",
+        )
+    }
+    if n_pairs == 0:
+        return terms
+    mesh_shape = _mesh_shape_from_k_grid_frac(run.basis_data.k_grid_frac)
+    nk = int(run.basis_data.nk)
+    nt = int(run.basis_data.nt)
+    base_k = np.arange(nk, dtype=int)
+    plus_k = np.empty(nk, dtype=int)
+    minus_k = np.empty(nk, dtype=int)
+    for index in base_k:
+        plus_k[index], _ = _shift_k_index_with_wrap(
+            int(index), q_shift, mesh_shape
+        )
+        minus_k[index], _ = _shift_k_index_with_wrap(
+            int(index), (-q_shift[0], -q_shift[1]), mesh_shape
+        )
+
+    p_local = np.empty(n_pairs, dtype=int)
+    h_local = np.empty(n_pairs, dtype=int)
+    h_k = np.empty(n_pairs, dtype=int)
+    p_plus_k = np.empty(n_pairs, dtype=int)
+    output_bra = np.empty((nt, n_pairs), dtype=np.complex128)
+    output_ket = np.empty((nt, n_pairs), dtype=np.complex128)
+    for index, pair in enumerate(pairs):
+        p_local[index], p_plus_k[index] = orbitals.decode_global_index(
+            pair.particle
+        )
+        h_local[index], h_k[index] = orbitals.decode_global_index(pair.hole)
+        if p_plus_k[index] != plus_k[h_k[index]]:
+            raise ValueError(
+                f"pair {index} particle momentum does not equal h+q"
+            )
+        output_bra[:, index] = orbitals.eigenvectors[
+            :, p_local[index], p_plus_k[index]
+        ]
+        output_ket[:, index] = orbitals.eigenvectors[
+            :, h_local[index], h_k[index]
+        ]
+        terms["A0"][index, index] = (
+            orbitals.energies[p_local[index], p_plus_k[index]]
+            - orbitals.energies[h_local[index], h_k[index]]
+        )
+
+    if int(chunk_size) <= 0:
+        raise ValueError("Track-P response projection chunk_size must be positive")
+    for start in range(0, n_pairs, int(chunk_size)):
+        stop = min(start + int(chunk_size), n_pairs)
+        columns = range(start, stop)
+        width = stop - start
+        ph_blocks = np.zeros((nt, nt, nk, width), dtype=np.complex128)
+        hp_blocks = np.zeros_like(ph_blocks)
+        for rhs, column in enumerate(columns):
+            base = int(h_k[column])
+            ph_blocks[:, :, base, rhs] = np.outer(
+                np.conj(
+                    orbitals.eigenvectors[
+                        :, h_local[column], base
+                    ]
+                ),
+                orbitals.eigenvectors[
+                    :, p_local[column], p_plus_k[column]
+                ],
+            )
+            hp_blocks[:, :, base, rhs] = np.outer(
+                np.conj(
+                    orbitals.eigenvectors[
+                        :, p_local[column], minus_k[base]
+                    ]
+                ),
+                orbitals.eigenvectors[
+                    :, h_local[column], base
+                ],
+            )
+        common = {
+            "output_bra": output_bra,
+            "output_ket": output_ket,
+            "output_base_k": h_k,
+            "beta": float(beta),
+            "require_converged": False,
+            "require_provenance": bool(require_provenance),
+        }
+        ph_response = (
+            project_rlg_hbn_hf_single_representative_finite_q_response(
+                run,
+                RLGhBNFiniteQDensityTangent(
+                    q_shift=q_shift,
+                    target_k=base_k,
+                    source_k=plus_k,
+                    blocks=ph_blocks,
+                    role="ph",
+                ),
+                **common,
+            )
+        )
+        hp_response = (
+            project_rlg_hbn_hf_single_representative_finite_q_response(
+                run,
+                RLGhBNFiniteQDensityTangent(
+                    q_shift=q_shift,
+                    target_k=minus_k,
+                    source_k=base_k,
+                    blocks=hp_blocks,
+                    role="hp",
+                ),
+                **common,
+            )
+        )
+        selection = slice(start, stop)
+        terms["A_direct"][:, selection] = ph_response.hartree
+        terms["A_exchange"][:, selection] = ph_response.fock
+        terms["B_direct"][:, selection] = hp_response.hartree
+        terms["B_exchange"][:, selection] = hp_response.fock
+    return terms
+
+
 def build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs(
     run: RLGhBNHartreeFockRun,
     orbitals: RLGhBNTDHFOrbitals,
@@ -260,6 +400,12 @@ def build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs(
     transport, average, Hermitize, or symmetrize assembled A/B blocks.
     """
 
+    if not np.isfinite(float(structure_tolerance)) or float(structure_tolerance) < 0.0:
+        raise ValueError("structure_tolerance must be finite and nonnegative")
+    if not bool(require_complete_umklapp):
+        raise ValueError(
+            "Track-P provider assembly is always fail-closed on incomplete Umklapp caches"
+        )
     if channel not in FINITE_Q_FULL_CHANNELS:
         raise ValueError(
             f"single-representative channel must be one of "
@@ -299,6 +445,13 @@ def build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs(
         if physical_shifts is not None
         else tuple((int(value[0]), int(value[1])) for value in run.overlap_blocks.shifts)
     )
+    provider = getattr(run, "track_p_provider", None)
+    if provider is None:
+        raise ValueError("Track-P TDHF assembly requires an attached provider")
+    if resolved_physical_shifts != provider.physical_shifts:
+        raise ValueError(
+            "Track-P TDHF physical shifts do not match the bound provider"
+        )
     if require_provenance:
         validate_rlg_hbn_hf_single_representative_provenance(
             run,
@@ -329,10 +482,19 @@ def build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs(
             if key in pair_by_key:
                 raise ValueError(f"duplicate -q pair key {key}")
             pair_by_key[key] = pair
+        candidate_keys = tuple(
+            _finite_q_pair_key(orbitals, pair) for pair in candidates
+        )
+        unexpected_keys = (
+            []
+            if minus_pairs is None
+            else [key for key in candidate_keys if key not in positive_key_set]
+        )
         missing_keys = [key for key in positive_keys if key not in pair_by_key]
-        if missing_keys:
+        if missing_keys or unexpected_keys:
             raise ValueError(
-                f"-q {channel} pair space is missing keys: {missing_keys[:10]}"
+                f"-q {channel} pair-key mismatch: missing={missing_keys[:10]}, "
+                f"unexpected={unexpected_keys[:10]}"
             )
         resolved_minus_pairs = tuple(pair_by_key[key] for key in positive_keys)
 
@@ -341,28 +503,53 @@ def build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs(
         sector_shift: tuple[int, int],
         term_collector: dict[str, np.ndarray] | None,
     ) -> TDHFMatrices:
-        if channel == "intraflavor":
-            return build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs(
-                run,
-                orbitals,
-                sector_pairs,
-                sector_shift,
-                beta=resolved_beta,
-                structure_tolerance=structure_tolerance,
-                require_complete_umklapp=require_complete_umklapp,
-                physical_shifts=resolved_physical_shifts,
-                _build_partner=False,
-                _term_collector=term_collector,
-            )
-        return build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs(
+        terms = _build_rlg_hbn_tdhf_track_p_terms_from_provider(
             run,
             orbitals,
             sector_pairs,
             sector_shift,
             beta=resolved_beta,
-            structure_tolerance=structure_tolerance,
-            require_complete_umklapp=require_complete_umklapp,
-            physical_shifts=resolved_physical_shifts,
+            require_provenance=require_provenance,
+        )
+        if term_collector is not None:
+            term_collector.clear()
+            term_collector.update(
+                {
+                    name: np.asarray(value, dtype=np.complex128).copy()
+                    for name, value in terms.items()
+                }
+            )
+        A_sector = (
+            terms["A0"]
+            + terms["A_direct"]
+            + terms["A_exchange"]
+        )
+        B_sector = terms["B_direct"] + terms["B_exchange"]
+        a_sector_residual = (
+            float(np.max(np.abs(A_sector - A_sector.conj().T)))
+            if A_sector.size
+            else 0.0
+        )
+        if a_sector_residual > float(structure_tolerance):
+            raise ValueError(
+                "provider-projected Track-P A block is not Hermitian: "
+                f"residual={a_sector_residual}, tolerance={structure_tolerance}"
+            )
+        placeholder_structure = TDHFStructureResiduals(
+            a_hermitian=a_sector_residual,
+            b_symmetric=0.0,
+            particle_hole_symmetry=0.0,
+            tolerance=float(structure_tolerance),
+        )
+        return TDHFMatrices(
+            pairs=sector_pairs,
+            A=A_sector,
+            B=B_sector,
+            L=np.zeros(
+                (2 * len(sector_pairs), 2 * len(sector_pairs)),
+                dtype=np.complex128,
+            ),
+            structure=placeholder_structure,
         )
 
     positive = build_sector(ph_pairs, shift, _plus_term_collector)
