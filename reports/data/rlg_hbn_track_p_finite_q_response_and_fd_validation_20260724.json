@@ -54,7 +54,58 @@
     "provider_projected_tdhf": "915f17e",
     "track_p_provider": "47ee79a"
   },
-  "exact_M_unitary_curvature_status": "blocked: q=-6 and q=+6 are torus-equivalent but retain distinct raw repeated-zone wraps; a unique physical-density sewing/representative prescription is not yet defined",
+  "exact_M_unitary_curvature_status": "canonical raw -M role-resolved scalar passes exact unitary-projector FD and has negative physical constrained curvature; signed +/-M H_stat remains a distinct regulator object because A(-M) != A(+M) and B(-M) is not self-transpose",
+  "exact_m_canonical_raw_unitary_curvature_validation": {
+    "acceptance": {
+      "curvature_residual_tolerance_mev_per_cell": 5e-06,
+      "energy_imag_tolerance_mev_per_cell": 1e-10,
+      "evenness_tolerance_mev_per_cell": 1e-10,
+      "ladder_difference_tolerance_mev_per_cell": 5e-06
+    },
+    "canonical_raw_curvature_target_mev_per_cell": -0.013063163583856424,
+    "canonical_raw_physical_min_mev": -1.881095556075325,
+    "directional_A_branch_defect_mev_per_cell": -8.0780379496261e-08,
+    "directional_A_mev_per_cell": 0.03304214754989909,
+    "directional_B_mev_per_cell": -0.03957372934182708,
+    "evenness_residual_mev_per_cell": 0.0,
+    "finest_residual_mev_per_cell": -1.7957072355120896e-08,
+    "five_point_curvatures_mev_per_cell": [
+      -0.013063163351034744,
+      -0.013063163351034744,
+      -0.013063148192789715,
+      -0.01306318154092878
+    ],
+    "hstat_hermitian_residual_mev": 5.85874444175896e-16,
+    "interpretation_gate": "The exact-M physical tangent is constrained by y=conj(x). The scalar evaluator retains ph and hp role tags at one raw M: hp uses the +M endpoint wrap internally, so both A and B enter without averaging raw branches. Acceptance targets the canonical raw -M scalar Hessian, not the signed +/-M H_stat average. The signed-minus-raw directional defect is reported separately and must not be hidden by branch averaging.",
+    "ladder_last_difference_mev_per_cell": -3.334813906442913e-08,
+    "max_A_branch_defect_mev": 0.005594866980260349,
+    "max_B_self_transpose_defect_mev": 0.16741908533833372,
+    "max_abs_energy_imag_mev_per_cell": 8.419128714042559e-11,
+    "minus_q_shift": [
+      6,
+      0
+    ],
+    "pair_count": 432,
+    "provider_fingerprint": "f0885cadbcc2ae6e86ea94ea8a595d389194e0180f2575ebdc5bb0825b604635",
+    "q_shift": [
+      -6,
+      0
+    ],
+    "response_cache_fingerprint": "5b73d0de4601e1d04f36d95d4f7d1264402d90ae58f1c7a981098f12438317c5",
+    "response_scope": "signed_raw_q_regulator_v1",
+    "script_sha256": "47195cb2f70b3dc606072137fba8514f1f93134b573ca035b3ec1163b7a7cb49",
+    "signed_curvature_same_direction_mev_per_cell": -0.013063082803476476,
+    "signed_minus_raw_directional_defect_mev_per_cell": 8.078037994768694e-08,
+    "signed_unconstrained_hstat_min_mev": -0.956571191098277,
+    "slurm_job": 194559,
+    "status": "pass",
+    "steps": [
+      0.04,
+      0.02,
+      0.01,
+      0.005
+    ]
+  },
   "provider_projected_tdhf_validation": {
     "built_missing_overlap_shift_count": 10,
     "interpretation": "Track-P production A/B now consumes projected provider response. The retained direct D19 formulas are diagnostic oracles only. Exact M remains explicitly signed_raw_q_regulator_v1.",

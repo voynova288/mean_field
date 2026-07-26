@@ -132,7 +132,23 @@ The executable functional is also no longer represented only by provenance strin
 
 Commit `915f17e` then changed the Track-P production TDHF matrix-pair builder itself: `A_direct`, `A_exchange`, `B_direct`, and `B_exchange` are now columns of the projected provider response, while the previous explicit D19 formulas remain only as a diagnostic oracle. Actual-12x12 all-column S3 (Slurm `194510`) compared all 432 columns in both signed sectors at `q=(1,0)` and exact M `q=(-6,0)`. Every interaction-term residual was below `5.80e-16 meV`; final matrix residuals were below `1.43e-13 meV` (summation-order roundoff with the diagonal `A0`). Both structure gates passed below `5.86e-16 meV`. The returned scope is explicitly `signed_raw_q_regulator_v1`, so this refactor does not silently promote exact M to a unique physical-density curvature.
 
-It has **not** yet been promoted as a complete all-q shared production truth because the exact-M physical curvature gate remains unresolved: on the even mesh, raw `q=(-6,0)` and `-q=(+6,0)` have identical torus endpoints but distinct repeated-zone wraps. A physical density tensor cannot distinguish those raw labels without an explicit sewing/representative prescription. Averaging the two responses would be a forbidden post-assembly repair. Until that branch prescription is derived or supplied by the authors, the exact-M static negative eigenvector is a validated signed-regulator result, not yet a uniquely lifted unitary-projector curvature.
+The exact-M projector question was then sharpened rather than answered by averaging aliases. For one canonical raw representative `q=(-6,0)`, the scalar evaluator retains separate ph and hp role tags: hp uses the conjugate `+M` endpoint wrap internally, so both A and B enter while no assembled matrix is symmetrized. The physical Hermitian tangent is `y=conj(x)`. Slurm `194559` minimized the corresponding real canonical-raw Hessian and followed its full multi-pair exact unitary-projector path. Results:
+
+```text
+canonical raw constrained eigenvalue        -1.8810955561 meV
+canonical raw curvature target / cell       -0.01306316358 meV
+five-point FD ladder                         -0.01306316335,
+                                             -0.01306316335,
+                                             -0.01306314819,
+                                             -0.01306318154 meV
+finest FD-target residual                    -1.80e-8 meV/cell
+A contribution                                +0.03304214755 meV/cell
+B contribution                                -0.03957372934 meV/cell
+evenness residual                              0
+max |Im E|                                     8.42e-11 meV/cell
+```
+
+Therefore the exact-M instability is **not merely an unrestricted-density or non-projector artifact** for the canonical raw `-M` Track-P functional: `B_exchange` drives a genuine negative unitary-projector curvature. This still does not make the signed `-M/+M` object a unique scalar Hessian. The two raw A branches differ by as much as `0.00559487 meV`, and `B(-M)` has a `0.167419 meV` self-transpose defect. Along the validated raw minimizing direction, the signed-minus-raw curvature defect is small but nonzero, `8.08e-8 meV/cell`. Thus the canonical raw regulator curvature is validated, while the independently signed H-stat remains explicitly a distinct regulator object pending an author-specified boundary representative/sewing prescription. Averaging the aliases remains forbidden.
 
 Auditable aggregate data committed with the report:
 
