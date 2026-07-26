@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import replace
 
 from ._hf_shared import *  # noqa: F401,F403
 from ._hf_reference import *  # noqa: F401,F403
@@ -15,6 +16,7 @@ RLG_HBN_C3_AFFINE_SUPPORT_VERSION = "c3_affine_fixed_support_v1"
 class RLGhBNC3AffineFixedSupport:
     """Minimal raw-G fiber closed under a fixed-sector affine C3 action."""
 
+    mesh_size: int
     mesh_pair: tuple[int, int]
     representative_shift: tuple[int, int]
     valley: int
@@ -26,6 +28,28 @@ class RLGhBNC3AffineFixedSupport:
     @property
     def support_size(self) -> int:
         return len(self.support_g_indices)
+
+
+@dataclass(frozen=True)
+class RLGhBNC3AffineFixedParent:
+    """Transient exact-support parent; never key a cache by shell metadata."""
+
+    lattice: RLGhBNLattice
+    support: RLGhBNC3AffineFixedSupport
+
+    def to_provenance_dict(self) -> dict[str, object]:
+        return {
+            "convention": self.support.convention,
+            "mesh_size": self.support.mesh_size,
+            "mesh_pair": list(self.support.mesh_pair),
+            "representative_shift": list(self.support.representative_shift),
+            "valley": self.support.valley,
+            "seed_g_indices": [list(value) for value in self.support.seed_g_indices],
+            "support_g_indices": [
+                list(value) for value in self.support.support_g_indices
+            ],
+            "c3_target_indices": list(self.support.c3_target_indices),
+        }
 
 
 def _c3_affine_raw_pair(
@@ -80,6 +104,43 @@ def _c3_affine_support_closure(
             "three-step affine C3 construction did not close the raw-G support"
         )
     return support
+
+
+def _validate_rlg_hbn_c3_affine_fixed_support(
+    support: RLGhBNC3AffineFixedSupport,
+) -> None:
+    if support.convention != RLG_HBN_C3_AFFINE_SUPPORT_VERSION:
+        raise ValueError(
+            f"unsupported affine-support convention {support.convention!r}"
+        )
+    if support.valley not in VALLEY_SEQUENCE:
+        raise ValueError(f"Expected valley in {VALLEY_SEQUENCE}, got {support.valley}")
+    transformed_pair, representative_shift = (
+        _c3_mesh_pair_and_representative_shift(
+            support.mesh_pair, support.mesh_size
+        )
+    )
+    if transformed_pair != support.mesh_pair:
+        raise ValueError("affine support is not attached to a C3-fixed torus pair")
+    if representative_shift != support.representative_shift:
+        raise ValueError("affine support representative shift is inconsistent")
+    if not set(support.seed_g_indices).issubset(support.support_g_indices):
+        raise ValueError("affine support does not contain its seed shell")
+    if len(set(support.support_g_indices)) != support.support_size:
+        raise ValueError("affine support contains duplicate raw-G indices")
+    if len(support.c3_target_indices) != support.support_size:
+        raise ValueError("affine C3 permutation has the wrong length")
+    if sorted(support.c3_target_indices) != list(range(support.support_size)):
+        raise ValueError("affine C3 target indices are not a permutation")
+    for source_index, source_pair in enumerate(support.support_g_indices):
+        target_pair = _c3_affine_raw_pair(
+            source_pair,
+            support.representative_shift,
+            valley=support.valley,
+        )
+        target_index = support.c3_target_indices[source_index]
+        if support.support_g_indices[target_index] != target_pair:
+            raise ValueError("affine C3 permutation does not match raw-G geometry")
 
 
 def build_rlg_hbn_c3_affine_fixed_supports(
@@ -162,17 +223,92 @@ def build_rlg_hbn_c3_affine_fixed_supports(
                     "affine C3 action is not a permutation at fixed pair "
                     f"{pair}, valley={valley}"
                 )
-            results.append(
-                RLGhBNC3AffineFixedSupport(
-                    mesh_pair=(int(pair[0]), int(pair[1])),
-                    representative_shift=representative_shift,
-                    valley=valley,
-                    seed_g_indices=seed,
-                    support_g_indices=support,
-                    c3_target_indices=target_indices,
-                )
+            value = RLGhBNC3AffineFixedSupport(
+                mesh_size=mesh,
+                mesh_pair=(int(pair[0]), int(pair[1])),
+                representative_shift=representative_shift,
+                valley=valley,
+                seed_g_indices=seed,
+                support_g_indices=support,
+                c3_target_indices=target_indices,
             )
+            _validate_rlg_hbn_c3_affine_fixed_support(value)
+            results.append(value)
     return tuple(results)
+
+
+def build_rlg_hbn_c3_affine_fixed_parent(
+    lattice: RLGhBNLattice,
+    support: RLGhBNC3AffineFixedSupport,
+    *,
+    layer_count: int,
+) -> RLGhBNC3AffineFixedParent:
+    """Build a transient fixed-fiber parent with exact support provenance.
+
+    The nested lattice retains base-shell scalar metadata for Hamiltonian
+    compatibility. Consumers must persist ``to_provenance_dict()`` and the
+    exact support; reconstructing from ``shell_count`` would be invalid.
+    """
+
+    _validate_rlg_hbn_c3_affine_fixed_support(support)
+    layers = int(layer_count)
+    if layers <= 0:
+        raise ValueError(f"layer_count must be positive, got {layer_count}")
+    seed = tuple(
+        (int(value[0]), int(value[1]))
+        for value in np.asarray(lattice.g_indices, dtype=int)
+    )
+    if support.seed_g_indices != seed:
+        raise ValueError("affine support seed does not match the parent lattice")
+    indices = np.asarray(support.support_g_indices, dtype=int)
+    if indices.shape != (support.support_size, 2):
+        raise ValueError("affine support indices have an invalid shape")
+    if len(set(support.support_g_indices)) != support.support_size:
+        raise ValueError("affine support contains duplicate raw-G indices")
+    vectors = np.asarray(
+        [
+            int(value[0]) * lattice.g_m1 + int(value[1]) * lattice.g_m2
+            for value in indices
+        ],
+        dtype=np.complex128,
+    )
+    support_lattice = replace(
+        lattice,
+        g_indices=indices,
+        g_vectors=vectors,
+        matrix_dim=2 * layers * support.support_size,
+    )
+    return RLGhBNC3AffineFixedParent(
+        lattice=support_lattice,
+        support=support,
+    )
+
+
+def build_rlg_hbn_c3_affine_support_unitary(
+    support: RLGhBNC3AffineFixedSupport,
+    *,
+    layer_count: int,
+) -> np.ndarray:
+    """Return the source-to-target C3 unitary on one affine parent fiber."""
+
+    _validate_rlg_hbn_c3_affine_fixed_support(support)
+    layers = int(layer_count)
+    if layers <= 0:
+        raise ValueError(f"layer_count must be positive, got {layer_count}")
+    local_size = 2 * layers
+    dimension = local_size * support.support_size
+    unitary = np.zeros((dimension, dimension), dtype=np.complex128)
+    omega = np.exp(2.0j * np.pi / 3.0)
+    for source_g, target_g in enumerate(support.c3_target_indices):
+        for layer in range(layers):
+            for sublattice in range(2):
+                phase = omega ** (layer + sublattice)
+                if support.valley == -1:
+                    phase = np.conj(phase)
+                source = source_g * local_size + 2 * layer + sublattice
+                target = target_g * local_size + 2 * layer + sublattice
+                unitary[target, source] = phase
+    return unitary
 
 
 def _rectangular_g_embedding(
