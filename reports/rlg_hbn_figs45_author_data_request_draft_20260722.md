@@ -18,10 +18,11 @@ Would you be willing to share either the raw 12x12 lowest-mode arrays used for t
 2. Is the finite interaction cutoff applied to `|G|` or to the physical transfer `|q+G|` (or `|q_WS+G|`)?
 3. How are exactly shortest-vector boundary ties handled?
 4. How are the two nonzero C3-fixed torus points represented in the active and filled-remote-band sectors?
-5. Are C3/inversion-related HF k points and TDHF q sectors assembled independently, or is the HF source/response computed only in an irreducible wedge and copied from symmetry representatives? If copied, what sewing/representation is used at the two nonzero C3-fixed torus points?
-6. On the even 12x12 mesh, how are the torus-equivalent raw aliases `q_i=-6` and `q_i=+6` treated at exact M? Is one half-open representative selected for both particle-hole orientations, or do the ph and hp legs retain opposite repeated-zone lifts?
-7. How is the filled-valence average-scheme Fock contribution evaluated with the 19-RLV plane-wave cutoff?
-8. If available, could you share the raw complex eigenvalues, static-Hessian inertia, or negative/complex classification used for the white intraflavor regions?
+5. Is the finite plane-wave parent dimension kept constant over the torus? The 19-point shell is C3 closed at Gamma but its affine closure has 27 points at the nonzero fixed sectors; conversely, a nearest-27 rule cuts a Gamma boundary orbit (including all exact ties gives 31 points). Is your implementation variable-rank, tie-averaged/multi-representative, or based on another support prescription?
+6. Are C3/inversion-related HF k points and TDHF q sectors assembled independently, or is the HF source/response computed only in an irreducible wedge and copied from symmetry representatives? If copied, what sewing/representation is used at the two nonzero C3-fixed torus points?
+7. On the even 12x12 mesh, how are the torus-equivalent raw aliases `q_i=-6` and `q_i=+6` treated at exact M? Is one half-open representative selected for both particle-hole orientations, or do the ph and hp legs retain opposite repeated-zone lifts?
+8. How is the filled-valence average-scheme Fock contribution evaluated with the 19-RLV plane-wave cutoff?
+9. If available, could you share the raw complex eigenvalues, static-Hessian inertia, or negative/complex classification used for the white intraflavor regions?
 
 The distinction is numerically important: an exact branch quotient changes the response Hilbert space and fixed-point mode weight, whereas a literal single-representative finite regulator gives paper-close low modes but a measurable unaveraged C3 defect in the converged source. I would be happy to share the raw signed-q spectra, source/Ward closure metrics, and convention audit.
 
