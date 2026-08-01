@@ -5,6 +5,7 @@ from dataclasses import replace
 import hashlib
 import importlib
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -16,6 +17,25 @@ from mean_field.core.hf import (
     compute_hf_energy,
 )
 from mean_field.systems.tbg.params import TBGParameters
+from mean_field.systems.tbg.zero_field.companion_single_particle import (
+    Beta,
+    CCa,
+    C2T_symmetry as companion_C2T_symmetry,
+    Poisson,
+    TBGZeroFieldCompanionSingleParticleParams,
+    TBG_ZERO_FIELD_COMPANION_ARRAY_HASH_SEMANTICS,
+    TBG_ZERO_FIELD_COMPANION_CONSTANTS_SOURCE,
+    TBG_ZERO_FIELD_COMPANION_CONSTANTS_SOURCE_SHA256,
+    TBG_ZERO_FIELD_COMPANION_DEFAULT_INPUT_SOURCE,
+    TBG_ZERO_FIELD_COMPANION_DEFAULT_INPUT_SOURCE_SHA256,
+    TBG_ZERO_FIELD_COMPANION_POINTWISE_GAUGE_WARNING,
+    TBG_ZERO_FIELD_COMPANION_RESIDUAL_GAUGE_AMBIGUITY,
+    TBG_ZERO_FIELD_COMPANION_SINGLE_PARTICLE_SCOPE,
+    gen_RLVs as gen_companion_RLVs,
+    gen_moire_hamiltonian as gen_companion_moire_hamiltonian,
+    solve_tbg_zero_field_companion_single_particle,
+    vhbar as companion_vhbar,
+)
 from mean_field.systems.tbg.zero_field import (
     BMSolution,
     HFOverlapBlockSet,
@@ -2051,4 +2071,683 @@ def test_companion_geometry_rejects_bool_mesh_and_valley_indices() -> None:
             interaction_spec,
             N1=True,  # type: ignore[arg-type]
             N2=1,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Stage-2 source-faithful companion BM single-particle diagnostic
+# ---------------------------------------------------------------------------
+
+
+def _small_companion_single_particle_params(
+    *,
+    N1: int = 1,
+    N2: int = 1,
+) -> TBGZeroFieldCompanionSingleParticleParams:
+    return TBGZeroFieldCompanionSingleParticleParams(
+        N1=N1,
+        N2=N2,
+        Ng1=2,
+        Ng2=2,
+        n_active=1,
+        theta_deg=1.08,
+        wAA_ev=0.07,
+        wAB_ev=0.11,
+        strain=0.003,
+        strain_angle_deg=17.0,
+    )
+
+
+def test_companion_single_particle_params_are_strict_and_pin_source_units() -> None:
+    params = TBGZeroFieldCompanionSingleParticleParams()
+
+    assert params.to_companion_input() == {
+        "N1": 8,
+        "N2": 8,
+        "Ng1": 4,
+        "Ng2": 4,
+        "n_active": 1,
+        "theta": 1.08,
+        "wAA": 0.07,
+        "wAB": 0.11,
+        "strain": 0.003,
+        "varphi": 0.0,
+    }
+    assert params.parent_dimension == 256
+    assert CCa == 1.42e-10
+    assert Poisson == 0.16
+    assert Beta == 3.14
+
+    with pytest.raises(TypeError, match="N1 must be a positive integer"):
+        replace(params, N1=1.0)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="bool is not accepted"):
+        replace(params, n_active=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="denominator zero"):
+        replace(params, theta_deg=0.0)
+
+
+def test_companion_parent_exact_blocks_indices_boundary_zero_fill_and_hermiticity() -> None:
+    params = _small_companion_single_particle_params(N1=2, N2=3)
+    geometry = gen_companion_RLVs(params)
+    ham = gen_companion_moire_hamiltonian(
+        params,
+        (1, 2),
+        rlv_geometry=geometry,
+    )
+    spec = TBGZeroFieldCompanionPlaneWaveSpec(
+        Ng1=params.Ng1,
+        Ng2=params.Ng2,
+        b1=geometry.b1_complex,
+        b2=geometry.b2_complex,
+    )
+
+    assert ham.shape == (params.parent_dimension, params.parent_dimension)
+    assert spec.companion_index(-2, -2, 0) == 0
+    assert spec.companion_index(-2, -2, 3) == 3
+    assert spec.companion_index(-2, -1, 0) == 4
+    assert spec.companion_index(-1, -2, 0) == 16
+    np.testing.assert_allclose(ham, ham.conj().T, rtol=0.0, atol=0.0)
+
+    omega = np.exp(2.0 * np.pi * 1j / 3.0)
+    T1 = np.asarray(
+        [[params.wAA_ev, params.wAB_ev], [params.wAB_ev, params.wAA_ev]],
+        dtype=np.complex128,
+    )
+    T2 = np.asarray(
+        [
+            [params.wAA_ev, params.wAB_ev * omega],
+            [params.wAB_ev * np.conj(omega), params.wAA_ev],
+        ],
+        dtype=np.complex128,
+    )
+    T3 = np.asarray(
+        [
+            [params.wAA_ev, params.wAB_ev * np.conj(omega)],
+            [params.wAB_ev * omega, params.wAA_ev],
+        ],
+        dtype=np.complex128,
+    )
+    source = spec.companion_index(-1, -1, 2)
+    target_T1 = spec.companion_index(-1, -1, 0)
+    target_T2 = spec.companion_index(0, 0, 0)
+    target_T3 = spec.companion_index(-1, 0, 0)
+    np.testing.assert_array_equal(ham[target_T1 : target_T1 + 2, source : source + 2], T1)
+    np.testing.assert_array_equal(ham[target_T2 : target_T2 + 2, source : source + 2], T2)
+    np.testing.assert_array_equal(ham[target_T3 : target_T3 + 2, source : source + 2], T3)
+
+    # Check the literal q -> subtract A -> M ordering and sy-conjugate Dirac block.
+    g1, g2 = -1, 0
+    kinetic = spec.companion_index(g1, g2, 0)
+    kvec = geometry.b1 / params.N1 + 2.0 * (geometry.b2 / params.N2)
+    d1 = -geometry.b1 / 3.0 + geometry.b2 / 3.0
+    A1 = Beta / 2.0 / CCa * np.asarray(
+        [
+            geometry.Etens1[0, 0] - geometry.Etens1[1, 1],
+            -2.0 * geometry.Etens1[0, 1],
+        ]
+    )
+    q1 = np.dot(
+        geometry.M1,
+        geometry.ktheta_m_inv * (kvec + g1 * geometry.b1 + g2 * geometry.b2 - d1)
+        - A1,
+    )
+    sx = np.asarray([[0.0, 1.0], [1.0, 0.0]], dtype=np.complex128)
+    sy_conjugate = np.asarray([[0.0, 1j], [-1j, 0.0]], dtype=np.complex128)
+    expected_kinetic = companion_vhbar * (q1[0] * sx + q1[1] * sy_conjugate)
+    np.testing.assert_array_equal(
+        ham[kinetic : kinetic + 2, kinetic : kinetic + 2],
+        expected_kinetic,
+    )
+
+    # At the upper rectangular corner, T2 and T3 are absent: only T1 remains
+    # in the directed layer-2 -> layer-1 column block.
+    boundary_source = spec.companion_index(params.Ng1 - 1, params.Ng2 - 1, 2)
+    for target_g1 in spec.g1_labels:
+        for target_g2 in spec.g2_labels:
+            target = spec.companion_index(target_g1, target_g2, 0)
+            block = ham[target : target + 2, boundary_source : boundary_source + 2]
+            expected = (
+                T1
+                if (target_g1, target_g2) == (params.Ng1 - 1, params.Ng2 - 1)
+                else np.zeros((2, 2), dtype=np.complex128)
+            )
+            np.testing.assert_array_equal(block, expected)
+
+
+def test_companion_single_particle_uses_central_contiguous_ranks_and_parent_padding() -> None:
+    params = _small_companion_single_particle_params()
+    rlv_geometry = gen_companion_RLVs(params)
+    spec = TBGZeroFieldCompanionPlaneWaveSpec(
+        Ng1=params.Ng1,
+        Ng2=params.Ng2,
+        b1=rlv_geometry.b1_complex,
+        b2=rlv_geometry.b2_complex,
+    )
+    point_geometry = build_tbg_zero_field_companion_plane_wave_geometry(
+        spec,
+        N1=params.N1,
+        N2=params.N2,
+        ik1=0,
+        ik2=0,
+        stau=1,
+    )
+    ham = gen_companion_moire_hamiltonian(params, (0, 0), rlv_geometry=rlv_geometry)
+    sub_index = np.asarray(point_geometry.sub_index, dtype=int)
+    eigvals, eigvecs = np.linalg.eigh(ham[sub_index][:, sub_index])
+    center = sub_index.size // 2
+    ranks = slice(center - params.n_active, center + params.n_active)
+
+    result = solve_tbg_zero_field_companion_single_particle(params)
+    np.testing.assert_array_equal(result.sp_energy_ev[0, 0, 0, :], eigvals[ranks])
+    parent_coeff = np.transpose(
+        result.coeff[0, 0, :, :, 0, :, :],
+        (0, 1, 3, 2),
+    ).reshape(params.parent_dimension, params.active_band_count)
+    overlap = eigvecs[:, ranks].conj().T @ parent_coeff[sub_index, :]
+    np.testing.assert_allclose(np.abs(overlap), np.eye(params.active_band_count), atol=1.0e-13)
+    outside = np.ones(params.parent_dimension, dtype=bool)
+    outside[sub_index] = False
+    np.testing.assert_array_equal(
+        parent_coeff[outside, :],
+        np.zeros_like(parent_coeff[outside, :]),
+    )
+
+
+def test_companion_pointwise_gauge_and_final_C2T_sewing_are_literal() -> None:
+    params = _small_companion_single_particle_params(N1=2, N2=3)
+    result = solve_tbg_zero_field_companion_single_particle(params)
+
+    reshaped = np.reshape(
+        result.coeff,
+        (
+            params.N1,
+            params.N2,
+            2 * params.Ng1,
+            2 * params.Ng2,
+            2,
+            params.active_band_count,
+            2,
+            2,
+        ),
+    )
+    transformed = np.zeros_like(reshaped)
+    for sub in range(2):
+        transformed[..., sub] = np.conj(reshaped[..., 1 - sub])
+    expected = np.einsum(
+        "kKgGtals,kKgGtbls->kKtab",
+        np.conj(reshaped),
+        transformed,
+        optimize=True,
+    )
+    np.testing.assert_array_equal(result.U_C2T, expected)
+    np.testing.assert_allclose(
+        np.imag(np.diagonal(result.U_C2T[:, :, 0, :, :], axis1=-2, axis2=-1)),
+        0.0,
+        rtol=0.0,
+        atol=2.0e-14,
+    )
+    assert np.all(
+        np.real(np.diagonal(result.U_C2T[:, :, 0, :, :], axis1=-2, axis2=-1))
+        >= -2.0e-14
+    )
+    np.testing.assert_array_equal(result.U_C2T, companion_C2T_symmetry(params, result.coeff))
+
+    assert result.coeff.shape == (2, 3, 4, 4, 2, 2, 4)
+    assert result.sp_energy_ev.shape == (2, 3, 2, 2)
+    assert result.U_C2T.shape == (2, 3, 2, 2, 2)
+    assert not result.coeff.flags.writeable
+    assert not result.sp_energy_ev.flags.writeable
+    assert not result.U_C2T.flags.writeable
+    assert result.geometry_fingerprints.mesh_shape == (2, 3)
+    assert result.provenance.scientific_scope == TBG_ZERO_FIELD_COMPANION_SINGLE_PARTICLE_SCOPE
+    assert result.provenance.scientific_scope == (
+        "diagnostic_BM_parity_only_not_production_HF_or_TDHF"
+    )
+    assert result.provenance.rlv_reference_lines == "20-49"
+    assert result.provenance.hamiltonian_reference_lines == "51-111"
+    assert result.provenance.coefficient_reference_lines == "113-202"
+    assert result.provenance.pointwise_C2T_gauge_reference_lines == "177-188"
+    assert result.provenance.Kprime_time_reversal_reference_lines == "190-200"
+    assert result.provenance.final_C2T_sewing_reference_lines == "265-279"
+    metadata = result.to_metadata()
+    assert metadata["params"]["default_input_source"] == (
+        TBG_ZERO_FIELD_COMPANION_DEFAULT_INPUT_SOURCE
+    )
+    assert metadata["params"]["default_input_source_sha256"] == (
+        TBG_ZERO_FIELD_COMPANION_DEFAULT_INPUT_SOURCE_SHA256
+    )
+    assert metadata["pointwise_gauge_warning"] == (
+        TBG_ZERO_FIELD_COMPANION_POINTWISE_GAUGE_WARNING
+    )
+    assert metadata["residual_gauge_ambiguity"] == (
+        TBG_ZERO_FIELD_COMPANION_RESIDUAL_GAUGE_AMBIGUITY
+    )
+    assert metadata["array_hash_semantics"] == (
+        "artifact_integrity_only_not_cross_eigensolver_parity"
+    )
+    assert metadata["array_hashes"]["semantics"] == (
+        TBG_ZERO_FIELD_COMPANION_ARRAY_HASH_SEMANTICS
+    )
+    assert metadata["provenance"]["pointwise_gauge_warning"] == (
+        TBG_ZERO_FIELD_COMPANION_POINTWISE_GAUGE_WARNING
+    )
+    assert metadata["provenance"]["residual_gauge_ambiguity"] == (
+        TBG_ZERO_FIELD_COMPANION_RESIDUAL_GAUGE_AMBIGUITY
+    )
+    assert metadata["provenance"]["array_hash_semantics"] == (
+        TBG_ZERO_FIELD_COMPANION_ARRAY_HASH_SEMANTICS
+    )
+
+
+def test_companion_Kprime_uses_unequal_mesh_python_floor_carries_and_zero_fill() -> None:
+    params = _small_companion_single_particle_params(N1=2, N2=3)
+    result = solve_tbg_zero_field_companion_single_particle(params)
+    invalid_boundary_count = 0
+
+    for ik1 in range(params.N1):
+        for ik2 in range(params.N2):
+            source_ik1 = (-ik1) % params.N1
+            source_ik2 = (-ik2) % params.N2
+            np.testing.assert_array_equal(
+                result.sp_energy_ev[ik1, ik2, 1, :],
+                result.sp_energy_ev[source_ik1, source_ik2, 0, :],
+            )
+            carry1 = (-ik1) // params.N1
+            carry2 = (-ik2) // params.N2
+            for g1 in range(-params.Ng1, params.Ng1):
+                for g2 in range(-params.Ng2, params.Ng2):
+                    gp1 = -g1 + carry1
+                    gp2 = -g2 + carry2
+                    target = result.coeff[
+                        ik1,
+                        ik2,
+                        g1 + params.Ng1,
+                        g2 + params.Ng2,
+                        1,
+                        :,
+                        :,
+                    ]
+                    if -params.Ng1 <= gp1 < params.Ng1 and -params.Ng2 <= gp2 < params.Ng2:
+                        expected = np.conj(
+                            result.coeff[
+                                source_ik1,
+                                source_ik2,
+                                gp1 + params.Ng1,
+                                gp2 + params.Ng2,
+                                0,
+                                :,
+                                :,
+                            ]
+                        )
+                    else:
+                        invalid_boundary_count += 1
+                        expected = np.zeros_like(target)
+                    np.testing.assert_array_equal(target, expected)
+
+    assert params.N1 != params.N2
+    assert (-1) // params.N1 == -1
+    assert (-1) // params.N2 == -1
+    assert invalid_boundary_count > 0
+    np.testing.assert_array_equal(
+        result.coeff[0, :, 0, :, 1, :, :],
+        np.zeros_like(result.coeff[0, :, 0, :, 1, :, :]),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Pinned-source stage-2 fixture parity (fixture generated out of process)
+# ---------------------------------------------------------------------------
+
+
+_COMPANION_FIXTURE_DIRECTORY = (
+    Path(__file__).resolve().parent / "fixtures" / "tbg_companion_single_particle_v1"
+)
+_COMPANION_FIXTURE_ARRAY_KEYS = {
+    "parent_h_0_0",
+    "parent_h_1_2",
+    "rlv_Etens1",
+    "rlv_Etens2",
+    "rlv_M1",
+    "rlv_M2",
+    "rlv_b1",
+    "rlv_b2",
+    "source_U_C2T",
+    "source_coeff",
+    "source_sp_energy_ev",
+    *(f"sub_index_{ik1}_{ik2}" for ik1 in range(2) for ik2 in range(3)),
+}
+
+
+def _companion_fixture_file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _companion_fixture_array_sha256(values: np.ndarray) -> str:
+    array = np.ascontiguousarray(values)
+    digest = hashlib.sha256()
+    digest.update(np.asarray(array.shape, dtype=np.dtype("<i8")).tobytes(order="C"))
+    digest.update(array.tobytes(order="C"))
+    return digest.hexdigest()
+
+
+def _companion_fixture_json_sha256(payload: object) -> str:
+    encoded = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _is_sha256(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
+@pytest.fixture(scope="module")
+def companion_single_particle_source_fixture():
+    manifest_path = _COMPANION_FIXTURE_DIRECTORY / "manifest.json"
+    generator_path = _COMPANION_FIXTURE_DIRECTORY / "generate_fixture.py"
+    assert manifest_path.is_file(), (
+        "Pinned companion fixture manifest is absent; explicitly run "
+        "tests/fixtures/tbg_companion_single_particle_v1/generate_fixture.py first"
+    )
+    assert generator_path.is_file(), "Pinned companion fixture generator is absent"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    fixture_path = _COMPANION_FIXTURE_DIRECTORY / manifest["fixture_npz"]
+    assert fixture_path.is_file(), (
+        "Pinned companion fixture NPZ is absent; explicitly run "
+        "tests/fixtures/tbg_companion_single_particle_v1/generate_fixture.py first"
+    )
+    with np.load(fixture_path, allow_pickle=False) as archive:
+        arrays = {key: np.array(archive[key], copy=True) for key in archive.files}
+    return manifest, arrays, generator_path, fixture_path
+
+
+def test_companion_source_fixture_manifest_and_payload_are_hash_bound(
+    companion_single_particle_source_fixture,
+) -> None:
+    manifest, arrays, generator_path, fixture_path = companion_single_particle_source_fixture
+    assert manifest["fixture_schema"] == (
+        "mean_field.tbg.companion_single_particle.source_fixture"
+    )
+    assert manifest["fixture_schema_version"] == 1
+    assert manifest["array_hash_semantics"] == (
+        TBG_ZERO_FIELD_COMPANION_ARRAY_HASH_SEMANTICS
+    )
+    assert manifest["pointwise_gauge_warning"] == (
+        TBG_ZERO_FIELD_COMPANION_POINTWISE_GAUGE_WARNING
+    )
+    assert manifest["residual_gauge_ambiguity"] == (
+        TBG_ZERO_FIELD_COMPANION_RESIDUAL_GAUGE_AMBIGUITY
+    )
+
+    expected_input = {
+        "N1": 2,
+        "N2": 3,
+        "Ng1": 2,
+        "Ng2": 2,
+        "n_active": 1,
+        "theta": 1.08,
+        "wAA": 0.07,
+        "wAB": 0.11,
+        "strain": 0.003,
+        "varphi": 17.0,
+    }
+    assert manifest["input"] == expected_input
+    assert all(manifest["resolved_input"][key] == value for key, value in expected_input.items())
+    assert manifest["resolved_input_sha256"] == _companion_fixture_json_sha256(
+        manifest["resolved_input"]
+    )
+
+    pinned_source = manifest["pinned_source"]
+    assert pinned_source["reference_repository"] == TBG_ZERO_FIELD_COMPANION_REFERENCE_REPOSITORY
+    assert pinned_source["reference_commit"] == TBG_ZERO_FIELD_COMPANION_REFERENCE_COMMIT
+    assert pinned_source["default_input"] == {
+        "path": TBG_ZERO_FIELD_COMPANION_DEFAULT_INPUT_SOURCE,
+        "sha256": "c143c294ad95cf94d91cfbabd0437556e5c2a342850d54484c9b47caaf84b4de",
+    }
+    assert pinned_source["default_input"]["sha256"] == (
+        TBG_ZERO_FIELD_COMPANION_DEFAULT_INPUT_SOURCE_SHA256
+    )
+    assert pinned_source["single_particle"] == {
+        "path": (
+            f"{TBG_ZERO_FIELD_COMPANION_REFERENCE_REPOSITORY}/"
+            f"{TBG_ZERO_FIELD_COMPANION_REFERENCE_SOURCE}"
+        ),
+        "sha256": TBG_ZERO_FIELD_COMPANION_REFERENCE_SOURCE_SHA256,
+    }
+    assert pinned_source["constants"] == {
+        "path": (
+            f"{TBG_ZERO_FIELD_COMPANION_REFERENCE_REPOSITORY}/"
+            f"{TBG_ZERO_FIELD_COMPANION_CONSTANTS_SOURCE}"
+        ),
+        "sha256": TBG_ZERO_FIELD_COMPANION_CONSTANTS_SOURCE_SHA256,
+    }
+    assert pinned_source["source_line_ranges"] == {
+        "C2T_symmetry": "265-279",
+        "Kprime_time_reversal": "190-200",
+        "gen_RLVs": "20-49",
+        "gen_coeff": "113-202",
+        "gen_moire_hamiltonian": "51-111",
+        "pointwise_C2T_gauge": "177-188",
+    }
+
+    assert manifest["generator_script"] == generator_path.name
+    assert _is_sha256(manifest["generator_script_sha256"])
+    assert manifest["generator_script_sha256"] == _companion_fixture_file_sha256(
+        generator_path
+    )
+    assert manifest["fixture_npz"] == fixture_path.name
+    assert _is_sha256(manifest["fixture_npz_sha256"])
+    assert manifest["fixture_npz_sha256"] == _companion_fixture_file_sha256(fixture_path)
+
+    assert set(manifest["arrays"]) == _COMPANION_FIXTURE_ARRAY_KEYS
+    assert set(arrays) == _COMPANION_FIXTURE_ARRAY_KEYS
+    for key in sorted(_COMPANION_FIXTURE_ARRAY_KEYS):
+        record = manifest["arrays"][key]
+        array = arrays[key]
+        assert set(record) == {"dtype", "sha256", "shape"}
+        assert record["shape"] == list(array.shape)
+        assert record["dtype"] == array.dtype.str
+        assert _is_sha256(record["sha256"])
+        assert record["sha256"] == _companion_fixture_array_sha256(array)
+
+    assert arrays["rlv_M1"].shape == (2, 2)
+    assert arrays["rlv_M2"].shape == (2, 2)
+    assert arrays["rlv_b1"].shape == (2,)
+    assert arrays["rlv_b2"].shape == (2,)
+    assert arrays["rlv_Etens1"].shape == (2, 2)
+    assert arrays["rlv_Etens2"].shape == (2, 2)
+    assert arrays["parent_h_0_0"].shape == (64, 64)
+    assert arrays["parent_h_1_2"].shape == (64, 64)
+    assert arrays["source_coeff"].shape == (2, 3, 4, 4, 2, 2, 4)
+    assert arrays["source_sp_energy_ev"].shape == (2, 3, 2, 2)
+    assert arrays["source_U_C2T"].shape == (2, 3, 2, 2, 2)
+
+
+def test_companion_port_matches_pinned_source_fixture_geometry_hamiltonian_and_energy(
+    companion_single_particle_source_fixture,
+) -> None:
+    _manifest, arrays, _generator_path, _fixture_path = (
+        companion_single_particle_source_fixture
+    )
+    params = _small_companion_single_particle_params(N1=2, N2=3)
+    geometry = gen_companion_RLVs(params)
+    for attribute, fixture_key in (
+        ("M1", "rlv_M1"),
+        ("M2", "rlv_M2"),
+        ("b1", "rlv_b1"),
+        ("b2", "rlv_b2"),
+        ("Etens1", "rlv_Etens1"),
+        ("Etens2", "rlv_Etens2"),
+    ):
+        np.testing.assert_allclose(
+            getattr(geometry, attribute),
+            arrays[fixture_key],
+            rtol=0.0,
+            atol=5.0e-15,
+        )
+
+    for ik, fixture_key in (((0, 0), "parent_h_0_0"), ((1, 2), "parent_h_1_2")):
+        np.testing.assert_allclose(
+            gen_companion_moire_hamiltonian(params, ik, rlv_geometry=geometry),
+            arrays[fixture_key],
+            rtol=0.0,
+            atol=5.0e-13,
+        )
+
+    spec = TBGZeroFieldCompanionPlaneWaveSpec(
+        Ng1=params.Ng1,
+        Ng2=params.Ng2,
+        b1=geometry.b1_complex,
+        b2=geometry.b2_complex,
+    )
+    for ik1 in range(params.N1):
+        for ik2 in range(params.N2):
+            point_geometry = build_tbg_zero_field_companion_plane_wave_geometry(
+                spec,
+                N1=params.N1,
+                N2=params.N2,
+                ik1=ik1,
+                ik2=ik2,
+                stau=1,
+            )
+            np.testing.assert_array_equal(
+                np.asarray(point_geometry.sub_index, dtype=np.int64),
+                arrays[f"sub_index_{ik1}_{ik2}"],
+            )
+
+    result = solve_tbg_zero_field_companion_single_particle(params)
+    np.testing.assert_allclose(
+        result.sp_energy_ev,
+        arrays["source_sp_energy_ev"],
+        rtol=0.0,
+        atol=5.0e-13,
+    )
+    # Raw coeff/U_C2T hashes are deliberately not compared across eigensolvers.
+
+
+def _companion_parent_coefficients(
+    coeff: np.ndarray,
+    *,
+    ik1: int,
+    ik2: int,
+    tau: int,
+) -> np.ndarray:
+    return np.transpose(
+        coeff[ik1, ik2, :, :, tau, :, :],
+        (0, 1, 3, 2),
+    ).reshape(64, 2)
+
+
+def test_companion_port_matches_pinned_source_fixture_gauge_invariants_and_c2t(
+    companion_single_particle_source_fixture,
+) -> None:
+    _manifest, arrays, _generator_path, _fixture_path = (
+        companion_single_particle_source_fixture
+    )
+    params = _small_companion_single_particle_params(N1=2, N2=3)
+    result = solve_tbg_zero_field_companion_single_particle(params)
+    source_coeff = arrays["source_coeff"]
+    source_energy = arrays["source_sp_energy_ev"]
+    source_U_C2T = arrays["source_U_C2T"]
+
+    np.testing.assert_allclose(
+        companion_C2T_symmetry(params, source_coeff),
+        source_U_C2T,
+        rtol=0.0,
+        atol=2.0e-14,
+    )
+    np.testing.assert_allclose(
+        companion_C2T_symmetry(params, result.coeff),
+        result.U_C2T,
+        rtol=0.0,
+        atol=2.0e-14,
+    )
+
+    aligned_coeff = np.array(result.coeff, copy=True)
+    aligned_points: list[tuple[int, int, int]] = []
+    for ik1 in range(params.N1):
+        for ik2 in range(params.N2):
+            for tau in range(2):
+                source_parent = _companion_parent_coefficients(
+                    source_coeff,
+                    ik1=ik1,
+                    ik2=ik2,
+                    tau=tau,
+                )
+                port_parent = _companion_parent_coefficients(
+                    result.coeff,
+                    ik1=ik1,
+                    ik2=ik2,
+                    tau=tau,
+                )
+                np.testing.assert_allclose(
+                    port_parent @ port_parent.conj().T,
+                    source_parent @ source_parent.conj().T,
+                    rtol=0.0,
+                    atol=5.0e-11,
+                )
+                overlap = source_parent.conj().T @ port_parent
+                np.testing.assert_allclose(
+                    np.linalg.svd(overlap, compute_uv=False),
+                    np.ones(params.active_band_count),
+                    rtol=0.0,
+                    atol=5.0e-11,
+                )
+                np.testing.assert_allclose(
+                    np.linalg.svd(result.U_C2T[ik1, ik2, tau], compute_uv=False),
+                    np.linalg.svd(source_U_C2T[ik1, ik2, tau], compute_uv=False),
+                    rtol=0.0,
+                    atol=5.0e-11,
+                )
+
+                minimum_gap = float(
+                    np.min(np.abs(np.diff(source_energy[ik1, ik2, tau])))
+                )
+                if minimum_gap <= 1.0e-10:
+                    # Exact degeneracies retain U(N), not merely real-sign, freedom.
+                    continue
+                diagonal = np.diag(overlap)
+                off_diagonal = overlap - np.diag(diagonal)
+                np.testing.assert_allclose(off_diagonal, 0.0, rtol=0.0, atol=5.0e-10)
+                np.testing.assert_allclose(np.abs(diagonal), 1.0, rtol=0.0, atol=5.0e-10)
+                np.testing.assert_allclose(
+                    np.imag(diagonal),
+                    0.0,
+                    rtol=0.0,
+                    atol=5.0e-10,
+                )
+                signs = np.where(np.real(diagonal) >= 0.0, 1.0, -1.0)
+                aligned_coeff[ik1, ik2, :, :, tau, :, :] *= signs[
+                    np.newaxis,
+                    np.newaxis,
+                    :,
+                    np.newaxis,
+                ]
+                np.testing.assert_allclose(
+                    aligned_coeff[ik1, ik2, :, :, tau, :, :],
+                    source_coeff[ik1, ik2, :, :, tau, :, :],
+                    rtol=0.0,
+                    atol=5.0e-10,
+                )
+                aligned_points.append((ik1, ik2, tau))
+
+    assert aligned_points, "The custom fixture must exercise real-sign coefficient alignment"
+    aligned_U_C2T = companion_C2T_symmetry(params, aligned_coeff)
+    for ik1, ik2, tau in aligned_points:
+        np.testing.assert_allclose(
+            aligned_U_C2T[ik1, ik2, tau],
+            source_U_C2T[ik1, ik2, tau],
+            rtol=0.0,
+            atol=5.0e-10,
         )

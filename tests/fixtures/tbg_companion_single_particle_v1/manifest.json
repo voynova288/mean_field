@@ -1,0 +1,206 @@
+{
+  "array_hash_convention": "sha256_little_endian_int64_shape_then_C_order_little_endian_array_bytes",
+  "array_hash_semantics": "artifact_integrity_only_not_cross_eigensolver_parity",
+  "arrays": {
+    "parent_h_0_0": {
+      "dtype": "<c16",
+      "sha256": "1bdf4bfff2899ce9342d86d5bc0484560bc1508d20791cba9c832bfdb06ea34c",
+      "shape": [
+        64,
+        64
+      ]
+    },
+    "parent_h_1_2": {
+      "dtype": "<c16",
+      "sha256": "0287b12c8f84738acef216332b411cce0cde066fab16e63cfed6c474eaf5e898",
+      "shape": [
+        64,
+        64
+      ]
+    },
+    "rlv_Etens1": {
+      "dtype": "<f8",
+      "sha256": "e9fce4fd3a90681330d7c25b9a6dac82647fd6e413f1d5001f037a9cfd542628",
+      "shape": [
+        2,
+        2
+      ]
+    },
+    "rlv_Etens2": {
+      "dtype": "<f8",
+      "sha256": "7af8f832377b029d29bc65d04a86479dbe1983df07fc4ad83fff4dfa83605032",
+      "shape": [
+        2,
+        2
+      ]
+    },
+    "rlv_M1": {
+      "dtype": "<f8",
+      "sha256": "3f0f27fa8333f660990d9000e79dc869f92e505ec4b28f16c4fe5685e9aa3d22",
+      "shape": [
+        2,
+        2
+      ]
+    },
+    "rlv_M2": {
+      "dtype": "<f8",
+      "sha256": "664424e76ddfc8b67c00f6a07a87976bae81a68d87559b66135263def0570dcc",
+      "shape": [
+        2,
+        2
+      ]
+    },
+    "rlv_b1": {
+      "dtype": "<f8",
+      "sha256": "582bafda0052f50083723bdb956ceb45b8706c03fe52f04ea9a69597eeba1ce3",
+      "shape": [
+        2
+      ]
+    },
+    "rlv_b2": {
+      "dtype": "<f8",
+      "sha256": "2196964a17f4f56051b0cdc99d273c24916d92437b8d958fb927c07919f3abff",
+      "shape": [
+        2
+      ]
+    },
+    "source_U_C2T": {
+      "dtype": "<c16",
+      "sha256": "dc4195a67636a8d9c42acfbc5e1a68b4e243ec4f0d39ed4497dd2876e192b310",
+      "shape": [
+        2,
+        3,
+        2,
+        2,
+        2
+      ]
+    },
+    "source_coeff": {
+      "dtype": "<c16",
+      "sha256": "3690337f6c0bb84696528d0b5034918ebdd2b3c0234cb4b80875a41532fc9429",
+      "shape": [
+        2,
+        3,
+        4,
+        4,
+        2,
+        2,
+        4
+      ]
+    },
+    "source_sp_energy_ev": {
+      "dtype": "<f8",
+      "sha256": "c10bf45f4cd406df2fc297df06e5741287c4952759893650562909a4de59a4ca",
+      "shape": [
+        2,
+        3,
+        2,
+        2
+      ]
+    },
+    "sub_index_0_0": {
+      "dtype": "<i8",
+      "sha256": "03f6c44ebd3060b318b81c68a90588f869e49a1baadbc7a3591aa9dc6c482d0f",
+      "shape": [
+        12
+      ]
+    },
+    "sub_index_0_1": {
+      "dtype": "<i8",
+      "sha256": "d088bc3d87d2dede1317f5afe08dfaa800c935aab6350f348a27b2c49194f8c2",
+      "shape": [
+        16
+      ]
+    },
+    "sub_index_0_2": {
+      "dtype": "<i8",
+      "sha256": "de7c5b90925a913de1131828469e80760be378c5464e2eedb901f4eeef0607b3",
+      "shape": [
+        16
+      ]
+    },
+    "sub_index_1_0": {
+      "dtype": "<i8",
+      "sha256": "868d8bf1bcc4ce28876c2d3e76e5dba3c03cd9844fad1bc1aa7523db2e2171ec",
+      "shape": [
+        20
+      ]
+    },
+    "sub_index_1_1": {
+      "dtype": "<i8",
+      "sha256": "d96349815699879f48f4f13032583dda9e463a437e9f1da47aa3ea296aa27143",
+      "shape": [
+        18
+      ]
+    },
+    "sub_index_1_2": {
+      "dtype": "<i8",
+      "sha256": "ff6361e56db2175955a45848932e71062061cdff10f99102a84be207004c9586",
+      "shape": [
+        18
+      ]
+    }
+  },
+  "fixture_npz": "fixture.npz",
+  "fixture_npz_sha256": "274b7316e871ba1de9f7f69176014c4263e19642e75fba84d2b7ab0119e05f6d",
+  "fixture_schema": "mean_field.tbg.companion_single_particle.source_fixture",
+  "fixture_schema_version": 1,
+  "generator_script": "generate_fixture.py",
+  "generator_script_sha256": "80f791f36805236391ed14593cff38be1b593c270aad8359d27816a8cb55d13c",
+  "input": {
+    "N1": 2,
+    "N2": 3,
+    "Ng1": 2,
+    "Ng2": 2,
+    "n_active": 1,
+    "strain": 0.003,
+    "theta": 1.08,
+    "varphi": 17.0,
+    "wAA": 0.07,
+    "wAB": 0.11
+  },
+  "pinned_source": {
+    "constants": {
+      "path": "reference/TBG-HF/constants.py",
+      "sha256": "8d25bcccd54e41207788ff4a9e1b934a50347fabdad46ba44408fc535573ec62"
+    },
+    "default_input": {
+      "path": "reference/TBG-HF/int_input.json",
+      "sha256": "c143c294ad95cf94d91cfbabd0437556e5c2a342850d54484c9b47caaf84b4de"
+    },
+    "reference_commit": "0d2a3d742aa901fa45ce46690c1385887165f58c",
+    "reference_repository": "reference/TBG-HF",
+    "single_particle": {
+      "path": "reference/TBG-HF/singleParticle.py",
+      "sha256": "a050fa545c4d399b227a178bcc4705a110bd7962edcb9e1f69e300b5e1a3e43b"
+    },
+    "source_line_ranges": {
+      "C2T_symmetry": "265-279",
+      "Kprime_time_reversal": "190-200",
+      "gen_RLVs": "20-49",
+      "gen_coeff": "113-202",
+      "gen_moire_hamiltonian": "51-111",
+      "pointwise_C2T_gauge": "177-188"
+    }
+  },
+  "pointwise_gauge_warning": "pinned_singleParticle.py_lines_177-188_apply_a_pointwise_nondegenerate_C2T_phase_choice_only;insufficient_inside_degenerate_subspaces",
+  "residual_gauge_ambiguity": "residual_real_sign_per_nondegenerate_state_and_U(N)_rotation_within_degenerate_subspaces",
+  "resolved_input": {
+    "N1": 2,
+    "N2": 3,
+    "NG1": 5,
+    "NG2": 5,
+    "Ng1": 2,
+    "Ng2": 2,
+    "dsc": 2.5000000000000002e-08,
+    "gates": "dual",
+    "include_q=0": true,
+    "n_active": 1,
+    "strain": 0.003,
+    "theta": 1.08,
+    "varphi": 17.0,
+    "wAA": 0.07,
+    "wAB": 0.11
+  },
+  "resolved_input_sha256": "ace4597af41155dcc14efa27f737077d2700eb19d1d6dc3f9e53749188ba07a2"
+}
