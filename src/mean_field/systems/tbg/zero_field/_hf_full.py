@@ -296,24 +296,31 @@ def build_full_hf_kernel(
     params: TBGParameters,
     *,
     beta: float = 1.0,
+    _screened_overlap_blocks: HFOverlapBlockSet | None = None,
 ) -> HartreeFockKernel:
-    screened_overlap_blocks = _with_tbg_overlap_screening(
-        overlap_blocks,
-        lattice_kvec=np.asarray(lattice_kvec, dtype=np.complex128),
-        params=params,
+    screened_overlap_blocks = (
+        _with_tbg_overlap_screening(
+            overlap_blocks,
+            lattice_kvec=np.asarray(lattice_kvec, dtype=np.complex128),
+            params=params,
+        )
+        if _screened_overlap_blocks is None
+        else _screened_overlap_blocks
     )
     return build_projected_hf_kernel(
         state,
         screened_overlap_blocks,
         density_builder=lambda hamiltonian: _full_density_update_result(state, hamiltonian),
         energy_functional=compute_hf_energy,
-        oda_parameterizer=lambda state_obj, delta_density: oda_parametrization_restricted(
+        oda_parameterizer=lambda state_obj, delta_density: compute_oda_parameter(
             state_obj,
             delta_density,
-            overlap_blocks,
-            lattice_kvec,
-            params,
-            beta=beta,
+            interaction_builder=lambda density: build_projected_interaction_hamiltonian(
+                density,
+                screened_overlap_blocks,
+                v0=state_obj.v0,
+                beta=beta,
+            ),
         ),
         step_callback=_update_tbg_hf_step_state,
         final_state_callback=_update_tbg_hf_density_update_state,
@@ -331,6 +338,7 @@ def build_full_hf_problem(
     *,
     beta: float = 1.0,
     initial_density: np.ndarray | None = None,
+    _screened_overlap_blocks: HFOverlapBlockSet | None = None,
 ) -> HartreeFockProblem:
     return HartreeFockProblem(
         initializer=lambda state_obj, *, init_mode, seed: initialize_full_state(
@@ -345,6 +353,7 @@ def build_full_hf_problem(
             lattice_kvec,
             params,
             beta=beta,
+            _screened_overlap_blocks=_screened_overlap_blocks,
         ),
     )
 
@@ -363,15 +372,30 @@ def run_full_hartree_fock(
     initial_density: np.ndarray | None = None,
 ) -> RestrictedHartreeFockRun:
     normalized_init_mode = normalize_full_init_mode(init_mode)
+    resolved_lattice_kvec = np.asarray(lattice_kvec, dtype=np.complex128)
+    # Screen once: SCF, ODA, and the returned run must share this exact inventory.
+    screened_overlap_blocks = _with_tbg_overlap_screening(
+        overlap_blocks,
+        lattice_kvec=resolved_lattice_kvec,
+        params=params,
+    )
     state.diagnostics["beta"] = float(beta)
     state.diagnostics["oda_stall_threshold"] = float(oda_stall_threshold)
+    state.hf_source_receipt = build_tbg_zero_field_hf_source_receipt(
+        hf_mode="full",
+        beta=beta,
+        v0=state.v0,
+        lattice_kvec=resolved_lattice_kvec,
+        overlap_blocks=screened_overlap_blocks,
+    )
     problem = build_full_hf_problem(
         state,
-        overlap_blocks,
-        lattice_kvec,
+        screened_overlap_blocks,
+        resolved_lattice_kvec,
         params,
         beta=beta,
         initial_density=initial_density,
+        _screened_overlap_blocks=screened_overlap_blocks,
     )
     base_run = run_hartree_fock_problem(
         state,
@@ -383,7 +407,7 @@ def run_full_hartree_fock(
     )
     return RestrictedHartreeFockRun(
         state=state,
-        overlap_blocks=overlap_blocks,
+        overlap_blocks=screened_overlap_blocks,
         iter_energy=base_run.iter_energy,
         iter_err=base_run.iter_err,
         iter_oda=base_run.iter_oda,

@@ -9,6 +9,7 @@ import numpy as np
 
 from ....api.artifacts import ModelRecord, write_contract_artifacts
 from ..params import TBGParameters
+from ._hf_basis_overlap import TBGZeroFieldHFSourceReceipt
 
 _CONTRACT_FILENAMES = (
     "manifest.json",
@@ -240,7 +241,7 @@ def _b0_hf_observables(result: object) -> dict[str, object]:
     state = hf_run.state
     path_result = getattr(result, "path_result")
     band_data = getattr(path_result, "band_data")
-    return {
+    payload: dict[str, object] = {
         "benchmark_id": str(case.benchmark_id),
         "theta_deg": float(case.theta_deg),
         "nu": float(path_result.nu),
@@ -260,6 +261,14 @@ def _b0_hf_observables(result: object) -> dict[str, object]:
         },
         "state_shapes": _hf_state_shapes(state),
     }
+
+
+    receipt = getattr(state, "hf_source_receipt", None)
+    if receipt is not None:
+        if not isinstance(receipt, TBGZeroFieldHFSourceReceipt):
+            raise TypeError("hf_source_receipt must be a TBGZeroFieldHFSourceReceipt")
+        payload["hf_source_receipt"] = receipt.to_metadata()
+    return payload
 
 
 def write_bm_unstrained_benchmark_contract_sidecars(

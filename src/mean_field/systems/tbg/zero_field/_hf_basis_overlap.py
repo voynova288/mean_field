@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+import hashlib
+import json
+from typing import Any, Literal
+
 from ._hf_shared import *  # noqa: F401,F403
 
 from .model import BMSolution
@@ -7,6 +12,303 @@ from ..params import TBGParameters
 
 
 _compute_density_overlap_trace_from_diagonal = compute_density_overlap_trace_from_diagonal
+
+
+TBG_ZERO_FIELD_HF_SOURCE_RECEIPT_SCHEMA = "mean_field.tbg.zero_field.hf_source_receipt"
+TBG_ZERO_FIELD_HF_SOURCE_RECEIPT_SCHEMA_VERSION = 2
+TBG_ZERO_FIELD_CENTERED_REFERENCE_CONVENTION = "D_stored=(P_conventional-0.5*I)^T"
+
+
+def _validate_sha256(value: object, *, name: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{name} must be a SHA-256 hexadecimal string")
+    digest = value.strip().lower()
+    if len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
+        raise ValueError(f"{name} must be a SHA-256 hexadecimal digest")
+    return digest
+
+
+def _update_fingerprint_bytes(digest: Any, label: str, payload: bytes) -> None:
+    label_bytes = label.encode("utf-8")
+    digest.update(len(label_bytes).to_bytes(8, byteorder="little", signed=False))
+    digest.update(label_bytes)
+    digest.update(len(payload).to_bytes(8, byteorder="little", signed=False))
+    digest.update(payload)
+
+
+def _update_fingerprint_array(
+    digest: Any,
+    label: str,
+    values: np.ndarray,
+    *,
+    dtype: str,
+) -> None:
+    array = np.ascontiguousarray(np.asarray(values, dtype=np.dtype(dtype)))
+    _update_fingerprint_bytes(
+        digest,
+        f"{label}.shape",
+        np.asarray(array.shape, dtype=np.dtype("<i8")).tobytes(order="C"),
+    )
+    _update_fingerprint_bytes(digest, f"{label}.values", array.tobytes(order="C"))
+
+
+def tbg_zero_field_lattice_kvec_sha256(values: np.ndarray) -> str:
+    lattice = np.ascontiguousarray(
+        np.asarray(values, dtype=np.dtype("<c16")).reshape(-1)
+    )
+    return hashlib.sha256(lattice.tobytes(order="C")).hexdigest()
+
+
+def tbg_zero_field_overlap_kernel_inventory_fingerprint(
+    blocks: HFOverlapBlockSet,
+) -> str:
+    """Hash the exact ordered overlap and independently active kernel inventory."""
+
+    shifts = tuple((int(shift[0]), int(shift[1])) for shift in blocks.shifts)
+    if len(set(shifts)) != len(shifts):
+        raise ValueError("Overlap shifts must be unique for source fingerprinting")
+    gvecs = np.asarray(blocks.gvecs, dtype=np.complex128)
+    if gvecs.shape != (len(shifts),):
+        raise ValueError(
+            "Overlap shift and reciprocal-vector inventories differ for source fingerprinting"
+        )
+    shift_set = set(shifts)
+    if set(blocks.overlaps) != shift_set:
+        raise ValueError("Overlap block keys must exactly match the ordered shift inventory")
+    for label, mapping in (
+        ("diagonal-overlap", blocks.diagonal_overlaps),
+        ("Hartree", blocks.hartree_screening),
+        ("Fock", blocks.fock_screening),
+    ):
+        if not set(mapping) <= shift_set:
+            raise ValueError(f"{label} inventory contains shifts absent from overlaps")
+
+    digest = hashlib.sha256()
+    _update_fingerprint_bytes(
+        digest,
+        "domain",
+        b"TBGZeroFieldHFOverlapKernelInventory/v1",
+    )
+    _update_fingerprint_bytes(
+        digest,
+        "shift_count",
+        int(len(shifts)).to_bytes(8, byteorder="little", signed=False),
+    )
+    for index, shift in enumerate(shifts):
+        prefix = f"shift[{index}]"
+        _update_fingerprint_array(
+            digest,
+            f"{prefix}.label",
+            np.asarray(shift),
+            dtype="<i8",
+        )
+        _update_fingerprint_array(
+            digest,
+            f"{prefix}.gvec",
+            np.asarray(gvecs[index]),
+            dtype="<c16",
+        )
+        _update_fingerprint_array(
+            digest,
+            f"{prefix}.overlap",
+            blocks.overlaps[shift],
+            dtype="<c16",
+        )
+
+        has_diagonal = shift in blocks.diagonal_overlaps
+        _update_fingerprint_bytes(
+            digest,
+            f"{prefix}.diagonal.present",
+            bytes((int(has_diagonal),)),
+        )
+        if has_diagonal:
+            _update_fingerprint_array(
+                digest,
+                f"{prefix}.diagonal",
+                blocks.diagonal_overlaps[shift],
+                dtype="<c16",
+            )
+
+        has_hartree = shift in blocks.hartree_screening
+        _update_fingerprint_bytes(
+            digest,
+            f"{prefix}.hartree.present",
+            bytes((int(has_hartree),)),
+        )
+        if has_hartree:
+            _update_fingerprint_array(
+                digest,
+                f"{prefix}.hartree",
+                np.asarray(float(blocks.hartree_screening[shift])),
+                dtype="<f8",
+            )
+
+        has_fock = shift in blocks.fock_screening
+        _update_fingerprint_bytes(
+            digest,
+            f"{prefix}.fock.present",
+            bytes((int(has_fock),)),
+        )
+        if has_fock:
+            _update_fingerprint_array(
+                digest,
+                f"{prefix}.fock",
+                blocks.fock_screening[shift],
+                dtype="<c16",
+            )
+    return digest.hexdigest()
+
+
+@dataclass(frozen=True)
+class TBGZeroFieldHFSourceReceipt:
+    """Immutable identity of the exact zero-field HF functional source."""
+
+    hf_mode: Literal["full", "restricted"]
+    beta: float
+    v0: float
+    lattice_kvec_sha256: str
+    overlap_kernel_inventory_sha256: str
+    schema: str = TBG_ZERO_FIELD_HF_SOURCE_RECEIPT_SCHEMA
+    schema_version: int = TBG_ZERO_FIELD_HF_SOURCE_RECEIPT_SCHEMA_VERSION
+    centered_reference_convention: str = TBG_ZERO_FIELD_CENTERED_REFERENCE_CONVENTION
+
+    def __post_init__(self) -> None:
+        if self.schema != TBG_ZERO_FIELD_HF_SOURCE_RECEIPT_SCHEMA:
+            raise ValueError(f"Unsupported TBG zero-field HF receipt schema {self.schema!r}")
+        if (
+            not isinstance(self.schema_version, (int, np.integer))
+            or isinstance(self.schema_version, (bool, np.bool_))
+            or int(self.schema_version) != TBG_ZERO_FIELD_HF_SOURCE_RECEIPT_SCHEMA_VERSION
+        ):
+            raise ValueError(
+                f"Unsupported TBG zero-field HF receipt schema version {self.schema_version!r}"
+            )
+        if not isinstance(self.hf_mode, str) or self.hf_mode not in ("full", "restricted"):
+            raise ValueError(f"Unsupported TBG zero-field hf_mode {self.hf_mode!r}")
+        if (
+            not isinstance(self.beta, (int, float, np.integer, np.floating))
+            or isinstance(self.beta, (bool, np.bool_))
+        ):
+            raise ValueError("TBG zero-field HF receipt beta must be a real scalar")
+        beta = float(self.beta)
+        if not np.isfinite(beta):
+            raise ValueError(f"TBG zero-field HF receipt beta must be finite, got {self.beta}")
+        if (
+            not isinstance(self.v0, (int, float, np.integer, np.floating))
+            or isinstance(self.v0, (bool, np.bool_))
+        ):
+            raise ValueError("TBG zero-field HF receipt v0 must be a real scalar")
+        v0 = float(self.v0)
+        if not np.isfinite(v0):
+            raise ValueError(f"TBG zero-field HF receipt v0 must be finite, got {self.v0}")
+        if self.centered_reference_convention != TBG_ZERO_FIELD_CENTERED_REFERENCE_CONVENTION:
+            raise ValueError(
+                "Unsupported TBG zero-field centered-reference convention "
+                f"{self.centered_reference_convention!r}"
+            )
+        object.__setattr__(self, "beta", beta)
+        object.__setattr__(self, "v0", v0)
+        object.__setattr__(self, "schema_version", int(self.schema_version))
+        object.__setattr__(
+            self,
+            "lattice_kvec_sha256",
+            _validate_sha256(self.lattice_kvec_sha256, name="lattice_kvec_sha256"),
+        )
+        object.__setattr__(
+            self,
+            "overlap_kernel_inventory_sha256",
+            _validate_sha256(
+                self.overlap_kernel_inventory_sha256,
+                name="overlap_kernel_inventory_sha256",
+            ),
+        )
+
+    def _payload(self) -> dict[str, object]:
+        return {
+            "beta": self.beta,
+            "centered_reference_convention": self.centered_reference_convention,
+            "hf_mode": self.hf_mode,
+            "lattice_kvec_sha256": self.lattice_kvec_sha256,
+            "overlap_kernel_inventory_sha256": self.overlap_kernel_inventory_sha256,
+            "schema": self.schema,
+            "schema_version": self.schema_version,
+            "v0": self.v0,
+        }
+
+    @property
+    def fingerprint(self) -> str:
+        encoded = json.dumps(
+            self._payload(),
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    def to_metadata(self) -> dict[str, object]:
+        payload = self._payload()
+        payload["fingerprint"] = self.fingerprint
+        return payload
+
+    @classmethod
+    def from_metadata(cls, metadata: Mapping[str, object]) -> "TBGZeroFieldHFSourceReceipt":
+        payload = dict(metadata)
+        expected_keys = {
+            "beta",
+            "centered_reference_convention",
+            "fingerprint",
+            "hf_mode",
+            "lattice_kvec_sha256",
+            "overlap_kernel_inventory_sha256",
+            "schema",
+            "schema_version",
+            "v0",
+        }
+        if set(payload) != expected_keys:
+            raise ValueError(
+                "TBG zero-field HF receipt metadata keys differ from the supported schema: "
+                f"expected={sorted(expected_keys)}, got={sorted(payload)}"
+            )
+        receipt = cls(
+            hf_mode=payload["hf_mode"],  # type: ignore[arg-type]
+            beta=payload["beta"],  # type: ignore[arg-type]
+            v0=payload["v0"],  # type: ignore[arg-type]
+            lattice_kvec_sha256=payload["lattice_kvec_sha256"],  # type: ignore[arg-type]
+            overlap_kernel_inventory_sha256=payload[
+                "overlap_kernel_inventory_sha256"
+            ],  # type: ignore[arg-type]
+            schema=payload["schema"],  # type: ignore[arg-type]
+            schema_version=payload["schema_version"],  # type: ignore[arg-type]
+            centered_reference_convention=payload[
+                "centered_reference_convention"
+            ],  # type: ignore[arg-type]
+        )
+        expected_fingerprint = _validate_sha256(
+            payload["fingerprint"],
+            name="fingerprint",
+        )
+        if receipt.fingerprint != expected_fingerprint:
+            raise ValueError("TBG zero-field HF receipt metadata fingerprint does not match its fields")
+        return receipt
+
+
+def build_tbg_zero_field_hf_source_receipt(
+    *,
+    hf_mode: Literal["full", "restricted"],
+    beta: float,
+    v0: float,
+    lattice_kvec: np.ndarray,
+    overlap_blocks: HFOverlapBlockSet,
+) -> TBGZeroFieldHFSourceReceipt:
+    return TBGZeroFieldHFSourceReceipt(
+        hf_mode=hf_mode,
+        beta=float(beta),
+        v0=float(v0),
+        lattice_kvec_sha256=tbg_zero_field_lattice_kvec_sha256(lattice_kvec),
+        overlap_kernel_inventory_sha256=(
+            tbg_zero_field_overlap_kernel_inventory_fingerprint(overlap_blocks)
+        ),
+    )
 
 
 @dataclass(frozen=True)
@@ -31,6 +333,7 @@ class RestrictedHartreeFockState:
     n_eta: int = 2
     n_band: int = 2
     diagnostics: dict[str, float] = field(default_factory=dict)
+    hf_source_receipt: "TBGZeroFieldHFSourceReceipt | None" = None
 
     @property
     def nt(self) -> int:

@@ -10,7 +10,9 @@ from ....core.hf import (
 from ._hf_basis_overlap import (
     RestrictedHartreeFockRun,
     RestrictedHartreeFockState,
+    TBGZeroFieldHFSourceReceipt,
     build_h0_from_bm,
+    build_tbg_zero_field_hf_source_receipt,
     build_interaction_hamiltonian,
     build_overlap_block_set,
     coulomb_unit,
@@ -19,6 +21,8 @@ from ._hf_basis_overlap import (
     restricted_occupied_bands_per_k,
     restricted_occupied_state_count,
     screened_coulomb,
+    tbg_zero_field_lattice_kvec_sha256,
+    tbg_zero_field_overlap_kernel_inventory_fingerprint,
 )
 from ._hf_restricted import (
     build_restricted_density_from_hamiltonian,
@@ -55,11 +59,13 @@ __all__ = [
     "HFOverlapBlockSet",
     "RestrictedHartreeFockRun",
     "RestrictedHartreeFockState",
+    "TBGZeroFieldHFSourceReceipt",
     "build_full_density_from_hamiltonian",
     "build_full_hf_kernel",
     "build_full_hf_problem",
     "build_h0_from_bm",
     "build_interaction_hamiltonian",
+    "build_tbg_zero_field_hf_source_receipt",
     "build_overlap_block_set",
     "build_restricted_density_from_hamiltonian",
     "build_restricted_hf_kernel",
@@ -89,5 +95,7 @@ __all__ = [
     "run_restricted_hartree_fock",
     "run_restricted_hf_from_bm_solution",
     "screened_coulomb",
+    "tbg_zero_field_lattice_kvec_sha256",
+    "tbg_zero_field_overlap_kernel_inventory_fingerprint",
     "update_restricted_density",
 ]

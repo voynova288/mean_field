@@ -35,6 +35,7 @@ from mean_field.core.hf.contracts_bridge import density_state_from_delta
 from .hf import (
     RestrictedHartreeFockRun,
     RestrictedHartreeFockState,
+    TBGZeroFieldHFSourceReceipt,
     build_overlap_block_set,
     restricted_filling,
     restricted_occupied_state_count,
@@ -77,6 +78,34 @@ def _float_diagnostics(values: Mapping[str, Any]) -> dict[str, float]:
         if finite is not None:
             out[str(key)] = finite
     return out
+
+
+def _hf_source_receipt_metadata(
+    state: RestrictedHartreeFockState,
+) -> dict[str, object] | None:
+    receipt = state.hf_source_receipt
+    if receipt is None:
+        return None
+    if not isinstance(receipt, TBGZeroFieldHFSourceReceipt):
+        raise TypeError("hf_source_receipt must be a TBGZeroFieldHFSourceReceipt")
+    return receipt.to_metadata()
+
+
+def _archive_manifest_with_hf_source_receipt(
+    archive_manifest: Mapping[str, Any] | None,
+    state: RestrictedHartreeFockState,
+) -> dict[str, Any]:
+    resolved = dict(archive_manifest or {})
+    receipt_metadata = _hf_source_receipt_metadata(state)
+    if receipt_metadata is None:
+        return resolved
+    existing = resolved.get("hf_source_receipt")
+    if existing is not None and existing != receipt_metadata:
+        raise ValueError(
+            "archive_manifest hf_source_receipt conflicts with the typed HF state receipt"
+        )
+    resolved["hf_source_receipt"] = receipt_metadata
+    return resolved
 
 
 def _single_particle_model(solution: BMSolution) -> ContractSingleParticleModel:
@@ -494,6 +523,19 @@ def tbg_zero_field_hf_run_to_hf_run_result(
 
     state = run.state
     lk = _infer_b0_lk(grid_solution)
+    canonical_observables: dict[str, object] = {
+        "eigenvectors_active_available": False,
+        "grid_solution_available": True,
+        "grid_lk": int(lk),
+        "bm_lg": int(grid_solution.lg),
+        "nu": float(state.nu),
+        "filling_from_density": float(restricted_filling(state.density)),
+        "micro_wavefunctions_source": "BMSolution.uk",
+        "micro_wavefunctions_spin_degeneracy_implicit": True,
+    }
+    receipt_metadata = _hf_source_receipt_metadata(state)
+    if receipt_metadata is not None:
+        canonical_observables["hf_source_receipt"] = receipt_metadata
     final_state = ContractHFState(
         basis=_projected_basis(run, grid_solution),
         density=_density_state(run),
@@ -501,16 +543,7 @@ def tbg_zero_field_hf_run_to_hf_run_result(
         energies=np.asarray(state.energies, dtype=float),
         eigenvectors_active=np.empty((0,), dtype=np.complex128),
         mu=float(state.mu),
-        observables={
-            "eigenvectors_active_available": False,
-            "grid_solution_available": True,
-            "grid_lk": int(lk),
-            "bm_lg": int(grid_solution.lg),
-            "nu": float(state.nu),
-            "filling_from_density": float(restricted_filling(state.density)),
-            "micro_wavefunctions_source": "BMSolution.uk",
-            "micro_wavefunctions_spin_degeneracy_implicit": True,
-        },
+        observables=canonical_observables,
         diagnostics=_float_diagnostics(state.diagnostics),
     )
     return ContractHFRunResult(
@@ -520,7 +553,10 @@ def tbg_zero_field_hf_run_to_hf_run_result(
         exit_reason=str(run.exit_reason),
         best_seed=int(run.seed),
         init_mode=str(run.init_mode),
-        archive_manifest={} if archive_manifest is None else dict(archive_manifest),
+        archive_manifest=_archive_manifest_with_hf_source_receipt(
+            archive_manifest,
+            state,
+        ),
     )
 
 
@@ -594,7 +630,7 @@ def _validate_hf_config_matches_run(config: "HFConfig", run: RestrictedHartreeFo
 
 def _result_observables(run: RestrictedHartreeFockRun, grid_solution: BMSolution) -> dict[str, object]:
     state = run.state
-    return {
+    observables: dict[str, object] = {
         "nu": float(state.nu),
         "filling_from_density": float(restricted_filling(state.density)),
         "converged": bool(run.converged),
@@ -606,6 +642,10 @@ def _result_observables(run: RestrictedHartreeFockRun, grid_solution: BMSolution
         "grid_lk": int(_infer_b0_lk(grid_solution)),
         "bm_lg": int(grid_solution.lg),
     }
+    receipt_metadata = _hf_source_receipt_metadata(state)
+    if receipt_metadata is not None:
+        observables["hf_source_receipt"] = receipt_metadata
+    return observables
 
 
 def tbg_zero_field_hf_run_to_hf_result(
