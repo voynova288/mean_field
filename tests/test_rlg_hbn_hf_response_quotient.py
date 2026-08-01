@@ -926,6 +926,9 @@ def test_rlg_hbn_q0_response_rejects_nonzero_reciprocal_alias() -> None:
         require_converged=False,
     )
     assert validated.provenance["source_provenance_validated"] is True
+    assert validated.provenance["response_scope"] == "q0_dense_stored_density_derivative"
+    assert "global_dense_scalar_extension" not in validated.provenance
+    assert "cross_role_dense_recomposition_authorized" not in validated.provenance
 
     with pytest.raises(ValueError, match="does not match"):
         apply_rlg_hbn_hf_quotient_response(

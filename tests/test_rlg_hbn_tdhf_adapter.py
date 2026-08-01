@@ -1287,6 +1287,8 @@ def test_rlg_hbn_hf_single_representative_q0_response_uses_source_kernel() -> No
     )
     np.testing.assert_allclose(response.total, expected, rtol=1.0e-12, atol=1.0e-12)
     assert response.provenance["source_provenance_validated"]
+    assert response.provenance["response_scope"] == "q0_dense_stored_density_derivative"
+    assert "global_dense_scalar_extension" not in response.provenance
 
     generic = apply_rlg_hbn_hf_single_representative_finite_q_response(
         run,
@@ -1297,6 +1299,12 @@ def test_rlg_hbn_hf_single_representative_q0_response_uses_source_kernel() -> No
     np.testing.assert_allclose(generic.hartree, response.hartree, rtol=1.0e-12, atol=1.0e-12)
     np.testing.assert_allclose(generic.fock, response.fock, rtol=1.0e-12, atol=1.0e-12)
     np.testing.assert_allclose(generic.total, response.total, rtol=1.0e-12, atol=1.0e-12)
+    assert generic.provenance["response_scope"] == "track_p_role_resolved_dense_column_action_v2"
+    assert generic.provenance["role_dependent_kernel"] is True
+    assert generic.provenance["projected_ab_column_action"] is False
+    assert generic.provenance["cross_role_dense_recomposition_authorized"] is False
+    assert generic.provenance["global_dense_scalar_extension"] == "not_established"
+    assert generic.provenance["pairing_adjointness_scope"] == "assembled_signed_ab_pair"
     assert generic.provenance["q_shift_raw"] == [0, 0]
     assert generic.provenance["provider_fingerprint"] == run.track_p_provider.fingerprint
     assert (
@@ -1373,7 +1381,12 @@ def test_rlg_hbn_hf_finite_q_tangent_preserves_signed_even_mesh_m_aliases() -> N
     )
     assert exact_m.q_shift == (-1, 0)
     assert exact_m.minus_q_shift == (1, 0)
-    assert exact_m.response_scope == "signed_raw_q_regulator_v1"
+    assert exact_m.response_scope == "track_p_role_resolved_projected_signed_q_regulator_v2"
+    assert exact_m.role_dependent_kernel is True
+    assert exact_m.projected_ab_column_action is True
+    assert exact_m.cross_role_dense_recomposition_authorized is False
+    assert exact_m.global_dense_scalar_extension == "not_established"
+    assert exact_m.pairing_adjointness_scope == "assembled_signed_ab_pair"
     legacy_m = build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs(
         run,
         orbitals,
@@ -1408,6 +1421,12 @@ def test_rlg_hbn_tdhf_single_representative_signed_q0_api_is_typed() -> None:
     assert result.q_shift == (0, 0)
     assert result.minus_q_shift == (0, 0)
     assert result.channel == "intervalley"
+    assert result.response_scope == "track_p_role_resolved_projected_signed_q_regulator_v2"
+    assert result.role_dependent_kernel is True
+    assert result.projected_ab_column_action is True
+    assert result.cross_role_dense_recomposition_authorized is False
+    assert result.global_dense_scalar_extension == "not_established"
+    assert result.pairing_adjointness_scope == "assembled_signed_ab_pair"
     np.testing.assert_allclose(result.plus.A, result.minus.A)
     np.testing.assert_allclose(result.plus.B, result.minus.B)
     np.testing.assert_allclose(result.plus.L, result.minus.L)
@@ -1754,6 +1773,46 @@ def test_rlg_hbn_tdhf_single_representative_signed_nonzero_q_uses_independent_pa
         )
     )
     assert unbatched_projected.total.shape == (len(pairs),)
+    for dense_response in (batched_ph, batched_hp):
+        assert (
+            dense_response.provenance["response_scope"]
+            == "track_p_role_resolved_dense_column_action_v2"
+        )
+        assert dense_response.provenance["role_dependent_kernel"] is True
+        assert dense_response.provenance["projected_ab_column_action"] is False
+        assert (
+            dense_response.provenance["cross_role_dense_recomposition_authorized"]
+            is False
+        )
+        assert (
+            dense_response.provenance["global_dense_scalar_extension"]
+            == "not_established"
+        )
+        assert (
+            dense_response.provenance["pairing_adjointness_scope"]
+            == "assembled_signed_ab_pair"
+        )
+    for projected_response in (projected_ph, projected_hp, unbatched_projected):
+        assert (
+            projected_response.provenance["response_scope"]
+            == "track_p_role_resolved_projected_ab_column_action_v2"
+        )
+        assert projected_response.provenance["role_dependent_kernel"] is True
+        assert projected_response.provenance["projected_ab_column_action"] is True
+        assert (
+            projected_response.provenance[
+                "cross_role_dense_recomposition_authorized"
+            ]
+            is False
+        )
+        assert (
+            projected_response.provenance["global_dense_scalar_extension"]
+            == "not_established"
+        )
+        assert (
+            projected_response.provenance["pairing_adjointness_scope"]
+            == "assembled_signed_ab_pair"
+        )
 
     rng = np.random.default_rng(71)
     dense_blocks = rng.normal(

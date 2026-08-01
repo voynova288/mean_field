@@ -41,10 +41,13 @@ class RLGhBNFiniteQDensityTangent:
 
     RLG/hBN HF stores ``ΔD[a,b]=<c_a^† c_b>-R[a,b]``. For q=0, a ph/X
     tangent therefore has orbital-basis entry ``D[h,p]=1`` while an hp/Y
-    tangent has ``D[p,h]=1``. Track P exposes a generic signed finite-q
-    response on this tangent; the fixed-quotient response remains q=0-only.
+    tangent has ``D[p,h]=1``. Track-P exposes a signed finite-q column action
+    on this tangent; the fixed-quotient response remains q=0-only.
     ``target_k`` is density axis 0 (dagger) and ``source_k`` is density axis 1
     (annihilation), so the endpoint arrays cannot collapse source/target k.
+    Each finite-q tangent must be role-homogeneous: a tangent contains either
+    ph or hp columns, never a mixed ph/hp dense recomposition. Track-P finite-q
+    does not establish a global dense scalar pairing.
     """
 
     q_shift: tuple[int, int]
@@ -1028,7 +1031,9 @@ def apply_rlg_hbn_hf_single_representative_finite_q_response(
     The input stores density axis-0/axis-1 fibers explicitly. The output has
     shape ``(nt, nt, nk)`` and enumerates Hamiltonian blocks with axis 0 at
     ``k+q`` and axis 1 at ``k``. Hartree and Fock components are returned
-    separately so TDHF A/B columns can be checked term by term.
+    separately so TDHF A/B columns can be checked term by term. Each tangent
+    must be role-homogeneous; mixed ph/hp dense recomposition and global scalar
+    pairing are unsupported for Track-P finite-q.
     """
 
     if bool(require_converged) and not bool(run.converged):
@@ -1091,7 +1096,12 @@ def apply_rlg_hbn_hf_single_representative_finite_q_response(
             RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION
         ),
         "source_provenance_validated": bool(require_provenance),
-        "response_scope": "generic_signed_q_dense_stored_density_derivative",
+        "response_scope": "track_p_role_resolved_dense_column_action_v2",
+        "role_dependent_kernel": True,
+        "projected_ab_column_action": False,
+        "cross_role_dense_recomposition_authorized": False,
+        "global_dense_scalar_extension": "not_established",
+        "pairing_adjointness_scope": "assembled_signed_ab_pair",
         "response_cache_fingerprint": provider.response_cache_fingerprint,
         "q_shift_raw": [int(q_shift[0]), int(q_shift[1])],
         "q_shift_torus": [
@@ -1133,7 +1143,9 @@ def project_rlg_hbn_hf_single_representative_finite_q_response(
 
     For output ``i``, ``output_base_k[i]=k``: ``output_bra[:, i]`` belongs to
     the Hamiltonian row/dagger fiber ``k+q`` and ``output_ket[:, i]`` belongs
-    to its column/annihilation fiber ``k``.
+    to its column/annihilation fiber ``k``. The projection is a role-resolved
+    A/B column action; mixed ph/hp dense recomposition and global scalar
+    pairing are unsupported for Track-P finite-q.
     """
 
     if bool(require_converged) and not bool(run.converged):
@@ -1213,7 +1225,12 @@ def project_rlg_hbn_hf_single_representative_finite_q_response(
             RLG_HBN_HF_SINGLE_REPRESENTATIVE_INTERACTION_CONVENTION_VERSION
         ),
         "source_provenance_validated": bool(require_provenance),
-        "response_scope": "generic_signed_q_projected_stored_density_derivative",
+        "response_scope": "track_p_role_resolved_projected_ab_column_action_v2",
+        "role_dependent_kernel": True,
+        "projected_ab_column_action": True,
+        "cross_role_dense_recomposition_authorized": False,
+        "global_dense_scalar_extension": "not_established",
+        "pairing_adjointness_scope": "assembled_signed_ab_pair",
         "response_cache_fingerprint": provider.response_cache_fingerprint,
         "q_shift_raw": [int(q_shift[0]), int(q_shift[1])],
         "q_shift_torus": [

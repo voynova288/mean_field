@@ -31,14 +31,19 @@ class RLGhBNTDHFFiniteQQuotientMatrixPair:
 
 @dataclass(frozen=True)
 class RLGhBNTDHFFiniteQSingleRepresentativeMatrixPair:
-    """Signed matrices derived from the fixed-G single-representative functional."""
+    """Role-resolved projected signed-q Track-P regulator matrix pair."""
 
     plus: TDHFMatrices
     minus: TDHFMatrices
     q_shift: tuple[int, int]
     minus_q_shift: tuple[int, int]
     channel: FiniteQChannel
-    response_scope: str = "signed_raw_q_regulator_v1"
+    response_scope: str = "track_p_role_resolved_projected_signed_q_regulator_v2"
+    role_dependent_kernel: bool = True
+    projected_ab_column_action: bool = True
+    cross_role_dense_recomposition_authorized: bool = False
+    global_dense_scalar_extension: str = "not_established"
+    pairing_adjointness_scope: str = "assembled_signed_ab_pair"
 
 
 def build_rlg_hbn_tdhf_finite_q_quotient_matrix_pair_from_pairs(
@@ -394,10 +399,12 @@ def build_rlg_hbn_tdhf_finite_q_single_representative_matrix_pair_from_pairs(
     _plus_term_collector: dict[str, np.ndarray] | None = None,
     _minus_term_collector: dict[str, np.ndarray] | None = None,
 ) -> RLGhBNTDHFFiniteQSingleRepresentativeMatrixPair:
-    """Build q and -q Hessians of one fixed-G single-representative functional.
+    """Build role-resolved projected signed-q Track-P regulator matrices.
 
-    Both signed sectors are assembled independently. The function does not
-    transport, average, Hermitize, or symmetrize assembled A/B blocks.
+    Both signed sectors are assembled independently from role-homogeneous ph/hp
+    column actions. The function does not transport, average, Hermitize, or
+    symmetrize assembled A/B blocks, and it does not authorize mixed-role dense
+    recomposition or a global dense scalar pairing.
     """
 
     if not np.isfinite(float(structure_tolerance)) or float(structure_tolerance) < 0.0:
