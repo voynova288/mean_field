@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import replace
+import hashlib
 import importlib
 import json
 from types import SimpleNamespace
@@ -18,6 +19,18 @@ from mean_field.systems.tbg.params import TBGParameters
 from mean_field.systems.tbg.zero_field import (
     BMSolution,
     HFOverlapBlockSet,
+    TBGZeroFieldCompanionInteractionSpec,
+    TBGZeroFieldCompanionPlaneWaveSpec,
+    TBG_ZERO_FIELD_COMPANION_HOPPING_REFERENCE_FUNCTION,
+    TBG_ZERO_FIELD_COMPANION_HOPPING_REFERENCE_LINES,
+    TBG_ZERO_FIELD_COMPANION_INTERACTION_REFERENCE_FUNCTION,
+    TBG_ZERO_FIELD_COMPANION_INTERACTION_REFERENCE_LINES,
+    TBG_ZERO_FIELD_COMPANION_PLANE_WAVE_REFERENCE_FUNCTION,
+    TBG_ZERO_FIELD_COMPANION_PLANE_WAVE_REFERENCE_LINES,
+    TBG_ZERO_FIELD_COMPANION_REFERENCE_COMMIT,
+    TBG_ZERO_FIELD_COMPANION_REFERENCE_REPOSITORY,
+    TBG_ZERO_FIELD_COMPANION_REFERENCE_SOURCE,
+    TBG_ZERO_FIELD_COMPANION_REFERENCE_SOURCE_SHA256,
     RestrictedHartreeFockRun,
     RestrictedHartreeFockState,
     TBGZeroFieldHFRunProvenance,
@@ -33,6 +46,8 @@ from mean_field.systems.tbg.zero_field import (
     TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_TANGENT_TOLERANCE,
     build_full_density_from_hamiltonian,
     build_overlap_block_set,
+    build_tbg_zero_field_companion_interaction_geometry,
+    build_tbg_zero_field_companion_plane_wave_geometry,
     build_restricted_density_from_hamiltonian,
     build_tbg_zero_field_half_open_torus_mesh,
     build_tbg_zero_field_diagnostic_hf_source_receipt,
@@ -1629,4 +1644,411 @@ def test_matrix_and_parity_calls_reject_post_context_live_source_mutation_with_r
             rebuilt_orbitals,
             matrices,
             columns=(0,),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Companion-faithful plane-wave and interaction geometry (bookkeeping only)
+# ---------------------------------------------------------------------------
+
+
+def test_companion_actual_unstrained_ng4_ng5_n10_reference_oracle() -> None:
+    """Check implementation bookkeeping against an independent Test001 oracle.
+
+    The hard-coded oracle was generated from the pinned reference
+    ``singleParticle.gen_RLVs`` output plus literal ``gen_coeff``,
+    ``gen_moire_hamiltonian``, and ``gen_interaction`` loops on unstrained
+    Test001.  It did not use the new companion-geometry module.  Together with
+    the synthetic checks below, this is one actual Test001 oracle plus focused
+    cases, not 10 oracle tests.  This is an implementation checkpoint only,
+    not validation of HF or TDHF physics.
+    """
+
+    assert TBG_ZERO_FIELD_COMPANION_REFERENCE_REPOSITORY == "reference/TBG-HF"
+    assert TBG_ZERO_FIELD_COMPANION_REFERENCE_COMMIT == (
+        "0d2a3d742aa901fa45ce46690c1385887165f58c"
+    )
+    assert TBG_ZERO_FIELD_COMPANION_REFERENCE_SOURCE == "singleParticle.py"
+    assert TBG_ZERO_FIELD_COMPANION_REFERENCE_SOURCE_SHA256 == (
+        "a050fa545c4d399b227a178bcc4705a110bd7962edcb9e1f69e300b5e1a3e43b"
+    )
+    assert TBG_ZERO_FIELD_COMPANION_PLANE_WAVE_REFERENCE_FUNCTION == "gen_coeff"
+    assert TBG_ZERO_FIELD_COMPANION_PLANE_WAVE_REFERENCE_LINES == "132-175"
+    assert TBG_ZERO_FIELD_COMPANION_HOPPING_REFERENCE_FUNCTION == (
+        "gen_moire_hamiltonian"
+    )
+    assert TBG_ZERO_FIELD_COMPANION_HOPPING_REFERENCE_LINES == "101-109"
+    assert TBG_ZERO_FIELD_COMPANION_INTERACTION_REFERENCE_FUNCTION == "gen_interaction"
+    assert TBG_ZERO_FIELD_COMPANION_INTERACTION_REFERENCE_LINES == "220-255"
+
+    b1 = complex(-1.7320508075688767, 0.0)
+    b2 = complex(0.8660254037844384, -1.4999999999999998)
+    plane_wave_spec = TBGZeroFieldCompanionPlaneWaveSpec(
+        Ng1=4,
+        Ng2=4,
+        b1=b1,
+        b2=b2,
+    )
+    interaction_spec = TBGZeroFieldCompanionInteractionSpec(
+        NG1=5,
+        NG2=5,
+        b1=b1,
+        b2=b2,
+    )
+
+    assert plane_wave_spec.b1 == complex(-1.7320508075688767, 0.0)
+    assert plane_wave_spec.b2 == complex(0.8660254037844384, -1.4999999999999998)
+    assert plane_wave_spec.radius == 4.999999999999999
+    assert interaction_spec.b1 == complex(-1.7320508075688767, 0.0)
+    assert interaction_spec.b2 == complex(0.8660254037844384, -1.4999999999999998)
+    assert interaction_spec.radius == pytest.approx(
+        7.4999999999999964,
+        rel=0.0,
+        abs=1.0e-14,
+    )
+
+    expected_plane_geometry = {
+        (0, 0): (
+            108,
+            "a9aea3f1e3b75df38352eae22c6cc70d416c0d65dfc736b5462fee3e7a53b379",
+            169,
+            72,
+            "6335d6c49ab7d2d7db8c6a8bdce8c86f70dac4ed3554fccf60c3bb95f682bb4d",
+        ),
+        (5, 0): (
+            124,
+            "02b5c1b816af2bc1974231c74652cf69381012a1134384b237a0a548d7734cec",
+            169,
+            83,
+            "b98f0346050ff8626e1aea55fbb195381eee0593aecdb74ac516a86580236575",
+        ),
+        (3, 7): (
+            118,
+            "b2c3661f0fc141e268cc4363cedf555ce33eb39238eb45fac67a02d3cbca4f70",
+            169,
+            77,
+            "a3dd4818d880ed1167a4f4d7bf9984a8a21d9aa36879b8b7d5dd05d0d100e2f6",
+        ),
+        (9, 9): (
+            112,
+            "2ae0655bb1dfd53233cd790fbba4e2e11960ef45380a61f431092daa7bd47f17",
+            169,
+            74,
+            "8efebb5ff626a46fb178d8946b74928111e96f3809ed5479420a71cceb97148a",
+        ),
+    }
+    for (ik1, ik2), expected in expected_plane_geometry.items():
+        geometry = build_tbg_zero_field_companion_plane_wave_geometry(
+            plane_wave_spec,
+            N1=10,
+            N2=10,
+            ik1=ik1,
+            ik2=ik2,
+            stau=1,
+        )
+        assert (
+            geometry.basis_count,
+            geometry.sub_index_sha256,
+            geometry.parent_hopping_edge_count,
+            geometry.active_hopping_edge_count,
+            geometry.hopping_edges_sha256,
+        ) == expected
+
+    interaction_geometry = build_tbg_zero_field_companion_interaction_geometry(
+        interaction_spec,
+        N1=10,
+        N2=10,
+    )
+    assert interaction_geometry.total_count == 10_000
+    assert interaction_geometry.active_count == 6_787
+    assert interaction_geometry.active_mask_sha256 == (
+        "71bef75a6476cb1c80aae0352ab5f1dab2b2569ba484bafab409ff0ed5103b44"
+    )
+    assert interaction_geometry.labels_sha256 == (
+        "060c05bde942742db7b1421833e8ddb78927d1c9ab1a3fe9d5c93c05d27b1aac"
+    )
+
+
+def test_companion_plane_wave_geometry_has_exact_subindex_and_zero_fill_edges() -> None:
+    spec = TBGZeroFieldCompanionPlaneWaveSpec(
+        Ng1=2,
+        Ng2=2,
+        b1=1.0 + 0.0j,
+        b2=0.0 + 1.0j,
+    )
+    geometry = build_tbg_zero_field_companion_plane_wave_geometry(
+        spec,
+        N1=1,
+        N2=1,
+        ik1=0,
+        ik2=0,
+        stau=1,
+    )
+
+    assert spec.g1_labels == (-2, -1, 0, 1)
+    assert spec.g2_labels == (-2, -1, 0, 1)
+    assert spec.radius == pytest.approx(4.0 / 3.0, rel=0.0, abs=1.0e-15)
+    assert geometry.sub_index == (
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+    )
+    assert geometry.basis_count == 16
+    assert geometry.parent_hopping_edge_count == 37
+    assert geometry.active_hopping_edge_count == 8
+    assert tuple(
+        (edge.channel, edge.source_label, edge.target_label)
+        for edge in geometry.active_hopping_edges
+    ) == (
+        ("T2", (-1, -1), (0, 0)),
+        ("T3", (-1, -1), (-1, 0)),
+        ("T1", (-1, 0), (-1, 0)),
+        ("T2", (-1, 0), (0, 1)),
+        ("T3", (-1, 0), (-1, 1)),
+        ("T3", (0, -1), (0, 0)),
+        ("T1", (0, 0), (0, 0)),
+        ("T3", (0, 0), (0, 1)),
+    )
+    assert all(
+        edge.source_companion_indices[0] % 4 == 2
+        and edge.target_companion_indices[0] % 4 == 0
+        for edge in geometry.hopping_edges
+    )
+    assert not any(
+        edge.channel == "T2" and (edge.source_label[0] == 1 or edge.source_label[1] == 1)
+        for edge in geometry.hopping_edges
+    )
+    assert not any(
+        edge.channel == "T3" and edge.source_label[1] == 1
+        for edge in geometry.hopping_edges
+    )
+    assert spec.to_metadata()["fingerprint"] == spec.fingerprint
+    assert geometry.to_metadata()["fingerprint"] == geometry.fingerprint
+    assert geometry.to_metadata()["spec_fingerprint"] == spec.fingerprint
+
+
+def test_companion_plane_wave_radius_preserves_literal_unequal_ng_source_behavior() -> None:
+    spec = TBGZeroFieldCompanionPlaneWaveSpec(
+        Ng1=2,
+        Ng2=1,
+        b1=1.0 + 0.0j,
+        b2=0.0 + 1.0j,
+    )
+
+    assert spec.g1_labels == (-2, -1, 0, 1)
+    assert spec.g2_labels == (-1, 0)
+    assert spec.radius == pytest.approx(4.0 / 3.0, rel=0.0, abs=1.0e-15)
+    assert spec.cutoff_convention == (
+        "rectangular_Ng1_Ng2_labels_but_pinned_gen_coeff_radius_uses_Ng1_in_all_four_"
+        "RX_RY_terms_including_b2_terms;strict_abs_Q_lt_radius_minus_margin"
+    )
+
+
+def test_companion_plane_wave_geometry_rejects_direct_k_prime_cutoff_reuse() -> None:
+    spec = TBGZeroFieldCompanionPlaneWaveSpec(
+        Ng1=1,
+        Ng2=1,
+        b1=1.0 + 0.0j,
+        b2=0.0 + 1.0j,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "K' must come from the separate companion time-reversal "
+            "mesh/wrapped-G construction, not direct cutoff reuse"
+        ),
+    ):
+        build_tbg_zero_field_companion_plane_wave_geometry(
+            spec,
+            N1=1,
+            N2=1,
+            ik1=0,
+            ik2=0,
+            stau=-1,
+        )
+
+
+def test_companion_interaction_geometry_has_exact_nested_mask_and_digest() -> None:
+    spec = TBGZeroFieldCompanionInteractionSpec(
+        NG1=1,
+        NG2=1,
+        b1=1.0 + 0.0j,
+        b2=0.0 + 1.0j,
+    )
+    geometry = build_tbg_zero_field_companion_interaction_geometry(spec, N1=2, N2=2)
+
+    assert spec.radius == pytest.approx(1.0, rel=0.0, abs=1.0e-15)
+    assert geometry.labels == (
+        (0, 0, -1, -1),
+        (0, 0, -1, 0),
+        (0, 0, 0, -1),
+        (0, 0, 0, 0),
+        (0, 1, -1, -1),
+        (0, 1, -1, 0),
+        (0, 1, 0, -1),
+        (0, 1, 0, 0),
+        (1, 0, -1, -1),
+        (1, 0, -1, 0),
+        (1, 0, 0, -1),
+        (1, 0, 0, 0),
+        (1, 1, -1, -1),
+        (1, 1, -1, 0),
+        (1, 1, 0, -1),
+        (1, 1, 0, 0),
+    )
+    assert geometry.active_indices == (3, 6, 7, 9, 11, 12, 13, 14, 15)
+    assert geometry.total_count == 16
+    assert geometry.active_count == 9
+    assert geometry.active_mask_sha256 == (
+        "8ebce8c2e35957ec2f9ae3aac180b563f7d07462a826346b3881f6770097916f"
+    )
+    assert spec.to_metadata()["fingerprint"] == spec.fingerprint
+    assert geometry.to_metadata()["fingerprint"] == geometry.fingerprint
+    assert geometry.to_metadata()["spec_fingerprint"] == spec.fingerprint
+
+
+def test_companion_interaction_radius_preserves_literal_unequal_ng_source_behavior() -> None:
+    spec = TBGZeroFieldCompanionInteractionSpec(
+        NG1=2,
+        NG2=1,
+        b1=1.0 + 0.0j,
+        b2=0.0 + 1.0j,
+    )
+
+    assert spec.G1_labels == (-2, -1, 0, 1)
+    assert spec.G2_labels == (-1, 0)
+    assert spec.radius == pytest.approx(2.0, rel=0.0, abs=1.0e-15)
+    assert spec.cutoff_convention == (
+        "rectangular_NG1_NG2_labels_but_pinned_gen_interaction_radius_uses_NG1_for_"
+        "both_R1_R2;strict_abs_total_Q_lt_radius_minus_margin"
+    )
+
+
+def test_companion_specs_pin_reference_identity_literals_in_metadata_and_fingerprints() -> None:
+    assert TBG_ZERO_FIELD_COMPANION_REFERENCE_REPOSITORY == "reference/TBG-HF"
+    assert TBG_ZERO_FIELD_COMPANION_REFERENCE_COMMIT == (
+        "0d2a3d742aa901fa45ce46690c1385887165f58c"
+    )
+    assert TBG_ZERO_FIELD_COMPANION_REFERENCE_SOURCE == "singleParticle.py"
+    assert TBG_ZERO_FIELD_COMPANION_REFERENCE_SOURCE_SHA256 == (
+        "a050fa545c4d399b227a178bcc4705a110bd7962edcb9e1f69e300b5e1a3e43b"
+    )
+    assert TBG_ZERO_FIELD_COMPANION_PLANE_WAVE_REFERENCE_FUNCTION == "gen_coeff"
+    assert TBG_ZERO_FIELD_COMPANION_PLANE_WAVE_REFERENCE_LINES == "132-175"
+    assert TBG_ZERO_FIELD_COMPANION_HOPPING_REFERENCE_FUNCTION == (
+        "gen_moire_hamiltonian"
+    )
+    assert TBG_ZERO_FIELD_COMPANION_HOPPING_REFERENCE_LINES == "101-109"
+    assert TBG_ZERO_FIELD_COMPANION_INTERACTION_REFERENCE_FUNCTION == "gen_interaction"
+    assert TBG_ZERO_FIELD_COMPANION_INTERACTION_REFERENCE_LINES == "220-255"
+
+    plane_wave_spec = TBGZeroFieldCompanionPlaneWaveSpec(
+        Ng1=1,
+        Ng2=1,
+        b1=1.0 + 0.0j,
+        b2=0.0 + 1.0j,
+    )
+    interaction_spec = TBGZeroFieldCompanionInteractionSpec(
+        NG1=1,
+        NG2=1,
+        b1=1.0 + 0.0j,
+        b2=0.0 + 1.0j,
+    )
+    shared_identity = {
+        "reference_commit": "0d2a3d742aa901fa45ce46690c1385887165f58c",
+        "reference_repository": "reference/TBG-HF",
+        "reference_source": "singleParticle.py",
+        "reference_source_sha256": (
+            "a050fa545c4d399b227a178bcc4705a110bd7962edcb9e1f69e300b5e1a3e43b"
+        ),
+    }
+
+    plane_wave_metadata = plane_wave_spec.to_metadata()
+    interaction_metadata = interaction_spec.to_metadata()
+    assert {key: plane_wave_metadata[key] for key in shared_identity} == shared_identity
+    assert {key: interaction_metadata[key] for key in shared_identity} == shared_identity
+    assert plane_wave_metadata["reference_function"] == "gen_coeff"
+    assert plane_wave_metadata["reference_lines"] == "132-175"
+    assert plane_wave_metadata["hopping_reference_function"] == (
+        "gen_moire_hamiltonian"
+    )
+    assert plane_wave_metadata["hopping_reference_lines"] == "101-109"
+    assert interaction_metadata["reference_function"] == "gen_interaction"
+    assert interaction_metadata["reference_lines"] == "220-255"
+
+    for metadata, fingerprint in (
+        (plane_wave_metadata, plane_wave_spec.fingerprint),
+        (interaction_metadata, interaction_spec.fingerprint),
+    ):
+        fingerprint_payload = dict(metadata)
+        assert fingerprint_payload.pop("fingerprint") == fingerprint
+        encoded = json.dumps(
+            fingerprint_payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+        assert hashlib.sha256(encoded).hexdigest() == fingerprint
+
+
+@pytest.mark.parametrize("bad_integer", [True, 1.0])
+def test_companion_geometry_rejects_non_strict_integer_specs(bad_integer: object) -> None:
+    with pytest.raises(TypeError, match="bool is not accepted"):
+        TBGZeroFieldCompanionPlaneWaveSpec(
+            Ng1=bad_integer,  # type: ignore[arg-type]
+            Ng2=1,
+            b1=1.0 + 0.0j,
+            b2=0.0 + 1.0j,
+        )
+    with pytest.raises(TypeError, match="bool is not accepted"):
+        TBGZeroFieldCompanionInteractionSpec(
+            NG1=1,
+            NG2=bad_integer,  # type: ignore[arg-type]
+            b1=1.0 + 0.0j,
+            b2=0.0 + 1.0j,
+        )
+
+
+def test_companion_geometry_rejects_bool_mesh_and_valley_indices() -> None:
+    plane_wave_spec = TBGZeroFieldCompanionPlaneWaveSpec(
+        Ng1=1,
+        Ng2=1,
+        b1=1.0 + 0.0j,
+        b2=0.0 + 1.0j,
+    )
+    with pytest.raises(TypeError, match="bool is not accepted"):
+        build_tbg_zero_field_companion_plane_wave_geometry(
+            plane_wave_spec,
+            N1=1,
+            N2=1,
+            ik1=0,
+            ik2=0,
+            stau=True,  # type: ignore[arg-type]
+        )
+
+    interaction_spec = TBGZeroFieldCompanionInteractionSpec(
+        NG1=1,
+        NG2=1,
+        b1=1.0 + 0.0j,
+        b2=0.0 + 1.0j,
+    )
+    with pytest.raises(TypeError, match="bool is not accepted"):
+        build_tbg_zero_field_companion_interaction_geometry(
+            interaction_spec,
+            N1=True,  # type: ignore[arg-type]
+            N2=1,
         )
