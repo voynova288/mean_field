@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import replace
 import importlib
 import json
@@ -8,24 +9,48 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from mean_field.core.hf import build_projected_interaction_hamiltonian
+from mean_field.core.hf import (
+    build_projected_interaction_hamiltonian,
+    calculate_norm_convergence,
+    compute_hf_energy,
+)
 from mean_field.systems.tbg.params import TBGParameters
 from mean_field.systems.tbg.zero_field import (
     BMSolution,
     HFOverlapBlockSet,
     RestrictedHartreeFockRun,
     RestrictedHartreeFockState,
+    TBGZeroFieldHFRunProvenance,
     TBGZeroFieldHFSourceReceipt,
+    TBGZeroFieldInteractionSpec,
     TBGZeroFieldTDHFContext,
     TBGZeroFieldTDHFOccupationResiduals,
     TBGZeroFieldTDHFOrbitals,
     TBGZeroFieldTDHFProvenance,
+    TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_CLOSURE_TOLERANCE_MEV,
+    TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_PROJECTOR_TOLERANCE,
+    TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_STRUCTURE_TOLERANCE,
+    TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_TANGENT_TOLERANCE,
+    build_full_density_from_hamiltonian,
+    build_overlap_block_set,
+    build_restricted_density_from_hamiltonian,
+    build_tbg_zero_field_half_open_torus_mesh,
+    build_tbg_zero_field_diagnostic_hf_source_receipt,
     build_tbg_zero_field_hf_source_receipt,
+    build_tbg_zero_field_screened_block_bundle,
     build_tbg_zero_field_tdhf_orbitals,
     build_tbg_zero_field_tdhf_q0_matrices,
     build_tbg_zero_field_tdhf_q0_pairs,
     conventional_projector_to_stored_density,
     conventional_tangent_to_stored_tangent,
+    coulomb_unit,
+    empty_overlap_block_set,
+    screened_coulomb,
+    run_full_hartree_fock,
+    run_full_hf_from_bm_solution,
+    run_restricted_hf_from_bm_solution,
+    solve_bm_model,
+    solve_bm_model_on_torus,
     stored_density_to_conventional_projector,
     stored_tangent_to_conventional_tangent,
     tbg_zero_field_lattice_kvec_sha256,
@@ -34,9 +59,14 @@ from mean_field.systems.tbg.zero_field import (
 )
 
 
+_INTERACTION_SPEC = TBGZeroFieldInteractionSpec()
+
+
 def _provenance(
     label: str,
     receipt: TBGZeroFieldHFSourceReceipt,
+    *,
+    run_provenance: TBGZeroFieldHFRunProvenance | None = None,
 ) -> TBGZeroFieldTDHFProvenance:
     return TBGZeroFieldTDHFProvenance(
         hf_run_source=f"synthetic:{label}:hf",
@@ -44,6 +74,9 @@ def _provenance(
         interaction_parameters_source=f"synthetic:{label}:interaction",
         reference_density_source=f"synthetic:{label}:centered-half-identity",
         expected_hf_source_receipt_sha256=receipt.fingerprint,
+        expected_hf_run_provenance_sha256=(
+            None if run_provenance is None else run_provenance.fingerprint
+        ),
         hf_mode="full",
     )
 
@@ -91,6 +124,33 @@ def _bm_solution(
         gvec=np.asarray([0.0 + 0.0j], dtype=np.complex128),
     )
 
+
+_TYPED_TORUS_SOLUTION_CACHE: dict[tuple[int, int], BMSolution] = {}
+_BM_SOLUTION_ARRAY_FIELDS = (
+    "lattice_kvec",
+    "hamiltonian",
+    "sigma_z",
+    "uk",
+    "spectrum",
+    "gvec",
+)
+
+def _typed_torus_solution(mesh_size: int = 1, *, lg: int = 7) -> BMSolution:
+    key = (int(mesh_size), int(lg))
+    if key not in _TYPED_TORUS_SOLUTION_CACHE:
+        base = solve_bm_model_on_torus(
+            TBGParameters.from_degrees(1.05),
+            mesh_size,
+            lg=lg,
+            calculate_chern_operator=True,
+        )
+        for name in _BM_SOLUTION_ARRAY_FIELDS:
+            np.asarray(getattr(base, name)).setflags(write=False)
+        _TYPED_TORUS_SOLUTION_CACHE[key] = base
+    copied = deepcopy(_TYPED_TORUS_SOLUTION_CACHE[key])
+    for name in _BM_SOLUTION_ARRAY_FIELDS:
+        object.__setattr__(copied, name, np.array(getattr(copied, name), copy=True))
+    return copied
 
 def _two_k_source() -> tuple[BMSolution, RestrictedHartreeFockRun]:
     nt = 2
@@ -140,8 +200,9 @@ def _two_k_source() -> tuple[BMSolution, RestrictedHartreeFockRun]:
         n_eta=1,
         n_band=2,
         diagnostics={"beta": beta},
+        interaction_spec=_INTERACTION_SPEC,
     )
-    state.hf_source_receipt = build_tbg_zero_field_hf_source_receipt(
+    state.hf_source_receipt = build_tbg_zero_field_diagnostic_hf_source_receipt(
         hf_mode="full",
         beta=beta,
         v0=state.v0,
@@ -182,7 +243,7 @@ def _source_with_overlap_blocks(
         nk=state.nk,
         h0=state.h0,
     )
-    state.hf_source_receipt = build_tbg_zero_field_hf_source_receipt(
+    state.hf_source_receipt = build_tbg_zero_field_diagnostic_hf_source_receipt(
         hf_mode="full",
         beta=beta,
         v0=state.v0,
@@ -203,6 +264,7 @@ def _context_from_source(
         run=run,
         beta=float(run.state.diagnostics["beta"]),
         provenance=_provenance(label, run.state.hf_source_receipt),
+        allow_diagnostic_source=True,
         closure_tolerance=1.0e-12,
     )
 
@@ -217,8 +279,14 @@ def test_source_receipt_fingerprint_binds_v0() -> None:
     assert isinstance(receipt, TBGZeroFieldHFSourceReceipt)
     changed_v0_receipt = replace(receipt, v0=receipt.v0 + 1.0)
 
-    assert receipt.schema_version == 2
+    assert receipt.schema_version == 5
+    assert receipt.interaction_contract == "legacy_untyped_diagnostic"
+    assert receipt.interaction_spec_fingerprint is None
     assert changed_v0_receipt.fingerprint != receipt.fingerprint
+    assert (
+        replace(receipt, overlap_kernel_inventory_sha256="0" * 64).fingerprint
+        != receipt.fingerprint
+    )
 
 
 def test_source_receipt_json_metadata_round_trip_reconstructs_and_verifies() -> None:
@@ -236,6 +304,317 @@ def test_source_receipt_json_metadata_round_trip_reconstructs_and_verifies() -> 
     loaded_metadata["v0"] = receipt.v0 + 1.0
     with pytest.raises(ValueError, match="fingerprint does not match"):
         TBGZeroFieldHFSourceReceipt.from_metadata(loaded_metadata)
+
+
+def test_typed_interaction_maps_physical_25nm_dual_gate_and_finite_q0() -> None:
+    spec = TBGZeroFieldInteractionSpec()
+    assert spec.screening_lm == pytest.approx(25.0 / (2.0 * 0.246), rel=0.0, abs=0.0)
+    assert spec.reference_scheme == "central_average_active_two_band"
+    assert spec.transfer_cutoff_policy == "g_label_hex_shell_3"
+    assert spec.companion_circular_total_q_cutoff_parity == "not_established"
+    assert spec.finite_zero_limit is True
+    assert screened_coulomb(
+        0.0 + 0.0j,
+        spec.screening_lm,
+        relative_permittivity=spec.epsr,
+        zero_cutoff=spec.zero_cutoff,
+        finite_zero_limit=spec.finite_zero_limit,
+    ) == pytest.approx(4.0 * np.pi * spec.screening_lm / spec.epsr, abs=1.0e-14)
+    assert TBGZeroFieldInteractionSpec.from_json(spec.to_json()) == spec
+
+
+def test_half_open_10x10_torus_is_unique_fortran_ordered_and_hashed() -> None:
+    params = TBGParameters.from_degrees(1.05, w0=80.0, w1=110.0)
+    mesh = build_tbg_zero_field_half_open_torus_mesh(params, 10)
+    repeated = build_tbg_zero_field_half_open_torus_mesh(params, 10)
+
+    np.testing.assert_array_equal(
+        mesh.k_grid_frac[:11],
+        np.asarray([[index / 10.0, 0.0] for index in range(10)] + [[0.0, 0.1]]),
+    )
+    assert mesh.k_grid_frac.shape == (100, 2)
+    assert np.unique(mesh.k_grid_frac, axis=0).shape[0] == 100
+    assert np.all(mesh.k_grid_frac >= 0.0)
+    assert np.all(mesh.k_grid_frac < 1.0)
+    assert mesh.fingerprint == repeated.fingerprint
+    assert mesh.to_metadata() == repeated.to_metadata()
+    assert mesh.to_metadata()["index_order"] == "F"
+    assert not mesh.k_grid_frac.flags.writeable
+    assert not mesh.kvec.flags.writeable
+
+
+def test_torus_mesh_copies_inputs_and_rejects_mutation_or_wrong_order() -> None:
+    params = TBGParameters.from_degrees(1.05)
+    built = build_tbg_zero_field_half_open_torus_mesh(params, 2)
+    frac_source = np.array(built.k_grid_frac, copy=True)
+    kvec_source = np.array(built.kvec, copy=True)
+    mesh = type(built)(
+        mesh_size=2,
+        g1=params.g1,
+        g2=params.g2,
+        k_grid_frac=frac_source,
+        kvec=kvec_source,
+    )
+    frac_source[0, 0] = 0.25
+    kvec_source[0] = 1.0 + 0.0j
+    np.testing.assert_array_equal(mesh.k_grid_frac, built.k_grid_frac)
+    np.testing.assert_array_equal(mesh.kvec, built.kvec)
+    with pytest.raises(ValueError, match="read-only"):
+        mesh.k_grid_frac[0, 0] = 0.25
+    with pytest.raises(ValueError, match="Fortran-ordered"):
+        type(built)(
+            mesh_size=2,
+            g1=params.g1,
+            g2=params.g2,
+            k_grid_frac=built.k_grid_frac[[0, 2, 1, 3]],
+            kvec=built.kvec[[0, 2, 1, 3]],
+        )
+    wrong_kvec = np.array(built.kvec, copy=True)
+    wrong_kvec[-1] += 1.0e-12
+    with pytest.raises(ValueError, match=r"f1\*g1\+f2\*g2"):
+        type(built)(
+            mesh_size=2,
+            g1=params.g1,
+            g2=params.g2,
+            k_grid_frac=built.k_grid_frac,
+            kvec=wrong_kvec,
+        )
+
+
+def test_solve_bm_model_issues_non_torus_source_attestation() -> None:
+    params = TBGParameters.from_degrees(1.05)
+    solution = solve_bm_model(
+        params,
+        np.asarray([0.0 + 0.0j]),
+        lg=1,
+        calculate_chern_operator=False,
+    )
+    assert solution.source_attestation is not None
+    assert solution.source_attestation.solver_entrypoint == "solve_bm_model"
+    assert solution.source_attestation.torus_mesh_fingerprint is None
+    solution.validate_source_attestation()
+
+
+def test_tbg_parameters_derived_arrays_are_owned_and_read_only() -> None:
+    params = TBGParameters.from_degrees(1.05, strain=2.0e-4)
+    for name in (
+        "t0",
+        "t1",
+        "t2",
+        "gauge_shift",
+        "rotation_phi",
+        "strain_matrix",
+    ):
+        values = getattr(params, name)
+        assert values.flags.owndata
+        assert not values.flags.writeable
+        with pytest.raises(ValueError, match="read-only"):
+            values.flat[0] = 0.0
+
+
+def test_typed_bundle_binds_mesh_shell_and_central_reference() -> None:
+    solution = _typed_torus_solution()
+    assert solution.lg == 7
+    assert solution.source_attestation is not None
+    assert solution.source_attestation.solver_entrypoint == "solve_bm_model_on_torus"
+    solution.validate_source_attestation(require_torus=True)
+    bundle = build_tbg_zero_field_screened_block_bundle(
+        solution,
+        interaction_spec=_INTERACTION_SPEC,
+        overlap_lg=7,
+    )
+    receipt = build_tbg_zero_field_hf_source_receipt(
+        hf_mode="full",
+        beta=1.0,
+        v0=coulomb_unit(solution.params),
+        solution=solution,
+        screened_block_bundle=bundle,
+    )
+    assert receipt.schema_version == 5
+    assert receipt.n_band == 2
+    assert receipt.reference_projector_dimensions == (8, 8, 1)
+    assert receipt.reference_projector_sha256 == bundle.reference_projector_sha256
+    assert receipt.overlap_lg == 7
+    assert receipt.active_shift_inventory == bundle.active_shifts
+    assert receipt.active_shift_inventory_sha256 == bundle.active_shift_inventory_sha256
+    assert receipt.screened_block_bundle_sha256 == bundle.fingerprint
+    assert bundle.bm_generation_fingerprint == solution.generation_fingerprint
+    assert receipt.bm_generation_fingerprint == solution.generation_fingerprint
+    assert receipt.mesh_fingerprint == solution.torus_mesh.fingerprint
+    assert receipt.companion_circular_total_q_cutoff_parity == "not_established"
+    assert not bundle.screened_blocks.gvecs.flags.writeable
+
+    stale_spectrum = np.array(solution.spectrum, copy=True)
+    stale_spectrum[0, 0, 0] += 1.0e-9
+    stale_solution = replace(solution, spectrum=stale_spectrum)
+    with pytest.raises(ValueError, match="source attestation"):
+        build_tbg_zero_field_hf_source_receipt(
+            hf_mode="full",
+            beta=1.0,
+            v0=coulomb_unit(stale_solution.params),
+            solution=stale_solution,
+            screened_block_bundle=bundle,
+        )
+
+    with pytest.raises(ValueError, match="insufficient"):
+        build_tbg_zero_field_screened_block_bundle(
+            solution,
+            interaction_spec=_INTERACTION_SPEC,
+            overlap_lg=5,
+        )
+    with pytest.raises(ValueError, match="freezes graphene_a_nm exactly"):
+        TBGZeroFieldInteractionSpec(graphene_a_nm=0.245)
+
+
+@pytest.mark.parametrize("bad_lg", [1, 3, 5], ids=lambda value: f"lg{value}")
+def test_typed_bundle_refuses_attested_undersized_bm_sources(bad_lg: int) -> None:
+    solution = _typed_torus_solution(lg=bad_lg)
+    solution.validate_source_attestation(require_torus=True)
+    with pytest.raises(ValueError, match=r"solution\.lg.*odd integer >= 7.*diagnostic-only"):
+        build_tbg_zero_field_screened_block_bundle(
+            solution,
+            interaction_spec=_INTERACTION_SPEC,
+            overlap_lg=7,
+        )
+
+@pytest.mark.parametrize("bad_lg", [6, 8], ids=lambda value: f"lg{value}")
+def test_typed_bundle_refuses_even_bm_sources(bad_lg: int) -> None:
+    solution = _typed_torus_solution()
+    object.__setattr__(solution, "lg", bad_lg)
+    with pytest.raises(ValueError, match=r"solution\.lg.*odd integer >= 7.*diagnostic-only"):
+        build_tbg_zero_field_screened_block_bundle(
+            solution,
+            interaction_spec=_INTERACTION_SPEC,
+            overlap_lg=7,
+        )
+
+def test_typed_primitive_cell_entrypoints_refuse_fractional_nu() -> None:
+    solution = _typed_torus_solution()
+    for entrypoint in (
+        run_full_hf_from_bm_solution,
+        run_restricted_hf_from_bm_solution,
+    ):
+        with pytest.raises(ValueError, match="separate supercell workflow"):
+            entrypoint(
+                solution,
+                nu=0.25,
+                max_iter=0,
+                overlap_lg=7,
+                interaction_spec=_INTERACTION_SPEC,
+            )
+
+def test_typed_bundle_rejects_hand_constructed_and_reference_modified_bm_sources() -> None:
+    solved = _typed_torus_solution()
+    hand_constructed = BMSolution(
+        params=solved.params,
+        lattice_kvec=np.array(solved.lattice_kvec, copy=True),
+        lg=solved.lg,
+        nlocal=solved.nlocal,
+        n_eta=solved.n_eta,
+        n_spin=solved.n_spin,
+        nb=solved.nb,
+        hamiltonian=np.array(solved.hamiltonian, copy=True),
+        sigma_z=np.array(solved.sigma_z, copy=True),
+        uk=np.array(solved.uk, copy=True),
+        spectrum=np.array(solved.spectrum, copy=True),
+        gvec=np.array(solved.gvec, copy=True),
+        sigma_rotation=solved.sigma_rotation,
+        calculate_chern_operator=solved.calculate_chern_operator,
+        periodic_g_grid=solved.periodic_g_grid,
+        torus_mesh=solved.torus_mesh,
+    )
+    assert hand_constructed.source_attestation is None
+    with pytest.raises(ValueError, match="diagnostic-only"):
+        build_tbg_zero_field_screened_block_bundle(
+            hand_constructed,
+            interaction_spec=_INTERACTION_SPEC,
+            overlap_lg=7,
+        )
+    stolen_attestation_clone = replace(
+        hand_constructed,
+        source_attestation=solved.source_attestation,
+    )
+    with pytest.raises(ValueError, match="hand-constructed clones are diagnostic-only"):
+        build_tbg_zero_field_screened_block_bundle(
+            stolen_attestation_clone,
+            interaction_spec=_INTERACTION_SPEC,
+            overlap_lg=7,
+        )
+
+    reference_modified = solved.with_reference_uk(np.array(solved.uk, copy=True))
+    assert reference_modified.source_attestation is None
+    with pytest.raises(ValueError, match="diagnostic-only"):
+        build_tbg_zero_field_screened_block_bundle(
+            reference_modified,
+            interaction_spec=_INTERACTION_SPEC,
+            overlap_lg=7,
+        )
+
+
+def test_bm_source_attestation_rejects_live_array_and_parameter_mutation() -> None:
+    array_mutated = _typed_torus_solution()
+    array_mutated.hamiltonian[0, 0, 0, 0] += 1.0e-9
+    with pytest.raises(ValueError, match="source attestation.*live solver arrays"):
+        build_tbg_zero_field_screened_block_bundle(
+            array_mutated,
+            interaction_spec=_INTERACTION_SPEC,
+            overlap_lg=7,
+        )
+
+    params_mutated = _typed_torus_solution()
+    object.__setattr__(params_mutated.params, "w0", params_mutated.params.w0 + 1.0)
+    with pytest.raises(ValueError, match="live independent parameters"):
+        build_tbg_zero_field_screened_block_bundle(
+            params_mutated,
+            interaction_spec=_INTERACTION_SPEC,
+            overlap_lg=7,
+        )
+
+    flag_source = _typed_torus_solution()
+    object.__setattr__(
+        flag_source,
+        "calculate_chern_operator",
+        not flag_source.calculate_chern_operator,
+    )
+    with pytest.raises(ValueError, match="live dimensions/flags"):
+        build_tbg_zero_field_screened_block_bundle(
+            flag_source,
+            interaction_spec=_INTERACTION_SPEC,
+            overlap_lg=7,
+        )
+
+
+    pristine = _typed_torus_solution()
+    pristine.validate_source_attestation(require_torus=True)
+    assert pristine.lg == 7
+
+def test_typed_screening_rejects_raw_mismatch_and_implicit_legacy_receipt() -> None:
+    solution = _bm_solution(n_spin=1, n_eta=1, n_band=1, nk=1)
+    with pytest.raises(ValueError, match="Raw screening_lm is rejected"):
+        build_overlap_block_set(
+            solution,
+            lg=1,
+            interaction_spec=_INTERACTION_SPEC,
+            screening_lm=_INTERACTION_SPEC.screening_lm + 1.0,
+        )
+
+    with pytest.raises(TypeError, match="screened_block_bundle"):
+        build_tbg_zero_field_hf_source_receipt(
+            hf_mode="full",
+            beta=1.0,
+            v0=1.0,
+            solution=solution,
+            screened_block_bundle=empty_overlap_block_set(),  # type: ignore[arg-type]
+        )
+    legacy = build_tbg_zero_field_diagnostic_hf_source_receipt(
+        hf_mode="restricted",
+        beta=1.0,
+        v0=1.0,
+        lattice_kvec=solution.lattice_kvec,
+        overlap_blocks=empty_overlap_block_set(),
+    )
+    assert legacy.interaction_contract == "legacy_untyped_diagnostic"
+    assert legacy.interaction_spec_fingerprint is None
 
 
 @pytest.mark.parametrize(
@@ -262,23 +641,61 @@ def test_hf_runners_persist_the_screened_blocks_used_by_the_kernel(
     expected_mode: str,
     init_mode: str,
 ) -> None:
-    solution, source_run = _two_k_source()
-    unscreened = replace(
-        source_run.overlap_blocks,
-        diagonal_overlaps={},
-        hartree_screening={},
-        fock_screening={},
+    solution = _typed_torus_solution()
+    bundle = build_tbg_zero_field_screened_block_bundle(
+        solution,
+        interaction_spec=_INTERACTION_SPEC,
+        overlap_lg=7,
     )
+    state = RestrictedHartreeFockState.from_bm_solution(solution, nu=5.0e-13)
+    state.diagnostics["overlap_lg"] = 7.0
     captured: dict[str, object] = {}
     module = importlib.import_module(module_name)
 
     def fake_build_projected_hf_kernel(state, overlap_blocks, **kwargs):
         captured["overlap_blocks"] = overlap_blocks
         captured["oda_parameterizer"] = kwargs["oda_parameterizer"]
-        return SimpleNamespace()
+        kernel = SimpleNamespace(
+            density_builder=kwargs["density_builder"],
+            energy_functional=kwargs["energy_functional"],
+            density_postprocessor=kwargs.get("density_postprocessor"),
+            final_state_callback=kwargs["final_state_callback"],
+            convergence_metric=kwargs.get("convergence_metric"),
+        )
+        captured["kernel"] = kernel
+        return kernel
 
     def fake_run_hartree_fock_problem(state, problem, **kwargs):
+        assert problem.kernel is captured["kernel"]
+        problem.initializer(
+            state,
+            init_mode=kwargs["init_mode"],
+            seed=kwargs["seed"],
+        )
+        density_update = problem.kernel.density_builder(state.hamiltonian)
+        state.energies[:, :] = density_update.energies
+        state.mu = float(density_update.mu)
+        interaction_h = state.hamiltonian - state.h0
+        state.diagnostics["hf_energy"] = float(
+            problem.kernel.energy_functional(interaction_h, state.h0, state.density)
+        )
+        final_raw_density = np.asarray(
+            density_update.density,
+            dtype=np.complex128,
+        ).copy()
+        if problem.kernel.density_postprocessor is not None:
+            problem.kernel.density_postprocessor(final_raw_density)
+        final_metric = (
+            calculate_norm_convergence
+            if problem.kernel.convergence_metric is None
+            else problem.kernel.convergence_metric
+        )
+        state.diagnostics["final_raw_norm"] = float(
+            final_metric(final_raw_density, state.density)
+        )
+        problem.kernel.final_state_callback(state, density_update)
         return SimpleNamespace(
+            state=state,
             iter_energy=np.asarray([], dtype=float),
             iter_err=np.asarray([], dtype=float),
             iter_oda=np.asarray([], dtype=float),
@@ -290,15 +707,44 @@ def test_hf_runners_persist_the_screened_blocks_used_by_the_kernel(
 
     monkeypatch.setattr(module, "build_projected_hf_kernel", fake_build_projected_hf_kernel)
     monkeypatch.setattr(module, "run_hartree_fock_problem", fake_run_hartree_fock_problem)
+    with pytest.raises(ValueError, match="separate supercell workflow"):
+        getattr(module, runner_name)(
+            RestrictedHartreeFockState.from_bm_solution(solution, nu=0.25),
+            bundle.screened_blocks,
+            solution.lattice_kvec,
+            solution.params,
+            init_mode=init_mode,
+            max_iter=0,
+            interaction_spec=_INTERACTION_SPEC,
+            source_solution=solution,
+            screened_block_bundle=bundle,
+        )
+    with pytest.raises(ValueError, match="arbitrary overlap blocks"):
+        getattr(module, runner_name)(
+            RestrictedHartreeFockState.from_bm_solution(solution, nu=0.0),
+            empty_overlap_block_set(),
+            solution.lattice_kvec,
+            solution.params,
+            init_mode=init_mode,
+            max_iter=0,
+            interaction_spec=_INTERACTION_SPEC,
+        )
+
     result = getattr(module, runner_name)(
-        source_run.state,
-        unscreened,
+        state,
+        bundle.screened_blocks,
         solution.lattice_kvec,
         solution.params,
         init_mode=init_mode,
         max_iter=0,
+        interaction_spec=_INTERACTION_SPEC,
+        source_solution=solution,
+        screened_block_bundle=bundle,
     )
 
+    assert result.state.nu == 0.0
+    assert result.screened_block_bundle is bundle
+    assert result.overlap_blocks is bundle.screened_blocks
     assert result.overlap_blocks is captured["overlap_blocks"]
     oda_parameterizer = captured["oda_parameterizer"]
     assert callable(oda_parameterizer)
@@ -316,15 +762,156 @@ def test_hf_runners_persist_the_screened_blocks_used_by_the_kernel(
     receipt = result.state.hf_source_receipt
     assert isinstance(receipt, TBGZeroFieldHFSourceReceipt)
     assert receipt.hf_mode == expected_mode
-    assert receipt.schema_version == 2
+    assert receipt.schema_version == 5
     assert receipt.v0 == result.state.v0
+    assert receipt.v0 == coulomb_unit(solution.params)
     assert receipt.lattice_kvec_sha256 == tbg_zero_field_lattice_kvec_sha256(
         solution.lattice_kvec
     )
     assert receipt.overlap_kernel_inventory_sha256 == (
         tbg_zero_field_overlap_kernel_inventory_fingerprint(result.overlap_blocks)
     )
+    assert receipt.screened_block_bundle_sha256 == bundle.fingerprint
+    assert receipt.bm_generation_fingerprint == solution.generation_fingerprint
     assert TBGZeroFieldHFSourceReceipt.from_metadata(receipt.to_metadata()) == receipt
+    run_provenance = result.provenance
+    assert isinstance(run_provenance, TBGZeroFieldHFRunProvenance)
+    assert run_provenance.hf_mode == expected_mode
+    assert run_provenance.beta == receipt.beta
+    assert run_provenance.nu == result.state.nu
+    assert run_provenance.filling == result.state.nu
+    assert run_provenance.precision == result.state.precision
+    assert (
+        run_provenance.oda_stall_threshold
+        == result.state.diagnostics["oda_stall_threshold"]
+    )
+    assert run_provenance.requested_max_iterations == 0
+    assert run_provenance.seed == result.seed
+    assert run_provenance.normalized_init_mode == result.init_mode
+    assert run_provenance.typed_receipt_fingerprint == receipt.fingerprint
+    assert run_provenance.interaction_spec_fingerprint == _INTERACTION_SPEC.fingerprint
+    assert run_provenance.bm_generation_fingerprint == solution.generation_fingerprint
+    assert run_provenance.mesh_fingerprint == solution.torus_mesh.fingerprint
+    assert run_provenance.converged is result.converged
+    assert run_provenance.exit_reason == result.exit_reason
+    metadata = run_provenance.to_metadata()
+    assert metadata["schema_version"] == 2
+    assert metadata["issuer"] == "TBGZeroFieldFullRestrictedRunner/v2"
+    assert metadata["iter_energy_sha256"] == run_provenance.iter_energy_sha256
+    assert metadata["iter_err_sha256"] == run_provenance.iter_err_sha256
+    assert metadata["iter_oda_sha256"] == run_provenance.iter_oda_sha256
+    assert metadata["state_source_sha256"] == run_provenance.state_source_sha256
+    assert metadata["fingerprint"] == run_provenance.fingerprint
+
+
+def test_typed_hf_receipt_and_runners_reject_unbound_v0_and_initial_density() -> None:
+    solution = _typed_torus_solution()
+    bundle = build_tbg_zero_field_screened_block_bundle(
+        solution,
+        interaction_spec=_INTERACTION_SPEC,
+        overlap_lg=7,
+    )
+    state = RestrictedHartreeFockState.from_bm_solution(solution, nu=0.0)
+    with pytest.raises(ValueError, match=r"v0 must equal coulomb_unit\(solution.params\) exactly"):
+        build_tbg_zero_field_hf_source_receipt(
+            hf_mode="full",
+            beta=1.0,
+            v0=state.v0 + 1.0e-6,
+            solution=solution,
+            screened_block_bundle=bundle,
+        )
+
+    override = np.zeros_like(state.density)
+    for module_name, runner_name, init_mode in (
+        ("mean_field.systems.tbg.zero_field._hf_full", "run_full_hartree_fock", "flavor"),
+        ("mean_field.systems.tbg.zero_field._hf_restricted", "run_restricted_hartree_fock", "educated"),
+    ):
+        module = importlib.import_module(module_name)
+        with pytest.raises(ValueError, match="typed resume trajectory is not implemented"):
+            getattr(module, runner_name)(
+                RestrictedHartreeFockState.from_bm_solution(solution, nu=0.0),
+                bundle.screened_blocks,
+                solution.lattice_kvec,
+                solution.params,
+                init_mode=init_mode,
+                interaction_spec=_INTERACTION_SPEC,
+                source_solution=solution,
+                screened_block_bundle=bundle,
+                initial_density=override,
+            )
+
+
+def test_restricted_complex_two_band_projector_matches_full_interaction_and_energy() -> None:
+    hamiltonian = np.asarray(
+        [[0.35, 0.62 + 0.47j], [0.62 - 0.47j, -0.28]],
+        dtype=np.complex128,
+    )[:, :, None]
+    sigma_z = np.zeros_like(hamiltonian)
+    restricted_density, restricted_energies, _, _ = build_restricted_density_from_hamiltonian(
+        hamiltonian,
+        sigma_z,
+        nu=0.0,
+        n_spin=1,
+        n_eta=1,
+        n_band=2,
+    )
+    full_density, full_energies, _, _ = build_full_density_from_hamiltonian(
+        hamiltonian,
+        sigma_z,
+        nu=0.0,
+    )
+
+    _, eigenvectors = np.linalg.eigh(hamiltonian[:, :, 0])
+    occupied = eigenvectors[:, :1]
+    conventional_projector = (occupied @ occupied.conj().T)[:, :, None]
+    expected_stored = conventional_projector_to_stored_density(conventional_projector)
+    wrong_ket_oriented_delta = conventional_projector - 0.5 * np.eye(2, dtype=np.complex128)[:, :, None]
+    assert abs(expected_stored[0, 1, 0].imag) > 1.0e-6
+    assert not np.allclose(expected_stored, wrong_ket_oriented_delta)
+    np.testing.assert_allclose(restricted_density, expected_stored, atol=1.0e-14, rtol=0.0)
+    np.testing.assert_allclose(full_density, expected_stored, atol=1.0e-14, rtol=0.0)
+    np.testing.assert_allclose(restricted_energies, full_energies, atol=1.0e-14, rtol=0.0)
+
+    overlap_matrix = np.asarray(
+        [[1.0 + 0.1j, 0.23 + 0.41j], [-0.17 + 0.29j, 0.74 - 0.08j]],
+        dtype=np.complex128,
+    )
+    overlap = overlap_matrix[:, None, :, None]
+    blocks = HFOverlapBlockSet(
+        shifts=((0, 0),),
+        gvecs=np.asarray([0.0 + 0.0j]),
+        overlaps={(0, 0): overlap},
+        fock_screening={(0, 0): np.asarray([[1.37]], dtype=float)},
+    )
+    restricted_interaction = build_projected_interaction_hamiltonian(
+        restricted_density,
+        blocks,
+        v0=2.3,
+        beta=0.8,
+        use_numba=False,
+    )
+    full_interaction = build_projected_interaction_hamiltonian(
+        full_density,
+        blocks,
+        v0=2.3,
+        beta=0.8,
+        use_numba=False,
+    )
+    wrong_interaction = build_projected_interaction_hamiltonian(
+        wrong_ket_oriented_delta,
+        blocks,
+        v0=2.3,
+        beta=0.8,
+        use_numba=False,
+    )
+    np.testing.assert_allclose(restricted_interaction, full_interaction, atol=1.0e-14, rtol=0.0)
+    assert not np.allclose(full_interaction, wrong_interaction)
+
+    restricted_energy = compute_hf_energy(restricted_interaction, hamiltonian, restricted_density)
+    full_energy = compute_hf_energy(full_interaction, hamiltonian, full_density)
+    wrong_energy = compute_hf_energy(wrong_interaction, hamiltonian, wrong_ket_oriented_delta)
+    assert restricted_energy == pytest.approx(full_energy, abs=1.0e-14, rel=0.0)
+    assert not np.isclose(full_energy, wrong_energy, atol=1.0e-8, rtol=0.0)
 
 
 def test_stored_and_conventional_density_conversions_are_explicit() -> None:
@@ -415,6 +1002,18 @@ def test_vectorized_q0_a_b_structure_and_tangent_column_parity() -> None:
         atol=0.0,
     )
     assert matrices.structure.ok
+    assert (
+        orbitals.occupation_residuals.production_max_tolerance
+        == TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_PROJECTOR_TOLERANCE
+    )
+    assert (
+        matrices.production_max_structure_tolerance
+        == TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_STRUCTURE_TOLERANCE
+    )
+    assert (
+        context.authorization_diagnostics["production_max_closure_tolerance_mev"]
+        == TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_CLOSURE_TOLERANCE_MEV
+    )
 
     parity = validate_tbg_zero_field_tdhf_tangent_columns(
         context,
@@ -427,6 +1026,64 @@ def test_vectorized_q0_a_b_structure_and_tangent_column_parity() -> None:
     assert parity.max_a_residual <= 1.0e-12
     assert parity.max_b_residual <= 1.0e-12
 
+
+    assert (
+        parity.production_max_tolerance
+        == TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_TANGENT_TOLERANCE
+    )
+
+def test_context_rejects_oversized_production_closure_tolerance() -> None:
+    solution, run = _two_k_source()
+    receipt = run.state.hf_source_receipt
+    assert isinstance(receipt, TBGZeroFieldHFSourceReceipt)
+    with pytest.raises(ValueError, match="closure_tolerance_mev.*production maximum"):
+        TBGZeroFieldTDHFContext(
+            grid_solution=solution,
+            run=run,
+            beta=receipt.beta,
+            provenance=_provenance("oversized-closure", receipt),
+            allow_diagnostic_source=True,
+            closure_tolerance=(
+                2.0 * TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_CLOSURE_TOLERANCE_MEV
+            ),
+        )
+
+def test_orbitals_reject_oversized_production_projector_tolerance() -> None:
+    _solution, run = _two_k_source()
+    with pytest.raises(ValueError, match="projector_tolerance.*production maximum"):
+        build_tbg_zero_field_tdhf_orbitals(
+            run,
+            projector_tolerance=(
+                2.0 * TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_PROJECTOR_TOLERANCE
+            ),
+        )
+
+def test_a_b_structure_rejects_oversized_production_tolerance() -> None:
+    context = _two_k_context()
+    orbitals = build_tbg_zero_field_tdhf_orbitals(context.run)
+    with pytest.raises(ValueError, match="structure_tolerance.*production maximum"):
+        build_tbg_zero_field_tdhf_q0_matrices(
+            context,
+            orbitals,
+            structure_tolerance=(
+                2.0 * TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_STRUCTURE_TOLERANCE
+            ),
+        )
+
+def test_tangent_parity_rejects_oversized_production_tolerance() -> None:
+    context = _two_k_context()
+    orbitals = build_tbg_zero_field_tdhf_orbitals(context.run)
+    matrices = build_tbg_zero_field_tdhf_q0_matrices(context, orbitals)
+    with pytest.raises(ValueError, match="tangent_tolerance.*production maximum"):
+        validate_tbg_zero_field_tdhf_tangent_columns(
+            context,
+            orbitals,
+            matrices,
+            columns=(0,),
+            tolerance=(
+                2.0 * TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_TANGENT_TOLERANCE
+            ),
+        )
 
 def test_dense_complex_fock_only_nontrivial_unitary_tangent_parity() -> None:
     nt = 4
@@ -504,8 +1161,9 @@ def test_dense_complex_fock_only_nontrivial_unitary_tangent_parity() -> None:
         n_eta=1,
         n_band=nt,
         diagnostics={"beta": beta},
+        interaction_spec=_INTERACTION_SPEC,
     )
-    state.hf_source_receipt = build_tbg_zero_field_hf_source_receipt(
+    state.hf_source_receipt = build_tbg_zero_field_diagnostic_hf_source_receipt(
         hf_mode="full",
         beta=beta,
         v0=state.v0,
@@ -573,8 +1231,9 @@ def test_flavor_symmetric_toy_has_exact_su2_spin_rotation_goldstone() -> None:
         n_eta=1,
         n_band=1,
         diagnostics={"beta": 1.0},
+        interaction_spec=_INTERACTION_SPEC,
     )
-    state.hf_source_receipt = build_tbg_zero_field_hf_source_receipt(
+    state.hf_source_receipt = build_tbg_zero_field_diagnostic_hf_source_receipt(
         hf_mode="full",
         beta=1.0,
         v0=state.v0,
@@ -642,13 +1301,236 @@ def test_context_rejects_bm_h0_mismatch() -> None:
         _context_from_source(solution, run)
 
 
-def test_context_requires_typed_receipt_and_matching_provenance_fingerprint() -> None:
+def test_context_requires_explicit_diagnostic_source_override() -> None:
+    solution, run = _two_k_source()
+    receipt = run.state.hf_source_receipt
+    assert isinstance(receipt, TBGZeroFieldHFSourceReceipt)
+    with pytest.raises(ValueError, match="allow_diagnostic_source=True"):
+        TBGZeroFieldTDHFContext(
+            grid_solution=solution,
+            run=run,
+            beta=receipt.beta,
+            provenance=_provenance("diagnostic-default-refusal", receipt),
+            closure_tolerance=1.0e-12,
+        )
+    context = TBGZeroFieldTDHFContext(
+        grid_solution=solution,
+        run=run,
+        beta=receipt.beta,
+        provenance=_provenance("diagnostic-explicit-override", receipt),
+        allow_diagnostic_source=True,
+        closure_tolerance=1.0e-12,
+    )
+    assert context.allow_diagnostic_source is True
+    assert context.source_classification == "diagnostic_non_production"
+    assert context.is_production_source is False
+
+
+def _typed_full_source() -> tuple[BMSolution, RestrictedHartreeFockRun]:
+    """Use the real full runner; the empty filling is a one-step fixed point."""
+
+    solution = _typed_torus_solution()
+    bundle = build_tbg_zero_field_screened_block_bundle(
+        solution,
+        interaction_spec=_INTERACTION_SPEC,
+        overlap_lg=7,
+    )
+    state = RestrictedHartreeFockState.from_bm_solution(solution, nu=-4.0)
+    state.diagnostics["overlap_lg"] = 7.0
+    run = run_full_hartree_fock(
+        state,
+        bundle.screened_blocks,
+        solution.lattice_kvec,
+        solution.params,
+        init_mode="bm",
+        seed=0,
+        beta=1.0,
+        max_iter=1,
+        oda_stall_threshold=1.0e-3,
+        interaction_spec=_INTERACTION_SPEC,
+        source_solution=solution,
+        screened_block_bundle=bundle,
+    )
+    assert run.converged
+    assert isinstance(run.provenance, TBGZeroFieldHFRunProvenance)
+    return solution, run
+
+
+def _typed_context(
+    solution: BMSolution,
+    run: RestrictedHartreeFockRun,
+    *,
+    label: str,
+) -> TBGZeroFieldTDHFContext:
+    receipt = run.state.hf_source_receipt
+    assert isinstance(receipt, TBGZeroFieldHFSourceReceipt)
+    return TBGZeroFieldTDHFContext(
+        grid_solution=solution,
+        run=run,
+        beta=1.0,
+        provenance=_provenance(
+            label,
+            receipt,
+            run_provenance=run.provenance,
+        ),
+        closure_tolerance=1.0e-12,
+    )
+
+
+def test_typed_context_requires_complete_hf_run_provenance() -> None:
+    solution, run = _typed_full_source()
+    with pytest.raises(ValueError, match="requires TBGZeroFieldHFRunProvenance"):
+        _typed_context(
+            solution,
+            replace(run, provenance=None, _production_issuer=None),
+            label="typed-missing-run-provenance",
+        )
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ["density", "hamiltonian", "energies", "mu", "sigma_ztauz", "diagnostics"],
+)
+def test_typed_context_rejects_pre_context_final_state_mutation(
+    field_name: str,
+) -> None:
+    solution, run = _typed_full_source()
+    state = run.state
+    if field_name == "mu":
+        state.mu += 1.0e-9
+    elif field_name == "diagnostics":
+        state.diagnostics["final_raw_norm"] += 1.0e-9
+    else:
+        getattr(state, field_name).flat[0] += 1.0e-9
+
+    with pytest.raises(ValueError, match="final state hash does not match"):
+        _typed_context(
+            solution,
+            run,
+            label=f"pre-context-{field_name}-mutation",
+        )
+
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "hf_mode",
+        "beta",
+        "nu",
+        "precision",
+        "oda_stall_threshold",
+        "requested_max_iterations",
+        "seed",
+        "normalized_init_mode",
+        "typed_receipt_fingerprint",
+        "interaction_spec_fingerprint",
+        "bm_generation_fingerprint",
+        "mesh_fingerprint",
+    ],
+)
+def test_solver_issued_hf_run_provenance_rejects_forged_replace(field_name: str) -> None:
+    _solution, run = _typed_full_source()
+    provenance = run.provenance
+    assert isinstance(provenance, TBGZeroFieldHFRunProvenance)
+    mutations = {
+        "hf_mode": "restricted",
+        "beta": provenance.beta + 0.5,
+        "nu": provenance.nu + 0.25,
+        "precision": provenance.precision * 2.0,
+        "oda_stall_threshold": provenance.oda_stall_threshold * 2.0,
+        "requested_max_iterations": provenance.requested_max_iterations + 1,
+        "seed": provenance.seed + 1,
+        "normalized_init_mode": "vp",
+        "typed_receipt_fingerprint": "0" * 64,
+        "interaction_spec_fingerprint": "0" * 64,
+        "bm_generation_fingerprint": "0" * 64,
+        "mesh_fingerprint": "0" * 64,
+    }
+    with pytest.raises(ValueError, match="solver-issued"):
+        replace(provenance, **{field_name: mutations[field_name]})
+
+
+def test_manual_hf_run_cannot_reuse_solver_issued_provenance() -> None:
+    _solution, run = _typed_full_source()
+    provenance = run.provenance
+    assert isinstance(provenance, TBGZeroFieldHFRunProvenance)
+    with pytest.raises(ValueError, match="Manually constructed HF runs"):
+        RestrictedHartreeFockRun(
+            state=run.state,
+            overlap_blocks=run.overlap_blocks,
+            screened_block_bundle=run.screened_block_bundle,
+            provenance=provenance,
+            iter_energy=run.iter_energy,
+            iter_err=run.iter_err,
+            iter_oda=run.iter_oda,
+            init_mode=run.init_mode,
+            seed=run.seed,
+            converged=run.converged,
+            exit_reason=run.exit_reason,
+        )
+
+def test_typed_context_live_hash_binds_hf_run_provenance_fingerprint() -> None:
+    solution, run = _typed_full_source()
+    context = _typed_context(solution, run, label="typed-live-provenance")
+    provenance = run.provenance
+    assert isinstance(provenance, TBGZeroFieldHFRunProvenance)
+    assert context.source_classification == "typed_production"
+    assert context.is_production_source is True
+    object.__setattr__(provenance, "seed", provenance.seed + 1)
+    with pytest.raises(ValueError, match="live HF source changed"):
+        context.build_interaction_hamiltonian(np.zeros_like(run.state.density))
+
+
+@pytest.mark.parametrize("history_name", ["iter_energy", "iter_err", "iter_oda"])
+def test_typed_context_live_hash_binds_solver_histories(history_name: str) -> None:
+    solution, run = _typed_full_source()
+    context = _typed_context(solution, run, label=f"typed-live-{history_name}")
+    changed = np.asarray(getattr(run, history_name), dtype=float).copy()
+    changed[0] += 1.0
+    object.__setattr__(run, history_name, changed)
+    with pytest.raises(ValueError, match="live HF source changed"):
+        context.build_interaction_hamiltonian(np.zeros_like(run.state.density))
+
+def test_typed_context_recomputes_central_reference_hash() -> None:
+    solution, run = _typed_full_source()
+    context = _typed_context(solution, run, label="typed-reference")
+    assert context.is_production_source is True
+    state = run.state
+    state.hf_source_receipt = replace(
+        state.hf_source_receipt,
+        reference_projector_sha256="0" * 64,
+    )
+    with pytest.raises(ValueError, match="reference projector hash mismatch"):
+        _typed_context(solution, run, label="typed-reference-tamper")
+
+
+def test_typed_context_rejects_mismatched_expected_hf_run_fingerprint() -> None:
+    solution, run = _typed_full_source()
+    receipt = run.state.hf_source_receipt
+    assert isinstance(receipt, TBGZeroFieldHFSourceReceipt)
+    provenance = replace(
+        _provenance(
+            "wrong-expected-run-fingerprint",
+            receipt,
+            run_provenance=run.provenance,
+        ),
+        expected_hf_run_provenance_sha256="0" * 64,
+    )
+    with pytest.raises(ValueError, match="expected HF run provenance fingerprint"):
+        TBGZeroFieldTDHFContext(
+            grid_solution=solution,
+            run=run,
+            beta=1.0,
+            provenance=provenance,
+            closure_tolerance=1.0e-12,
+        )
+
+def test_context_requires_receipt_and_matching_provenance_fingerprint() -> None:
     solution, run = _two_k_source()
     receipt = run.state.hf_source_receipt
     assert isinstance(receipt, TBGZeroFieldHFSourceReceipt)
     provenance = _provenance("missing-typed-receipt", receipt)
     run.state.hf_source_receipt = None
-    with pytest.raises(ValueError, match="typed TBGZeroFieldHFSourceReceipt"):
+    with pytest.raises(ValueError, match="TBGZeroFieldHFSourceReceipt"):
         TBGZeroFieldTDHFContext(
             grid_solution=solution,
             run=run,
@@ -670,6 +1552,7 @@ def test_context_requires_typed_receipt_and_matching_provenance_fingerprint() ->
             run=run,
             beta=receipt.beta,
             provenance=provenance,
+            allow_diagnostic_source=True,
             closure_tolerance=1.0e-12,
         )
 

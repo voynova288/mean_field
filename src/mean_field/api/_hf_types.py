@@ -49,12 +49,35 @@ class HFConfig:
     metadata: dict[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if len(self.mesh) != 2 or int(self.mesh[0]) <= 0 or int(self.mesh[1]) <= 0:
-            raise ValueError(f"mesh must be positive (n1, n2), got {self.mesh}")
+        try:
+            mesh_values = tuple(self.mesh)
+        except TypeError as exc:
+            raise ValueError(
+                f"mesh must be a positive pair of non-bool integers, got {self.mesh!r}"
+            ) from exc
+        if len(mesh_values) != 2 or any(
+            isinstance(value, (bool, np.bool_))
+            or not isinstance(value, (int, np.integer))
+            for value in mesh_values
+        ):
+            raise ValueError(
+                f"mesh must be a positive pair of non-bool integers, got {self.mesh!r}"
+            )
+        normalized_mesh = (int(mesh_values[0]), int(mesh_values[1]))
+        if normalized_mesh[0] <= 0 or normalized_mesh[1] <= 0:
+            raise ValueError(
+                f"mesh must be a positive pair of non-bool integers, got {self.mesh!r}"
+            )
+        object.__setattr__(self, "mesh", normalized_mesh)
         if self.active_window is not None and len(self.active_window) != 2:
             raise ValueError(f"active_window must be (n_valence, n_conduction), got {self.active_window}")
-        if self.max_iter <= 0:
-            raise ValueError("max_iter must be positive")
+        if isinstance(self.max_iter, (bool, np.bool_)) or not isinstance(
+            self.max_iter, (int, np.integer)
+        ):
+            raise ValueError("max_iter must be a non-negative integer")
+        if int(self.max_iter) < 0:
+            raise ValueError("max_iter must be a non-negative integer")
+        object.__setattr__(self, "max_iter", int(self.max_iter))
         if self.precision <= 0.0:
             raise ValueError("precision must be positive")
 

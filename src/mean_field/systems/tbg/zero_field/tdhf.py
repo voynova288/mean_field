@@ -19,8 +19,10 @@ convention.  All screening kernels are taken directly from the
 reference-density choices are never reconstructed here.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 import hashlib
+from types import MappingProxyType
 from typing import Any, Literal, Sequence
 
 import numpy as np
@@ -35,26 +37,68 @@ from ....core.hf import (
 )
 from ._hf_basis_overlap import (
     RestrictedHartreeFockRun,
+    TBGZeroFieldHFRunProvenance,
     TBGZeroFieldHFSourceReceipt,
+    TBGZeroFieldScreenedBlockBundle,
     TBG_ZERO_FIELD_CENTERED_REFERENCE_CONVENTION,
+    TBG_ZERO_FIELD_REFERENCE_PROJECTOR_CONVENTION,
     TBG_ZERO_FIELD_HF_SOURCE_RECEIPT_SCHEMA,
     TBG_ZERO_FIELD_HF_SOURCE_RECEIPT_SCHEMA_VERSION,
     build_h0_from_bm,
+    conventional_projector_to_stored_density as _conventional_projector_to_stored_density,
+    restricted_filling,
     restricted_occupied_state_count,
+    stored_density_to_conventional_projector as _stored_density_to_conventional_projector,
+    tbg_zero_field_central_average_reference_projector,
     tbg_zero_field_lattice_kvec_sha256,
     tbg_zero_field_overlap_kernel_inventory_fingerprint,
+    tbg_zero_field_reference_projector_sha256,
 )
+from ._hf_full import normalize_full_init_mode
+from .interaction import TBGZeroFieldInteractionSpec
 from .model import BMSolution
 
+
+TBG_ZERO_FIELD_TDHF_PRODUCTION_TOLERANCE_CONTRACT_SCHEMA = (
+    "mean_field.tbg.zero_field.tdhf.production_tolerances"
+)
+TBG_ZERO_FIELD_TDHF_PRODUCTION_TOLERANCE_CONTRACT_VERSION = 1
+TBG_ZERO_FIELD_TDHF_PRODUCTION_CLOSURE_TOLERANCE_MEV = 1.0e-10
+TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_CLOSURE_TOLERANCE_MEV = 1.0e-8
+TBG_ZERO_FIELD_TDHF_PRODUCTION_PROJECTOR_TOLERANCE = 1.0e-7
+TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_PROJECTOR_TOLERANCE = 1.0e-7
+TBG_ZERO_FIELD_TDHF_PRODUCTION_STRUCTURE_TOLERANCE = 1.0e-8
+TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_STRUCTURE_TOLERANCE = 1.0e-8
+TBG_ZERO_FIELD_TDHF_PRODUCTION_TANGENT_TOLERANCE = 1.0e-10
+TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_TANGENT_TOLERANCE = 1.0e-10
+
+def _validated_production_tolerance(
+    value: float,
+    *,
+    name: str,
+    production_maximum: float,
+) -> float:
+    tolerance = float(value)
+    if tolerance < 0.0 or not np.isfinite(tolerance):
+        raise ValueError(f"{name} must be finite and non-negative, got {value}")
+    if tolerance > float(production_maximum):
+        raise ValueError(
+            f"{name}={tolerance:.6e} exceeds the production maximum "
+            f"{float(production_maximum):.6e} under tolerance contract v"
+            f"{TBG_ZERO_FIELD_TDHF_PRODUCTION_TOLERANCE_CONTRACT_VERSION}; "
+            "loose tolerances cannot authorize this public operation"
+        )
+    return tolerance
 
 @dataclass(frozen=True)
 class TBGZeroFieldTDHFProvenance:
     """Explicit receipts for the HF functional linearized by TDHF.
 
-    Source labels identify external evidence, while
-    ``expected_hf_source_receipt_sha256`` binds that evidence to every typed
-    receipt field.  Numerical kernels still come only from the overlap blocks
-    attached to the run.
+    Source labels identify external evidence. The expected source-receipt and
+    solver-issued run-provenance fingerprints bind production evidence to the
+    exact HF source and solver outcome. Diagnostic sources must leave the run
+    fingerprint unset. Numerical kernels still come only from the overlap
+    blocks attached to the run.
     """
 
     hf_run_source: str
@@ -62,6 +106,7 @@ class TBGZeroFieldTDHFProvenance:
     interaction_parameters_source: str
     reference_density_source: str
     expected_hf_source_receipt_sha256: str
+    expected_hf_run_provenance_sha256: str | None
     hf_mode: Literal["full"]
 
     def __post_init__(self) -> None:
@@ -84,6 +129,15 @@ class TBGZeroFieldTDHFProvenance:
             "expected_hf_source_receipt_sha256",
             expected_fingerprint,
         )
+        if self.expected_hf_run_provenance_sha256 is not None:
+            object.__setattr__(
+                self,
+                "expected_hf_run_provenance_sha256",
+                _validate_sha256(
+                    self.expected_hf_run_provenance_sha256,
+                    name="expected_hf_run_provenance_sha256",
+                ),
+            )
         if self.hf_mode != "full":
             raise ValueError("TBG zero-field TDHF accepts only explicitly identified full-HF runs")
 
@@ -95,26 +149,39 @@ class TBGZeroFieldTDHFContext:
     ``grid_solution`` identifies the exact BM source grid but is not used to
     regenerate screening.  ``run.overlap_blocks`` is the sole interaction-block
     inventory, so this adapter cannot silently choose epsilon, gate distance,
-    a q=0 prescription, or a reference density.
+    a q=0 prescription, or a reference density. Synthetic/legacy receipts are
+    refused unless ``allow_diagnostic_source=True`` is explicitly requested.
     """
 
     grid_solution: BMSolution
     run: RestrictedHartreeFockRun
     beta: float
     provenance: TBGZeroFieldTDHFProvenance
-    closure_tolerance: float = 1.0e-10
+    allow_diagnostic_source: bool = False
+    closure_tolerance: float = TBG_ZERO_FIELD_TDHF_PRODUCTION_CLOSURE_TOLERANCE_MEV
     _bound_live_source_sha256: str = field(init=False, repr=False, compare=False)
+    _source_classification: str = field(init=False, repr=False, compare=False)
+    _authorization_diagnostics: Mapping[str, float | int | str] = field(
+        init=False,
+        repr=False,
+        compare=False,
+    )
 
     def __post_init__(self) -> None:
         beta = float(self.beta)
-        tolerance = float(self.closure_tolerance)
+        tolerance = _validated_production_tolerance(
+            self.closure_tolerance,
+            name="closure_tolerance_mev",
+            production_maximum=(
+                TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_CLOSURE_TOLERANCE_MEV
+            ),
+        )
         if not np.isfinite(beta):
             raise ValueError(f"TDHF beta must be finite, got {self.beta}")
-        if tolerance < 0.0 or not np.isfinite(tolerance):
-            raise ValueError(
-                f"TDHF closure_tolerance must be finite and non-negative, got {self.closure_tolerance}"
-            )
+        if not isinstance(self.allow_diagnostic_source, (bool, np.bool_)):
+            raise TypeError("allow_diagnostic_source must be bool")
         object.__setattr__(self, "beta", beta)
+        object.__setattr__(self, "allow_diagnostic_source", bool(self.allow_diagnostic_source))
         object.__setattr__(self, "closure_tolerance", tolerance)
         if not isinstance(self.provenance, TBGZeroFieldTDHFProvenance):
             raise TypeError("provenance must be a TBGZeroFieldTDHFProvenance")
@@ -123,7 +190,16 @@ class TBGZeroFieldTDHFContext:
 
         state = self.run.state
         source = self.grid_solution
-        self._validated_source_receipt()
+        receipt = self._validated_source_receipt()
+        object.__setattr__(
+            self,
+            "_source_classification",
+            (
+                "typed_production"
+                if receipt.interaction_contract == "typed"
+                else "diagnostic_non_production"
+            ),
+        )
         expected_dimensions = (int(source.n_spin), int(source.n_eta), int(source.nb), int(source.nk))
         state_dimensions = (int(state.n_spin), int(state.n_eta), int(state.n_band), int(state.nk))
         if state_dimensions != expected_dimensions:
@@ -165,6 +241,27 @@ class TBGZeroFieldTDHFContext:
             )
         object.__setattr__(
             self,
+            "_authorization_diagnostics",
+            MappingProxyType(
+                {
+                    "tolerance_contract_schema": (
+                        TBG_ZERO_FIELD_TDHF_PRODUCTION_TOLERANCE_CONTRACT_SCHEMA
+                    ),
+                    "tolerance_contract_version": (
+                        TBG_ZERO_FIELD_TDHF_PRODUCTION_TOLERANCE_CONTRACT_VERSION
+                    ),
+                    "source_classification": self._source_classification,
+                    "accepted_closure_tolerance_mev": tolerance,
+                    "production_max_closure_tolerance_mev": (
+                        TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_CLOSURE_TOLERANCE_MEV
+                    ),
+                    "h0_closure_residual_mev": h0_residual,
+                    "hamiltonian_closure_residual_mev": hamiltonian_residual,
+                }
+            ),
+        )
+        object.__setattr__(
+            self,
             "_bound_live_source_sha256",
             self._current_live_source_sha256(),
         )
@@ -173,7 +270,7 @@ class TBGZeroFieldTDHFContext:
         receipt = self.run.state.hf_source_receipt
         if not isinstance(receipt, TBGZeroFieldHFSourceReceipt):
             raise ValueError(
-                "TBG zero-field TDHF requires a typed TBGZeroFieldHFSourceReceipt"
+                "TBG zero-field TDHF requires a TBGZeroFieldHFSourceReceipt"
             )
         if receipt.schema != TBG_ZERO_FIELD_HF_SOURCE_RECEIPT_SCHEMA:
             raise ValueError("TBG zero-field TDHF source receipt schema mismatch")
@@ -181,6 +278,85 @@ class TBGZeroFieldTDHFContext:
             raise ValueError("TBG zero-field TDHF source receipt schema-version mismatch")
         if receipt.hf_mode != "full" or self.provenance.hf_mode != receipt.hf_mode:
             raise ValueError("TBG zero-field TDHF requires an hf_mode='full' source receipt")
+        interaction_spec = self.run.state.interaction_spec
+        if receipt.interaction_contract == "typed":
+            if self.allow_diagnostic_source:
+                raise ValueError(
+                    "allow_diagnostic_source=True is isolated to explicitly diagnostic "
+                    "TDHF receipts and cannot be attached to a production typed source"
+                )
+            if not isinstance(interaction_spec, TBGZeroFieldInteractionSpec):
+                raise ValueError("Typed TDHF source is missing TBGZeroFieldInteractionSpec")
+            bundle = self.run.screened_block_bundle
+            if not isinstance(bundle, TBGZeroFieldScreenedBlockBundle):
+                raise ValueError("Typed TDHF source is missing the screened-block bundle")
+            bundle.validate_for_solution(self.grid_solution)
+            if self.run.overlap_blocks is not bundle.screened_blocks:
+                raise ValueError("Typed TDHF run does not carry the exact screened bundle blocks")
+            if receipt.interaction_spec_fingerprint != interaction_spec.fingerprint:
+                raise ValueError(
+                    "HF source receipt interaction fingerprint does not match the live typed spec"
+                )
+            if receipt.screened_block_bundle_sha256 != bundle.fingerprint:
+                raise ValueError("HF source receipt does not match the screened-block bundle")
+            if (
+                receipt.overlap_lg != bundle.overlap_lg
+                or receipt.active_shift_inventory != bundle.active_shifts
+                or receipt.active_shift_inventory_sha256
+                != bundle.active_shift_inventory_sha256
+                or receipt.companion_circular_total_q_cutoff_parity
+                != bundle.companion_circular_total_q_cutoff_parity
+            ):
+                raise ValueError("Typed TDHF cutoff inventory receipt does not match the bundle")
+            mesh = self.grid_solution.torus_mesh
+            if mesh is None or receipt.mesh_fingerprint != mesh.fingerprint:
+                raise ValueError("Typed TDHF source mesh does not match the receipt")
+            if receipt.bm_solution_sha256 != bundle.bm_solution_sha256:
+                raise ValueError("Typed TDHF BMSolution does not match the receipt")
+            reference = tbg_zero_field_central_average_reference_projector(
+                self.grid_solution
+            )
+            if int(receipt.n_band or 0) != 2 or int(self.run.state.n_band) != 2:
+                raise ValueError("Typed TDHF requires the active central two-band reference")
+            if receipt.reference_projector_convention != TBG_ZERO_FIELD_REFERENCE_PROJECTOR_CONVENTION:
+                raise ValueError("Typed TDHF reference projector convention mismatch")
+            if receipt.reference_projector_dimensions != tuple(reference.shape):
+                raise ValueError("Typed TDHF reference projector dimensions mismatch")
+            if receipt.reference_projector_sha256 != tbg_zero_field_reference_projector_sha256(reference):
+                raise ValueError("Typed TDHF central-average reference projector hash mismatch")
+            run_provenance = self._validated_typed_run_provenance(
+                receipt=receipt,
+                interaction_spec=interaction_spec,
+                bundle=bundle,
+            )
+            if (
+                self.provenance.expected_hf_run_provenance_sha256
+                != run_provenance.fingerprint
+            ):
+                raise ValueError(
+                    "TDHF provenance expected HF run provenance fingerprint "
+                    "does not match the solver-issued live run"
+                )
+        elif receipt.interaction_contract == "legacy_untyped_diagnostic":
+            if not self.allow_diagnostic_source:
+                raise ValueError(
+                    "TBG zero-field TDHF refuses synthetic/legacy diagnostic sources unless "
+                    "allow_diagnostic_source=True is explicitly set"
+                )
+            if self.run.screened_block_bundle is not None:
+                raise ValueError("Diagnostic TDHF source cannot carry a typed screened bundle")
+            if self.run.provenance is not None:
+                raise ValueError(
+                    "Diagnostic TDHF sources must not carry production "
+                    "TBGZeroFieldHFRunProvenance"
+                )
+            if self.provenance.expected_hf_run_provenance_sha256 is not None:
+                raise ValueError(
+                    "Diagnostic TDHF provenance must not claim an expected "
+                    "production HF run provenance fingerprint"
+                )
+        else:
+            raise ValueError("Unsupported TDHF source receipt interaction contract")
         if receipt.beta != self.beta:
             raise ValueError(
                 "Explicit TDHF beta does not match the source receipt: "
@@ -219,12 +395,151 @@ class TBGZeroFieldTDHFContext:
             )
         return receipt
 
+    def _validated_typed_run_provenance(
+        self,
+        *,
+        receipt: TBGZeroFieldHFSourceReceipt,
+        interaction_spec: TBGZeroFieldInteractionSpec,
+        bundle: TBGZeroFieldScreenedBlockBundle,
+    ) -> TBGZeroFieldHFRunProvenance:
+        provenance = self.run.provenance
+        if not isinstance(provenance, TBGZeroFieldHFRunProvenance):
+            raise ValueError(
+                "Production typed TBG zero-field TDHF requires "
+                "TBGZeroFieldHFRunProvenance"
+            )
+        provenance._validate_solver_issued_live_run(self.run)
+        if provenance.hf_mode != "full" or receipt.hf_mode != "full":
+            raise ValueError("Typed TDHF run provenance must identify hf_mode='full'")
+        state = self.run.state
+        exact_checks = (
+            ("beta", provenance.beta, self.beta),
+            ("receipt beta", provenance.beta, receipt.beta),
+            ("seed", provenance.seed, int(self.run.seed)),
+            (
+                "typed receipt fingerprint",
+                provenance.typed_receipt_fingerprint,
+                receipt.fingerprint,
+            ),
+            (
+                "interaction spec fingerprint",
+                provenance.interaction_spec_fingerprint,
+                interaction_spec.fingerprint,
+            ),
+            (
+                "BM generation fingerprint",
+                provenance.bm_generation_fingerprint,
+                self.grid_solution.generation_fingerprint,
+            ),
+            (
+                "bundle BM generation fingerprint",
+                provenance.bm_generation_fingerprint,
+                bundle.bm_generation_fingerprint,
+            ),
+        )
+        for name, actual, expected in exact_checks:
+            if actual != expected:
+                raise ValueError(
+                    f"Typed TDHF run provenance {name} does not match the live source"
+                )
+        mesh = self.grid_solution.torus_mesh
+        if mesh is None:
+            raise ValueError("Typed TDHF BM source is missing its torus mesh")
+        if (
+            provenance.mesh_fingerprint != mesh.fingerprint
+            or provenance.mesh_fingerprint != bundle.mesh_fingerprint
+        ):
+            raise ValueError(
+                "Typed TDHF run provenance mesh fingerprint does not match the live source"
+            )
+        float_checks = (
+            ("nu", provenance.nu, state.nu, 1.0e-12),
+            (
+                "density-derived filling",
+                provenance.nu,
+                restricted_filling(state.density),
+                1.0e-12,
+            ),
+            ("precision", provenance.precision, state.precision, 0.0),
+        )
+        for name, expected, actual, atol in float_checks:
+            if not np.isclose(
+                float(actual),
+                float(expected),
+                rtol=1.0e-13,
+                atol=atol,
+            ):
+                raise ValueError(
+                    f"Typed TDHF run provenance {name} does not match the live run/state"
+                )
+        diagnostic_beta = state.diagnostics.get("beta")
+        if diagnostic_beta is None or float(diagnostic_beta) != provenance.beta:
+            raise ValueError(
+                "Typed TDHF run provenance beta does not match state diagnostics"
+            )
+        diagnostic_oda = state.diagnostics.get("oda_stall_threshold")
+        if diagnostic_oda is None or not np.isclose(
+            float(diagnostic_oda),
+            provenance.oda_stall_threshold,
+            rtol=1.0e-13,
+            atol=0.0,
+        ):
+            raise ValueError(
+                "Typed TDHF run provenance ODA threshold does not match state diagnostics"
+            )
+        diagnostic_max_iterations = state.diagnostics.get("requested_max_iterations")
+        if (
+            diagnostic_max_iterations is None
+            or int(diagnostic_max_iterations) != provenance.requested_max_iterations
+            or float(diagnostic_max_iterations) != float(int(diagnostic_max_iterations))
+        ):
+            raise ValueError(
+                "Typed TDHF run provenance max iterations do not match state diagnostics"
+            )
+        observed_iterations = max(
+            len(self.run.iter_energy),
+            len(self.run.iter_err),
+            len(self.run.iter_oda),
+        )
+        if observed_iterations > provenance.requested_max_iterations:
+            raise ValueError(
+                "Typed TDHF observed iterations exceed run provenance max iterations"
+            )
+        normalized_init_mode = normalize_full_init_mode(str(self.run.init_mode))
+        if (
+            str(self.run.init_mode) != normalized_init_mode
+            or provenance.normalized_init_mode != normalized_init_mode
+        ):
+            raise ValueError(
+                "Typed TDHF run provenance init mode does not match the live run"
+            )
+        return provenance
+
+    @property
+    def source_classification(self) -> str:
+        """Return ``typed_production`` or the explicit non-production label."""
+
+        return self._source_classification
+
+    @property
+    def is_production_source(self) -> bool:
+        return self._source_classification == "typed_production"
+
+    @property
+    def authorization_diagnostics(self) -> Mapping[str, float | int | str]:
+        """Accepted production bounds and measured context-closure residuals."""
+
+        return self._authorization_diagnostics
+
     def _current_live_source_sha256(self) -> str:
         receipt = self._validated_source_receipt()
         return _tbg_zero_field_tdhf_live_source_sha256(
             self.run,
             beta=self.beta,
             receipt=receipt,
+            expected_hf_run_provenance_sha256=(
+                self.provenance.expected_hf_run_provenance_sha256
+            ),
         )
 
     def _revalidate_live_source(self) -> None:
@@ -237,6 +552,9 @@ class TBGZeroFieldTDHFContext:
             self.run,
             beta=self.beta,
             receipt=receipt,
+            expected_hf_run_provenance_sha256=(
+                self.provenance.expected_hf_run_provenance_sha256
+            ),
         )
         if current != self._bound_live_source_sha256:
             raise ValueError(
@@ -281,6 +599,21 @@ class TBGZeroFieldTDHFOccupationResiduals:
     projector_trace: float
     tolerance: float
     trace_tolerance: float
+    tolerance_contract_version: int = field(
+        default=TBG_ZERO_FIELD_TDHF_PRODUCTION_TOLERANCE_CONTRACT_VERSION,
+        init=False,
+    )
+    production_max_tolerance: float = field(
+        default=TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_PROJECTOR_TOLERANCE,
+        init=False,
+    )
+
+    def __post_init__(self) -> None:
+        _validated_production_tolerance(
+            self.tolerance,
+            name="projector_tolerance",
+            production_maximum=self.production_max_tolerance,
+        )
 
     @property
     def ok(self) -> bool:
@@ -369,6 +702,26 @@ class TBGZeroFieldTDHFOrbitals:
 
 
 @dataclass(frozen=True)
+class TBGZeroFieldTDHFMatrices(TDHFMatrices):
+    """A/B result carrying the fixed production structure-tolerance bound."""
+
+    tolerance_contract_version: int = field(
+        default=TBG_ZERO_FIELD_TDHF_PRODUCTION_TOLERANCE_CONTRACT_VERSION,
+        init=False,
+    )
+    production_max_structure_tolerance: float = field(
+        default=TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_STRUCTURE_TOLERANCE,
+        init=False,
+    )
+
+    def __post_init__(self) -> None:
+        _validated_production_tolerance(
+            self.structure.tolerance,
+            name="structure_tolerance",
+            production_maximum=self.production_max_structure_tolerance,
+        )
+
+@dataclass(frozen=True)
 class TBGZeroFieldTDHFTangentParity:
     """Selected-column parity against the scalar HF interaction tangent."""
 
@@ -376,6 +729,21 @@ class TBGZeroFieldTDHFTangentParity:
     a_column_residuals: tuple[float, ...]
     b_column_residuals: tuple[float, ...]
     tolerance: float
+    tolerance_contract_version: int = field(
+        default=TBG_ZERO_FIELD_TDHF_PRODUCTION_TOLERANCE_CONTRACT_VERSION,
+        init=False,
+    )
+    production_max_tolerance: float = field(
+        default=TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_TANGENT_TOLERANCE,
+        init=False,
+    )
+
+    def __post_init__(self) -> None:
+        _validated_production_tolerance(
+            self.tolerance,
+            name="tangent_tolerance",
+            production_maximum=self.production_max_tolerance,
+        )
 
     @property
     def max_a_residual(self) -> float:
@@ -393,19 +761,13 @@ class TBGZeroFieldTDHFTangentParity:
 def stored_density_to_conventional_projector(stored_density: np.ndarray) -> np.ndarray:
     """Convert ``D_stored`` to ``P = D_stored.T + 1/2 I`` at every k."""
 
-    stored = _as_square_matrix_field(stored_density, name="stored_density")
-    nt = int(stored.shape[0])
-    identity = np.eye(nt, dtype=np.complex128)[:, :, None]
-    return np.swapaxes(stored, 0, 1) + 0.5 * identity
+    return _stored_density_to_conventional_projector(stored_density)
 
 
 def conventional_projector_to_stored_density(projector: np.ndarray) -> np.ndarray:
     """Convert a conventional projector to the centered stored HF convention."""
 
-    conventional = _as_square_matrix_field(projector, name="projector")
-    nt = int(conventional.shape[0])
-    identity = np.eye(nt, dtype=np.complex128)[:, :, None]
-    return np.swapaxes(conventional - 0.5 * identity, 0, 1)
+    return _conventional_projector_to_stored_density(projector)
 
 
 def stored_tangent_to_conventional_tangent(stored_tangent: np.ndarray) -> np.ndarray:
@@ -425,7 +787,7 @@ def conventional_tangent_to_stored_tangent(conventional_tangent: np.ndarray) -> 
 def build_tbg_zero_field_tdhf_orbitals(
     run: RestrictedHartreeFockRun,
     *,
-    projector_tolerance: float = 1.0e-7,
+    projector_tolerance: float = TBG_ZERO_FIELD_TDHF_PRODUCTION_PROJECTOR_TOLERANCE,
 ) -> TBGZeroFieldTDHFOrbitals:
     """Reconstruct HF orbitals and 0/1 occupations from a full-HF run.
 
@@ -434,9 +796,11 @@ def build_tbg_zero_field_tdhf_orbitals(
     in the freshly reconstructed HF eigenbasis and have occupations near 0/1.
     """
 
-    tolerance = float(projector_tolerance)
-    if tolerance < 0.0 or not np.isfinite(tolerance):
-        raise ValueError(f"projector_tolerance must be finite and non-negative, got {projector_tolerance}")
+    tolerance = _validated_production_tolerance(
+        projector_tolerance,
+        name="projector_tolerance",
+        production_maximum=TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_PROJECTOR_TOLERANCE,
+    )
 
     state = run.state
     hamiltonian = _as_square_matrix_field(state.hamiltonian, name="run.state.hamiltonian")
@@ -555,8 +919,8 @@ def build_tbg_zero_field_tdhf_q0_matrices(
     context: TBGZeroFieldTDHFContext,
     orbitals: TBGZeroFieldTDHFOrbitals | None = None,
     *,
-    structure_tolerance: float = 1.0e-8,
-) -> TDHFMatrices:
+    structure_tolerance: float = TBG_ZERO_FIELD_TDHF_PRODUCTION_STRUCTURE_TOLERANCE,
+) -> TBGZeroFieldTDHFMatrices:
     """Build dense q=0 A/B/L matrices from the source run's scalar blocks.
 
     For pair ``i=(p,h)`` and ``j=(p',h')``, the HF-energy gap supplies the
@@ -566,6 +930,11 @@ def build_tbg_zero_field_tdhf_q0_matrices(
     assembled by the common core helper according to Kwan Eq. (84).
     """
 
+    tolerance = _validated_production_tolerance(
+        structure_tolerance,
+        name="structure_tolerance",
+        production_maximum=TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_STRUCTURE_TOLERANCE,
+    )
     context._revalidate_live_source()
     resolved_orbitals = (
         build_tbg_zero_field_tdhf_orbitals(context.run)
@@ -577,7 +946,7 @@ def build_tbg_zero_field_tdhf_q0_matrices(
         context,
         resolved_orbitals,
         pairs,
-        structure_tolerance=structure_tolerance,
+        structure_tolerance=tolerance,
     )
     context._revalidate_live_source()
     return result
@@ -588,14 +957,16 @@ def build_tbg_zero_field_tdhf_q0_matrices_from_pairs(
     orbitals: TBGZeroFieldTDHFOrbitals,
     pairs: Sequence[ParticleHolePair],
     *,
-    structure_tolerance: float = 1.0e-8,
-) -> TDHFMatrices:
+    structure_tolerance: float = TBG_ZERO_FIELD_TDHF_PRODUCTION_STRUCTURE_TOLERANCE,
+) -> TBGZeroFieldTDHFMatrices:
     """Vectorized dense q=0 A/B assembly for an explicitly ordered pair list."""
 
+    tolerance = _validated_production_tolerance(
+        structure_tolerance,
+        name="structure_tolerance",
+        production_maximum=TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_STRUCTURE_TOLERANCE,
+    )
     context._revalidate_live_source()
-    tolerance = float(structure_tolerance)
-    if tolerance < 0.0 or not np.isfinite(tolerance):
-        raise ValueError(f"structure_tolerance must be finite and non-negative, got {structure_tolerance}")
     if orbitals.nt != context.run.state.nt or orbitals.nk != context.run.state.nk:
         raise ValueError("TDHF orbitals do not match the source HF run dimensions")
     _validate_orbitals_source(context, orbitals)
@@ -691,7 +1062,13 @@ def build_tbg_zero_field_tdhf_q0_matrices_from_pairs(
         tolerance=tolerance,
         raise_on_fail=True,
     )
-    result = TDHFMatrices(pairs=ph_pairs, A=A, B=B, L=L, structure=structure)
+    result = TBGZeroFieldTDHFMatrices(
+        pairs=ph_pairs,
+        A=A,
+        B=B,
+        L=L,
+        structure=structure,
+    )
     context._revalidate_live_source()
     return result
 
@@ -702,7 +1079,7 @@ def validate_tbg_zero_field_tdhf_tangent_columns(
     matrices: TDHFMatrices,
     columns: Sequence[int],
     *,
-    tolerance: float = 1.0e-10,
+    tolerance: float = TBG_ZERO_FIELD_TDHF_PRODUCTION_TANGENT_TOLERANCE,
     raise_on_fail: bool = True,
 ) -> TBGZeroFieldTDHFTangentParity:
     """Compare selected vectorized A/B columns to the scalar HF tangent.
@@ -714,10 +1091,12 @@ def validate_tbg_zero_field_tdhf_tangent_columns(
     row pair must reproduce ``A-gap`` and ``B`` respectively.
     """
 
+    resolved_tolerance = _validated_production_tolerance(
+        tolerance,
+        name="tangent_tolerance",
+        production_maximum=TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_TANGENT_TOLERANCE,
+    )
     context._revalidate_live_source()
-    resolved_tolerance = float(tolerance)
-    if resolved_tolerance < 0.0 or not np.isfinite(resolved_tolerance):
-        raise ValueError(f"tolerance must be finite and non-negative, got {tolerance}")
     resolved_columns = tuple(int(value) for value in columns)
     if not resolved_columns:
         raise ValueError("At least one TDHF column is required for tangent parity")
@@ -990,13 +1369,14 @@ def _tbg_zero_field_tdhf_live_source_sha256(
     *,
     beta: float,
     receipt: TBGZeroFieldHFSourceReceipt,
+    expected_hf_run_provenance_sha256: str | None,
 ) -> str:
     state = run.state
     digest = hashlib.sha256()
     _update_live_source_bytes(
         digest,
         "domain",
-        b"TBGZeroFieldTDHFLiveSource/v1",
+        b"TBGZeroFieldTDHFLiveSource/v3",
     )
     _update_live_source_array(digest, "h0", state.h0)
     _update_live_source_array(digest, "hamiltonian", state.hamiltonian)
@@ -1015,6 +1395,40 @@ def _tbg_zero_field_tdhf_live_source_sha256(
         digest,
         "receipt",
         receipt.fingerprint.encode("ascii"),
+    )
+    run_provenance = run.provenance
+    provenance_fingerprint = (
+        run_provenance.fingerprint
+        if isinstance(run_provenance, TBGZeroFieldHFRunProvenance)
+        else "diagnostic:none"
+    )
+    _update_live_source_bytes(
+        digest,
+        "hf_run_provenance",
+        provenance_fingerprint.encode("ascii"),
+    )
+    expected_run_fingerprint = (
+        expected_hf_run_provenance_sha256
+        if expected_hf_run_provenance_sha256 is not None
+        else "diagnostic:none"
+    )
+    _update_live_source_bytes(
+        digest,
+        "expected_hf_run_provenance",
+        expected_run_fingerprint.encode("ascii"),
+    )
+    _update_live_source_array(digest, "iter_energy", run.iter_energy)
+    _update_live_source_array(digest, "iter_err", run.iter_err)
+    _update_live_source_array(digest, "iter_oda", run.iter_oda)
+    _update_live_source_bytes(
+        digest,
+        "converged",
+        b"true" if bool(run.converged) else b"false",
+    )
+    _update_live_source_bytes(
+        digest,
+        "exit_reason",
+        str(run.exit_reason).encode("utf-8"),
     )
     _update_live_source_bytes(
         digest,
@@ -1046,10 +1460,21 @@ def _max_abs(values: np.ndarray) -> float:
 
 __all__ = [
     "TBGZeroFieldTDHFContext",
+    "TBGZeroFieldTDHFMatrices",
     "TBGZeroFieldTDHFOccupationResiduals",
     "TBGZeroFieldTDHFOrbitals",
     "TBGZeroFieldTDHFProvenance",
     "TBGZeroFieldTDHFTangentParity",
+    "TBG_ZERO_FIELD_TDHF_PRODUCTION_CLOSURE_TOLERANCE_MEV",
+    "TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_CLOSURE_TOLERANCE_MEV",
+    "TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_PROJECTOR_TOLERANCE",
+    "TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_STRUCTURE_TOLERANCE",
+    "TBG_ZERO_FIELD_TDHF_PRODUCTION_MAX_TANGENT_TOLERANCE",
+    "TBG_ZERO_FIELD_TDHF_PRODUCTION_PROJECTOR_TOLERANCE",
+    "TBG_ZERO_FIELD_TDHF_PRODUCTION_STRUCTURE_TOLERANCE",
+    "TBG_ZERO_FIELD_TDHF_PRODUCTION_TANGENT_TOLERANCE",
+    "TBG_ZERO_FIELD_TDHF_PRODUCTION_TOLERANCE_CONTRACT_SCHEMA",
+    "TBG_ZERO_FIELD_TDHF_PRODUCTION_TOLERANCE_CONTRACT_VERSION",
     "build_tbg_zero_field_tdhf_orbitals",
     "build_tbg_zero_field_tdhf_q0_matrices",
     "build_tbg_zero_field_tdhf_q0_matrices_from_pairs",

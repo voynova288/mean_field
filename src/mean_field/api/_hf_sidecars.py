@@ -84,6 +84,14 @@ def _mapping_keys(value: object) -> list[str]:
     return []
 
 
+def _density_delta_definition(density: object) -> str:
+    metadata = getattr(density, "metadata", {})
+    if isinstance(metadata, Mapping):
+        explicit = metadata.get("density_delta_definition")
+        if isinstance(explicit, str) and explicit.strip():
+            return explicit.strip()
+    return "D_stored[a,b,k]=<c_a†(k)c_b(k)>-R_stored[a,b,k]"
+
 def _canonical_hf_run_result_sidecar(canonical_run_result: Any) -> dict[str, object]:
     final_state = canonical_run_result.final_state
     basis = final_state.basis
@@ -131,7 +139,7 @@ def _canonical_hf_run_result_sidecar(canonical_run_result: Any) -> dict[str, obj
             "density": {
                 "contract_type": "mean_field.core.contracts.DensityState",
                 "convention": str(density.convention),
-                "density_delta_definition": "P-R",
+                "density_delta_definition": _density_delta_definition(density),
                 "density_delta_shape": _array_shape(density.density_delta),
                 "reference_shape": _array_shape(reference.reference),
                 "reference_scheme": str(reference.scheme),

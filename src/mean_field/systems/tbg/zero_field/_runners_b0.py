@@ -59,7 +59,11 @@ def run_b0_hf_benchmark_case(
         )
 
     overlap_start = perf_counter()
-    overlap_blocks = build_overlap_block_set(grid_solution, lg=overlap_grid_lg)
+    overlap_blocks = build_overlap_block_set(
+        grid_solution,
+        lg=overlap_grid_lg,
+        legacy_untyped=True,
+    )
     overlap_elapsed = perf_counter() - overlap_start
 
     hf_start = perf_counter()
@@ -90,6 +94,7 @@ def run_b0_hf_benchmark_case(
         beta=beta,
         init_mode=requested_init_mode,
         path=path,
+        legacy_untyped=True,
     )
     path_elapsed = perf_counter() - path_start
 

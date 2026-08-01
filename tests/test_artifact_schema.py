@@ -211,6 +211,11 @@ def test_hf_result_save_writes_canonical_hf_run_result_sidecar(tmp_path) -> None
         reference=reference,
         filling=1.0,
         n_occupied_total=1,
+        metadata={
+            "density_delta_definition": (
+                "D_stored[a,b]=<c_a† c_b>-0.5*delta_ab"
+            )
+        },
     )
     hamiltonian = ContractHamiltonianParts(
         h0=h0,
@@ -264,7 +269,10 @@ def test_hf_result_save_writes_canonical_hf_run_result_sidecar(tmp_path) -> None
     assert sidecar["contract_type"] == "mean_field.core.contracts.HFRunResult"
     assert sidecar["iteration_history"]["count"] == 2
     assert sidecar["final_state"]["density"]["reference_scheme"] == "custom"
-    assert sidecar["final_state"]["density"]["density_delta_definition"] == "P-R"
+    assert (
+        sidecar["final_state"]["density"]["density_delta_definition"]
+        == "D_stored[a,b]=<c_a† c_b>-0.5*delta_ab"
+    )
     assert sidecar["final_state"]["density"]["density_delta_shape"] == [1, 1, 1]
     assert sidecar["final_state"]["basis"]["h0_shape"] == [1, 1, 1]
     assert sidecar["final_state"]["hamiltonian"]["metadata"]["supports_crpa"] is False
@@ -284,6 +292,10 @@ def test_hf_result_save_metadata_only_remains_default(tmp_path) -> None:
     assert "canonical_hf_arrays_schema" not in loaded.manifest["files"]
     assert loaded.canonical_hf_run_result is not None
     assert loaded.canonical_hf_run_result["final_state"]["density"]["density_delta_shape"] == [1, 1, 1]
+    assert (
+        loaded.canonical_hf_run_result["final_state"]["density"]["density_delta_definition"]
+        == "D_stored[a,b,k]=<c_a†(k)c_b(k)>-R_stored[a,b,k]"
+    )
 
 
 def test_hf_result_save_canonical_arrays_round_trips_dataclass(tmp_path) -> None:

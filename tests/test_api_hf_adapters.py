@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from copy import deepcopy
+from dataclasses import replace
 from types import SimpleNamespace
 
 import numpy as np
@@ -13,7 +15,13 @@ from mean_field.systems import tdbg as tdbg_system
 from mean_field.systems.RnG_hBN import RLGhBNInteractionParams, RLGhBNRunHFConfig
 from mean_field.systems.htg import HTGRunHFConfig, HTGSupercellRunHFConfig, InteractionParams
 from mean_field.systems.tbg.params import TBGParameters
-from mean_field.systems.tbg.zero_field import BMSolution, TBGZeroFieldRunHFConfig, build_b0_uniform_lattice
+from mean_field.systems.tbg.zero_field import (
+    BMSolution,
+    TBGZeroFieldInteractionSpec,
+    TBGZeroFieldRunHFConfig,
+    solve_bm_model_on_torus,
+    tbg_zero_field_hf_run_to_hf_result,
+)
 from mean_field.systems.tdbg import TDBGInteractionSettings, TDBGProjectedHFConfig, TDBGProjectedWindow
 
 
@@ -32,35 +40,32 @@ def _tiny_tdbg_config() -> TDBGProjectedHFConfig:
     )
 
 
+_TINY_TBG_GRID_CACHE: dict[float, BMSolution] = {}
+_TINY_TBG_ARRAY_FIELDS = (
+    "lattice_kvec",
+    "hamiltonian",
+    "sigma_z",
+    "uk",
+    "spectrum",
+    "gvec",
+)
+
 def _tiny_tbg_grid_solution(theta_deg: float = 1.05) -> BMSolution:
-    params = TBGParameters.from_degrees(theta_deg)
-    grid = build_b0_uniform_lattice(params, lk=1)
-    nk = int(grid.nk)
-    lg = 1
-    nlocal = 4
-    n_eta = 2
-    n_spin = 2
-    nb = 2
-    dim = nlocal * lg * lg
-    spectrum = np.zeros((nb, n_eta, nk), dtype=float)
-    for ik in range(nk):
-        spectrum[0, :, ik] = [-1.0 - 0.01 * ik, -0.8 - 0.01 * ik]
-        spectrum[1, :, ik] = [0.8 + 0.01 * ik, 1.0 + 0.01 * ik]
-    return BMSolution(
-        params=params,
-        lattice_kvec=np.asarray(grid.kvec, dtype=np.complex128),
-        lg=lg,
-        nlocal=nlocal,
-        n_eta=n_eta,
-        n_spin=n_spin,
-        nb=nb,
-        hamiltonian=np.zeros((dim, dim, n_eta, nk), dtype=np.complex128),
-        sigma_z=np.zeros((n_spin * n_eta * nb, n_spin * n_eta * nb, nk), dtype=np.complex128),
-        uk=np.zeros((dim, nb, n_eta, nk), dtype=np.complex128),
-        spectrum=spectrum,
-        gvec=np.asarray([0.0 + 0.0j], dtype=np.complex128),
-        periodic_g_grid=True,
-    )
+    key = float(theta_deg)
+    if key not in _TINY_TBG_GRID_CACHE:
+        base = solve_bm_model_on_torus(
+            TBGParameters.from_degrees(theta_deg),
+            2,
+            lg=7,
+            calculate_chern_operator=True,
+        )
+        for name in _TINY_TBG_ARRAY_FIELDS:
+            np.asarray(getattr(base, name)).setflags(write=False)
+        _TINY_TBG_GRID_CACHE[key] = base
+    copied = deepcopy(_TINY_TBG_GRID_CACHE[key])
+    for name in _TINY_TBG_ARRAY_FIELDS:
+        object.__setattr__(copied, name, np.array(getattr(copied, name), copy=True))
+    return copied
 
 
 def test_public_hf_adapter_registry_exposes_post_run_converters_without_run_dispatch() -> None:
@@ -142,8 +147,200 @@ def test_public_run_hf_tbg_bm_requires_explicit_system_workflow() -> None:
 
 def test_public_run_hf_tbg_zero_field_explicit_config_attaches_canonical_contract_result() -> None:
     grid_solution = _tiny_tbg_grid_solution(theta_deg=1.05)
-    model = make_model("tbg", variant="zero_field_bm", theta_deg=1.05, lg=1)
-    screening_lm = float(np.sqrt(abs(grid_solution.params.a1) * abs(grid_solution.params.a2)))
+    model = make_model(
+        "tbg",
+        variant="zero_field_bm",
+        theta_deg=1.05,
+        lg=grid_solution.lg,
+    )
+    interaction_spec = TBGZeroFieldInteractionSpec()
+    cfg = HFConfig(
+        filling=5.0e-13,
+        mesh=(2, 2),
+        max_iter=1,
+        precision=1.0e-6,
+        density_convention="stored_delta",
+        interaction_scheme="average",
+        epsilon_r=interaction_spec.epsr,
+        dsc_nm=interaction_spec.dsc_nm,
+        coulomb_kernel="2d_gate",
+        seeds=("5",),
+    )
+    tbg_cfg = TBGZeroFieldRunHFConfig(
+        grid_solution=grid_solution,
+        nu=5.0e-13,
+        init_mode="bm",
+        seed=5,
+        max_iter=1,
+        overlap_lg=7,
+        precision=1.0e-6,
+        interaction_spec=interaction_spec,
+    )
+
+    result = run_hf(model, cfg, tbg_zero_field_config=tbg_cfg)
+
+    assert isinstance(result, HFResult)
+    assert tbg_cfg.nu == 0.0
+    assert result.config.filling == 0.0
+    assert result.model.system_name == "tbg_zero_field"
+    assert isinstance(result.canonical_run_result, ContractHFRunResult)
+    assert result.state.seed == 5
+    assert result.config.dsc_nm == interaction_spec.dsc_nm
+    assert result.state.interaction_spec == interaction_spec
+    assert (
+        result.state.hf_source_receipt.interaction_spec_fingerprint
+        == interaction_spec.fingerprint
+    )
+    assert result.observables["public_run_hf_adapter"].endswith("run_tbg_zero_field_hf_config_adapter")
+    assert result.observables["hf_mode"] == "restricted"
+    assert result.observables["beta"] == tbg_cfg.beta
+    assert result.observables["hf_run_provenance"] == result.state.provenance.to_metadata()
+    assert result.artifacts.metadata["workflow"] == "tbg.zero_field.restricted_hf.raw_run_result"
+    assert result.observables["torus_mesh_fingerprint"] == grid_solution.torus_mesh.fingerprint
+    assert result.observables["bm_solution_sha256"] == result.state.screened_block_bundle.bm_solution_sha256
+    assert result.observables["lattice_kvec_sha256"] == result.state.hf_source_receipt.lattice_kvec_sha256
+    assert result.observables["interaction_spec"] == interaction_spec.to_metadata()
+    assert result.observables["hf_source_receipt"] == result.state.hf_source_receipt.to_metadata()
+    assert result.observables["screened_block_bundle"] == result.state.screened_block_bundle.to_metadata()
+    assert result.canonical_run_result.final_state.observables["grid_mesh_size"] == 2
+    assert result.canonical_run_result.final_state.density.reference.metadata["raw_density_convention"] == "stored_delta"
+    assert (
+        result.canonical_run_result.final_state.density.metadata["density_delta_definition"]
+        == "D_stored[a,b]=<c_a† c_b>-0.5*delta_ab"
+    )
+    assert result.canonical_run_result.final_state.hamiltonian.metadata["supports_crpa"] is False
+
+    for reserved_key in (
+        "interaction_spec",
+        "hf_source_receipt",
+        "screened_block_bundle",
+        "hf_mode",
+        "beta",
+        "hf_run_provenance",
+        "solver_provenance",
+        "mesh_fingerprint",
+        "source_fingerprint",
+        "torus_mesh_fingerprint",
+        "bm_solution_sha256",
+        "lattice_kvec_sha256",
+    ):
+        with pytest.raises(ValueError, match="reserved verified TBG HF keys"):
+            tbg_zero_field_hf_run_to_hf_result(
+                result.state,
+                grid_solution=grid_solution,
+                config=cfg,
+                observables={reserved_key: "caller-forged"},
+            )
+
+
+def test_public_run_hf_tbg_zero_field_refuses_fractional_hfconfig_filling() -> None:
+    grid_solution = _tiny_tbg_grid_solution(theta_deg=1.05)
+    model = make_model(
+        "tbg",
+        variant="zero_field_bm",
+        theta_deg=1.05,
+        lg=grid_solution.lg,
+    )
+    interaction_spec = TBGZeroFieldInteractionSpec()
+    config = HFConfig(
+        filling=0.25,
+        mesh=(2, 2),
+        max_iter=0,
+        precision=1.0e-6,
+        density_convention="stored_delta",
+        interaction_scheme="average",
+        epsilon_r=interaction_spec.epsr,
+        dsc_nm=interaction_spec.dsc_nm,
+        coulomb_kernel="2d_gate",
+        seeds=("1",),
+    )
+    tbg_config = TBGZeroFieldRunHFConfig(
+        grid_solution=grid_solution,
+        nu=0.0,
+        init_mode="bm",
+        max_iter=0,
+        overlap_lg=7,
+        precision=1.0e-6,
+        interaction_spec=interaction_spec,
+    )
+
+    with pytest.raises(ValueError, match="separate supercell workflow"):
+        run_hf(model, config, tbg_zero_field_config=tbg_config)
+
+@pytest.mark.parametrize(
+    "mismatch_kind",
+    ["w0", "w1", "strain", "sigma_rotation", "periodic_g_grid"],
+)
+def test_public_run_hf_tbg_rejects_complete_bm_generation_mismatch(
+    mismatch_kind: str,
+) -> None:
+    grid_solution = _tiny_tbg_grid_solution(theta_deg=1.05)
+    model_kwargs: dict[str, object] = {
+        "variant": "zero_field_bm",
+        "theta_deg": 1.05,
+        "lg": grid_solution.lg,
+        "params": grid_solution.params,
+        "sigma_rotation": grid_solution.sigma_rotation,
+        "periodic_g_grid": grid_solution.periodic_g_grid,
+    }
+    if mismatch_kind == "w0":
+        model_kwargs["params"] = replace(
+            grid_solution.params,
+            w0=grid_solution.params.w0 + 1.0,
+        )
+    elif mismatch_kind == "w1":
+        model_kwargs["params"] = replace(
+            grid_solution.params,
+            w1=grid_solution.params.w1 + 1.0,
+        )
+    elif mismatch_kind == "strain":
+        model_kwargs["params"] = replace(
+            grid_solution.params,
+            strain=grid_solution.params.strain + 1.0e-4,
+        )
+    elif mismatch_kind == "sigma_rotation":
+        model_kwargs["sigma_rotation"] = not grid_solution.sigma_rotation
+    elif mismatch_kind == "periodic_g_grid":
+        model_kwargs["periodic_g_grid"] = not grid_solution.periodic_g_grid
+    else:
+        raise AssertionError(f"Unhandled mismatch_kind={mismatch_kind!r}")
+    model = make_model("tbg", **model_kwargs)
+    interaction_spec = TBGZeroFieldInteractionSpec()
+    config = HFConfig(
+        filling=0.0,
+        mesh=(2, 2),
+        max_iter=1,
+        precision=1.0e-6,
+        density_convention="stored_delta",
+        interaction_scheme="average",
+        epsilon_r=interaction_spec.epsr,
+        dsc_nm=interaction_spec.dsc_nm,
+        coulomb_kernel="2d_gate",
+        seeds=("1",),
+    )
+    tbg_config = TBGZeroFieldRunHFConfig(
+        grid_solution=grid_solution,
+        nu=0.0,
+        init_mode="bm",
+        max_iter=1,
+        overlap_lg=7,
+        precision=1.0e-6,
+        interaction_spec=interaction_spec,
+    )
+
+    with pytest.raises(ValueError, match="BM generation fingerprint"):
+        run_hf(model, config, tbg_zero_field_config=tbg_config)
+
+
+def test_public_post_run_tbg_config_rejects_interaction_kernel_and_window_mislabels() -> None:
+    grid_solution = _tiny_tbg_grid_solution(theta_deg=1.05)
+    model = make_model(
+        "tbg",
+        variant="zero_field_bm",
+        theta_deg=1.05,
+        lg=grid_solution.lg,
+    )
+    interaction_spec = TBGZeroFieldInteractionSpec()
     cfg = HFConfig(
         filling=0.0,
         mesh=(2, 2),
@@ -151,34 +348,43 @@ def test_public_run_hf_tbg_zero_field_explicit_config_attaches_canonical_contrac
         precision=1.0e-6,
         density_convention="stored_delta",
         interaction_scheme="average",
-        epsilon_r=15.0,
-        dsc_nm=screening_lm,
+        epsilon_r=interaction_spec.epsr,
+        dsc_nm=interaction_spec.dsc_nm,
         coulomb_kernel="2d_gate",
+        seeds=("1",),
     )
-    tbg_cfg = TBGZeroFieldRunHFConfig(
+    run_config = TBGZeroFieldRunHFConfig(
         grid_solution=grid_solution,
         nu=0.0,
         init_mode="bm",
-        seed=5,
         max_iter=1,
+        overlap_lg=7,
         precision=1.0e-6,
+        interaction_spec=interaction_spec,
     )
-
-    result = run_hf(model, cfg, tbg_zero_field_config=tbg_cfg)
-
-    assert isinstance(result, HFResult)
-    assert result.model.system_name == "tbg_zero_field"
-    assert isinstance(result.canonical_run_result, ContractHFRunResult)
-    assert result.state.seed == 5
-    assert result.observables["public_run_hf_adapter"].endswith("run_tbg_zero_field_hf_config_adapter")
-    assert result.canonical_run_result.final_state.observables["grid_lk"] == 1
-    assert result.canonical_run_result.final_state.density.reference.metadata["raw_density_convention"] == "stored_delta"
-    assert result.canonical_run_result.final_state.hamiltonian.metadata["supports_crpa"] is False
+    result = run_hf(model, cfg, tbg_zero_field_config=run_config)
+    for mislabeled in (
+        replace(cfg, interaction_scheme="cn"),
+        replace(cfg, coulomb_kernel="crpa"),
+        replace(cfg, active_window=(1, 1)),
+    ):
+        with pytest.raises((ValueError, NotImplementedError)):
+            tbg_zero_field_hf_run_to_hf_result(
+                result.state,
+                grid_solution=grid_solution,
+                config=mislabeled,
+            )
 
 
 def test_public_run_hf_tbg_zero_field_rejects_missing_grid_contract() -> None:
     grid_solution = _tiny_tbg_grid_solution(theta_deg=1.05)
-    model = make_model("tbg", variant="zero_field_bm", theta_deg=1.05, lg=1)
+    model = make_model(
+        "tbg",
+        variant="zero_field_bm",
+        theta_deg=1.05,
+        lg=grid_solution.lg,
+    )
+    interaction_spec = TBGZeroFieldInteractionSpec()
     cfg = HFConfig(
         filling=0.0,
         mesh=(1, 1),
@@ -186,15 +392,212 @@ def test_public_run_hf_tbg_zero_field_rejects_missing_grid_contract() -> None:
         precision=1.0e-6,
         density_convention="stored_delta",
         interaction_scheme="average",
-        epsilon_r=15.0,
-        dsc_nm=float(np.sqrt(abs(grid_solution.params.a1) * abs(grid_solution.params.a2))),
+        epsilon_r=interaction_spec.epsr,
+        dsc_nm=interaction_spec.dsc_nm,
         coulomb_kernel="2d_gate",
+        seeds=("1",),
     )
-    tbg_cfg = TBGZeroFieldRunHFConfig(grid_solution=grid_solution, nu=0.0, init_mode="bm", max_iter=1, precision=1.0e-6)
+    tbg_cfg = TBGZeroFieldRunHFConfig(
+        grid_solution=grid_solution,
+        nu=0.0,
+        init_mode="bm",
+        max_iter=1,
+        overlap_lg=7,
+        precision=1.0e-6,
+        interaction_spec=interaction_spec,
+    )
 
-    with pytest.raises(ValueError, match="B0 grid point count"):
+    with pytest.raises(ValueError, match="carried half-open torus mesh"):
         run_hf(model, cfg, tbg_zero_field_config=tbg_cfg)
 
+
+def test_public_run_hf_tbg_zero_field_refuses_untyped_and_dimensionless_dsc_contracts() -> None:
+    grid_solution = _tiny_tbg_grid_solution(theta_deg=1.05)
+    model = make_model(
+        "tbg",
+        variant="zero_field_bm",
+        theta_deg=1.05,
+        lg=grid_solution.lg,
+    )
+    with pytest.raises(ValueError, match="requires a typed"):
+        TBGZeroFieldRunHFConfig(grid_solution=grid_solution, nu=0.0)
+
+    interaction_spec = TBGZeroFieldInteractionSpec()
+    with pytest.raises(ValueError, match="Raw screening_lm is rejected"):
+        TBGZeroFieldRunHFConfig(
+            grid_solution=grid_solution,
+            nu=0.0,
+            overlap_lg=7,
+            interaction_spec=interaction_spec,
+            screening_lm=interaction_spec.screening_lm,
+        )
+    tbg_cfg = TBGZeroFieldRunHFConfig(
+        grid_solution=grid_solution,
+        nu=0.0,
+        init_mode="bm",
+        max_iter=1,
+        overlap_lg=7,
+        precision=1.0e-6,
+        interaction_spec=interaction_spec,
+    )
+    config_with_dimensionless_lm = HFConfig(
+        filling=0.0,
+        mesh=(2, 2),
+        max_iter=1,
+        precision=1.0e-6,
+        density_convention="stored_delta",
+        interaction_scheme="average",
+        epsilon_r=interaction_spec.epsr,
+        dsc_nm=interaction_spec.screening_lm,
+        coulomb_kernel="2d_gate",
+        seeds=("1",),
+    )
+    with pytest.raises(ValueError, match="physical gate distance in nm"):
+        run_hf(
+            model,
+            config_with_dimensionless_lm,
+            tbg_zero_field_config=tbg_cfg,
+        )
+
+
+@pytest.mark.parametrize(
+    "bad_mesh",
+    [(2.9, 2), (2, 2.9), (True, 2), (2, np.bool_(False))],
+)
+def test_hf_config_rejects_float_and_bool_mesh_components(
+    bad_mesh: tuple[object, object],
+) -> None:
+    with pytest.raises(ValueError, match="positive pair of non-bool integers"):
+        HFConfig(filling=0.0, mesh=bad_mesh)  # type: ignore[arg-type]
+
+def test_hf_config_normalizes_numpy_integer_mesh_to_exact_tuple() -> None:
+    config = HFConfig(filling=0.0, mesh=(np.int64(2), np.int32(3)))
+    assert config.mesh == (2, 3)
+    assert type(config.mesh) is tuple
+    assert all(type(value) is int for value in config.mesh)
+
+@pytest.mark.parametrize("bad_max_iter", [2.9, True, np.bool_(False)])
+def test_hf_config_rejects_non_integer_and_bool_max_iter(bad_max_iter: object) -> None:
+    with pytest.raises(ValueError, match="non-negative integer"):
+        HFConfig(filling=0.0, mesh=(1, 1), max_iter=bad_max_iter)  # type: ignore[arg-type]
+
+def test_hf_config_accepts_zero_and_numpy_integer_max_iter() -> None:
+    config = HFConfig(filling=0.0, mesh=(1, 1), max_iter=np.int64(0))
+    assert config.max_iter == 0
+    assert isinstance(config.max_iter, int)
+
+@pytest.mark.parametrize(
+    "bad_nu",
+    [np.nan, np.inf, -np.inf],
+    ids=["nan", "inf", "neg_inf"],
+)
+def test_tbg_typed_config_rejects_nonfinite_primitive_cell_nu(
+    bad_nu: float,
+) -> None:
+    with pytest.raises(ValueError, match="finite real integer"):
+        TBGZeroFieldRunHFConfig(
+            grid_solution=_tiny_tbg_grid_solution(),
+            nu=bad_nu,
+            overlap_lg=7,
+            interaction_spec=TBGZeroFieldInteractionSpec(),
+        )
+
+@pytest.mark.parametrize(
+    "bad_nu",
+    [0.25, 2.0 + 2.0e-12],
+    ids=["fractional", "outside_integer_tolerance"],
+)
+def test_tbg_typed_config_refuses_fractional_primitive_cell_nu(
+    bad_nu: float,
+) -> None:
+    with pytest.raises(ValueError, match="separate supercell workflow"):
+        TBGZeroFieldRunHFConfig(
+            grid_solution=_tiny_tbg_grid_solution(),
+            nu=bad_nu,
+            overlap_lg=7,
+            interaction_spec=TBGZeroFieldInteractionSpec(),
+        )
+
+def test_tbg_typed_config_normalizes_float_integer_nu_with_tight_tolerance() -> None:
+    exact = TBGZeroFieldRunHFConfig(
+        grid_solution=_tiny_tbg_grid_solution(),
+        nu=2.0,
+        overlap_lg=7,
+        interaction_spec=TBGZeroFieldInteractionSpec(),
+    )
+    near = TBGZeroFieldRunHFConfig(
+        grid_solution=_tiny_tbg_grid_solution(),
+        nu=2.0 + 5.0e-13,
+        overlap_lg=7,
+        interaction_spec=TBGZeroFieldInteractionSpec(),
+    )
+    assert exact.nu == 2.0
+    assert near.nu == 2.0
+    assert type(exact.nu) is float
+    assert type(near.nu) is float
+
+@pytest.mark.parametrize("bad_max_iter", [2.9, True, np.bool_(True)])
+def test_tbg_typed_config_rejects_non_integer_and_bool_max_iter(
+    bad_max_iter: object,
+) -> None:
+    with pytest.raises(ValueError, match="non-negative integer"):
+        TBGZeroFieldRunHFConfig(
+            grid_solution=_tiny_tbg_grid_solution(),
+            nu=0.0,
+            max_iter=bad_max_iter,  # type: ignore[arg-type]
+            overlap_lg=7,
+            interaction_spec=TBGZeroFieldInteractionSpec(),
+        )
+
+@pytest.mark.parametrize("bad_seed", [2.9, True, np.bool_(False)])
+def test_tbg_typed_config_rejects_float_and_bool_seed(bad_seed: object) -> None:
+    with pytest.raises(ValueError, match="seed must be a non-bool integer"):
+        TBGZeroFieldRunHFConfig(
+            grid_solution=_tiny_tbg_grid_solution(),
+            nu=0.0,
+            seed=bad_seed,  # type: ignore[arg-type]
+            overlap_lg=7,
+            interaction_spec=TBGZeroFieldInteractionSpec(),
+        )
+
+@pytest.mark.parametrize(
+    ("bad_overlap_lg", "message"),
+    [
+        (7.9, "positive odd integer"),
+        (True, "positive odd integer"),
+        (np.bool_(False), "positive odd integer"),
+        (6, "positive odd integer"),
+        (5, "insufficient"),
+    ],
+)
+def test_tbg_typed_config_rejects_invalid_or_insufficient_overlap_lg(
+    bad_overlap_lg: object,
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        TBGZeroFieldRunHFConfig(
+            grid_solution=_tiny_tbg_grid_solution(),
+            nu=0.0,
+            max_iter=0,
+            overlap_lg=bad_overlap_lg,  # type: ignore[arg-type]
+            interaction_spec=TBGZeroFieldInteractionSpec(),
+        )
+
+def test_tbg_typed_config_accepts_numpy_integer_limits() -> None:
+    config = TBGZeroFieldRunHFConfig(
+        grid_solution=_tiny_tbg_grid_solution(),
+        nu=0.0,
+        seed=np.int64(17),
+        max_iter=np.int64(0),
+        overlap_lg=np.int64(7),
+        interaction_spec=TBGZeroFieldInteractionSpec(),
+    )
+    assert config.seed == 17
+    assert config.max_iter == 0
+    assert config.overlap_lg == 7
+    assert type(config.seed) is int
+    assert type(config.max_iter) is int
+    assert type(config.overlap_lg) is int
 
 def test_public_run_hf_tdbg_requires_explicit_projected_config() -> None:
     model = make_model("tdbg", theta_deg=1.38, cut=1.0)

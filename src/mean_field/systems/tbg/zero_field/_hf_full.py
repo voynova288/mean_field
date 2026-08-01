@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from ._hf_shared import *  # noqa: F401,F403
 from ._hf_basis_overlap import *  # noqa: F401,F403
-from ._hf_restricted import _update_tbg_hf_density_update_state, _update_tbg_hf_step_state
+from ._hf_basis_overlap import _issue_tbg_zero_field_typed_hf_run
+from ._hf_diagnostics import offdiag_flavor_norm
+from ._hf_restricted import (
+    _update_tbg_hf_density_update_state,
+    _update_tbg_hf_step_state,
+)
 
 def normalize_full_init_mode(init_mode: str) -> str:
     normalized = init_mode.strip().lower()
@@ -289,6 +294,23 @@ def build_full_density_from_hamiltonian(
     return density, energies, sigma_ztauz, mu
 
 
+def _full_density_update_result(
+    state: RestrictedHartreeFockState,
+    hamiltonian: np.ndarray,
+) -> DensityUpdateResult:
+    density, energies, sigma_ztauz, mu = build_full_density_from_hamiltonian(
+        hamiltonian,
+        state.sigma_z,
+        nu=state.nu,
+    )
+    return DensityUpdateResult(
+        density=density,
+        energies=energies,
+        mu=mu,
+        observables={"sigma_ztauz": sigma_ztauz},
+    )
+
+
 def build_full_hf_kernel(
     state: RestrictedHartreeFockState,
     overlap_blocks: HFOverlapBlockSet,
@@ -296,6 +318,8 @@ def build_full_hf_kernel(
     params: TBGParameters,
     *,
     beta: float = 1.0,
+    interaction_spec: TBGZeroFieldInteractionSpec | None = None,
+    legacy_untyped: bool = False,
     _screened_overlap_blocks: HFOverlapBlockSet | None = None,
 ) -> HartreeFockKernel:
     screened_overlap_blocks = (
@@ -303,6 +327,8 @@ def build_full_hf_kernel(
             overlap_blocks,
             lattice_kvec=np.asarray(lattice_kvec, dtype=np.complex128),
             params=params,
+            interaction_spec=interaction_spec,
+            legacy_untyped=legacy_untyped,
         )
         if _screened_overlap_blocks is None
         else _screened_overlap_blocks
@@ -337,6 +363,8 @@ def build_full_hf_problem(
     params: TBGParameters,
     *,
     beta: float = 1.0,
+    interaction_spec: TBGZeroFieldInteractionSpec | None = None,
+    legacy_untyped: bool = False,
     initial_density: np.ndarray | None = None,
     _screened_overlap_blocks: HFOverlapBlockSet | None = None,
 ) -> HartreeFockProblem:
@@ -353,6 +381,8 @@ def build_full_hf_problem(
             lattice_kvec,
             params,
             beta=beta,
+            interaction_spec=interaction_spec,
+            legacy_untyped=legacy_untyped,
             _screened_overlap_blocks=_screened_overlap_blocks,
         ),
     )
@@ -369,31 +399,103 @@ def run_full_hartree_fock(
     beta: float = 1.0,
     max_iter: int = 300,
     oda_stall_threshold: float = 1e-3,
+    interaction_spec: TBGZeroFieldInteractionSpec | None = None,
+    legacy_untyped: bool = False,
+    source_solution: BMSolution | None = None,
+    screened_block_bundle: TBGZeroFieldScreenedBlockBundle | None = None,
     initial_density: np.ndarray | None = None,
 ) -> RestrictedHartreeFockRun:
-    normalized_init_mode = normalize_full_init_mode(init_mode)
-    resolved_lattice_kvec = np.asarray(lattice_kvec, dtype=np.complex128)
-    # Screen once: SCF, ODA, and the returned run must share this exact inventory.
-    screened_overlap_blocks = _with_tbg_overlap_screening(
-        overlap_blocks,
-        lattice_kvec=resolved_lattice_kvec,
-        params=params,
+    resolved_seed = validate_tbg_zero_field_seed(seed)
+    _validate_initial_density_override_policy(
+        initial_density,
+        legacy_untyped=legacy_untyped,
+        hf_mode="full",
     )
+    normalized_init_mode = normalize_full_init_mode(init_mode)
+    typed_run_requested = screened_block_bundle is not None or interaction_spec is not None
+    if typed_run_requested:
+        state.nu = validate_tbg_zero_field_primitive_cell_nu(state.nu)
+    resolved_max_iter = (
+        validate_tbg_zero_field_typed_max_iter(max_iter)
+        if typed_run_requested
+        else max_iter
+    )
+    resolved_lattice_kvec = np.asarray(lattice_kvec, dtype=np.complex128)
+    # Typed production uses one builder-attested immutable bundle. Diagnostic
+    # compatibility remains a separate, explicitly untyped path.
+    if screened_block_bundle is not None:
+        if legacy_untyped:
+            raise ValueError("screened_block_bundle and legacy_untyped=True are mutually exclusive")
+        if source_solution is None:
+            raise ValueError("Typed full HF requires source_solution with a carried torus mesh")
+        bundle_spec = screened_block_bundle.interaction_spec
+        if interaction_spec is not None and interaction_spec.fingerprint != bundle_spec.fingerprint:
+            raise ValueError("interaction_spec does not match screened_block_bundle")
+        validate_tbg_zero_field_typed_hf_source(
+            state,
+            source_solution,
+            screened_block_bundle,
+            overlap_blocks=overlap_blocks,
+            lattice_kvec=resolved_lattice_kvec,
+            params=params,
+        )
+        interaction_spec = bundle_spec
+        screened_overlap_blocks = screened_block_bundle.screened_blocks
+    else:
+        if interaction_spec is not None:
+            raise ValueError(
+                "Typed full HF requires build_tbg_zero_field_screened_block_bundle; "
+                "arbitrary overlap blocks cannot be relabelled typed"
+            )
+        if not legacy_untyped:
+            raise ValueError(
+                "Full HF requires either a typed screened_block_bundle or explicit legacy_untyped=True"
+            )
+        screened_overlap_blocks = _with_tbg_overlap_screening(
+            overlap_blocks,
+            lattice_kvec=resolved_lattice_kvec,
+            params=params,
+            legacy_untyped=True,
+        )
+
+    if interaction_spec is not None:
+        if state.interaction_spec is not None and state.interaction_spec.fingerprint != interaction_spec.fingerprint:
+            raise ValueError("HF state is already bound to a different typed interaction_spec")
+        state.interaction_spec = interaction_spec
+        state.diagnostics["relative_permittivity"] = float(interaction_spec.epsr)
+        state.diagnostics["screening_lm"] = float(interaction_spec.screening_lm)
+        state.diagnostics["finite_zero_limit"] = float(interaction_spec.finite_zero_limit)
+        state.diagnostics["zero_cutoff"] = float(interaction_spec.zero_cutoff)
+        state.diagnostics["dsc_nm"] = float(interaction_spec.dsc_nm)
+    elif state.interaction_spec is not None:
+        raise ValueError("Cannot run legacy_untyped HF from a state already bound to a typed interaction_spec")
     state.diagnostics["beta"] = float(beta)
     state.diagnostics["oda_stall_threshold"] = float(oda_stall_threshold)
-    state.hf_source_receipt = build_tbg_zero_field_hf_source_receipt(
-        hf_mode="full",
-        beta=beta,
-        v0=state.v0,
-        lattice_kvec=resolved_lattice_kvec,
-        overlap_blocks=screened_overlap_blocks,
-    )
+    state.diagnostics["requested_max_iterations"] = float(resolved_max_iter)
+    if screened_block_bundle is not None:
+        state.hf_source_receipt = build_tbg_zero_field_hf_source_receipt(
+            hf_mode="full",
+            beta=beta,
+            v0=state.v0,
+            solution=source_solution,
+            screened_block_bundle=screened_block_bundle,
+        )
+    else:
+        state.hf_source_receipt = build_tbg_zero_field_diagnostic_hf_source_receipt(
+            hf_mode="full",
+            beta=beta,
+            v0=state.v0,
+            lattice_kvec=resolved_lattice_kvec,
+            overlap_blocks=screened_overlap_blocks,
+        )
     problem = build_full_hf_problem(
         state,
         screened_overlap_blocks,
         resolved_lattice_kvec,
         params,
         beta=beta,
+        interaction_spec=interaction_spec,
+        legacy_untyped=legacy_untyped,
         initial_density=initial_density,
         _screened_overlap_blocks=screened_overlap_blocks,
     )
@@ -401,13 +503,26 @@ def run_full_hartree_fock(
         state,
         problem,
         init_mode=normalized_init_mode,
-        seed=seed,
-        max_iter=max_iter,
+        seed=resolved_seed,
+        max_iter=resolved_max_iter,
         oda_stall_threshold=oda_stall_threshold,
     )
+    if screened_block_bundle is not None:
+        return _issue_tbg_zero_field_typed_hf_run(
+            hf_mode="full",
+            state=state,
+            overlap_blocks=screened_overlap_blocks,
+            screened_block_bundle=screened_block_bundle,
+            base_run=base_run,
+            beta=beta,
+            oda_stall_threshold=oda_stall_threshold,
+            requested_max_iterations=resolved_max_iter,
+        )
     return RestrictedHartreeFockRun(
         state=state,
         overlap_blocks=screened_overlap_blocks,
+        screened_block_bundle=None,
+        provenance=None,
         iter_energy=base_run.iter_energy,
         iter_err=base_run.iter_err,
         iter_oda=base_run.iter_oda,
@@ -429,22 +544,68 @@ def run_full_hf_from_bm_solution(
     overlap_lg: int | None = None,
     precision: float = 1e-5,
     oda_stall_threshold: float = 1e-3,
+    interaction_spec: TBGZeroFieldInteractionSpec | None = None,
+    legacy_untyped: bool = False,
     initial_density: np.ndarray | None = None,
 ) -> RestrictedHartreeFockRun:
-    state = RestrictedHartreeFockState.from_bm_solution(solution, nu=nu, precision=precision)
-    resolved_overlap_lg = solution.lg if overlap_lg is None else int(overlap_lg)
+    resolved_seed = validate_tbg_zero_field_seed(seed)
+    _validate_initial_density_override_policy(
+        initial_density,
+        legacy_untyped=legacy_untyped,
+        hf_mode="full",
+    )
+    resolved_max_iter = (
+        validate_tbg_zero_field_typed_max_iter(max_iter)
+        if interaction_spec is not None
+        else max_iter
+    )
+    resolved_nu = (
+        validate_tbg_zero_field_primitive_cell_nu(nu)
+        if interaction_spec is not None
+        else float(nu)
+    )
+    state = RestrictedHartreeFockState.from_bm_solution(
+        solution,
+        nu=resolved_nu,
+        precision=precision,
+    )
+    raw_overlap_lg = solution.lg if overlap_lg is None else overlap_lg
+    resolved_overlap_lg = (
+        validate_tbg_zero_field_typed_overlap_lg(raw_overlap_lg)
+        if interaction_spec is not None
+        else int(raw_overlap_lg)
+    )
     state.diagnostics["overlap_lg"] = float(resolved_overlap_lg)
-    overlap_blocks = build_overlap_block_set(solution, lg=resolved_overlap_lg)
+    if interaction_spec is not None:
+        if legacy_untyped:
+            raise ValueError("interaction_spec and legacy_untyped=True are mutually exclusive")
+        screened_block_bundle = build_tbg_zero_field_screened_block_bundle(
+            solution,
+            interaction_spec=interaction_spec,
+            overlap_lg=resolved_overlap_lg,
+        )
+        overlap_blocks = screened_block_bundle.screened_blocks
+    else:
+        screened_block_bundle = None
+        overlap_blocks = build_overlap_block_set(
+            solution,
+            lg=resolved_overlap_lg,
+            legacy_untyped=legacy_untyped,
+        )
     return run_full_hartree_fock(
         state,
         overlap_blocks,
         solution.lattice_kvec,
         solution.params,
         init_mode=init_mode,
-        seed=seed,
+        seed=resolved_seed,
         beta=beta,
-        max_iter=max_iter,
+        max_iter=resolved_max_iter,
         oda_stall_threshold=oda_stall_threshold,
+        interaction_spec=interaction_spec,
+        legacy_untyped=legacy_untyped,
+        source_solution=solution,
+        screened_block_bundle=screened_block_bundle,
         initial_density=initial_density,
     )
 

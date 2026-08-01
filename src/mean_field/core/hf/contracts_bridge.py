@@ -2,10 +2,12 @@ from __future__ import annotations
 
 """Boundary-only bridges from legacy HF density arrays to core contracts.
 
-These helpers intentionally do not participate in the SCF loop.  They build
+These helpers intentionally do not participate in the SCF loop. They build
 canonical :mod:`mean_field.core.contracts` views from existing stored-orientation
 HF arrays so systems can add contract checks and sidecars without changing their
-physics implementation.
+physics implementation. In particular, ``D_stored[a,b,k]`` keeps the input
+orientation ``<c_a†(k) c_b(k)> - R_stored[a,b,k]``; this bridge never silently
+transposes an existing array into the conventional ket-bra orientation.
 """
 
 from typing import Any
@@ -111,10 +113,11 @@ def density_state_from_delta(
     reference_metadata: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> ContractDensityState:
-    """Build a canonical ``DensityState`` from an existing stored delta ``P - R``.
+    """Build a canonical ``DensityState`` from an existing stored density delta.
 
-    The input and returned arrays use the existing core-HF stored matrix-field
-    convention ``(n_state, n_state, n_k)``.  No projector/idempotency check is
+    The input and returned arrays obey
+    ``D_stored[a,b,k]=<c_a†(k)c_b(k)>-R_stored[a,b,k]`` with shape
+    ``(n_state, n_state, n_k)``. No transpose is performed. No projector/idempotency check is
     performed here; use ``assert_density_state_consistent`` at the call site with
     the appropriate ``require_projector`` setting.
     """
@@ -145,10 +148,12 @@ def density_state_from_projector(
     reference_metadata: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> ContractDensityState:
-    """Build a canonical ``DensityState`` from an existing stored projector ``P``.
+    """Build a canonical ``DensityState`` from an existing stored projector.
 
-    The raw projector is not relabelled.  The returned contract stores only
-    ``density_delta = P - R`` and reconstructs ``P`` via ``DensityState.projector``.
+    Here ``P_stored[a,b,k]=<c_a†(k)c_b(k)>`` already has the core-HF stored
+    orientation. The raw projector is not transposed or relabelled. The returned
+    contract stores ``D_stored=P_stored-R_stored`` and reconstructs that same
+    stored projector via ``DensityState.projector``.
     """
 
     contract_reference = make_contract_reference_density(

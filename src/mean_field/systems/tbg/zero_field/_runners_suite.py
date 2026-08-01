@@ -5,6 +5,7 @@ from ._runners_helpers import *  # noqa: F401,F403
 from ._runners_summaries import *  # noqa: F401,F403
 from ._runners_b0 import run_b0_hf_benchmark_case
 from ._runners_artifacts import write_b0_hf_benchmark_artifacts
+from .artifacts import _reject_typed_b0_hf_suite_outputs
 
 def run_b0_hf_benchmark_suite(
     benchmark_ids: tuple[str, ...] | None = None,
@@ -68,7 +69,11 @@ def run_b0_hf_benchmark_suite(
         cached_overlap = overlap_cache.get(overlap_key)
         if cached_overlap is None:
             overlap_start = perf_counter()
-            overlap_blocks = build_overlap_block_set(grid_solution, lg=overlap_grid_lg)
+            overlap_blocks = build_overlap_block_set(
+                grid_solution,
+                lg=overlap_grid_lg,
+                legacy_untyped=True,
+            )
             overlap_elapsed = perf_counter() - overlap_start
             overlap_cache[overlap_key] = overlap_blocks
         else:
@@ -103,6 +108,7 @@ def run_b0_hf_benchmark_suite(
             beta=beta,
             init_mode=requested_init_mode,
             path=path,
+            legacy_untyped=True,
         )
         path_elapsed = perf_counter() - path_start
 
@@ -140,6 +146,7 @@ def run_b0_hf_benchmark_suite(
 
 
 def write_b0_hf_suite_summary(path: Path | str, suite_result: B0HFBenchmarkSuiteResult) -> Path:
+    _reject_typed_b0_hf_suite_outputs(suite_result)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
@@ -205,6 +212,7 @@ def write_b0_hf_suite_artifacts(
     write_contract_sidecars: bool = True,
     overwrite_contract_sidecars: bool = False,
 ) -> dict[str, Path]:
+    _reject_typed_b0_hf_suite_outputs(suite_result)
     output_dir = Path(output_dir)
     if write_contract_sidecars:
         _ensure_tbg_zero_field_contract_sidecars_writable(

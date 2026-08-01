@@ -21,6 +21,7 @@ from ....core.hf import (
     compute_hf_energy,
     compute_oda_parameter,
     contract_fock_term_from_overlap,
+    conventional_projector_to_stored,
     empty_overlap_block_set,
     find_chemical_potential,
     flavor_block_indices,
@@ -31,6 +32,7 @@ from ....core.hf import (
     project_to_flavor_diagonal,
     project_to_flavor_diagonal_inplace,
     run_hartree_fock_problem,
+    stored_projector_to_conventional,
 )
 
 __all__ = [name for name in globals() if not name.startswith('__')]

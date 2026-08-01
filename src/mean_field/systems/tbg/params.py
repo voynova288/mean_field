@@ -1,14 +1,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import hashlib
+import json
 import math
 from typing import Any
 
 import numpy as np
 
 
+TBG_PARAMETERS_INDEPENDENT_SCHEMA = "mean_field.tbg.parameters.independent"
+TBG_PARAMETERS_INDEPENDENT_SCHEMA_VERSION = 1
+
+
 def _complex_matrix(values: list[list[complex]]) -> np.ndarray:
     return np.asarray(values, dtype=np.complex128)
+
+
+def _owned_read_only_array(values: np.ndarray, *, dtype: str) -> np.ndarray:
+    array = np.array(values, dtype=np.dtype(dtype), order="C", copy=True)
+    array.setflags(write=False)
+    return array
 
 
 @dataclass(frozen=True)
@@ -109,15 +121,27 @@ class TBGParameters:
         object.__setattr__(self, "kt", complex(kt))
         object.__setattr__(self, "kb_point", complex(kb_point))
         object.__setattr__(self, "omega", complex(omega))
-        object.__setattr__(self, "t0", t0)
-        object.__setattr__(self, "t1", t1)
-        object.__setattr__(self, "t2", t2)
+        object.__setattr__(self, "t0", _owned_read_only_array(t0, dtype="<c16"))
+        object.__setattr__(self, "t1", _owned_read_only_array(t1, dtype="<c16"))
+        object.__setattr__(self, "t2", _owned_read_only_array(t2, dtype="<c16"))
         object.__setattr__(self, "exx", float(exx))
         object.__setattr__(self, "eyy", float(eyy))
         object.__setattr__(self, "exy", float(exy))
-        object.__setattr__(self, "gauge_shift", gauge_shift)
-        object.__setattr__(self, "rotation_phi", rotation_phi)
-        object.__setattr__(self, "strain_matrix", strain_matrix)
+        object.__setattr__(
+            self,
+            "gauge_shift",
+            _owned_read_only_array(gauge_shift, dtype="<f8"),
+        )
+        object.__setattr__(
+            self,
+            "rotation_phi",
+            _owned_read_only_array(rotation_phi, dtype="<f8"),
+        )
+        object.__setattr__(
+            self,
+            "strain_matrix",
+            _owned_read_only_array(strain_matrix, dtype="<f8"),
+        )
 
     @classmethod
     def from_degrees(
@@ -128,6 +152,7 @@ class TBGParameters:
         vf: float = 2482.0,
         w0: float = 77.0,
         w1: float = 110.0,
+        delta: float = 0.0,
         strain: float = 0.0,
         strain_angle_deg: float = 0.0,
         alpha: float = 0.5,
@@ -139,22 +164,52 @@ class TBGParameters:
             vf=vf,
             w0=w0,
             w1=w1,
+            delta=delta,
             strain=strain,
             strain_angle_rad=float(strain_angle_deg) * math.pi / 180.0,
             alpha=alpha,
             deformation_potential=deformation_potential,
         )
 
+    def to_summary_dict(self) -> dict[str, Any]:
+        """Return every independent BM parameter input in JSON-native form."""
+
+        return {
+            "dtheta_rad": float(self.dtheta_rad),
+            "convention": str(self.convention),
+            "vf": float(self.vf),
+            "chemical_potential": float(self.chemical_potential),
+            "w0": float(self.w0),
+            "w1": float(self.w1),
+            "delta": float(self.delta),
+            "strain": float(self.strain),
+            "strain_angle_rad": float(self.strain_angle_rad),
+            "poisson": float(self.poisson),
+            "beta_g": float(self.beta_g),
+            "alpha": float(self.alpha),
+            "deformation_potential": float(self.deformation_potential),
+        }
+
+    @property
+    def independent_fingerprint(self) -> str:
+        """Hash the complete independent input set, excluding derived arrays."""
+
+        payload = {
+            "schema": TBG_PARAMETERS_INDEPENDENT_SCHEMA,
+            "schema_version": TBG_PARAMETERS_INDEPENDENT_SCHEMA_VERSION,
+            "params": self.to_summary_dict(),
+        }
+        encoded = json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
     def as_dict(self) -> dict[str, Any]:
         return {
-            "dtheta_rad": self.dtheta_rad,
-            "convention": self.convention,
-            "vf": self.vf,
-            "chemical_potential": self.chemical_potential,
-            "w0": self.w0,
-            "w1": self.w1,
-            "strain": self.strain,
-            "alpha": self.alpha,
+            **self.to_summary_dict(),
             "kb": self.kb,
             "g1": self.g1,
             "g2": self.g2,

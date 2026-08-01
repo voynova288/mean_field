@@ -256,6 +256,7 @@ def _run_benchmark_hf_from_grid_solution(
             seed=requested_seed,
             beta=beta,
             max_iter=max_iter,
+            legacy_untyped=True,
             initial_density=initial_density,
         )
     if runner_kind == "restricted":
@@ -271,6 +272,7 @@ def _run_benchmark_hf_from_grid_solution(
             seed=requested_seed,
             beta=beta,
             max_iter=max_iter,
+            legacy_untyped=True,
         )
     raise ValueError(f"Unsupported benchmark runner_kind={runner_kind!r} for case {case.benchmark_id}")
 

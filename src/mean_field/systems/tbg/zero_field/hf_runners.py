@@ -9,11 +9,14 @@ from ....benchmarks import HFPathReference
 from ....core.hf import FlavorBandData, build_flavor_band_data, build_projected_target_hamiltonian
 from ....core.lattice import KPath
 from ..params import TBGParameters
+from ._hf_basis_overlap import validate_tbg_zero_field_typed_overlap_lg
 from .hf import (
     RestrictedHartreeFockRun,
+    TBGZeroFieldInteractionSpec,
     build_h0_from_bm,
     build_overlap_block_set,
 )
+from .hf_contracts import validate_tbg_zero_field_typed_hf_run_source
 from .model import BMSolution, solve_bm_model
 from .path import build_fig6_kpath
 
@@ -39,6 +42,7 @@ class HFPathResult:
     screening_lm: float | None = None
     finite_zero_limit: bool = False
     zero_cutoff: float = 1e-6
+    interaction_spec_fingerprint: str | None = None
     include_interaction: bool = True
 
 
@@ -73,6 +77,22 @@ class HFSCFPathPlotResult:
     exit_reason: str
 
 
+def _has_typed_hf_source(hf_run: RestrictedHartreeFockRun) -> bool:
+    receipt = hf_run.state.hf_source_receipt
+    return (
+        hf_run.state.interaction_spec is not None
+        or hf_run.screened_block_bundle is not None
+        or hf_run.provenance is not None
+        or getattr(receipt, "interaction_contract", None) == "typed"
+    )
+
+def _reported_grid_size(grid_solution: BMSolution) -> int:
+    """Report N for half-open NxN meshes and legacy lk for endpoint grids."""
+
+    if grid_solution.torus_mesh is not None:
+        return int(grid_solution.torus_mesh.mesh_size)
+    return int(round(np.sqrt(grid_solution.nk))) - 1
+
 def build_restricted_hf_scf_path_plot_result(
     hf_run: RestrictedHartreeFockRun,
     grid_solution: BMSolution,
@@ -84,7 +104,10 @@ def build_restricted_hf_scf_path_plot_result(
     # Diagnostic-only view: keep only path samples that are exact SCF grid
     # points. This preserves repeated path coordinates, such as Gamma appearing
     # at both the start and middle of a high-symmetry path, without recomputing
-    # any off-grid Hamiltonians.
+    # any off-grid Hamiltonians. Typed sources are checked before any plot can
+    # consume their saved Hamiltonian.
+    if _has_typed_hf_source(hf_run):
+        validate_tbg_zero_field_typed_hf_run_source(hf_run, grid_solution)
     grid_kvec = np.asarray(grid_solution.lattice_kvec, dtype=np.complex128)
     if path.kvec.size == 0:
         raise ValueError("At least two path nodes are required to build an SCF path plot.")
@@ -117,7 +140,7 @@ def build_restricted_hf_scf_path_plot_result(
         band_data=band_data,
         mu=hf_run.state.mu,
         nu=hf_run.state.nu,
-        lk=int(round(np.sqrt(grid_solution.nk))) - 1,
+        lk=_reported_grid_size(grid_solution),
         lg=grid_solution.lg,
         init_mode=requested_init_mode,
         normalized_init_mode=hf_run.init_mode,
@@ -135,31 +158,75 @@ def build_restricted_hf_path_hamiltonian(
     overlap_lg: int | None = None,
     beta: float | None = None,
     path: KPath | None = None,
-    relative_permittivity: float = 15.0,
+    interaction_spec: TBGZeroFieldInteractionSpec | None = None,
+    legacy_untyped: bool = False,
+    relative_permittivity: float | None = None,
     screening_lm: float | None = None,
-    finite_zero_limit: bool = False,
-    zero_cutoff: float = 1e-6,
+    finite_zero_limit: bool | None = None,
+    zero_cutoff: float | None = None,
     include_interaction: bool = True,
+    allow_typed_off_grid_diagnostic: bool = False,
 ) -> tuple[KPath, BMSolution, np.ndarray]:
     state = hf_run.state
     params = grid_solution.params
     path = build_fig6_kpath(params, points_per_segment) if path is None else path
     bm_lg = grid_solution.lg if lg is None else int(lg)
-    resolved_overlap_lg = (
-        int(overlap_lg)
-        if overlap_lg is not None
-        else int(hf_run.state.diagnostics.get("overlap_lg", float(bm_lg)))
-    )
+    typed_source = _has_typed_hf_source(hf_run)
+    if typed_source:
+        if allow_typed_off_grid_diagnostic is not True:
+            raise ValueError(
+                "Typed TBG HF forbids automatic off-grid reconstruction; pass "
+                "allow_typed_off_grid_diagnostic=True only for an explicit diagnostic"
+            )
+        typed_spec, typed_bundle, _receipt = validate_tbg_zero_field_typed_hf_run_source(
+            hf_run,
+            grid_solution,
+        )
+        if legacy_untyped:
+            raise ValueError("Typed off-grid diagnostics cannot use legacy_untyped=True")
+        if bm_lg != grid_solution.lg:
+            raise ValueError("Typed off-grid diagnostics must preserve the source BM lg")
+        requested_overlap_lg = typed_bundle.overlap_lg if overlap_lg is None else overlap_lg
+        resolved_overlap_lg = validate_tbg_zero_field_typed_overlap_lg(
+            requested_overlap_lg
+        )
+        if resolved_overlap_lg != typed_bundle.overlap_lg:
+            raise ValueError(
+                "Typed off-grid diagnostics must preserve the source overlap_lg"
+            )
+        if (
+            interaction_spec is not None
+            and interaction_spec.fingerprint != typed_spec.fingerprint
+        ):
+            raise ValueError(
+                "Typed off-grid diagnostic interaction_spec does not match the source"
+            )
+        interaction_spec = typed_spec
+    else:
+        resolved_overlap_lg = (
+            int(overlap_lg)
+            if overlap_lg is not None
+            else int(hf_run.state.diagnostics.get("overlap_lg", float(bm_lg)))
+        )
     resolved_beta = float(beta) if beta is not None else float(hf_run.state.diagnostics.get("beta", 1.0))
-    path_solution = solve_bm_model(params, path.kvec, lg=bm_lg, sigma_rotation=True)
+    path_solution = solve_bm_model(
+        params,
+        path.kvec,
+        lg=bm_lg,
+        sigma_rotation=grid_solution.sigma_rotation,
+        calculate_chern_operator=grid_solution.calculate_chern_operator,
+        periodic_g_grid=grid_solution.periodic_g_grid,
+    )
     h_path = build_h0_from_bm(path_solution)
 
     if include_interaction:
         screening_kwargs = {
-            "relative_permittivity": float(relative_permittivity),
+            "interaction_spec": interaction_spec,
+            "legacy_untyped": legacy_untyped,
+            "relative_permittivity": relative_permittivity,
             "screening_lm": screening_lm,
-            "finite_zero_limit": bool(finite_zero_limit),
-            "zero_cutoff": float(zero_cutoff),
+            "finite_zero_limit": finite_zero_limit,
+            "zero_cutoff": zero_cutoff,
         }
         grid_overlap = build_overlap_block_set(grid_solution, lg=resolved_overlap_lg, **screening_kwargs)
         path_overlap = build_overlap_block_set(path_solution, lg=resolved_overlap_lg, **screening_kwargs)
@@ -192,11 +259,14 @@ def evaluate_restricted_hf_path(
     beta: float | None = None,
     init_mode: str | None = None,
     path: KPath | None = None,
-    relative_permittivity: float = 15.0,
+    interaction_spec: TBGZeroFieldInteractionSpec | None = None,
+    legacy_untyped: bool = False,
+    relative_permittivity: float | None = None,
     screening_lm: float | None = None,
-    finite_zero_limit: bool = False,
-    zero_cutoff: float = 1e-6,
+    finite_zero_limit: bool | None = None,
+    zero_cutoff: float | None = None,
     include_interaction: bool = True,
+    allow_typed_off_grid_diagnostic: bool = False,
 ) -> HFPathResult:
     path, _, h_path = build_restricted_hf_path_hamiltonian(
         hf_run,
@@ -206,11 +276,14 @@ def evaluate_restricted_hf_path(
         overlap_lg=overlap_lg,
         beta=beta,
         path=path,
+        interaction_spec=interaction_spec,
+        legacy_untyped=legacy_untyped,
         relative_permittivity=relative_permittivity,
         screening_lm=screening_lm,
         finite_zero_limit=finite_zero_limit,
         zero_cutoff=zero_cutoff,
         include_interaction=include_interaction,
+        allow_typed_off_grid_diagnostic=allow_typed_off_grid_diagnostic,
     )
     band_data = build_flavor_band_data(
         h_path,
@@ -220,12 +293,31 @@ def evaluate_restricted_hf_path(
     )
     requested_init_mode = hf_run.init_mode if init_mode is None else str(init_mode)
     bm_lg = grid_solution.lg if lg is None else int(lg)
-    resolved_overlap_lg = (
-        int(overlap_lg)
-        if overlap_lg is not None
-        else int(hf_run.state.diagnostics.get("overlap_lg", float(bm_lg)))
-    )
+    if _has_typed_hf_source(hf_run):
+        typed_spec, typed_bundle, _typed_receipt = (
+            validate_tbg_zero_field_typed_hf_run_source(hf_run, grid_solution)
+        )
+        resolved_overlap_lg = typed_bundle.overlap_lg
+        interaction_spec = typed_spec
+    else:
+        resolved_overlap_lg = (
+            int(overlap_lg)
+            if overlap_lg is not None
+            else int(hf_run.state.diagnostics.get("overlap_lg", float(bm_lg)))
+        )
     resolved_beta = float(beta) if beta is not None else float(hf_run.state.diagnostics.get("beta", 1.0))
+    if interaction_spec is not None:
+        resolved_epsr = float(interaction_spec.epsr)
+        resolved_lm = float(interaction_spec.screening_lm)
+        resolved_zero_limit = bool(interaction_spec.finite_zero_limit)
+        resolved_zero_cutoff = float(interaction_spec.zero_cutoff)
+        interaction_fingerprint = interaction_spec.fingerprint
+    else:
+        resolved_epsr = 15.0 if relative_permittivity is None else float(relative_permittivity)
+        resolved_lm = screening_lm
+        resolved_zero_limit = False if finite_zero_limit is None else bool(finite_zero_limit)
+        resolved_zero_cutoff = 1.0e-6 if zero_cutoff is None else float(zero_cutoff)
+        interaction_fingerprint = None
     return HFPathResult(
         params=grid_solution.params,
         path=path,
@@ -233,7 +325,7 @@ def evaluate_restricted_hf_path(
         band_data=band_data,
         mu=hf_run.state.mu,
         nu=hf_run.state.nu,
-        lk=int(round(np.sqrt(grid_solution.nk))) - 1,
+        lk=_reported_grid_size(grid_solution),
         lg=bm_lg,
         points_per_segment=points_per_segment,
         init_mode=requested_init_mode,
@@ -242,10 +334,11 @@ def evaluate_restricted_hf_path(
         exit_reason=hf_run.exit_reason,
         beta=resolved_beta,
         overlap_lg=resolved_overlap_lg,
-        relative_permittivity=float(relative_permittivity),
-        screening_lm=screening_lm,
-        finite_zero_limit=bool(finite_zero_limit),
-        zero_cutoff=float(zero_cutoff),
+        relative_permittivity=resolved_epsr,
+        screening_lm=resolved_lm,
+        finite_zero_limit=resolved_zero_limit,
+        zero_cutoff=resolved_zero_cutoff,
+        interaction_spec_fingerprint=interaction_fingerprint,
         include_interaction=bool(include_interaction),
     )
 
