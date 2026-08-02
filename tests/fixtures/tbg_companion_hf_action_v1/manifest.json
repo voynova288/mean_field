@@ -1,0 +1,283 @@
+{
+  "array_hash_convention": "sha256_little_endian_int64_shape_then_C_order_little_endian_array_bytes",
+  "array_hash_semantics": "source_fixture_integrity_and_same_environment_parity_not_cross_eigensolver_raw_gauge",
+  "arrays": {
+    "P": {
+      "dtype": "<c16",
+      "sha256": "f458298de7f722d6026a4c3ac68e15c9ad3081a70bc1944deefeb7bf2eef5972",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "P_ref": {
+      "dtype": "<c16",
+      "sha256": "254777bb0dd7d352a6ad6594c4a8d2dfb4788e0ef9fbc673dadda49e8c67da04",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "source_H_D_ev": {
+      "dtype": "<c16",
+      "sha256": "c9bb5c034767cff8265143c85ad3f9d562134f6cc0a2dc3b59cd02950f4b6cd2",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "source_H_E_ev": {
+      "dtype": "<c16",
+      "sha256": "0eb43c7315373a311b7dd58f1086503efa077fc8a7f163412099647c83d8a285",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "source_H_SP_ev": {
+      "dtype": "<f8",
+      "sha256": "3574afb01bbeff87cd16e733e3f8bd86ace1de3d09996817a81f7efdd34cbb6d",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "source_M_ev": {
+      "dtype": "<f8",
+      "sha256": "13e891267f78bea66ebc6559dd0f3990f65db0de52cb6916e038e48e6d5ab5f2",
+      "shape": [
+        2,
+        3,
+        2,
+        3,
+        10,
+        10,
+        2,
+        2,
+        2
+      ]
+    },
+    "source_coeff": {
+      "dtype": "<c16",
+      "sha256": "666d106e52bf130ac341e0c706ae08472e6cdd506a93662bc03bb6fb920c9add",
+      "shape": [
+        2,
+        3,
+        6,
+        6,
+        2,
+        2,
+        4
+      ]
+    },
+    "source_energy_ev": {
+      "dtype": "<f8",
+      "sha256": "f6f9c96c6750d4f8cea14cd886b02a250ea1a0874782bff8f2e81dc9d4169447",
+      "shape": [
+        4
+      ]
+    },
+    "source_form": {
+      "dtype": "<f8",
+      "sha256": "ed65815ef55f8f7b4e4e6d99e932fd6b60c8762782c6d3978670be97db323bf0",
+      "shape": [
+        2,
+        3,
+        2,
+        3,
+        10,
+        10,
+        2,
+        2,
+        2
+      ]
+    },
+    "source_form_branch": {
+      "dtype": "<U4",
+      "sha256": "df9d591c4b439d156805c7798ba20eb7cdb044e86caafd1de9609cce8d71eb4d",
+      "shape": []
+    },
+    "source_form_raw": {
+      "dtype": "<c16",
+      "sha256": "554b56e7d4a0e85da5a9ccf0bf53f8eb614cdcd512450666f3f45551b11635e8",
+      "shape": [
+        2,
+        3,
+        2,
+        3,
+        10,
+        10,
+        2,
+        2,
+        2
+      ]
+    },
+    "source_raw_intFT_ev": {
+      "dtype": "<f8",
+      "sha256": "e70889243a36bc4b294b6264b990f8204b29d5d40db23b9fe6fcb8c7e486db26",
+      "shape": [
+        2,
+        3,
+        10,
+        10
+      ]
+    },
+    "source_screened_intFT_ev": {
+      "dtype": "<f8",
+      "sha256": "b51a70c2296e262cef65bef525991585bc08e29a9c7a119c62f26dd87aa981f4",
+      "shape": [
+        2,
+        3,
+        10,
+        10
+      ]
+    },
+    "source_sp_energy_ev": {
+      "dtype": "<f8",
+      "sha256": "7e2628b33b1b1ed5f336238ebbfaa76206ae3c7c3d4f5dab12fad26f9a4df549",
+      "shape": [
+        2,
+        3,
+        2,
+        2
+      ]
+    },
+    "source_tVE_ev": {
+      "dtype": "<f8",
+      "sha256": "1110dd453f43d6be62797990f39aa3356461e3acbe0f1becdd846df032ea266e",
+      "shape": [
+        24,
+        24,
+        4
+      ]
+    }
+  },
+  "environment": {
+    "byteorder": "little",
+    "numpy": "2.3.5",
+    "platform": "Linux-5.14.0-611.5.1.el9_7.x86_64-x86_64-with-glibc2.34",
+    "python": "3.13.9",
+    "zlib_compile": "1.3.1",
+    "zlib_runtime": "1.3.1"
+  },
+  "fixture_npz": "fixture.npz",
+  "fixture_npz_sha256": "fc2e916cf3cfee9a69eebec79d6494106f3dcdbe80d823d19d03fea9031a6eac",
+  "fixture_schema": "mean_field.tbg.companion_hf_action.source_fixture",
+  "fixture_schema_version": 1,
+  "form_branch": "real",
+  "form_raw_max_abs_imag": 2.7518539638105677e-14,
+  "form_real_threshold": 1e-09,
+  "generator_script": "generate_fixture.py",
+  "generator_script_sha256": "3e084ed78a782d9b414836f16baee2e9be37b931f0cf4acc7be6fe69d4c53ce8",
+  "inherited_hf_input": {
+    "boost1": 0,
+    "boost2": 0,
+    "epsr": 10,
+    "exchange": true
+  },
+  "inherited_interaction_input": {
+    "NG1": 5,
+    "NG2": 5,
+    "dsc": 2.5000000000000002e-08,
+    "gates": "dual",
+    "include_q=0": true
+  },
+  "input_overrides": {
+    "N1": 2,
+    "N2": 3,
+    "Ng1": 3,
+    "Ng2": 3,
+    "n_active": 1,
+    "strain": 0.0,
+    "theta": 1.08,
+    "varphi": 0.0,
+    "wAA": 0.07,
+    "wAB": 0.11
+  },
+  "output_units": {
+    "H_D_H_E_H_SP_M_tVE": "eV",
+    "energy": "finite_system_eV_not_per_moire_cell",
+    "intFT": "eV"
+  },
+  "pinned_source": {
+    "constants": {
+      "path": "reference/TBG-HF/constants.py",
+      "sha256": "8d25bcccd54e41207788ff4a9e1b934a50347fabdad46ba44408fc535573ec62"
+    },
+    "default_input": {
+      "path": "reference/TBG-HF/int_input.json",
+      "sha256": "c143c294ad95cf94d91cfbabd0437556e5c2a342850d54484c9b47caaf84b4de"
+    },
+    "hf_input": {
+      "path": "reference/TBG-HF/HF_input.json",
+      "sha256": "d577afffdf80a05a348394c5b813540b8074107fc765454f6e50066d420e25e8"
+    },
+    "main_program": {
+      "path": "reference/TBG-HF/mainProgram.py",
+      "sha256": "258c97e57164055de3273ba4471cd96be709c1f159e19f73481750c801aed401"
+    },
+    "reference_commit": "0d2a3d742aa901fa45ce46690c1385887165f58c",
+    "reference_repository": "reference/TBG-HF",
+    "routines": {
+      "path": "reference/TBG-HF/routines.py",
+      "sha256": "507e8b9e799f494777d354c9d7d481dd19d6ba42894d393630dd79ef16d02108"
+    },
+    "single_particle": {
+      "path": "reference/TBG-HF/singleParticle.py",
+      "sha256": "a050fa545c4d399b227a178bcc4705a110bd7962edcb9e1f69e300b5e1a3e43b"
+    },
+    "source_line_ranges": {
+      "mainProgram.build_and_realify_form": "33-43",
+      "mainProgram.screen_raw_intFT": "31",
+      "mainProgram.zero_or_nonzero_boost": "47-54",
+      "routines.calc_E": "81-97",
+      "routines.calc_fock_matrix": "99-153",
+      "routines.gen_H_SP": "6-22",
+      "routines.gen_M_tVE": "24-79",
+      "singleParticle.gen_form_factors": "389-440"
+    }
+  },
+  "projector": {
+    "definition": "per_k_and_spin:v1=(sqrt(0.7),0,phase*sqrt(0.3),0),v2=(0,1,0,0);phase=exp(2pi*i*(k1/N1+k2/N2));P=sum_outer(conj(v),v);P_ref=0.5*I4",
+    "scope": "generic_IVC_algebra_input_not_K_IVC_seed",
+    "spin_duplication": "identical_two_spin_blocks",
+    "stored_orientation": "P[alpha,beta]=<c_dagger_alpha c_beta>"
+  },
+  "resolved_input": {
+    "N1": 2,
+    "N2": 3,
+    "NG1": 5,
+    "NG2": 5,
+    "Ng1": 3,
+    "Ng2": 3,
+    "boost1": 0,
+    "boost2": 0,
+    "dsc": 2.5000000000000002e-08,
+    "epsr": 10,
+    "exchange": true,
+    "gates": "dual",
+    "include_q=0": true,
+    "n_active": 1,
+    "strain": 0.0,
+    "theta": 1.08,
+    "varphi": 0.0,
+    "wAA": 0.07,
+    "wAB": 0.11
+  },
+  "resolved_input_sha256": "c7922c6e78d8bf23eb633877b8655d9aa71634b3ba24fe8595ddf6ff17496881"
+}

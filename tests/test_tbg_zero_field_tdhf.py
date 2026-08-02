@@ -17,6 +17,30 @@ from mean_field.core.hf import (
     compute_hf_energy,
 )
 from mean_field.systems.tbg.params import TBGParameters
+from mean_field.systems.tbg.zero_field.companion_hf_action import (
+    TBGZeroFieldCompanionHFActionSpec,
+    TBGZeroFieldCompanionHFEnergy,
+    TBGZeroFieldCompanionHFEvaluationArrayHashes,
+    TBG_ZERO_FIELD_COMPANION_CALC_E_REFERENCE_LINES,
+    TBG_ZERO_FIELD_COMPANION_CALC_FOCK_MATRIX_REFERENCE_LINES,
+    TBG_ZERO_FIELD_COMPANION_FORM_FACTOR_REFERENCE_LINES,
+    TBG_ZERO_FIELD_COMPANION_GEN_H_SP_REFERENCE_LINES,
+    TBG_ZERO_FIELD_COMPANION_GEN_M_TVE_REFERENCE_LINES,
+    TBG_ZERO_FIELD_COMPANION_HF_ACTION_ARRAY_HASH_SEMANTICS,
+    TBG_ZERO_FIELD_COMPANION_HF_ACTION_ENERGY_UNITS,
+    TBG_ZERO_FIELD_COMPANION_HF_ACTION_SCOPE,
+    TBG_ZERO_FIELD_COMPANION_HF_INPUT_SOURCE_SHA256,
+    TBG_ZERO_FIELD_COMPANION_MAIN_PROGRAM_SOURCE_SHA256,
+    TBG_ZERO_FIELD_COMPANION_ROUTINES_SOURCE_SHA256,
+    calc_E as companion_calc_E,
+    calc_fock_matrix as companion_calc_fock_matrix,
+    gen_H_SP as companion_gen_H_SP,
+    gen_M_tVE as companion_gen_M_tVE,
+    gen_form_factors as companion_gen_form_factors,
+    gen_full_form_factors as companion_gen_full_form_factors,
+    main_program_realify_form as companion_main_program_realify_form,
+    prepare_tbg_zero_field_companion_hf_action,
+)
 from mean_field.systems.tbg.zero_field.companion_interaction import (
     TBGZeroFieldCompanionInteractionSpec as TBGZeroFieldCompanionSourceInteractionSpec,
     TBG_ZERO_FIELD_COMPANION_INTERACTION_ARRAY_HASH_SEMANTICS as SOURCE_INTERACTION_ARRAY_HASH_SEMANTICS,
@@ -35,6 +59,7 @@ from mean_field.systems.tbg.zero_field.companion_single_particle import (
     CCa,
     C2T_symmetry as companion_C2T_symmetry,
     Poisson,
+    TBGZeroFieldCompanionSingleParticleArrayHashes,
     TBGZeroFieldCompanionSingleParticleParams,
     TBG_ZERO_FIELD_COMPANION_ARRAY_HASH_SEMANTICS,
     TBG_ZERO_FIELD_COMPANION_CONSTANTS_SOURCE,
@@ -3116,3 +3141,1505 @@ def test_companion_source_interaction_q0_interior_outside_support_and_source_uni
     assert metadata["total_real_space_area_m2"] == dual.total_real_space_area_m2
     assert metadata["source_units"]["intFT"] == "eV"
     assert metadata["source_units"]["physical_q"] == "m^-1"
+
+
+# ---------------------------------------------------------------------------
+# Stage-4 source-faithful companion form-factor/HF-action diagnostic
+# ---------------------------------------------------------------------------
+
+_COMPANION_HF_ACTION_FIXTURE_DIRECTORY = (
+    Path(__file__).resolve().parent / "fixtures" / "tbg_companion_hf_action_v1"
+)
+_COMPANION_HF_ACTION_FIXTURE_ARRAY_KEYS = {
+    "P",
+    "P_ref",
+    "source_H_D_ev",
+    "source_H_E_ev",
+    "source_H_SP_ev",
+    "source_M_ev",
+    "source_coeff",
+    "source_energy_ev",
+    "source_form",
+    "source_form_branch",
+    "source_form_raw",
+    "source_raw_intFT_ev",
+    "source_screened_intFT_ev",
+    "source_sp_energy_ev",
+    "source_tVE_ev",
+}
+_COMPANION_HF_ACTION_INPUT_OVERRIDES = {
+    "N1": 2,
+    "N2": 3,
+    "Ng1": 3,
+    "Ng2": 3,
+    "n_active": 1,
+    "theta": 1.08,
+    "wAA": 0.07,
+    "wAB": 0.11,
+    "strain": 0.0,
+    "varphi": 0.0,
+}
+_COMPANION_HF_ACTION_INHERITED_INTERACTION = {
+    "NG1": 5,
+    "NG2": 5,
+    "dsc": 2.5000000000000002e-8,
+    "gates": "dual",
+    "include_q=0": True,
+}
+_COMPANION_HF_ACTION_INHERITED_HF = {
+    "epsr": 10,
+    "exchange": True,
+    "boost1": 0,
+    "boost2": 0,
+}
+_COMPANION_HF_ACTION_SOURCE_LINES = {
+    "mainProgram.build_and_realify_form": "33-43",
+    "mainProgram.screen_raw_intFT": "31",
+    "mainProgram.zero_or_nonzero_boost": "47-54",
+    "routines.calc_E": "81-97",
+    "routines.calc_fock_matrix": "99-153",
+    "routines.gen_H_SP": "6-22",
+    "routines.gen_M_tVE": "24-79",
+    "singleParticle.gen_form_factors": "389-440",
+}
+
+
+def _companion_stage4_params() -> TBGZeroFieldCompanionSingleParticleParams:
+    return TBGZeroFieldCompanionSingleParticleParams(
+        N1=2,
+        N2=3,
+        Ng1=3,
+        Ng2=3,
+        n_active=1,
+        theta_deg=1.08,
+        wAA_ev=0.07,
+        wAB_ev=0.11,
+        strain=0.0,
+        strain_angle_deg=0.0,
+    )
+
+
+@pytest.fixture(scope="module")
+def companion_hf_action_source_fixture():
+    manifest_path = _COMPANION_HF_ACTION_FIXTURE_DIRECTORY / "manifest.json"
+    generator_path = _COMPANION_HF_ACTION_FIXTURE_DIRECTORY / "generate_fixture.py"
+    assert generator_path.is_file(), "Pinned companion HF-action generator is absent"
+    assert manifest_path.is_file(), (
+        "Pinned companion HF-action manifest is absent; explicitly run "
+        "tests/fixtures/tbg_companion_hf_action_v1/generate_fixture.py first"
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    fixture_path = _COMPANION_HF_ACTION_FIXTURE_DIRECTORY / manifest["fixture_npz"]
+    assert fixture_path.is_file(), (
+        "Pinned companion HF-action NPZ is absent; explicitly run "
+        "tests/fixtures/tbg_companion_hf_action_v1/generate_fixture.py first"
+    )
+    with np.load(fixture_path, allow_pickle=False) as archive:
+        arrays = {key: np.array(archive[key], copy=True) for key in archive.files}
+    return manifest, arrays, generator_path, fixture_path
+
+
+@pytest.fixture(scope="module")
+def companion_stage4_typed_inputs():
+    params = _companion_stage4_params()
+    single_particle = solve_tbg_zero_field_companion_single_particle(params)
+    interaction = solve_tbg_zero_field_companion_interaction(params)
+    return single_particle, interaction
+
+
+def _source_gauge_single_particle(base, arrays):
+    coeff = np.asarray(arrays["source_coeff"], dtype=np.complex128)
+    sp_energy = np.asarray(arrays["source_sp_energy_ev"], dtype=np.float64)
+    U_C2T = companion_C2T_symmetry(base.params, coeff)
+    hashes = TBGZeroFieldCompanionSingleParticleArrayHashes.from_arrays(
+        coeff=coeff,
+        sp_energy_ev=sp_energy,
+        U_C2T=U_C2T,
+    )
+    return replace(
+        base,
+        coeff=coeff,
+        sp_energy_ev=sp_energy,
+        U_C2T=U_C2T,
+        array_hashes=hashes,
+    )
+
+
+def _companion_prepared_array_hashes(prepared, **overrides):
+    arrays = {
+        "form_raw": prepared.form_raw,
+        "form": prepared.form,
+        "screened_intFT_ev": prepared.screened_intFT_ev,
+        "M_ev": prepared.M_ev,
+        "tVE_ev": prepared.tVE_ev,
+        "H_SP_ev": prepared.H_SP_ev,
+        "sp_energy_ev": prepared.sp_energy_ev,
+    }
+    arrays.update(overrides)
+    return type(prepared.array_hashes).from_arrays(**arrays)
+
+
+def _assert_stage4_readonly_bytes_mutation_fails_closed(
+    array: np.ndarray,
+    callback,
+    *,
+    match: str,
+) -> None:
+    """Mutate one live byte, assert failure, then restore exact bytes and flags."""
+
+    assert isinstance(array, np.ndarray)
+    assert array.flags.c_contiguous
+    original_writeable = array.flags.writeable
+    original_bytes = array.view(np.uint8).reshape(-1).copy()
+    try:
+        array.setflags(write=True)
+        byte_view = array.view(np.uint8).reshape(-1)
+        byte_view[0] = np.uint8(int(byte_view[0]) ^ 1)
+        array.setflags(write=False)
+        with pytest.raises(ValueError, match=match):
+            callback()
+    finally:
+        array.setflags(write=True)
+        array.view(np.uint8).reshape(-1)[:] = original_bytes
+        array.setflags(write=original_writeable)
+    np.testing.assert_array_equal(
+        array.view(np.uint8).reshape(-1),
+        original_bytes,
+    )
+    assert array.flags.writeable == original_writeable
+
+
+def _stage4_state_vector(
+    coeff: np.ndarray,
+    *,
+    ik1: int,
+    ik2: int,
+    tau: int,
+    band: int,
+) -> np.ndarray:
+    return np.asarray(coeff[ik1, ik2, :, :, tau, band, :]).reshape(-1)
+
+
+def test_companion_hf_action_fixture_manifest_is_source_only_and_hash_bound(
+    companion_hf_action_source_fixture,
+) -> None:
+    manifest, arrays, generator_path, fixture_path = companion_hf_action_source_fixture
+    assert manifest["fixture_schema"] == (
+        "mean_field.tbg.companion_hf_action.source_fixture"
+    )
+    assert manifest["fixture_schema_version"] == 1
+    assert manifest["array_hash_semantics"] == (
+        "source_fixture_integrity_and_same_environment_parity_not_cross_eigensolver_raw_gauge"
+    )
+    assert manifest["input_overrides"] == _COMPANION_HF_ACTION_INPUT_OVERRIDES
+    assert manifest["inherited_interaction_input"] == (
+        _COMPANION_HF_ACTION_INHERITED_INTERACTION
+    )
+    assert manifest["inherited_hf_input"] == _COMPANION_HF_ACTION_INHERITED_HF
+    assert manifest["resolved_input_sha256"] == _companion_fixture_json_sha256(
+        manifest["resolved_input"]
+    )
+    assert manifest["projector"]["scope"] == "generic_IVC_algebra_input_not_K_IVC_seed"
+    assert "K-IVC" not in manifest["projector"]["definition"]
+    assert manifest["projector"]["stored_orientation"] == (
+        "P[alpha,beta]=<c_dagger_alpha c_beta>"
+    )
+    assert manifest["output_units"]["energy"] == TBG_ZERO_FIELD_COMPANION_HF_ACTION_ENERGY_UNITS
+
+    pinned = manifest["pinned_source"]
+    assert pinned["reference_repository"] == TBG_ZERO_FIELD_COMPANION_REFERENCE_REPOSITORY
+    assert pinned["reference_commit"] == TBG_ZERO_FIELD_COMPANION_REFERENCE_COMMIT
+    assert pinned["single_particle"]["sha256"] == TBG_ZERO_FIELD_COMPANION_REFERENCE_SOURCE_SHA256
+    assert pinned["routines"]["sha256"] == TBG_ZERO_FIELD_COMPANION_ROUTINES_SOURCE_SHA256
+    assert pinned["main_program"]["sha256"] == (
+        TBG_ZERO_FIELD_COMPANION_MAIN_PROGRAM_SOURCE_SHA256
+    )
+    assert pinned["hf_input"]["sha256"] == TBG_ZERO_FIELD_COMPANION_HF_INPUT_SOURCE_SHA256
+    assert pinned["source_line_ranges"] == _COMPANION_HF_ACTION_SOURCE_LINES
+
+    assert set(manifest["environment"]) == {
+        "byteorder",
+        "numpy",
+        "platform",
+        "python",
+        "zlib_compile",
+        "zlib_runtime",
+    }
+    assert all(isinstance(value, str) and value for value in manifest["environment"].values())
+    assert manifest["generator_script"] == generator_path.name
+    assert manifest["generator_script_sha256"] == _companion_fixture_file_sha256(
+        generator_path
+    )
+    assert manifest["fixture_npz"] == fixture_path.name
+    assert manifest["fixture_npz_sha256"] == _companion_fixture_file_sha256(fixture_path)
+    assert set(manifest["arrays"]) == _COMPANION_HF_ACTION_FIXTURE_ARRAY_KEYS
+    assert set(arrays) == _COMPANION_HF_ACTION_FIXTURE_ARRAY_KEYS
+    for key in sorted(arrays):
+        record = manifest["arrays"][key]
+        assert record["shape"] == list(arrays[key].shape)
+        assert record["dtype"] == arrays[key].dtype.str
+        assert record["sha256"] == _companion_fixture_array_sha256(arrays[key])
+
+    assert arrays["source_coeff"].shape == (2, 3, 6, 6, 2, 2, 4)
+    assert arrays["source_form_raw"].shape == (2, 3, 2, 3, 10, 10, 2, 2, 2)
+    assert arrays["source_M_ev"].shape == arrays["source_form_raw"].shape
+    assert arrays["source_tVE_ev"].shape == (24, 24, 4)
+    assert arrays["source_H_SP_ev"].shape == (2, 3, 2, 4, 4)
+    assert arrays["source_energy_ev"].shape == (4,)
+    assert arrays["source_form_branch"].shape == ()
+    assert arrays["source_form_branch"].item() == manifest["form_branch"] == "real"
+    assert manifest["form_real_threshold"] == 1.0e-9
+    assert manifest["form_raw_max_abs_imag"] == float(
+        np.max(np.abs(np.imag(arrays["source_form_raw"])))
+    )
+    assert manifest["form_raw_max_abs_imag"] <= manifest["form_real_threshold"]
+    assert arrays["source_form_raw"].dtype == np.dtype("<c16")
+    for name in ("source_form", "source_M_ev", "source_tVE_ev"):
+        assert arrays[name].dtype == np.dtype("<f8")
+    np.testing.assert_array_equal(
+        arrays["source_form"],
+        np.real(arrays["source_form_raw"]),
+    )
+
+
+def test_companion_hf_action_source_lines_spec_and_provenance_are_pinned(
+    companion_stage4_typed_inputs,
+) -> None:
+    single_particle, interaction = companion_stage4_typed_inputs
+    spec = TBGZeroFieldCompanionHFActionSpec()
+    prepared = prepare_tbg_zero_field_companion_hf_action(
+        single_particle,
+        interaction,
+        spec=spec,
+    )
+    assert spec.to_companion_input() == {
+        "epsr": 10.0,
+        "exchange": True,
+        "boost1": 0,
+        "boost2": 0,
+    }
+    assert prepared.provenance.form_factor_reference_lines == (
+        TBG_ZERO_FIELD_COMPANION_FORM_FACTOR_REFERENCE_LINES
+    )
+    assert TBG_ZERO_FIELD_COMPANION_FORM_FACTOR_REFERENCE_LINES == "389-440"
+    assert prepared.provenance.gen_H_SP_reference_lines == (
+        TBG_ZERO_FIELD_COMPANION_GEN_H_SP_REFERENCE_LINES
+    )
+    assert TBG_ZERO_FIELD_COMPANION_GEN_H_SP_REFERENCE_LINES == "6-22"
+    assert prepared.provenance.gen_M_tVE_reference_lines == (
+        TBG_ZERO_FIELD_COMPANION_GEN_M_TVE_REFERENCE_LINES
+    )
+    assert TBG_ZERO_FIELD_COMPANION_GEN_M_TVE_REFERENCE_LINES == "24-79"
+    assert prepared.provenance.calc_E_reference_lines == (
+        TBG_ZERO_FIELD_COMPANION_CALC_E_REFERENCE_LINES
+    )
+    assert TBG_ZERO_FIELD_COMPANION_CALC_E_REFERENCE_LINES == "81-97"
+    assert prepared.provenance.calc_fock_matrix_reference_lines == (
+        TBG_ZERO_FIELD_COMPANION_CALC_FOCK_MATRIX_REFERENCE_LINES
+    )
+    assert TBG_ZERO_FIELD_COMPANION_CALC_FOCK_MATRIX_REFERENCE_LINES == "99-153"
+    assert prepared.provenance.scientific_scope == TBG_ZERO_FIELD_COMPANION_HF_ACTION_SCOPE
+    assert "not_production" in prepared.provenance.scientific_scope
+    assert prepared.array_hashes.semantics == (
+        TBG_ZERO_FIELD_COMPANION_HF_ACTION_ARRAY_HASH_SEMANTICS
+    )
+    assert prepared.single_particle_source is single_particle
+    assert prepared.interaction_source is interaction
+    assert prepared.single_particle_fingerprint == single_particle.fingerprint
+    assert prepared.interaction_fingerprint == interaction.fingerprint
+    metadata = prepared.to_metadata()
+    assert metadata["single_particle_source_fingerprint"] == single_particle.fingerprint
+    assert metadata["interaction_source_fingerprint"] == interaction.fingerprint
+
+
+def test_companion_prepared_rejects_source_receipt_and_param_substitution(
+    companion_stage4_typed_inputs,
+) -> None:
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(
+        single_particle,
+        interaction,
+    )
+    with pytest.raises(TypeError, match="single_particle_source must be"):
+        replace(prepared, single_particle_source=object())
+    with pytest.raises(TypeError, match="interaction_source must be"):
+        replace(prepared, interaction_source=object())
+    with pytest.raises(ValueError, match="single_particle_fingerprint does not match"):
+        replace(prepared, single_particle_fingerprint="0" * 64)
+    with pytest.raises(ValueError, match="interaction_fingerprint does not match"):
+        replace(prepared, interaction_fingerprint="0" * 64)
+    with pytest.raises(ValueError, match="params differ from single_particle_source"):
+        replace(
+            prepared,
+            params=replace(prepared.params, theta_deg=prepared.params.theta_deg + 0.01),
+        )
+
+
+def test_companion_main_program_realify_form_keeps_tiny_synthetic_complex_branch() -> None:
+    form_raw = np.asarray([1.0 + 2.0e-9j], dtype=np.complex128)
+    form, branch, max_abs_imag = companion_main_program_realify_form(form_raw)
+    assert branch == "complex"
+    assert max_abs_imag == 2.0e-9
+    assert form.dtype == np.dtype(np.complex128)
+    np.testing.assert_array_equal(form, form_raw)
+
+
+def test_companion_form_factor_saturates_guard_and_keeps_roll_zero_fill_carries() -> None:
+    params = _companion_stage4_params()
+    shape = (params.N1, params.N2, 2 * params.Ng1, 2 * params.Ng2, 4)
+    c = np.zeros(shape, dtype=np.complex128)
+    cp = np.zeros(shape, dtype=np.complex128)
+    c[0, 0, 0, 0, 0] = 1.0
+    cp[0, 0, 0, 0, 0] = 1.0
+    form = companion_gen_form_factors(params, c, cp, NG1=5, NG2=5)
+    assert form.shape == (2, 3, 2, 3, 10, 10)
+    assert np.count_nonzero(form) > 0
+    # A periodic parent roll would preserve this norm for every reciprocal shift;
+    # the pinned zero-fill boundary does not.
+    assert np.count_nonzero(form[0, 0, 0, 0]) < form.shape[4] * form.shape[5]
+    with pytest.raises(ValueError, match=r"NG1 <= 2\*Ng1-1"):
+        companion_gen_form_factors(params, c, cp, NG1=6, NG2=5)
+    with pytest.raises(ValueError, match=r"NG2 <= 2\*Ng2-1"):
+        companion_gen_form_factors(params, c, cp, NG1=5, NG2=6)
+
+
+def test_companion_hf_action_direct_port_matches_source_fixture_in_source_gauge(
+    companion_hf_action_source_fixture,
+) -> None:
+    manifest, arrays, _generator_path, _fixture_path = companion_hf_action_source_fixture
+    params = _companion_stage4_params()
+    form_raw = companion_gen_full_form_factors(
+        params,
+        arrays["source_coeff"],
+        NG1=5,
+        NG2=5,
+    )
+    np.testing.assert_allclose(form_raw, arrays["source_form_raw"], rtol=0.0, atol=2.0e-14)
+    form, branch, max_abs_imag = companion_main_program_realify_form(form_raw)
+    assert branch == manifest["form_branch"] == arrays["source_form_branch"].item() == "real"
+    assert max_abs_imag <= 1.0e-9
+    np.testing.assert_allclose(
+        max_abs_imag,
+        manifest["form_raw_max_abs_imag"],
+        rtol=0.0,
+        atol=2.0e-14,
+    )
+    assert form_raw.dtype == np.dtype(np.complex128)
+    assert form.dtype == np.dtype(np.float64)
+    np.testing.assert_array_equal(form, np.real(form_raw))
+    np.testing.assert_allclose(form, arrays["source_form"], rtol=0.0, atol=2.0e-14)
+
+    M, tVE = companion_gen_M_tVE(
+        params,
+        form_raw,
+        arrays["source_screened_intFT_ev"],
+        exchange=True,
+    )
+    assert M.dtype == np.dtype(np.float64)
+    assert tVE.dtype == np.dtype(np.float64)
+    np.testing.assert_allclose(M, arrays["source_M_ev"], rtol=0.0, atol=2.0e-14)
+    np.testing.assert_allclose(tVE, arrays["source_tVE_ev"], rtol=0.0, atol=2.0e-13)
+    H_SP = companion_gen_H_SP(params, arrays["source_sp_energy_ev"])
+    np.testing.assert_array_equal(H_SP, arrays["source_H_SP_ev"])
+    action = companion_calc_fock_matrix(
+        params,
+        arrays["P"] - arrays["P_ref"],
+        form,
+        M,
+        tVE,
+    )
+    np.testing.assert_allclose(action.H_D_ev, arrays["source_H_D_ev"], rtol=0.0, atol=2.0e-13)
+    np.testing.assert_allclose(action.H_E_ev, arrays["source_H_E_ev"], rtol=0.0, atol=2.0e-13)
+    energy = companion_calc_E(
+        params,
+        arrays["P"],
+        arrays["P_ref"],
+        arrays["source_sp_energy_ev"],
+        action,
+    )
+    np.testing.assert_allclose(energy.components_ev, arrays["source_energy_ev"], rtol=0.0, atol=2.0e-13)
+    assert energy.units == "finite_system_eV_not_per_moire_cell"
+
+
+def test_companion_stage2_coefficients_are_real_sign_alignable_and_actions_covary(
+    companion_hf_action_source_fixture,
+    companion_stage4_typed_inputs,
+) -> None:
+    _manifest, arrays, _generator_path, _fixture_path = companion_hf_action_source_fixture
+    single_particle, interaction = companion_stage4_typed_inputs
+    params = single_particle.params
+    bands = params.active_band_count
+    gauge = np.empty((params.N1, params.N2, 2 * bands), dtype=np.complex128)
+    aligned = np.array(single_particle.coeff, copy=True)
+    for ik1 in range(params.N1):
+        for ik2 in range(params.N2):
+            for tau in range(2):
+                for band in range(bands):
+                    source_state = _stage4_state_vector(
+                        arrays["source_coeff"],
+                        ik1=ik1,
+                        ik2=ik2,
+                        tau=tau,
+                        band=band,
+                    )
+                    port_state = _stage4_state_vector(
+                        single_particle.coeff,
+                        ik1=ik1,
+                        ik2=ik2,
+                        tau=tau,
+                        band=band,
+                    )
+                    overlap = np.vdot(source_state, port_state)
+                    np.testing.assert_allclose(abs(overlap), 1.0, rtol=0.0, atol=5.0e-11)
+                    phase = overlap / abs(overlap)
+                    assert abs(phase.imag) < 5.0e-10
+                    np.testing.assert_allclose(abs(phase.real), 1.0, rtol=0.0, atol=5.0e-10)
+                    aligned[ik1, ik2, :, :, tau, band, :] *= np.conj(phase)
+                    gauge[ik1, ik2, tau * bands + band] = phase
+    np.testing.assert_allclose(aligned, arrays["source_coeff"], rtol=0.0, atol=5.0e-11)
+
+    source_single_particle = _source_gauge_single_particle(single_particle, arrays)
+    source_prepared = prepare_tbg_zero_field_companion_hf_action(
+        source_single_particle,
+        interaction,
+    )
+    port_prepared = prepare_tbg_zero_field_companion_hf_action(
+        single_particle,
+        interaction,
+    )
+    source_evaluation = source_prepared.evaluate(arrays["P"], arrays["P_ref"])
+    D_left = gauge[:, :, None, :, None]
+    D_right_conj = np.conj(gauge[:, :, None, None, :])
+    P_port = D_left * arrays["P"] * D_right_conj
+    P_ref_port = D_left * arrays["P_ref"] * D_right_conj
+    port_evaluation = port_prepared.evaluate(P_port, P_ref_port)
+    expected_H_D_port = np.conj(D_left) * source_evaluation.H_D_ev * np.conj(D_right_conj)
+    expected_H_E_port = np.conj(D_left) * source_evaluation.H_E_ev * np.conj(D_right_conj)
+    np.testing.assert_allclose(port_evaluation.H_D_ev, expected_H_D_port, rtol=0.0, atol=2.0e-10)
+    np.testing.assert_allclose(port_evaluation.H_E_ev, expected_H_E_port, rtol=0.0, atol=2.0e-10)
+    np.testing.assert_allclose(
+        port_evaluation.energy_components_ev,
+        source_evaluation.energy_components_ev,
+        rtol=0.0,
+        atol=2.0e-10,
+    )
+
+
+def test_companion_prepared_source_gauge_matches_fixture_and_is_immutable_hashed(
+    companion_hf_action_source_fixture,
+    companion_stage4_typed_inputs,
+) -> None:
+    _manifest, arrays, _generator_path, _fixture_path = companion_hf_action_source_fixture
+    single_particle, interaction = companion_stage4_typed_inputs
+    source_single_particle = _source_gauge_single_particle(single_particle, arrays)
+    prepared = prepare_tbg_zero_field_companion_hf_action(
+        source_single_particle,
+        interaction,
+    )
+    np.testing.assert_allclose(prepared.form_raw, arrays["source_form_raw"], rtol=0.0, atol=2.0e-14)
+    np.testing.assert_allclose(prepared.form, arrays["source_form"], rtol=0.0, atol=2.0e-14)
+    np.testing.assert_allclose(
+        prepared.screened_intFT_ev,
+        arrays["source_screened_intFT_ev"],
+        rtol=5.0e-15,
+        atol=0.0,
+    )
+    np.testing.assert_allclose(prepared.M_ev, arrays["source_M_ev"], rtol=0.0, atol=2.0e-14)
+    np.testing.assert_allclose(prepared.tVE_ev, arrays["source_tVE_ev"], rtol=0.0, atol=2.0e-13)
+    assert prepared.form_branch == arrays["source_form_branch"].item() == "real"
+    assert prepared.form_raw.dtype == np.dtype(np.complex128)
+    assert prepared.form.dtype == np.dtype(np.float64)
+    assert prepared.M_ev.dtype == np.dtype(np.float64)
+    assert prepared.tVE_ev.dtype == np.dtype(np.float64)
+    np.testing.assert_array_equal(prepared.form, np.real(prepared.form_raw))
+    assert prepared.spec.epsr == 10.0
+    np.testing.assert_array_equal(
+        prepared.screened_intFT_ev,
+        np.asarray(interaction.intFT_ev / prepared.spec.epsr),
+    )
+    assert prepared.raw_interaction_array_sha256 == interaction.array_hashes.intFT_ev
+    assert prepared.residuals.screening_roundtrip_max_abs_ev == float(
+        np.max(
+            np.abs(
+                prepared.screened_intFT_ev * prepared.spec.epsr
+                - interaction.intFT_ev
+            )
+        )
+    )
+    for array in (
+        prepared.form_raw,
+        prepared.form,
+        prepared.screened_intFT_ev,
+        prepared.M_ev,
+        prepared.tVE_ev,
+        prepared.H_SP_ev,
+        prepared.sp_energy_ev,
+    ):
+        assert not array.flags.writeable
+    assert prepared.array_hashes.form_raw == _companion_fixture_array_sha256(
+        np.asarray(prepared.form_raw, dtype=np.dtype("<c16"))
+    )
+    assert prepared.memory_estimate.form_elements == prepared.form.size
+    assert prepared.memory_estimate.tVE_elements == prepared.tVE_ev.size
+    assert prepared.memory_estimate.hamiltonian_elements == prepared.H_SP_ev.size
+    assert prepared.memory_estimate.prepared_arrays_bytes == sum(
+        array.nbytes
+        for array in (
+            prepared.form_raw,
+            prepared.form,
+            prepared.screened_intFT_ev,
+            prepared.M_ev,
+            prepared.tVE_ev,
+            prepared.H_SP_ev,
+            prepared.sp_energy_ev,
+        )
+    )
+    assert prepared.memory_estimate.raw_form_bytes == 450 * 1024
+    assert prepared.memory_estimate.tVE_bytes in (18 * 1024, 36 * 1024)
+    assert prepared.to_metadata()["fingerprint"] == prepared.fingerprint
+
+
+def test_companion_screening_is_exact_source_division_and_raw_hash(
+    companion_stage4_typed_inputs,
+) -> None:
+    single_particle, interaction = companion_stage4_typed_inputs
+    spec = TBGZeroFieldCompanionHFActionSpec(epsr=7.3)
+    prepared = prepare_tbg_zero_field_companion_hf_action(
+        single_particle,
+        interaction,
+        spec=spec,
+    )
+    np.testing.assert_array_equal(
+        prepared.screened_intFT_ev,
+        np.asarray(interaction.intFT_ev / spec.epsr),
+    )
+    assert prepared.raw_interaction_array_sha256 == interaction.array_hashes.intFT_ev
+    assert prepared.residuals.screening_roundtrip_max_abs_ev == float(
+        np.max(
+            np.abs(
+                prepared.screened_intFT_ev * spec.epsr
+                - interaction.intFT_ev
+            )
+        )
+    )
+    with pytest.raises(ValueError, match="residuals do not match"):
+        replace(
+            prepared,
+            residuals=replace(
+                prepared.residuals,
+                screening_roundtrip_max_abs_ev=(
+                    prepared.residuals.screening_roundtrip_max_abs_ev + 1.0e-18
+                ),
+            ),
+        )
+
+
+def test_companion_prepared_rejects_mutated_typed_source_arrays(
+    companion_stage4_typed_inputs,
+) -> None:
+    single_particle, interaction = companion_stage4_typed_inputs
+
+    tampered_single_particle = replace(single_particle)
+    tampered_single_particle.coeff.setflags(write=True)
+    tampered_single_particle.coeff.flat[0] += 1.0e-6
+    tampered_single_particle.coeff.setflags(write=False)
+    with pytest.raises(
+        ValueError,
+        match=r"single_particle_source\.coeff no longer matches its source hash",
+    ):
+        prepare_tbg_zero_field_companion_hf_action(
+            tampered_single_particle,
+            interaction,
+        )
+
+    tampered_interaction = replace(interaction)
+    tampered_interaction.intFT_ev.setflags(write=True)
+    tampered_interaction.intFT_ev.flat[0] += 1.0e-6
+    tampered_interaction.intFT_ev.setflags(write=False)
+    with pytest.raises(
+        ValueError,
+        match=r"interaction_source\.intFT_ev no longer matches its source hash",
+    ):
+        prepare_tbg_zero_field_companion_hf_action(
+            single_particle,
+            tampered_interaction,
+        )
+
+
+@pytest.mark.parametrize(
+    ("source_array_name", "entrypoint"),
+    (
+        ("coeff", "fingerprint"),
+        ("sp_energy_ev", "metadata"),
+        ("U_C2T", "evaluate"),
+    ),
+)
+def test_companion_prepared_live_validation_rehashes_post_prepare_stage2_arrays(
+    companion_stage4_typed_inputs,
+    source_array_name,
+    entrypoint,
+) -> None:
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(
+        single_particle,
+        interaction,
+    )
+    source_array = getattr(prepared.single_particle_source, source_array_name)
+    original_value = source_array.flat[0].item()
+    original_writeable = source_array.flags.writeable
+    try:
+        source_array.setflags(write=True)
+        source_array.flat[0] = original_value + 1.0e-6
+        source_array.setflags(write=False)
+        with pytest.raises(
+            ValueError,
+            match=rf"single_particle_source\.{source_array_name} no longer matches its source hash",
+        ):
+            if entrypoint == "fingerprint":
+                _ = prepared.fingerprint
+            elif entrypoint == "metadata":
+                prepared.to_metadata()
+            else:
+                zeros = np.zeros_like(prepared.H_SP_ev, dtype=np.complex128)
+                prepared.evaluate(zeros, zeros)
+    finally:
+        source_array.setflags(write=True)
+        source_array.flat[0] = original_value
+        source_array.setflags(write=original_writeable)
+
+
+def test_companion_prepared_live_validation_rehashes_post_prepare_stage3_source(
+    companion_hf_action_source_fixture,
+    companion_stage4_typed_inputs,
+) -> None:
+    _manifest, arrays, _generator_path, _fixture_path = companion_hf_action_source_fixture
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(
+        _source_gauge_single_particle(single_particle, arrays),
+        interaction,
+    )
+    evaluation = prepared.evaluate(arrays["P"], arrays["P_ref"])
+    source_array = prepared.interaction_source.intFT_ev
+    original_value = source_array.flat[0].item()
+    original_writeable = source_array.flags.writeable
+    expected_error = (
+        r"interaction_source\.intFT_ev no longer matches its source hash"
+    )
+    try:
+        source_array.setflags(write=True)
+        source_array.flat[0] = original_value + 1.0e-6
+        source_array.setflags(write=False)
+        with pytest.raises(ValueError, match=expected_error):
+            _ = prepared.fingerprint
+        with pytest.raises(ValueError, match=expected_error):
+            prepared.to_metadata()
+        with pytest.raises(ValueError, match=expected_error):
+            prepared.evaluate(arrays["P"], arrays["P_ref"])
+        with pytest.raises(ValueError, match=expected_error):
+            replace(evaluation)
+    finally:
+        source_array.setflags(write=True)
+        source_array.flat[0] = original_value
+        source_array.setflags(write=original_writeable)
+
+
+@pytest.mark.parametrize(
+    ("array_name", "entrypoint"),
+    (
+        ("form_raw", "fingerprint"),
+        ("form", "metadata"),
+        ("screened_intFT_ev", "evaluate"),
+        ("M_ev", "evaluation"),
+        ("tVE_ev", "fingerprint"),
+        ("H_SP_ev", "metadata"),
+        ("sp_energy_ev", "evaluate"),
+    ),
+)
+def test_companion_prepared_live_arrays_fail_closed_after_setflags_mutation(
+    companion_hf_action_source_fixture,
+    companion_stage4_typed_inputs,
+    array_name,
+    entrypoint,
+) -> None:
+    _manifest, arrays, _generator_path, _fixture_path = companion_hf_action_source_fixture
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(
+        _source_gauge_single_particle(single_particle, arrays),
+        interaction,
+    )
+    existing_evaluation = (
+        prepared.evaluate(arrays["P"], arrays["P_ref"])
+        if entrypoint == "evaluation"
+        else None
+    )
+    callbacks = {
+        "fingerprint": lambda: prepared.fingerprint,
+        "metadata": prepared.to_metadata,
+        "evaluate": lambda: prepared.evaluate(arrays["P"], arrays["P_ref"]),
+        "evaluation": lambda: existing_evaluation.fingerprint,
+    }
+    _assert_stage4_readonly_bytes_mutation_fails_closed(
+        getattr(prepared, array_name),
+        callbacks[entrypoint],
+        match="prepared array_hashes no longer match live prepared arrays",
+    )
+
+
+@pytest.mark.parametrize(
+    ("array_name", "entrypoint"),
+    (
+        ("density_delta", "action"),
+        ("H_D_ev", "evaluation"),
+        ("H_E_ev", "action"),
+        ("H_interaction_ev", "evaluation"),
+    ),
+)
+def test_companion_action_live_arrays_fail_closed_after_setflags_mutation(
+    companion_hf_action_source_fixture,
+    companion_stage4_typed_inputs,
+    array_name,
+    entrypoint,
+) -> None:
+    _manifest, arrays, _generator_path, _fixture_path = companion_hf_action_source_fixture
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(
+        _source_gauge_single_particle(single_particle, arrays),
+        interaction,
+    )
+    evaluation = prepared.evaluate(arrays["P"], arrays["P_ref"])
+    callbacks = {
+        "action": lambda: evaluation.action.fingerprint,
+        "evaluation": lambda: evaluation.fingerprint,
+    }
+    _assert_stage4_readonly_bytes_mutation_fails_closed(
+        getattr(evaluation.action, array_name),
+        callbacks[entrypoint],
+        match="action array_hashes no longer match live companion HF-action arrays",
+    )
+
+
+@pytest.mark.parametrize(
+    "array_name",
+    ("projector", "reference", "density_delta", "H_SP_ev", "H_total_ev"),
+)
+def test_companion_evaluation_live_arrays_fail_closed_after_setflags_mutation(
+    companion_hf_action_source_fixture,
+    companion_stage4_typed_inputs,
+    array_name,
+) -> None:
+    _manifest, arrays, _generator_path, _fixture_path = companion_hf_action_source_fixture
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(
+        _source_gauge_single_particle(single_particle, arrays),
+        interaction,
+    )
+    evaluation = prepared.evaluate(arrays["P"], arrays["P_ref"])
+    _assert_stage4_readonly_bytes_mutation_fails_closed(
+        getattr(evaluation, array_name),
+        lambda: evaluation.fingerprint,
+        match="evaluation array_hashes no longer match live evaluation arrays",
+    )
+
+
+@pytest.mark.parametrize("entrypoint", ("energy", "evaluation"))
+def test_companion_energy_components_fail_closed_after_setflags_mutation(
+    companion_hf_action_source_fixture,
+    companion_stage4_typed_inputs,
+    entrypoint,
+) -> None:
+    _manifest, arrays, _generator_path, _fixture_path = companion_hf_action_source_fixture
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(
+        _source_gauge_single_particle(single_particle, arrays),
+        interaction,
+    )
+    evaluation = prepared.evaluate(arrays["P"], arrays["P_ref"])
+    callbacks = {
+        "energy": lambda: evaluation.energy.fingerprint,
+        "evaluation": lambda: evaluation.fingerprint,
+    }
+    expected_error = (
+        "energy.components_ev no longer matches its construction hash"
+        if entrypoint == "energy"
+        else "evaluation array_hashes no longer match live evaluation arrays"
+    )
+    _assert_stage4_readonly_bytes_mutation_fails_closed(
+        evaluation.energy.components_ev,
+        callbacks[entrypoint],
+        match=expected_error,
+    )
+
+
+def test_companion_prepared_rejects_coherent_derived_array_substitutions(
+    companion_hf_action_source_fixture,
+    companion_stage4_typed_inputs,
+) -> None:
+    _manifest, arrays, _generator_path, _fixture_path = companion_hf_action_source_fixture
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(
+        _source_gauge_single_particle(single_particle, arrays),
+        interaction,
+    )
+
+    altered_sp_energy = np.asarray(prepared.sp_energy_ev + 1.0e-6)
+    altered_sp_H_SP = companion_gen_H_SP(prepared.params, altered_sp_energy)
+    with pytest.raises(ValueError, match="sp_energy_ev does not exactly equal"):
+        replace(
+            prepared,
+            sp_energy_ev=altered_sp_energy,
+            H_SP_ev=altered_sp_H_SP,
+            array_hashes=_companion_prepared_array_hashes(
+                prepared,
+                sp_energy_ev=altered_sp_energy,
+                H_SP_ev=altered_sp_H_SP,
+            ),
+        )
+
+    altered_form_raw = np.array(prepared.form_raw, copy=True)
+    altered_form_raw[0, 0, 0, 0, 0, 0, 0, 0, 0] += 1.0e-6
+    with pytest.raises(ValueError, match="form_raw does not match recomputation"):
+        replace(
+            prepared,
+            form_raw=altered_form_raw,
+            array_hashes=_companion_prepared_array_hashes(
+                prepared,
+                form_raw=altered_form_raw,
+            ),
+        )
+
+    altered_form = np.array(prepared.form, copy=True)
+    altered_form[0, 0, 0, 0, 0, 0, 0, 0, 0] += 1.0e-6
+    with pytest.raises(ValueError, match="form does not exactly match"):
+        replace(
+            prepared,
+            form=altered_form,
+            array_hashes=_companion_prepared_array_hashes(
+                prepared,
+                form=altered_form,
+            ),
+        )
+
+    with pytest.raises(ValueError, match="form_branch does not match"):
+        replace(
+            prepared,
+            form_branch="complex",
+            residuals=replace(prepared.residuals, form_branch="complex"),
+            memory_estimate=type(prepared.memory_estimate).from_shapes(
+                prepared.params,
+                NG1=prepared.interaction_NG1,
+                NG2=prepared.interaction_NG2,
+                form_branch="complex",
+                exchange=prepared.spec.exchange,
+            ),
+        )
+
+    altered_H_SP = np.array(prepared.H_SP_ev, copy=True)
+    altered_H_SP[0, 0, 0, 0, 0] += 1.0e-6
+    with pytest.raises(ValueError, match="H_SP_ev does not exactly equal gen_H_SP"):
+        replace(
+            prepared,
+            H_SP_ev=altered_H_SP,
+            array_hashes=_companion_prepared_array_hashes(
+                prepared,
+                H_SP_ev=altered_H_SP,
+            ),
+        )
+
+    altered_M = np.array(prepared.M_ev, copy=True)
+    altered_M[0, 0, 0, 0, 0, 0, 0, 0, 0] += 1.0e-6
+    with pytest.raises(ValueError, match="M_ev does not exactly equal gen_M_tVE"):
+        replace(
+            prepared,
+            M_ev=altered_M,
+            array_hashes=_companion_prepared_array_hashes(
+                prepared,
+                M_ev=altered_M,
+            ),
+        )
+
+    altered_tVE = np.array(prepared.tVE_ev, copy=True)
+    altered_tVE[0, 0, 0] += 1.0e-6
+    with pytest.raises(ValueError, match="tVE_ev does not exactly equal gen_M_tVE"):
+        replace(
+            prepared,
+            tVE_ev=altered_tVE,
+            array_hashes=_companion_prepared_array_hashes(
+                prepared,
+                tVE_ev=altered_tVE,
+            ),
+        )
+
+    altered_screened_intFT = np.asarray(prepared.screened_intFT_ev * 1.125)
+    altered_screened_M, altered_screened_tVE = companion_gen_M_tVE(
+        prepared.params,
+        prepared.form,
+        altered_screened_intFT,
+        exchange=prepared.spec.exchange,
+    )
+    with pytest.raises(
+        ValueError,
+        match="screened_intFT_ev does not exactly equal interaction_source",
+    ):
+        replace(
+            prepared,
+            screened_intFT_ev=altered_screened_intFT,
+            M_ev=altered_screened_M,
+            tVE_ev=altered_screened_tVE,
+            array_hashes=_companion_prepared_array_hashes(
+                prepared,
+                screened_intFT_ev=altered_screened_intFT,
+                M_ev=altered_screened_M,
+                tVE_ev=altered_screened_tVE,
+            ),
+        )
+
+
+def test_companion_prepared_rejects_raw_hash_substitution(
+    companion_hf_action_source_fixture,
+    companion_stage4_typed_inputs,
+) -> None:
+    _manifest, arrays, _generator_path, _fixture_path = companion_hf_action_source_fixture
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(
+        _source_gauge_single_particle(single_particle, arrays),
+        interaction,
+    )
+    with pytest.raises(ValueError, match="raw_interaction_array_sha256 does not match"):
+        replace(prepared, raw_interaction_array_sha256="0" * 64)
+
+
+def test_companion_action_zero_linearity_hermiticity_spin_and_manual_element(
+    companion_hf_action_source_fixture,
+    companion_stage4_typed_inputs,
+) -> None:
+    _manifest, arrays, _generator_path, _fixture_path = companion_hf_action_source_fixture
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(
+        _source_gauge_single_particle(single_particle, arrays),
+        interaction,
+    )
+    delta = arrays["P"] - arrays["P_ref"]
+    zero = companion_calc_fock_matrix(
+        prepared.params,
+        np.zeros_like(delta),
+        prepared.form,
+        prepared.M_ev,
+        prepared.tVE_ev,
+    )
+    np.testing.assert_array_equal(zero.H_D_ev, np.zeros_like(zero.H_D_ev))
+    np.testing.assert_array_equal(zero.H_E_ev, np.zeros_like(zero.H_E_ev))
+    action = companion_calc_fock_matrix(
+        prepared.params,
+        delta,
+        prepared.form,
+        prepared.M_ev,
+        prepared.tVE_ev,
+    )
+    scaled = companion_calc_fock_matrix(
+        prepared.params,
+        0.375 * delta,
+        prepared.form,
+        prepared.M_ev,
+        prepared.tVE_ev,
+    )
+    np.testing.assert_allclose(scaled.H_D_ev, 0.375 * action.H_D_ev, rtol=2.0e-14, atol=2.0e-15)
+    np.testing.assert_allclose(scaled.H_E_ev, 0.375 * action.H_E_ev, rtol=2.0e-14, atol=2.0e-15)
+    np.testing.assert_allclose(action.H_interaction_ev, action.H_interaction_ev.conj().swapaxes(-1, -2), rtol=0.0, atol=1.0e-12)
+    np.testing.assert_allclose(action.H_D_ev[:, :, 0], action.H_D_ev[:, :, 1], rtol=0.0, atol=1.0e-13)
+    np.testing.assert_allclose(action.H_E_ev[:, :, 0], action.H_E_ev[:, :, 1], rtol=0.0, atol=1.0e-13)
+
+    # Independent single-element Hartree sum in the exact stored orientation.
+    split = delta.reshape(2, 3, 2, 2, 2, 2, 2)
+    tau, a, b = 0, 0, 1
+    expected = 0.0j
+    for iG1 in range(10):
+        for iG2 in range(10):
+            source_sum = 0.0j
+            for ik1 in range(2):
+                for ik2 in range(3):
+                    for spin in range(2):
+                        for source_tau in range(2):
+                            for aa in range(2):
+                                for bb in range(2):
+                                    source_sum += (
+                                        prepared.M_ev[
+                                            ik1,
+                                            ik2,
+                                            0,
+                                            0,
+                                            iG1,
+                                            iG2,
+                                            source_tau,
+                                            aa,
+                                            bb,
+                                        ]
+                                        * split[
+                                            ik1,
+                                            ik2,
+                                            spin,
+                                            source_tau,
+                                            bb,
+                                            source_tau,
+                                            aa,
+                                        ]
+                                    )
+            expected += prepared.form[0, 0, 0, 0, iG1, iG2, tau, a, b] * source_sum
+    np.testing.assert_allclose(action.H_D_ev[0, 0, 0, tau * 2 + a, tau * 2 + b], expected, rtol=0.0, atol=2.0e-13)
+    index = (1, 2, 1, 1, 4, 6, 1, 0, 1)
+    np.testing.assert_allclose(
+        prepared.M_ev[index],
+        prepared.screened_intFT_ev[index[2], index[3], index[4], index[5]]
+        * np.conj(prepared.form[index]),
+        rtol=0.0,
+        atol=0.0,
+    )
+
+
+def test_companion_energy_uses_stored_orientation_and_finite_system_ev(
+    companion_hf_action_source_fixture,
+    companion_stage4_typed_inputs,
+) -> None:
+    _manifest, arrays, _generator_path, _fixture_path = companion_hf_action_source_fixture
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(
+        _source_gauge_single_particle(single_particle, arrays),
+        interaction,
+    )
+    evaluation = prepared.evaluate(arrays["P"], arrays["P_ref"])
+    delta = arrays["P"] - arrays["P_ref"]
+    Psplit = arrays["P"].reshape(2, 3, 2, 2, 2, 2, 2)
+    manual_kinetic = np.einsum(
+        "kKta,kKstata->",
+        arrays["source_sp_energy_ev"],
+        Psplit,
+        optimize=True,
+    )
+    manual_D = 0.5 * np.einsum(
+        "kpsAB,kpsAB->",
+        evaluation.H_D_ev,
+        delta,
+        optimize=True,
+    )
+    manual_E = 0.5 * np.einsum(
+        "kpsAB,kpsAB->",
+        evaluation.H_E_ev,
+        delta,
+        optimize=True,
+    )
+    np.testing.assert_allclose(
+        evaluation.energy_components_ev,
+        np.real([manual_kinetic + manual_D + manual_E, manual_kinetic, manual_D, manual_E]),
+        rtol=0.0,
+        atol=2.0e-13,
+    )
+    np.testing.assert_allclose(evaluation.energy_components_ev, arrays["source_energy_ev"], rtol=0.0, atol=2.0e-13)
+    assert evaluation.energy.units == TBG_ZERO_FIELD_COMPANION_HF_ACTION_ENERGY_UNITS
+    assert evaluation.prepared is prepared
+    assert evaluation.H_SP_ev is prepared.H_SP_ev
+    assert not evaluation.energy_components_ev.flags.writeable
+    assert not evaluation.H_SP_ev.flags.writeable
+    assert not evaluation.H_total_ev.flags.writeable
+    assert evaluation.array_hashes.H_SP_ev == prepared.array_hashes.H_SP_ev
+    assert evaluation.array_hashes.density_delta == evaluation.action.array_hashes.density_delta
+    assert evaluation.energy.projector_sha256 == evaluation.array_hashes.projector
+    assert evaluation.energy.reference_sha256 == evaluation.array_hashes.reference
+    assert evaluation.residuals.density_subtraction_max_abs == 0.0
+    assert evaluation.residuals.H_total_closure_max_abs_ev == 0.0
+    assert evaluation.residuals.energy_action_binding_residual == 0.0
+
+
+def test_companion_evaluation_rejects_tampered_residuals_total_and_mixed_pair(
+    companion_hf_action_source_fixture,
+    companion_stage4_typed_inputs,
+) -> None:
+    _manifest, arrays, _generator_path, _fixture_path = companion_hf_action_source_fixture
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(
+        _source_gauge_single_particle(single_particle, arrays),
+        interaction,
+    )
+    evaluation = prepared.evaluate(arrays["P"], arrays["P_ref"])
+
+    for residual_name in (
+        "projector_hermiticity_max_abs",
+        "reference_hermiticity_max_abs",
+        "density_subtraction_max_abs",
+        "H_total_closure_max_abs_ev",
+        "energy_action_binding_residual",
+    ):
+        with pytest.raises(ValueError, match="residuals do not match"):
+            replace(
+                evaluation,
+                residuals=replace(
+                    evaluation.residuals,
+                    **{
+                        residual_name: (
+                            getattr(evaluation.residuals, residual_name) + 1.0e-15
+                        )
+                    },
+                ),
+            )
+
+    tampered_H_total = np.array(evaluation.H_total_ev, copy=True)
+    tampered_H_total[0, 0, 0, 0, 0] += 1.0e-6
+    tampered_hashes = TBGZeroFieldCompanionHFEvaluationArrayHashes.from_arrays(
+        projector=evaluation.projector,
+        reference=evaluation.reference,
+        density_delta=evaluation.density_delta,
+        H_SP_ev=evaluation.H_SP_ev,
+        H_total_ev=tampered_H_total,
+        energy_components_ev=evaluation.energy.components_ev,
+    )
+    with pytest.raises(ValueError, match="H_total_ev must equal H_SP_ev"):
+        replace(
+            evaluation,
+            H_total_ev=tampered_H_total,
+            array_hashes=tampered_hashes,
+        )
+
+    common_shift = np.zeros_like(evaluation.projector)
+    common_shift[..., 1, 1] = 0.125
+    mixed_projector = evaluation.projector + common_shift
+    mixed_reference = evaluation.reference + common_shift
+    np.testing.assert_array_equal(
+        mixed_projector - mixed_reference,
+        evaluation.density_delta,
+    )
+    mixed_hashes = TBGZeroFieldCompanionHFEvaluationArrayHashes.from_arrays(
+        projector=mixed_projector,
+        reference=mixed_reference,
+        density_delta=evaluation.density_delta,
+        H_SP_ev=evaluation.H_SP_ev,
+        H_total_ev=evaluation.H_total_ev,
+        energy_components_ev=evaluation.energy.components_ev,
+    )
+    with pytest.raises(ValueError, match="energy projector hash"):
+        replace(
+            evaluation,
+            projector=mixed_projector,
+            reference=mixed_reference,
+            array_hashes=mixed_hashes,
+        )
+    mixed_projector_bound_energy = replace(
+        evaluation.energy,
+        projector_sha256=mixed_hashes.projector,
+    )
+    with pytest.raises(ValueError, match="energy reference hash"):
+        replace(
+            evaluation,
+            projector=mixed_projector,
+            reference=mixed_reference,
+            energy=mixed_projector_bound_energy,
+            array_hashes=mixed_hashes,
+        )
+
+    with pytest.raises(ValueError, match="energy is not bound"):
+        replace(
+            evaluation,
+            energy=replace(evaluation.energy, action_fingerprint="0" * 64),
+        )
+
+
+def test_companion_evaluation_rejects_coherent_alternate_action_substitution(
+    companion_hf_action_source_fixture,
+    companion_stage4_typed_inputs,
+) -> None:
+    _manifest, arrays, _generator_path, _fixture_path = companion_hf_action_source_fixture
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(
+        _source_gauge_single_particle(single_particle, arrays),
+        interaction,
+    )
+    evaluation = prepared.evaluate(arrays["P"], arrays["P_ref"])
+
+    alternate_H_D = np.array(evaluation.action.H_D_ev, copy=True)
+    alternate_H_D[..., 0, 0] += 1.0e-6
+    alternate_H_E = np.array(evaluation.action.H_E_ev, copy=True)
+    alternate_H_interaction = np.asarray(alternate_H_D + alternate_H_E)
+    alternate_action_residuals = type(evaluation.action.residuals)(
+        density_hermiticity_max_abs=float(
+            np.max(
+                np.abs(
+                    evaluation.density_delta
+                    - evaluation.density_delta.conj().swapaxes(-1, -2)
+                )
+            )
+        ),
+        H_D_hermiticity_max_abs_ev=float(
+            np.max(np.abs(alternate_H_D - alternate_H_D.conj().swapaxes(-1, -2)))
+        ),
+        H_E_hermiticity_max_abs_ev=float(
+            np.max(np.abs(alternate_H_E - alternate_H_E.conj().swapaxes(-1, -2)))
+        ),
+        H_interaction_hermiticity_max_abs_ev=float(
+            np.max(
+                np.abs(
+                    alternate_H_interaction
+                    - alternate_H_interaction.conj().swapaxes(-1, -2)
+                )
+            )
+        ),
+    )
+    alternate_action_hashes = type(evaluation.action.array_hashes).from_arrays(
+        density_delta=evaluation.density_delta,
+        H_D_ev=alternate_H_D,
+        H_E_ev=alternate_H_E,
+        H_interaction_ev=alternate_H_interaction,
+    )
+    alternate_action = replace(
+        evaluation.action,
+        H_D_ev=alternate_H_D,
+        H_E_ev=alternate_H_E,
+        H_interaction_ev=alternate_H_interaction,
+        residuals=alternate_action_residuals,
+        array_hashes=alternate_action_hashes,
+    )
+    alternate_energy = companion_calc_E(
+        prepared.params,
+        evaluation.projector,
+        evaluation.reference,
+        prepared.sp_energy_ev,
+        alternate_action,
+    )
+    alternate_H_total = np.asarray(
+        prepared.H_SP_ev + alternate_action.H_interaction_ev
+    )
+    alternate_evaluation_residuals = replace(
+        evaluation.residuals,
+        H_total_hermiticity_max_abs_ev=float(
+            np.max(
+                np.abs(
+                    alternate_H_total
+                    - alternate_H_total.conj().swapaxes(-1, -2)
+                )
+            )
+        ),
+        H_total_closure_max_abs_ev=float(
+            np.max(
+                np.abs(
+                    alternate_H_total
+                    - (prepared.H_SP_ev + alternate_action.H_interaction_ev)
+                )
+            )
+        ),
+        total_energy_imag_residual_ev=alternate_energy.total_imag_residual_ev,
+        energy_action_binding_residual=float(
+            alternate_energy.action_fingerprint != alternate_action.fingerprint
+        ),
+    )
+    alternate_evaluation_hashes = (
+        TBGZeroFieldCompanionHFEvaluationArrayHashes.from_arrays(
+            projector=evaluation.projector,
+            reference=evaluation.reference,
+            density_delta=evaluation.density_delta,
+            H_SP_ev=prepared.H_SP_ev,
+            H_total_ev=alternate_H_total,
+            energy_components_ev=alternate_energy.components_ev,
+        )
+    )
+
+    assert alternate_energy.action_fingerprint == alternate_action.fingerprint
+    np.testing.assert_array_equal(
+        alternate_H_total,
+        prepared.H_SP_ev + alternate_action.H_interaction_ev,
+    )
+    with pytest.raises(
+        ValueError,
+        match=r"action\.H_D_ev does not exactly equal the canonical calc_fock_matrix output",
+    ):
+        replace(
+            evaluation,
+            action=alternate_action,
+            energy=alternate_energy,
+            H_total_ev=alternate_H_total,
+            residuals=alternate_evaluation_residuals,
+            array_hashes=alternate_evaluation_hashes,
+        )
+
+
+def test_companion_evaluation_recomputes_energy_and_rejects_stale_prepared(
+    companion_hf_action_source_fixture,
+    companion_stage4_typed_inputs,
+) -> None:
+    _manifest, arrays, _generator_path, _fixture_path = companion_hf_action_source_fixture
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(
+        _source_gauge_single_particle(single_particle, arrays),
+        interaction,
+    )
+    evaluation = prepared.evaluate(arrays["P"], arrays["P_ref"])
+
+    coherent_components = np.array(evaluation.energy.components_ev, copy=True)
+    coherent_components[1] += 1.0e-6
+    coherent_components[0] = float(
+        coherent_components[1]
+        + coherent_components[2]
+        + coherent_components[3]
+    )
+    coherent_energy = replace(
+        evaluation.energy,
+        components_ev=coherent_components,
+    )
+    coherent_hashes = TBGZeroFieldCompanionHFEvaluationArrayHashes.from_arrays(
+        projector=evaluation.projector,
+        reference=evaluation.reference,
+        density_delta=evaluation.density_delta,
+        H_SP_ev=evaluation.H_SP_ev,
+        H_total_ev=evaluation.H_total_ev,
+        energy_components_ev=coherent_components,
+    )
+    with pytest.raises(ValueError, match="energy components do not match recomputed calc_E"):
+        replace(
+            evaluation,
+            energy=coherent_energy,
+            array_hashes=coherent_hashes,
+        )
+    with pytest.raises(ValueError, match="max_component_imag_residual_ev"):
+        replace(
+            evaluation,
+            energy=replace(
+                evaluation.energy,
+                max_component_imag_residual_ev=(
+                    evaluation.energy.max_component_imag_residual_ev + 1.0e-15
+                ),
+            ),
+        )
+
+    stale_sp_energy = np.asarray(prepared.sp_energy_ev + 1.0e-4)
+    stale_H_SP = companion_gen_H_SP(prepared.params, stale_sp_energy)
+    stale_single_particle_hashes = (
+        TBGZeroFieldCompanionSingleParticleArrayHashes.from_arrays(
+            coeff=prepared.single_particle_source.coeff,
+            sp_energy_ev=stale_sp_energy,
+            U_C2T=prepared.single_particle_source.U_C2T,
+        )
+    )
+    stale_single_particle_source = replace(
+        prepared.single_particle_source,
+        sp_energy_ev=stale_sp_energy,
+        array_hashes=stale_single_particle_hashes,
+    )
+    stale_prepared = replace(
+        prepared,
+        single_particle_source=stale_single_particle_source,
+        single_particle_fingerprint=stale_single_particle_source.fingerprint,
+        sp_energy_ev=stale_sp_energy,
+        H_SP_ev=stale_H_SP,
+        array_hashes=_companion_prepared_array_hashes(
+            prepared,
+            sp_energy_ev=stale_sp_energy,
+            H_SP_ev=stale_H_SP,
+        ),
+    )
+    with pytest.raises(TypeError, match="prepared must be"):
+        replace(evaluation, prepared=object())
+    with pytest.raises(ValueError, match="prepared_fingerprint does not match"):
+        replace(evaluation, prepared=stale_prepared)
+    with pytest.raises(ValueError, match="H_SP_ev must exactly equal prepared.H_SP_ev"):
+        replace(
+            evaluation,
+            prepared=stale_prepared,
+            prepared_fingerprint=stale_prepared.fingerprint,
+        )
+
+    stale_H_total = np.asarray(stale_H_SP + evaluation.action.H_interaction_ev)
+    stale_hashes = TBGZeroFieldCompanionHFEvaluationArrayHashes.from_arrays(
+        projector=evaluation.projector,
+        reference=evaluation.reference,
+        density_delta=evaluation.density_delta,
+        H_SP_ev=stale_H_SP,
+        H_total_ev=stale_H_total,
+        energy_components_ev=evaluation.energy.components_ev,
+    )
+    with pytest.raises(ValueError, match="energy components do not match recomputed calc_E"):
+        replace(
+            evaluation,
+            prepared=stale_prepared,
+            prepared_fingerprint=stale_prepared.fingerprint,
+            H_SP_ev=stale_H_SP,
+            H_total_ev=stale_H_total,
+            array_hashes=stale_hashes,
+        )
+
+
+def test_companion_zero_exchange_is_exact_and_preserves_hartree(
+    companion_hf_action_source_fixture,
+    companion_stage4_typed_inputs,
+) -> None:
+    _manifest, arrays, _generator_path, _fixture_path = companion_hf_action_source_fixture
+    single_particle, interaction = companion_stage4_typed_inputs
+    source_single_particle = _source_gauge_single_particle(single_particle, arrays)
+    with_exchange = prepare_tbg_zero_field_companion_hf_action(
+        source_single_particle,
+        interaction,
+    )
+    without_exchange = prepare_tbg_zero_field_companion_hf_action(
+        source_single_particle,
+        interaction,
+        spec=TBGZeroFieldCompanionHFActionSpec(exchange=False),
+    )
+    np.testing.assert_array_equal(
+        without_exchange.tVE_ev,
+        np.zeros(without_exchange.tVE_ev.shape, dtype=np.complex128),
+    )
+    assert without_exchange.tVE_ev.dtype == np.dtype(np.complex128)
+    evaluation = without_exchange.evaluate(arrays["P"], arrays["P_ref"])
+    full_evaluation = with_exchange.evaluate(arrays["P"], arrays["P_ref"])
+    np.testing.assert_array_equal(evaluation.H_E_ev, np.zeros_like(evaluation.H_E_ev))
+    np.testing.assert_array_equal(evaluation.H_D_ev, full_evaluation.H_D_ev)
+    assert evaluation.energy.exchange_ev == 0.0
+
+
+def test_companion_hf_action_guards_shape_nonfinite_boost_hermiticity_and_energy() -> None:
+    spec = TBGZeroFieldCompanionHFActionSpec()
+    with pytest.raises(ValueError, match="finite and positive"):
+        replace(spec, epsr=0.0)
+    with pytest.raises(ValueError, match="finite and positive"):
+        replace(spec, epsr=np.nan)
+    with pytest.raises(TypeError, match="exchange must be bool"):
+        replace(spec, exchange=np.bool_(True))  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="boost1=boost2=0"):
+        replace(spec, boost1=1)
+
+    params = _companion_stage4_params()
+    form = np.zeros((2, 3, 2, 3, 10, 10, 2, 2, 2), dtype=np.complex128)
+    intFT = np.zeros((2, 3, 10, 10), dtype=float)
+    M, tVE = companion_gen_M_tVE(params, form, intFT)
+    good_delta = np.zeros((2, 3, 2, 4, 4), dtype=np.complex128)
+    with pytest.raises(ValueError, match="must have shape"):
+        companion_calc_fock_matrix(params, good_delta[..., :3, :3], form, M, tVE)
+    bad_form = form.copy()
+    bad_form[0, 0, 0, 0, 0, 0, 0, 0, 0] = np.nan
+    with pytest.raises(ValueError, match="finite"):
+        companion_gen_M_tVE(params, bad_form, intFT)
+    nonhermitian = good_delta.copy()
+    nonhermitian[0, 0, 0, 0, 1] = 1.0
+    with pytest.raises(ValueError, match="materially non-Hermitian"):
+        companion_calc_fock_matrix(params, nonhermitian, form, M, tVE)
+    with pytest.raises(ValueError, match="total must equal kinetic"):
+        TBGZeroFieldCompanionHFEnergy(
+            components_ev=np.asarray([1.0e-6, 0.0, 0.0, 0.0]),
+            total_imag_residual_ev=0.0,
+            max_component_imag_residual_ev=0.0,
+            projector_sha256="0" * 64,
+            reference_sha256="0" * 64,
+            action_fingerprint="0" * 64,
+        )
+    with pytest.raises(ValueError, match="finite and nonnegative"):
+        TBGZeroFieldCompanionHFEnergy(
+            components_ev=np.zeros(4),
+            total_imag_residual_ev=np.inf,
+            max_component_imag_residual_ev=np.inf,
+            projector_sha256="0" * 64,
+            reference_sha256="0" * 64,
+            action_fingerprint="0" * 64,
+        )
+    with pytest.raises(ValueError, match="material imaginary defect"):
+        TBGZeroFieldCompanionHFEnergy(
+            components_ev=np.zeros(4),
+            total_imag_residual_ev=2.0e-9,
+            max_component_imag_residual_ev=2.0e-9,
+            projector_sha256="0" * 64,
+            reference_sha256="0" * 64,
+            action_fingerprint="0" * 64,
+        )
