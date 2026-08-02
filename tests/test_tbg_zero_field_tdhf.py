@@ -17,6 +17,30 @@ from mean_field.core.hf import (
     compute_hf_energy,
 )
 from mean_field.systems.tbg.params import TBGParameters
+from mean_field.systems.tbg.zero_field.companion_kivc_seed import (
+    KWAN_EQ99_ARXIV,
+    KWAN_EQ99_PDF_SHA256,
+    KWAN_EQ99_PDF_SOURCE,
+    KWAN_EQ99_REFERENCE,
+    MAX_VALIDATION_TOLERANCE,
+    TBG_ZERO_FIELD_COMPANION_KIVC_BASIS_COVARIANCE_SCOPE,
+    TBG_ZERO_FIELD_COMPANION_KIVC_CANONICAL_ORDER,
+    TBG_ZERO_FIELD_COMPANION_KIVC_CHERN_SCOPE,
+    TBG_ZERO_FIELD_COMPANION_KIVC_COMPANION_MEASURE_TP_SCOPE,
+    TBG_ZERO_FIELD_COMPANION_KIVC_EXTERNAL_AUTHORITY_FILES,
+    TBG_ZERO_FIELD_COMPANION_KIVC_FRAME_SCOPE,
+    TBG_ZERO_FIELD_COMPANION_KIVC_SEED_SCOPE,
+    TBG_ZERO_FIELD_COMPANION_KIVC_STORED_PROJECTOR_CONVENTION,
+    TBG_ZERO_FIELD_COMPANION_KIVC_TP_SCOPE,
+    TBG_ZERO_FIELD_COMPANION_MEASURE_SOURCE,
+    TBG_ZERO_FIELD_COMPANION_MEASURE_SOURCE_SHA256,
+    TBG_ZERO_FIELD_COMPANION_MEASURE_TP_REFERENCE_LINES,
+    TBG_ZERO_FIELD_COMPANION_PROJECTORS_SOURCE,
+    TBG_ZERO_FIELD_COMPANION_PROJECTORS_SOURCE_SHA256,
+    build_tbg_zero_field_companion_kivc_seed,
+    kwan_eq99_kivc_q,
+    validate_tbg_zero_field_companion_kivc_external_authorities,
+)
 from mean_field.systems.tbg.zero_field.companion_hf_action import (
     TBGZeroFieldCompanionHFActionSpec,
     TBGZeroFieldCompanionHFEnergy,
@@ -2791,6 +2815,574 @@ def test_companion_port_matches_pinned_source_fixture_gauge_invariants_and_c2t(
             atol=5.0e-10,
         )
 
+
+# ---------------------------------------------------------------------------
+# Stage-5 Kwan Eq. (99) source-array-bound pivoted K-IVC diagnostic
+# ---------------------------------------------------------------------------
+
+
+def _tiny_unstrained_companion_stage2(
+    *,
+    N1: int = 2,
+    N2: int = 3,
+):
+    params = TBGZeroFieldCompanionSingleParticleParams(
+        N1=N1,
+        N2=N2,
+        Ng1=2,
+        Ng2=2,
+        n_active=1,
+        theta_deg=1.05,
+        wAA_ev=0.08,
+        wAB_ev=0.11,
+        strain=0.0,
+        strain_angle_deg=0.0,
+    )
+    return solve_tbg_zero_field_companion_single_particle(params)
+
+
+def _replace_companion_stage2_coeff(source, coeff: np.ndarray):
+    resolved_coeff = np.asarray(coeff, dtype=np.complex128)
+    resolved_U_C2T = companion_C2T_symmetry(source.params, resolved_coeff)
+    hashes = TBGZeroFieldCompanionSingleParticleArrayHashes.from_arrays(
+        coeff=resolved_coeff,
+        sp_energy_ev=source.sp_energy_ev,
+        U_C2T=resolved_U_C2T,
+    )
+    return replace(
+        source,
+        coeff=resolved_coeff,
+        U_C2T=resolved_U_C2T,
+        array_hashes=hashes,
+    )
+
+
+def _companion_lifted_kivc_projector(source, seed, ik1: int, ik2: int) -> np.ndarray:
+    parent_dimension = source.params.parent_dimension
+    lifted_frame = np.zeros((2 * parent_dimension, 4), dtype=np.complex128)
+    lifted_frame[:parent_dimension, :2] = _companion_parent_coefficients(
+        source.coeff,
+        ik1=ik1,
+        ik2=ik2,
+        tau=0,
+    )
+    lifted_frame[parent_dimension:, 2:] = _companion_parent_coefficients(
+        source.coeff,
+        ik1=ik1,
+        ik2=ik2,
+        tau=1,
+    )
+    return lifted_frame @ seed.P_conventional[ik1, ik2] @ lifted_frame.conj().T
+
+
+def test_kwan_eq99_explicit_matrices_and_valley_major_kronecker_order() -> None:
+    expected_phi_zero = np.asarray(
+        [
+            [0.0, 0.0, 0.0, -1.0j],
+            [0.0, 0.0, 1.0j, 0.0],
+            [0.0, -1.0j, 0.0, 0.0],
+            [1.0j, 0.0, 0.0, 0.0],
+        ],
+        dtype=np.complex128,
+    )
+    expected_phi_half_pi = np.asarray(
+        [
+            [0.0, 0.0, 0.0, -1.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [-1.0, 0.0, 0.0, 0.0],
+        ],
+        dtype=np.complex128,
+    )
+    np.testing.assert_array_equal(kwan_eq99_kivc_q(0.0), expected_phi_zero)
+    np.testing.assert_allclose(
+        kwan_eq99_kivc_q(np.pi / 2.0),
+        expected_phi_half_pi,
+        rtol=0.0,
+        atol=1.0e-16,
+    )
+
+    tau_x = np.asarray([[0.0, 1.0], [1.0, 0.0]], dtype=np.complex128)
+    sigma_y = np.asarray([[0.0, -1.0j], [1.0j, 0.0]], dtype=np.complex128)
+    np.testing.assert_array_equal(kwan_eq99_kivc_q(0.0), np.kron(tau_x, sigma_y))
+    assert not np.array_equal(kwan_eq99_kivc_q(0.0), np.kron(sigma_y, tau_x))
+
+
+def test_kwan_eq99_seed_actual_unstrained_stage2_invariants_and_scopes() -> None:
+    source = _tiny_unstrained_companion_stage2()
+    seed = build_tbg_zero_field_companion_kivc_seed(source, phi=0.37)
+    params = source.params
+
+    assert seed.provenance.scientific_scope == TBG_ZERO_FIELD_COMPANION_KIVC_SEED_SCOPE
+    assert KWAN_EQ99_PDF_SHA256 == (
+        "2354caaa3c5fddbdc7c5caaacbc9dcfa94c45dfc855d930b10372daabf6fd8a6"
+    )
+    assert TBG_ZERO_FIELD_COMPANION_REFERENCE_SOURCE_SHA256 == (
+        "a050fa545c4d399b227a178bcc4705a110bd7962edcb9e1f69e300b5e1a3e43b"
+    )
+    assert TBG_ZERO_FIELD_COMPANION_PROJECTORS_SOURCE_SHA256 == (
+        "d7c7138ddf2107a71c24194ac70790bd27cdc05297ee9cdc997c1dc3882e5ede"
+    )
+    assert TBG_ZERO_FIELD_COMPANION_MEASURE_SOURCE_SHA256 == (
+        "d1a47420400c3381247f4bc8c2e7700935077536b7782a14e52e1d25a1fd516e"
+    )
+    assert seed.provenance.source_hashes.paper_pdf == KWAN_EQ99_PDF_SHA256
+    assert seed.provenance.source_hashes.single_particle == (
+        TBG_ZERO_FIELD_COMPANION_REFERENCE_SOURCE_SHA256
+    )
+    assert seed.provenance.source_hashes.projectors == (
+        TBG_ZERO_FIELD_COMPANION_PROJECTORS_SOURCE_SHA256
+    )
+    assert seed.provenance.source_hashes.measure == (
+        TBG_ZERO_FIELD_COMPANION_MEASURE_SOURCE_SHA256
+    )
+    assert seed.provenance.paper_arxiv == KWAN_EQ99_ARXIV == "2511.21683v1"
+    assert seed.provenance.paper_reference == KWAN_EQ99_REFERENCE
+    assert "PDF pages 38-39 (printed 38-39)" in KWAN_EQ99_REFERENCE
+    assert "Eq. (99) implementation authority" in KWAN_EQ99_REFERENCE
+    assert "Eq. (98) Chern context only" in KWAN_EQ99_REFERENCE
+    assert "not implementing Eq. (97) triplet/n_pm" in KWAN_EQ99_REFERENCE
+    assert "not implementing Eq. (98) pseudospin equality" in KWAN_EQ99_REFERENCE
+    assert seed.P_conventional.shape == (params.N1, params.N2, 4, 4)
+    assert seed.P_stored.shape == (params.N1, params.N2, 2, 4, 4)
+    assert seed.U_Tp.shape == (params.N1, params.N2, 4, 4)
+    assert seed.pivot_indices_K.shape == (params.N1, params.N2, 2)
+    assert seed.pivot_relative_margins_K.shape == (params.N1, params.N2, 2)
+    assert np.all(
+        seed.pivot_relative_margins_K > seed.pivot_tie_relative_tolerance
+    )
+    assert seed.pivot_relative_margin_min == float(
+        np.min(seed.pivot_relative_margins_K)
+    )
+    assert len(seed.array_hashes.pivot_indices_K) == 64
+    assert len(seed.array_hashes.pivot_relative_margins_K) == 64
+
+    for ik1 in range(params.N1):
+        for ik2 in range(params.N2):
+            mk1 = (-ik1) % params.N1
+            mk2 = (-ik2) % params.N2
+            np.testing.assert_array_equal(
+                seed.W_Kprime[ik1, ik2],
+                np.conj(seed.W_K[mk1, mk2]),
+            )
+            for tau, frame in enumerate(
+                (seed.W_K[ik1, ik2], seed.W_Kprime[ik1, ik2])
+            ):
+                transformed_Z = frame.conj().T @ seed.Z_projected[
+                    ik1, ik2, tau
+                ] @ frame
+                np.testing.assert_allclose(
+                    transformed_Z,
+                    np.diag(seed.Z_spectra[ik1, ik2, tau]),
+                    rtol=0.0,
+                    atol=5.0e-10,
+                )
+            expected_U_Tp = (
+                seed.W[ik1, ik2]
+                @ np.kron(
+                    np.asarray([[0.0, -1.0j], [1.0j, 0.0]]),
+                    np.eye(2),
+                )
+                @ seed.W[mk1, mk2].T
+            )
+            np.testing.assert_array_equal(seed.U_Tp[ik1, ik2], expected_U_Tp)
+
+    assert np.all(seed.Z_spectra[..., 0] > 0.0)
+    assert np.all(seed.Z_spectra[..., 1] < 0.0)
+    np.testing.assert_allclose(
+        seed.P_conventional @ seed.P_conventional,
+        seed.P_conventional,
+        rtol=0.0,
+        atol=5.0e-10,
+    )
+    np.testing.assert_array_equal(
+        seed.P_stored,
+        np.repeat(
+            seed.P_conventional.swapaxes(-1, -2)[:, :, None, :, :],
+            2,
+            axis=2,
+        ),
+    )
+    np.testing.assert_array_equal(seed.P_stored[:, :, 0], seed.P_stored[:, :, 1])
+    np.testing.assert_allclose(seed.chern_balance_trace, 0.0, rtol=0.0, atol=5.0e-10)
+
+    # Same projected-Z labels in both valleys are explicitly not the same
+    # physical-Chern ordering: Gamma_C eigenvalues reverse in K'.
+    np.testing.assert_array_equal(
+        np.diag(seed.Gamma_C),
+        np.asarray([1.0, -1.0, -1.0, 1.0]),
+    )
+    assert "same_projected_microscopic_sublattice_Z_order" in (
+        TBG_ZERO_FIELD_COMPANION_KIVC_CANONICAL_ORDER
+    )
+    assert "not_same_physical_Chern_order" in TBG_ZERO_FIELD_COMPANION_KIVC_CANONICAL_ORDER
+
+    assert seed.residuals.source_TR_Z_max_abs < 5.0e-10
+    assert seed.residuals.kprime_Z_diagonalization_max_abs < 5.0e-10
+    assert seed.residuals.tp_square_max_abs <= MAX_VALIDATION_TOLERANCE
+    assert seed.residuals.tp_Q_invariance_max_abs <= MAX_VALIDATION_TOLERANCE
+    assert seed.residuals.tp_P_invariance_max_abs <= MAX_VALIDATION_TOLERANCE
+    assert seed.residuals.companion_measure_Tp_max_abs <= MAX_VALIDATION_TOLERANCE
+    metadata = seed.to_metadata()
+    source_metadata = metadata["provenance"]["source_hashes"]
+    assert source_metadata["external_authority_files"] == (
+        TBG_ZERO_FIELD_COMPANION_KIVC_EXTERNAL_AUTHORITY_FILES
+    )
+    assert TBG_ZERO_FIELD_COMPANION_KIVC_EXTERNAL_AUTHORITY_FILES == (
+        "external_authority_files_not_embedded"
+    )
+    assert source_metadata["hashes"] == {
+        "measure": TBG_ZERO_FIELD_COMPANION_MEASURE_SOURCE_SHA256,
+        "paper_pdf": KWAN_EQ99_PDF_SHA256,
+        "projectors": TBG_ZERO_FIELD_COMPANION_PROJECTORS_SOURCE_SHA256,
+        "single_particle": TBG_ZERO_FIELD_COMPANION_REFERENCE_SOURCE_SHA256,
+    }
+    assert source_metadata["locator"] == {
+        "companion_commit": TBG_ZERO_FIELD_COMPANION_REFERENCE_COMMIT,
+        "companion_repository": TBG_ZERO_FIELD_COMPANION_REFERENCE_REPOSITORY,
+        "measure": TBG_ZERO_FIELD_COMPANION_MEASURE_SOURCE,
+        "paper_pdf": KWAN_EQ99_PDF_SOURCE,
+        "projectors": TBG_ZERO_FIELD_COMPANION_PROJECTORS_SOURCE,
+        "single_particle": (
+            f"{TBG_ZERO_FIELD_COMPANION_REFERENCE_REPOSITORY}/"
+            f"{TBG_ZERO_FIELD_COMPANION_REFERENCE_SOURCE}"
+        ),
+    }
+    assert metadata["frame_scope"] == TBG_ZERO_FIELD_COMPANION_KIVC_FRAME_SCOPE
+    assert metadata["frame_scope"] == (
+        "source-array-bound pivoted diagnostic; not cross-eigensolver reproducible; "
+        "not a global smooth gauge"
+    )
+    assert metadata["basis_covariance_scope"] == (
+        TBG_ZERO_FIELD_COMPANION_KIVC_BASIS_COVARIANCE_SCOPE
+    )
+    assert metadata["mapped_U_Tp_validation_scope"] == (
+        TBG_ZERO_FIELD_COMPANION_KIVC_TP_SCOPE
+    )
+    assert "algebraic_by_construction" in metadata["mapped_U_Tp_validation_scope"]
+    assert metadata["companion_measure_Tp_validation_scope"] == (
+        TBG_ZERO_FIELD_COMPANION_KIVC_COMPANION_MEASURE_TP_SCOPE
+    )
+    assert metadata["provenance"]["companion_measure_source"] == (
+        TBG_ZERO_FIELD_COMPANION_MEASURE_SOURCE
+    )
+    assert metadata["provenance"]["companion_measure_Tp_reference_lines"] == (
+        TBG_ZERO_FIELD_COMPANION_MEASURE_TP_REFERENCE_LINES
+    )
+    assert metadata["pivot_relative_margin_min"] == seed.pivot_relative_margin_min
+    assert metadata["validation_tolerance_hard_max"] == MAX_VALIDATION_TOLERANCE
+    assert metadata["stage2_array_hashes"]["fingerprint"] == (
+        source.array_hashes.fingerprint
+    )
+    assert metadata["chern_validation_scope"] == TBG_ZERO_FIELD_COMPANION_KIVC_CHERN_SCOPE
+    assert "not_FHS_Chern_validation" in metadata["chern_validation_scope"]
+    assert "chern_number" not in metadata
+    assert metadata["stored_projector_convention"] == (
+        TBG_ZERO_FIELD_COMPANION_KIVC_STORED_PROJECTOR_CONVENTION
+    )
+
+    for array in (
+        seed.Z_projected,
+        seed.Z_spectra,
+        seed.W_K,
+        seed.W_Kprime,
+        seed.W,
+        seed.pivot_indices_K,
+        seed.pivot_relative_margins_K,
+        seed.Q_canonical,
+        seed.Q_band,
+        seed.P_conventional,
+        seed.P_stored,
+        seed.U_Tp,
+        seed.Gamma_C,
+        seed.source_TR_Z_residuals,
+        seed.kprime_Z_diagonalization_residuals,
+        seed.tp_square_residuals,
+        seed.tp_Q_invariance_residuals,
+        seed.tp_P_invariance_residuals,
+        seed.companion_measure_Tp_residuals,
+        seed.chern_balance_trace,
+    ):
+        assert not array.flags.writeable
+
+
+def test_kwan_eq99_seed_companion_measure_boost0_Tp_residual_is_independent() -> None:
+    source = _tiny_unstrained_companion_stage2()
+    seed = build_tbg_zero_field_companion_kivc_seed(source, phi=0.29)
+    params = source.params
+
+    # Independent transcription of reference/TBG-HF/measure.py lines 5-14,
+    # 64-69: reshape valley/band axes, flip k and both valley axes, roll k by
+    # (1, 1), conjugate, then negate both off-diagonal valley blocks.
+    Pex = np.reshape(seed.P_stored, (params.N1, params.N2, 2, 2, 2, 2, 2))
+    expected_T = np.flip(Pex, axis=(0, 1, 3, 5)).copy()
+    expected_T = np.roll(expected_T, (1, 1), axis=(0, 1))
+    expected_T = np.conj(expected_T)
+    expected_Tp = expected_T.copy()
+    expected_Tp[:, :, :, 0, :, 1, :] = -expected_T[:, :, :, 0, :, 1, :]
+    expected_Tp[:, :, :, 1, :, 0, :] = -expected_T[:, :, :, 1, :, 0, :]
+    expected_residuals = np.max(
+        np.abs(seed.P_stored - expected_Tp.reshape(seed.P_stored.shape)),
+        axis=(2, 3, 4),
+    )
+
+    np.testing.assert_array_equal(
+        seed.companion_measure_Tp_residuals,
+        expected_residuals,
+    )
+    assert seed.residuals.companion_measure_Tp_max_abs == float(
+        np.max(expected_residuals)
+    )
+    assert seed.residuals.companion_measure_Tp_max_abs <= seed.validation_tolerance
+    metadata = seed.to_metadata()
+    assert metadata["residuals"]["companion_measure_Tp_max_abs"] == (
+        seed.residuals.companion_measure_Tp_max_abs
+    )
+    assert "independent_companion_measure" in (
+        metadata["companion_measure_Tp_validation_scope"]
+    )
+    assert "algebraic_by_construction" in metadata["mapped_U_Tp_validation_scope"]
+
+def test_kwan_eq99_seed_has_paired_active_subspace_basis_covariance() -> None:
+    """Arbitrary paired U(2) is not a valid nondegenerate eigenpair gauge."""
+
+    params = _small_companion_single_particle_params(N1=2, N2=3)
+    source = solve_tbg_zero_field_companion_single_particle(params)
+    seed = build_tbg_zero_field_companion_kivc_seed(source, phi=0.43)
+    assert seed.to_metadata()["basis_covariance_scope"] == (
+        "paired active-subspace basis covariance; arbitrary U(2) is not a valid "
+        "nondegenerate eigenpair gauge"
+    )
+    rng = np.random.default_rng(90210)
+    K_basis_change = np.empty((params.N1, params.N2, 2, 2), dtype=np.complex128)
+    for ik1 in range(params.N1):
+        for ik2 in range(params.N2):
+            raw = rng.normal(size=(2, 2)) + 1.0j * rng.normal(size=(2, 2))
+            unitary, triangular = np.linalg.qr(raw)
+            K_basis_change[ik1, ik2] = unitary @ np.diag(
+                np.exp(-1.0j * np.angle(np.diag(triangular)))
+            )
+
+    changed_coeff = np.array(source.coeff, copy=True)
+    for ik1 in range(params.N1):
+        for ik2 in range(params.N2):
+            mk1 = (-ik1) % params.N1
+            mk2 = (-ik2) % params.N2
+            changed_coeff[ik1, ik2, :, :, 0, :, :] = np.einsum(
+                "...as,ab->...bs",
+                source.coeff[ik1, ik2, :, :, 0, :, :],
+                K_basis_change[ik1, ik2],
+            )
+            changed_coeff[ik1, ik2, :, :, 1, :, :] = np.einsum(
+                "...as,ab->...bs",
+                source.coeff[ik1, ik2, :, :, 1, :, :],
+                np.conj(K_basis_change[mk1, mk2]),
+            )
+    changed_source = _replace_companion_stage2_coeff(source, changed_coeff)
+    changed_seed = build_tbg_zero_field_companion_kivc_seed(
+        changed_source,
+        phi=0.43,
+    )
+
+    for ik1 in range(params.N1):
+        for ik2 in range(params.N2):
+            np.testing.assert_allclose(
+                _companion_lifted_kivc_projector(source, seed, ik1, ik2),
+                _companion_lifted_kivc_projector(
+                    changed_source,
+                    changed_seed,
+                    ik1,
+                    ik2,
+                ),
+                rtol=0.0,
+                atol=MAX_VALIDATION_TOLERANCE,
+            )
+
+
+def test_kwan_eq99_seed_allows_paired_nondegenerate_U1_phase_covariance() -> None:
+    params = _small_companion_single_particle_params(N1=2, N2=3)
+    source = solve_tbg_zero_field_companion_single_particle(params)
+    seed = build_tbg_zero_field_companion_kivc_seed(source, phi=0.43)
+    rng = np.random.default_rng(8675309)
+    K_phases = np.exp(
+        1.0j * rng.uniform(-np.pi, np.pi, size=(params.N1, params.N2, 2))
+    )
+
+    phase_changed_coeff = np.array(source.coeff, copy=True)
+    for ik1 in range(params.N1):
+        for ik2 in range(params.N2):
+            mk1 = (-ik1) % params.N1
+            mk2 = (-ik2) % params.N2
+            phase_changed_coeff[ik1, ik2, :, :, 0, :, :] *= K_phases[
+                ik1,
+                ik2,
+                np.newaxis,
+                :,
+                np.newaxis,
+            ]
+            phase_changed_coeff[ik1, ik2, :, :, 1, :, :] *= np.conj(
+                K_phases[mk1, mk2, np.newaxis, :, np.newaxis]
+            )
+    phase_changed_source = _replace_companion_stage2_coeff(
+        source,
+        phase_changed_coeff,
+    )
+    phase_changed_seed = build_tbg_zero_field_companion_kivc_seed(
+        phase_changed_source,
+        phi=0.43,
+    )
+
+    for ik1 in range(params.N1):
+        for ik2 in range(params.N2):
+            np.testing.assert_allclose(
+                _companion_lifted_kivc_projector(source, seed, ik1, ik2),
+                _companion_lifted_kivc_projector(
+                    phase_changed_source,
+                    phase_changed_seed,
+                    ik1,
+                    ik2,
+                ),
+                rtol=0.0,
+                atol=MAX_VALIDATION_TOLERANCE,
+            )
+
+def test_kwan_eq99_seed_rejects_nonpositive_or_loose_validation_tolerance() -> None:
+    source = solve_tbg_zero_field_companion_single_particle(
+        _small_companion_single_particle_params()
+    )
+    accepted = build_tbg_zero_field_companion_kivc_seed(
+        source,
+        validation_tolerance=MAX_VALIDATION_TOLERANCE,
+    )
+    assert accepted.validation_tolerance == MAX_VALIDATION_TOLERANCE == 1.0e-10
+    for rejected in (
+        0.0,
+        -1.0e-16,
+        np.nextafter(MAX_VALIDATION_TOLERANCE, np.inf),
+        1.0e-9,
+    ):
+        with pytest.raises(
+            ValueError,
+            match=r"validation_tolerance must be > 0 and <= MAX_VALIDATION_TOLERANCE",
+        ):
+            build_tbg_zero_field_companion_kivc_seed(
+                source,
+                validation_tolerance=rejected,
+            )
+
+def test_kwan_eq99_seed_fails_closed_on_Z_gap_and_lifted_pivot_tie() -> None:
+    source = solve_tbg_zero_field_companion_single_particle(
+        _small_companion_single_particle_params()
+    )
+    params = source.params
+
+    baseline = build_tbg_zero_field_companion_kivc_seed(source)
+    with pytest.raises(ValueError, match="phase pivot is tied or near-tied"):
+        build_tbg_zero_field_companion_kivc_seed(
+            source,
+            pivot_tie_relative_tolerance=baseline.pivot_relative_margin_min,
+        )
+
+    tied_parent = np.zeros((params.parent_dimension, 2), dtype=np.complex128)
+    tied_parent[0, 0] = tied_parent[2, 0] = 1.0 / np.sqrt(2.0)
+    tied_parent[1, 1] = tied_parent[3, 1] = 1.0 / np.sqrt(2.0)
+    tied_point = tied_parent.reshape(
+        2 * params.Ng1,
+        2 * params.Ng2,
+        4,
+        2,
+    ).transpose(0, 1, 3, 2)
+    tied_coeff = np.zeros_like(source.coeff)
+    tied_coeff[0, 0, :, :, 0, :, :] = tied_point
+    tied_coeff[0, 0, :, :, 1, :, :] = tied_point
+    tied_source = _replace_companion_stage2_coeff(source, tied_coeff)
+    with pytest.raises(ValueError, match="phase pivot is tied or near-tied"):
+        build_tbg_zero_field_companion_kivc_seed(tied_source)
+
+    gapless_parent = np.zeros((params.parent_dimension, 2), dtype=np.complex128)
+    gapless_parent[0, 0] = gapless_parent[1, 0] = 1.0 / np.sqrt(2.0)
+    gapless_parent[2, 1] = gapless_parent[3, 1] = 1.0 / np.sqrt(2.0)
+    gapless_point = gapless_parent.reshape(
+        2 * params.Ng1,
+        2 * params.Ng2,
+        4,
+        2,
+    ).transpose(0, 1, 3, 2)
+    gapless_coeff = np.zeros_like(source.coeff)
+    gapless_coeff[0, 0, :, :, 0, :, :] = gapless_point
+    gapless_coeff[0, 0, :, :, 1, :, :] = gapless_point
+    gapless_source = _replace_companion_stage2_coeff(source, gapless_coeff)
+    with pytest.raises(ValueError, match="lacks one positive and one negative"):
+        build_tbg_zero_field_companion_kivc_seed(gapless_source)
+
+
+def test_kwan_eq99_seed_live_stage2_source_rehash_fails_on_array_drift() -> None:
+    source = solve_tbg_zero_field_companion_single_particle(
+        _small_companion_single_particle_params()
+    )
+    seed = build_tbg_zero_field_companion_kivc_seed(source)
+    original_value = source.coeff.flat[0].item()
+    try:
+        source.coeff.setflags(write=True)
+        source.coeff.flat[0] = original_value + 1.0e-6
+        source.coeff.setflags(write=False)
+        with pytest.raises(
+            ValueError,
+            match=r"single_particle_source\.coeff no longer matches its source hash",
+        ):
+            _ = seed.fingerprint
+    finally:
+        source.coeff.setflags(write=True)
+        source.coeff.flat[0] = original_value
+        source.coeff.setflags(write=False)
+
+
+
+
+
+# Optional external-authority coverage; the eight tests above are clean-checkout core.
+def test_kwan_eq99_optional_external_authorities_validate_and_detect_drift(
+    tmp_path: Path,
+) -> None:
+    repository_root = Path(__file__).resolve().parents[1]
+    pdf_path = repository_root / KWAN_EQ99_PDF_SOURCE
+    companion_root = repository_root / TBG_ZERO_FIELD_COMPANION_REFERENCE_REPOSITORY
+    authority_files = (
+        pdf_path,
+        companion_root / TBG_ZERO_FIELD_COMPANION_REFERENCE_SOURCE,
+        companion_root / Path(TBG_ZERO_FIELD_COMPANION_PROJECTORS_SOURCE).name,
+        companion_root / Path(TBG_ZERO_FIELD_COMPANION_MEASURE_SOURCE).name,
+    )
+    if not all(path.is_file() for path in authority_files) or not (
+        companion_root / ".git"
+    ).exists():
+        pytest.skip("optional ignored external K-IVC authorities are unavailable")
+
+    validated = validate_tbg_zero_field_companion_kivc_external_authorities(
+        pdf_path,
+        companion_root,
+    )
+    assert validated.paper_pdf == KWAN_EQ99_PDF_SHA256
+    assert validated.single_particle == (
+        TBG_ZERO_FIELD_COMPANION_REFERENCE_SOURCE_SHA256
+    )
+    assert validated.projectors == TBG_ZERO_FIELD_COMPANION_PROJECTORS_SOURCE_SHA256
+    assert validated.measure == TBG_ZERO_FIELD_COMPANION_MEASURE_SOURCE_SHA256
+
+    missing_pdf = tmp_path / "missing-authority.pdf"
+    with pytest.raises(ValueError, match="Pinned Kwan PDF source is unavailable"):
+        validate_tbg_zero_field_companion_kivc_external_authorities(
+            missing_pdf,
+            companion_root,
+        )
+
+    drifted_pdf = tmp_path / pdf_path.name
+    drifted_pdf.write_bytes(pdf_path.read_bytes() + b"\nexternal authority drift\n")
+    with pytest.raises(ValueError, match="Pinned paper_pdf external authority drift"):
+        validate_tbg_zero_field_companion_kivc_external_authorities(
+            drifted_pdf,
+            companion_root,
+        )
 
 # ---------------------------------------------------------------------------
 # Stage-3 source-faithful companion interaction diagnostic
