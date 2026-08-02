@@ -1,9 +1,10 @@
 """Kwan Eq. (99) K-IVC seed diagnostic built from typed Stage-2 data.
 
-This module constructs a source-array-bound pivoted diagnostic projector in the
-companion active-subspace coordinates.  The pivoted frame is bound to the exact
-Stage-2 array hashes; it is neither a cross-eigensolver frame nor a global
-smooth gauge.  The module is intentionally not exported by the zero-field TBG
+This module constructs a source-array-bound ordered-phase-anchor diagnostic
+projector in the companion active-subspace coordinates.  The anchored frame is
+bound to the exact Stage-2 array hashes; it is active-subspace gauge-covariant
+but neither a cross-eigensolver frame nor a global smooth gauge.  The module is
+intentionally not exported by the zero-field TBG
 package front door and is not connected to an HF runner or production path.
 The construction uses Kwan et al. Eq. (99), while the companion checkout
 supplies only the Stage-2 active-subspace coordinates and stored-projector
@@ -47,13 +48,14 @@ from .companion_single_particle import (
 TBG_ZERO_FIELD_COMPANION_KIVC_SEED_SCHEMA: Final[str] = (
     "mean_field.tbg.zero_field.companion_kivc_seed"
 )
-TBG_ZERO_FIELD_COMPANION_KIVC_SEED_SCHEMA_VERSION: Final[int] = 1
+TBG_ZERO_FIELD_COMPANION_KIVC_SEED_SCHEMA_VERSION: Final[int] = 2
 TBG_ZERO_FIELD_COMPANION_KIVC_SEED_SCOPE: Final[str] = (
-    "paper_eq99_source_array_bound_pivoted_diagnostic_not_companion_source_parity_"
-    "not_HF_not_FHS_not_production_result"
+    "paper_eq99_source_array_bound_ordered_phase_anchor_diagnostic_not_companion_"
+    "source_parity_not_HF_not_FHS_not_production_result"
 )
 TBG_ZERO_FIELD_COMPANION_KIVC_FRAME_SCOPE: Final[str] = (
-    "source-array-bound pivoted diagnostic; not cross-eigensolver reproducible; "
+    "source-array-bound ordered phase anchor in exact companion parent order; "
+    "active-subspace gauge-covariant; not cross-eigensolver reproducible; "
     "not a global smooth gauge"
 )
 TBG_ZERO_FIELD_COMPANION_KIVC_BASIS_COVARIANCE_SCOPE: Final[str] = (
@@ -87,14 +89,14 @@ TBG_ZERO_FIELD_COMPANION_KIVC_EXTERNAL_AUTHORITY_FILES: Final[str] = (
 )
 
 TBG_ZERO_FIELD_COMPANION_KIVC_SIGN_GAP_TOLERANCE: Final[float] = 1.0e-8
-# The unstrained finite companion source has symmetry-related microscopic
-# maxima whose stored magnitudes differ only at eigensolver roundoff.  This
-# guard rejects a configured unresolved pivot tie while retaining evidence of
-# the exact source-array margin.  It does not establish cross-eigensolver gauge
-# stability.  Callers may request a stricter nonnegative threshold.
-TBG_ZERO_FIELD_COMPANION_KIVC_PIVOT_NEAR_TIE_RELATIVE_TOLERANCE: Final[float] = (
-    1.0e-16
+# Scan the lifted column in exact companion parent order and anchor its phase to
+# the first component meeting this source-array-bound relative-magnitude floor.
+# A caller may tighten the floor but may neither loosen it nor exceed the
+# mathematical upper bound for a component divided by the vector norm.
+TBG_ZERO_FIELD_COMPANION_KIVC_PHASE_ANCHOR_MIN_RELATIVE_MAGNITUDE: Final[float] = (
+    1.0e-12
 )
+MAX_PHASE_ANCHOR_MIN_RELATIVE_MAGNITUDE: Final[float] = 1.0
 MAX_VALIDATION_TOLERANCE: Final[float] = 1.0e-10
 TBG_ZERO_FIELD_COMPANION_KIVC_VALIDATION_TOLERANCE: Final[float] = (
     MAX_VALIDATION_TOLERANCE
@@ -147,6 +149,22 @@ def _finite_real(value: object, *, name: str, nonnegative: bool = False) -> floa
         raise ValueError(f"{name} must be nonnegative")
     return resolved
 
+
+def _validate_phase_anchor_min_relative_magnitude(value: object) -> float:
+    name = "phase_anchor_min_relative_magnitude"
+    resolved = _finite_real(value, name=name, nonnegative=True)
+    hard_minimum = (
+        TBG_ZERO_FIELD_COMPANION_KIVC_PHASE_ANCHOR_MIN_RELATIVE_MAGNITUDE
+    )
+    if not hard_minimum <= resolved <= MAX_PHASE_ANCHOR_MIN_RELATIVE_MAGNITUDE:
+        raise ValueError(
+            f"{name} must be >= "
+            "TBG_ZERO_FIELD_COMPANION_KIVC_PHASE_ANCHOR_MIN_RELATIVE_MAGNITUDE "
+            f"({hard_minimum:.1e}) and <= "
+            "MAX_PHASE_ANCHOR_MIN_RELATIVE_MAGNITUDE "
+            f"({MAX_PHASE_ANCHOR_MIN_RELATIVE_MAGNITUDE:.1e})"
+        )
+    return resolved
 
 def _json_sha256(payload: object) -> str:
     encoded = json.dumps(
@@ -537,8 +555,8 @@ class TBGZeroFieldCompanionKIVCSeedArrayHashes:
     W_K: str
     W_Kprime: str
     W: str
-    pivot_indices_K: str
-    pivot_relative_margins_K: str
+    anchor_indices_K: str
+    anchor_relative_magnitudes_K: str
     Q_canonical: str
     Q_band: str
     P_conventional: str
@@ -652,36 +670,57 @@ def _validate_stage2_source(
     return actual
 
 
+def _first_phase_anchor(
+    lifted: np.ndarray,
+    *,
+    min_relative_magnitude: float,
+    label: str,
+) -> tuple[int, float, float]:
+    """Return the first qualifying component in companion parent order."""
+
+    lifted_norm = float(np.linalg.norm(lifted))
+    if not math.isfinite(lifted_norm) or lifted_norm == 0.0:
+        raise ValueError(f"{label} has no nonzero lifted microscopic phase anchor")
+    magnitudes = np.abs(lifted)
+    relative_magnitudes = magnitudes / lifted_norm
+    for anchor, relative_magnitude in enumerate(relative_magnitudes):
+        if float(relative_magnitude) >= min_relative_magnitude:
+            return anchor, float(relative_magnitude), float(magnitudes[anchor])
+    raise ValueError(
+        f"{label} has no lifted microscopic phase anchor at or above "
+        f"relative magnitude {min_relative_magnitude:.3e}; maximum is "
+        f"{float(np.max(relative_magnitudes)):.3e}"
+    )
+
 def _phase_frame_column(
     column: np.ndarray,
     parent_coefficients: np.ndarray,
     *,
-    tie_tolerance: float,
+    min_relative_magnitude: float,
     label: str,
 ) -> tuple[np.ndarray, int, float]:
+    # `_parent_coefficients` flattens in exact companion order: species fastest,
+    # then g2, then g1.  A first-match scan therefore needs no maximum or tie.
     lifted = parent_coefficients @ column
-    magnitudes = np.abs(lifted)
-    pivot = int(np.argmax(magnitudes))
-    largest = float(magnitudes[pivot])
-    if largest == 0.0:
-        raise ValueError(f"{label} has no nonzero lifted microscopic pivot")
-    if magnitudes.size < 2:
-        second = 0.0
-    else:
-        second = float(np.partition(magnitudes, -2)[-2])
-    relative_separation = (largest - second) / largest
-    if relative_separation <= tie_tolerance:
-        raise ValueError(
-            f"{label} lifted microscopic phase pivot is tied or near-tied: "
-            f"relative separation {relative_separation:.3e} <= {tie_tolerance:.3e}"
-        )
-    phased = np.asarray(column, dtype=np.complex128) * np.conj(
-        lifted[pivot] / largest
+    anchor, anchor_relative_magnitude, anchor_magnitude = _first_phase_anchor(
+        lifted,
+        min_relative_magnitude=min_relative_magnitude,
+        label=label,
     )
-    pivot_value = (parent_coefficients @ phased)[pivot]
-    if pivot_value.real <= 0.0 or abs(pivot_value.imag) > 1.0e-12 * largest:
-        raise ValueError(f"{label} phase pivot could not be made positive-real")
-    return phased, pivot, relative_separation
+    phased = np.asarray(column, dtype=np.complex128) * np.conj(
+        lifted[anchor] / anchor_magnitude
+    )
+    anchor_value = (parent_coefficients @ phased)[anchor]
+    imaginary_tolerance = max(
+        1.0e-12 * anchor_magnitude,
+        64.0 * np.finfo(np.float64).eps * float(np.linalg.norm(lifted)),
+    )
+    if (
+        anchor_value.real <= 0.0
+        or abs(anchor_value.imag) > imaginary_tolerance
+    ):
+        raise ValueError(f"{label} phase anchor could not be made positive-real")
+    return phased, anchor, anchor_relative_magnitude
 
 
 def _block_frames(W_K: np.ndarray, W_Kprime: np.ndarray) -> np.ndarray:
@@ -763,8 +802,11 @@ _RESULT_ARRAY_LAYOUTS = {
     "W_K": (lambda N1, N2: (N1, N2, 2, 2), np.complex128),
     "W_Kprime": (lambda N1, N2: (N1, N2, 2, 2), np.complex128),
     "W": (lambda N1, N2: (N1, N2, 4, 4), np.complex128),
-    "pivot_indices_K": (lambda N1, N2: (N1, N2, 2), np.int64),
-    "pivot_relative_margins_K": (lambda N1, N2: (N1, N2, 2), np.float64),
+    "anchor_indices_K": (lambda N1, N2: (N1, N2, 2), np.int64),
+    "anchor_relative_magnitudes_K": (
+        lambda N1, N2: (N1, N2, 2),
+        np.float64,
+    ),
     "Q_canonical": (lambda N1, N2: (4, 4), np.complex128),
     "Q_band": (lambda N1, N2: (N1, N2, 4, 4), np.complex128),
     "P_conventional": (lambda N1, N2: (N1, N2, 4, 4), np.complex128),
@@ -792,16 +834,16 @@ class TBGZeroFieldCompanionKIVCSeedResult:
     single_particle_source: TBGZeroFieldCompanionSingleParticleResult
     phi: float
     sign_gap_tolerance: float
-    pivot_tie_relative_tolerance: float
-    pivot_relative_margin_min: float
+    phase_anchor_min_relative_magnitude: float
+    anchor_relative_magnitude_min: float
     validation_tolerance: float
     Z_projected: np.ndarray
     Z_spectra: np.ndarray
     W_K: np.ndarray
     W_Kprime: np.ndarray
     W: np.ndarray
-    pivot_indices_K: np.ndarray
-    pivot_relative_margins_K: np.ndarray
+    anchor_indices_K: np.ndarray
+    anchor_relative_magnitudes_K: np.ndarray
     Q_canonical: np.ndarray
     Q_band: np.ndarray
     P_conventional: np.ndarray
@@ -822,16 +864,31 @@ class TBGZeroFieldCompanionKIVCSeedResult:
     def __post_init__(self) -> None:
         _validate_stage2_source(self.single_particle_source)
         object.__setattr__(self, "phi", _finite_real(self.phi, name="phi"))
-        for name in (
+        object.__setattr__(
+            self,
             "sign_gap_tolerance",
-            "pivot_tie_relative_tolerance",
-            "pivot_relative_margin_min",
-        ):
-            object.__setattr__(
-                self,
-                name,
-                _finite_real(getattr(self, name), name=name, nonnegative=True),
-            )
+            _finite_real(
+                self.sign_gap_tolerance,
+                name="sign_gap_tolerance",
+                nonnegative=True,
+            ),
+        )
+        object.__setattr__(
+            self,
+            "phase_anchor_min_relative_magnitude",
+            _validate_phase_anchor_min_relative_magnitude(
+                self.phase_anchor_min_relative_magnitude
+            ),
+        )
+        object.__setattr__(
+            self,
+            "anchor_relative_magnitude_min",
+            _finite_real(
+                self.anchor_relative_magnitude_min,
+                name="anchor_relative_magnitude_min",
+                nonnegative=True,
+            ),
+        )
         object.__setattr__(
             self,
             "validation_tolerance",
@@ -867,10 +924,12 @@ class TBGZeroFieldCompanionKIVCSeedResult:
             object.__setattr__(self, name, array)
         if TBGZeroFieldCompanionKIVCSeedArrayHashes.from_arrays(arrays) != self.array_hashes:
             raise ValueError("array_hashes do not match K-IVC diagnostic arrays")
-        actual_minimum_margin = float(np.min(arrays["pivot_relative_margins_K"]))
-        if self.pivot_relative_margin_min != actual_minimum_margin:
+        actual_minimum_magnitude = float(
+            np.min(arrays["anchor_relative_magnitudes_K"])
+        )
+        if self.anchor_relative_magnitude_min != actual_minimum_magnitude:
             raise ValueError(
-                "pivot_relative_margin_min does not match pivot margin array"
+                "anchor_relative_magnitude_min does not match anchor magnitude array"
             )
         self._validate_live_state()
 
@@ -897,6 +956,55 @@ class TBGZeroFieldCompanionKIVCSeedResult:
         arrays = self._live_arrays()
         if TBGZeroFieldCompanionKIVCSeedArrayHashes.from_arrays(arrays) != self.array_hashes:
             raise ValueError("K-IVC arrays no longer match their live hashes")
+
+        (
+            reconstructed_arrays,
+            reconstructed_residuals,
+            reconstructed_hashes,
+            reconstructed_anchor_minimum,
+        ) = _reconstruct_kivc_seed_arrays(
+            self.single_particle_source,
+            self.phi,
+            self.sign_gap_tolerance,
+            self.phase_anchor_min_relative_magnitude,
+            self.validation_tolerance,
+        )
+        for name in _RESULT_ARRAY_LAYOUTS:
+            actual = arrays[name]
+            expected = reconstructed_arrays[name]
+            if actual.dtype.kind in "iu":
+                matches_replay = np.array_equal(actual, expected)
+            else:
+                replay_tolerance = (
+                    64.0
+                    * np.finfo(np.float64).eps
+                    * max(1.0, _max_abs(expected))
+                )
+                matches_replay = _max_abs(actual - expected) <= replay_tolerance
+            if not matches_replay:
+                raise ValueError(
+                    f"{name} does not match deterministic Stage-2 semantic replay"
+                )
+        for field in fields(self.array_hashes):
+            if field.name == "convention":
+                continue
+            if getattr(self.array_hashes, field.name) != getattr(
+                reconstructed_hashes,
+                field.name,
+            ):
+                raise ValueError(
+                    f"{field.name} hash does not match deterministic Stage-2 "
+                    "semantic replay"
+                )
+        if self.residuals != reconstructed_residuals:
+            raise ValueError(
+                "residuals do not match deterministic Stage-2 semantic replay"
+            )
+        if self.anchor_relative_magnitude_min != reconstructed_anchor_minimum:
+            raise ValueError(
+                "anchor_relative_magnitude_min does not match deterministic "
+                "Stage-2 semantic replay"
+            )
 
         tolerance = self.validation_tolerance
         if not np.array_equal(arrays["Q_canonical"], kwan_eq99_kivc_q(self.phi)):
@@ -950,14 +1058,83 @@ class TBGZeroFieldCompanionKIVCSeedResult:
                 "stored-projector transform"
             )
         if np.any(
-            arrays["pivot_relative_margins_K"]
-            <= self.pivot_tie_relative_tolerance
+            arrays["anchor_relative_magnitudes_K"]
+            < self.phase_anchor_min_relative_magnitude
         ):
-            raise ValueError("pivot margin no longer exceeds the configured tie threshold")
-        if self.pivot_relative_margin_min != float(
-            np.min(arrays["pivot_relative_margins_K"])
+            raise ValueError(
+                "anchor relative magnitude fell below the configured phase-anchor floor"
+            )
+        for ik1 in range(N1):
+            for ik2 in range(N2):
+                C_K = _parent_coefficients(
+                    self.single_particle_source,
+                    ik1,
+                    ik2,
+                    0,
+                )
+                for canonical_index in range(2):
+                    label = f"K frame ({ik1},{ik2}) anchor receipt"
+                    lifted = C_K @ arrays["W_K"][
+                        ik1,
+                        ik2,
+                        :,
+                        canonical_index,
+                    ]
+                    expected_index, expected_relative_magnitude, anchor_magnitude = (
+                        _first_phase_anchor(
+                            lifted,
+                            min_relative_magnitude=(
+                                self.phase_anchor_min_relative_magnitude
+                            ),
+                            label=label,
+                        )
+                    )
+                    if (
+                        int(arrays["anchor_indices_K"][ik1, ik2, canonical_index])
+                        != expected_index
+                    ):
+                        raise ValueError(
+                            "anchor_indices_K no longer records the first qualifying "
+                            "companion-parent component"
+                        )
+                    stored_relative_magnitude = float(
+                        arrays["anchor_relative_magnitudes_K"][
+                            ik1,
+                            ik2,
+                            canonical_index,
+                        ]
+                    )
+                    if (
+                        abs(
+                            stored_relative_magnitude
+                            - expected_relative_magnitude
+                        )
+                        > tolerance
+                    ):
+                        raise ValueError(
+                            "anchor_relative_magnitudes_K no longer matches the "
+                            "lifted frame"
+                        )
+                    anchor_value = lifted[expected_index]
+                    imaginary_tolerance = max(
+                        1.0e-12 * anchor_magnitude,
+                        64.0
+                        * np.finfo(np.float64).eps
+                        * float(np.linalg.norm(lifted)),
+                    )
+                    if (
+                        anchor_value.real <= 0.0
+                        or abs(anchor_value.imag) > imaginary_tolerance
+                    ):
+                        raise ValueError(
+                            "ordered phase anchor is no longer positive-real"
+                        )
+        if self.anchor_relative_magnitude_min != float(
+            np.min(arrays["anchor_relative_magnitudes_K"])
         ):
-            raise ValueError("pivot_relative_margin_min no longer matches live margins")
+            raise ValueError(
+                "anchor_relative_magnitude_min no longer matches live magnitudes"
+            )
 
         recomputed_residuals = _diagnostic_residuals(arrays)
         if recomputed_residuals != self.residuals:
@@ -998,9 +1175,13 @@ class TBGZeroFieldCompanionKIVCSeedResult:
         return _json_sha256(
             {
                 "array_hashes": self.array_hashes.fingerprint,
+                "anchor_relative_magnitude_min": (
+                    self.anchor_relative_magnitude_min
+                ),
+                "phase_anchor_min_relative_magnitude": (
+                    self.phase_anchor_min_relative_magnitude
+                ),
                 "phi": self.phi,
-                "pivot_relative_margin_min": self.pivot_relative_margin_min,
-                "pivot_tie_relative_tolerance": self.pivot_tie_relative_tolerance,
                 "provenance": self.provenance.fingerprint,
                 "residuals": self.residuals.to_metadata(),
                 "schema": TBG_ZERO_FIELD_COMPANION_KIVC_SEED_SCHEMA,
@@ -1026,9 +1207,17 @@ class TBGZeroFieldCompanionKIVCSeedResult:
             "fingerprint": fingerprint,
             "frame_scope": TBG_ZERO_FIELD_COMPANION_KIVC_FRAME_SCOPE,
             "mapped_U_Tp_validation_scope": TBG_ZERO_FIELD_COMPANION_KIVC_TP_SCOPE,
+            "anchor_relative_magnitude_min": self.anchor_relative_magnitude_min,
+            "phase_anchor_min_relative_magnitude": (
+                self.phase_anchor_min_relative_magnitude
+            ),
+            "phase_anchor_min_relative_magnitude_hard_max": (
+                MAX_PHASE_ANCHOR_MIN_RELATIVE_MAGNITUDE
+            ),
+            "phase_anchor_min_relative_magnitude_hard_min": (
+                TBG_ZERO_FIELD_COMPANION_KIVC_PHASE_ANCHOR_MIN_RELATIVE_MAGNITUDE
+            ),
             "phi": self.phi,
-            "pivot_relative_margin_min": self.pivot_relative_margin_min,
-            "pivot_tie_relative_tolerance": self.pivot_tie_relative_tolerance,
             "provenance": self.provenance.to_metadata(),
             "stage2_array_hashes": {
                 "U_C2T": self.single_particle_source.array_hashes.U_C2T,
@@ -1049,32 +1238,32 @@ class TBGZeroFieldCompanionKIVCSeedResult:
         }
 
 
-def build_tbg_zero_field_companion_kivc_seed(
+def _reconstruct_kivc_seed_arrays(
     single_particle: TBGZeroFieldCompanionSingleParticleResult,
-    *,
-    phi: float = 0.0,
-    sign_gap_tolerance: float = TBG_ZERO_FIELD_COMPANION_KIVC_SIGN_GAP_TOLERANCE,
-    pivot_tie_relative_tolerance: float = (
-        TBG_ZERO_FIELD_COMPANION_KIVC_PIVOT_NEAR_TIE_RELATIVE_TOLERANCE
-    ),
-    validation_tolerance: float = TBG_ZERO_FIELD_COMPANION_KIVC_VALIDATION_TOLERANCE,
-) -> TBGZeroFieldCompanionKIVCSeedResult:
-    """Build the isolated Eq. (99) diagnostic without invoking HF or FHS."""
+    phi: object,
+    sign_gap: object,
+    anchor_threshold: object,
+    validation_tol: object,
+) -> tuple[
+    dict[str, np.ndarray],
+    TBGZeroFieldCompanionKIVCSeedResiduals,
+    TBGZeroFieldCompanionKIVCSeedArrayHashes,
+    float,
+]:
+    """Purely reconstruct every retained Stage-5 array and numerical receipt."""
 
-    source_array_hashes = _validate_stage2_source(single_particle)
+    _validate_stage2_source(single_particle)
     resolved_phi = _finite_real(phi, name="phi")
     sign_tolerance = _finite_real(
-        sign_gap_tolerance,
+        sign_gap,
         name="sign_gap_tolerance",
         nonnegative=True,
     )
-    pivot_tolerance = _finite_real(
-        pivot_tie_relative_tolerance,
-        name="pivot_tie_relative_tolerance",
-        nonnegative=True,
+    anchor_min_relative_magnitude = (
+        _validate_phase_anchor_min_relative_magnitude(anchor_threshold)
     )
     numerical_tolerance = _finite_real(
-        validation_tolerance,
+        validation_tol,
         name="validation_tolerance",
     )
     if sign_tolerance == 0.0:
@@ -1106,8 +1295,11 @@ def build_tbg_zero_field_companion_kivc_seed(
 
     Z_spectra = np.empty((N1, N2, 2, 2), dtype=np.float64)
     W_K = np.empty((N1, N2, 2, 2), dtype=np.complex128)
-    pivot_indices_K = np.empty((N1, N2, 2), dtype=np.int64)
-    pivot_relative_margins_K = np.empty((N1, N2, 2), dtype=np.float64)
+    anchor_indices_K = np.empty((N1, N2, 2), dtype=np.int64)
+    anchor_relative_magnitudes_K = np.empty(
+        (N1, N2, 2),
+        dtype=np.float64,
+    )
     for ik1 in range(N1):
         for ik2 in range(N2):
             eigenvalues, eigenvectors = np.linalg.eigh(Z_projected[ik1, ik2, 0])
@@ -1120,20 +1312,22 @@ def build_tbg_zero_field_companion_kivc_seed(
                 )
             C_K = _parent_coefficients(single_particle, ik1, ik2, 0)
             for canonical_index, eigen_index in enumerate((1, 0)):
-                phased, pivot, relative_margin = _phase_frame_column(
+                phased, anchor, anchor_relative_magnitude = _phase_frame_column(
                     eigenvectors[:, eigen_index],
                     C_K,
-                    tie_tolerance=pivot_tolerance,
+                    min_relative_magnitude=anchor_min_relative_magnitude,
                     label=(
                         f"K frame ({ik1},{ik2}) "
                         f"{'Z+' if canonical_index == 0 else 'Z-'}"
                     ),
                 )
                 W_K[ik1, ik2, :, canonical_index] = phased
-                pivot_indices_K[ik1, ik2, canonical_index] = pivot
-                pivot_relative_margins_K[ik1, ik2, canonical_index] = (
-                    relative_margin
-                )
+                anchor_indices_K[ik1, ik2, canonical_index] = anchor
+                anchor_relative_magnitudes_K[
+                    ik1,
+                    ik2,
+                    canonical_index,
+                ] = anchor_relative_magnitude
             Z_spectra[ik1, ik2, 0] = (positive, negative)
 
     W_Kprime = np.empty_like(W_K)
@@ -1232,8 +1426,8 @@ def build_tbg_zero_field_companion_kivc_seed(
         "W_K": W_K,
         "W_Kprime": W_Kprime,
         "W": W,
-        "pivot_indices_K": pivot_indices_K,
-        "pivot_relative_margins_K": pivot_relative_margins_K,
+        "anchor_indices_K": anchor_indices_K,
+        "anchor_relative_magnitudes_K": anchor_relative_magnitudes_K,
         "Q_canonical": Q_canonical,
         "Q_band": Q_band,
         "P_conventional": P_conventional,
@@ -1250,6 +1444,8 @@ def build_tbg_zero_field_companion_kivc_seed(
         "companion_measure_Tp_residuals": companion_measure_Tp_residuals,
         "chern_balance_trace": chern_balance_trace,
     }
+    if set(arrays) != set(_RESULT_ARRAY_LAYOUTS):
+        raise RuntimeError("Internal K-IVC reconstruction array inventory drifted")
     if any(not np.all(np.isfinite(array)) for array in arrays.values()):
         raise ValueError("K-IVC diagnostic produced nonfinite arrays")
     residuals = _diagnostic_residuals(arrays)
@@ -1260,6 +1456,60 @@ def build_tbg_zero_field_companion_kivc_seed(
                 f"{getattr(residuals, field.name):.3e}"
             )
 
+    array_hashes = TBGZeroFieldCompanionKIVCSeedArrayHashes.from_arrays(arrays)
+    anchor_relative_magnitude_min = float(
+        np.min(anchor_relative_magnitudes_K)
+    )
+    return arrays, residuals, array_hashes, anchor_relative_magnitude_min
+
+def build_tbg_zero_field_companion_kivc_seed(
+    single_particle: TBGZeroFieldCompanionSingleParticleResult,
+    *,
+    phi: float = 0.0,
+    sign_gap_tolerance: float = TBG_ZERO_FIELD_COMPANION_KIVC_SIGN_GAP_TOLERANCE,
+    phase_anchor_min_relative_magnitude: float = (
+        TBG_ZERO_FIELD_COMPANION_KIVC_PHASE_ANCHOR_MIN_RELATIVE_MAGNITUDE
+    ),
+    validation_tolerance: float = TBG_ZERO_FIELD_COMPANION_KIVC_VALIDATION_TOLERANCE,
+) -> TBGZeroFieldCompanionKIVCSeedResult:
+    """Build the isolated Eq. (99) diagnostic without invoking HF or FHS."""
+
+    source_array_hashes = _validate_stage2_source(single_particle)
+    resolved_phi = _finite_real(phi, name="phi")
+    sign_tolerance = _finite_real(
+        sign_gap_tolerance,
+        name="sign_gap_tolerance",
+        nonnegative=True,
+    )
+    anchor_min_relative_magnitude = (
+        _validate_phase_anchor_min_relative_magnitude(
+            phase_anchor_min_relative_magnitude
+        )
+    )
+    numerical_tolerance = _finite_real(
+        validation_tolerance,
+        name="validation_tolerance",
+    )
+    if sign_tolerance == 0.0:
+        raise ValueError("sign_gap_tolerance must be positive")
+    if not 0.0 < numerical_tolerance <= MAX_VALIDATION_TOLERANCE:
+        raise ValueError(
+            "validation_tolerance must be > 0 and <= "
+            f"MAX_VALIDATION_TOLERANCE ({MAX_VALIDATION_TOLERANCE:.1e})"
+        )
+
+    (
+        arrays,
+        residuals,
+        array_hashes,
+        anchor_relative_magnitude_min,
+    ) = _reconstruct_kivc_seed_arrays(
+        single_particle,
+        resolved_phi,
+        sign_tolerance,
+        anchor_min_relative_magnitude,
+        numerical_tolerance,
+    )
     source_hashes = TBGZeroFieldCompanionKIVCSourceHashes.from_pinned_metadata()
     provenance = TBGZeroFieldCompanionKIVCSeedProvenance(
         phi=resolved_phi,
@@ -1267,13 +1517,12 @@ def build_tbg_zero_field_companion_kivc_seed(
         stage2_array_hashes_fingerprint=source_array_hashes.fingerprint,
         source_hashes=source_hashes,
     )
-    array_hashes = TBGZeroFieldCompanionKIVCSeedArrayHashes.from_arrays(arrays)
     return TBGZeroFieldCompanionKIVCSeedResult(
         single_particle_source=single_particle,
         phi=resolved_phi,
         sign_gap_tolerance=sign_tolerance,
-        pivot_tie_relative_tolerance=pivot_tolerance,
-        pivot_relative_margin_min=float(np.min(pivot_relative_margins_K)),
+        phase_anchor_min_relative_magnitude=anchor_min_relative_magnitude,
+        anchor_relative_magnitude_min=anchor_relative_magnitude_min,
         validation_tolerance=numerical_tolerance,
         residuals=residuals,
         provenance=provenance,
@@ -1287,6 +1536,7 @@ __all__ = [
     "KWAN_EQ99_PDF_SHA256",
     "KWAN_EQ99_PDF_SOURCE",
     "KWAN_EQ99_REFERENCE",
+    "MAX_PHASE_ANCHOR_MIN_RELATIVE_MAGNITUDE",
     "MAX_VALIDATION_TOLERANCE",
     "TBGZeroFieldCompanionKIVCSeedArrayHashes",
     "TBGZeroFieldCompanionKIVCSeedProvenance",
@@ -1300,7 +1550,7 @@ __all__ = [
     "TBG_ZERO_FIELD_COMPANION_KIVC_COMPANION_MEASURE_TP_SCOPE",
     "TBG_ZERO_FIELD_COMPANION_KIVC_EXTERNAL_AUTHORITY_FILES",
     "TBG_ZERO_FIELD_COMPANION_KIVC_FRAME_SCOPE",
-    "TBG_ZERO_FIELD_COMPANION_KIVC_PIVOT_NEAR_TIE_RELATIVE_TOLERANCE",
+    "TBG_ZERO_FIELD_COMPANION_KIVC_PHASE_ANCHOR_MIN_RELATIVE_MAGNITUDE",
     "TBG_ZERO_FIELD_COMPANION_KIVC_SEED_SCHEMA",
     "TBG_ZERO_FIELD_COMPANION_KIVC_SEED_SCHEMA_VERSION",
     "TBG_ZERO_FIELD_COMPANION_KIVC_SEED_SCOPE",

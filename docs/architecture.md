@@ -119,6 +119,10 @@ The zero-field TBG port now has three explicit layers instead of one large `hf.p
 - `systems/tbg/finite_field/hf.py`: a thin TBG adapter. It computes/validates TBG K/K′ `MagneticSpectrumResult` objects, expands TBG valley overlaps into the generic spin/valley HF basis, supplies TBG magnetic k-vectors/normalization, and exposes paper/Fig.6 convenience APIs. It must not own the finite-B HF calculation itself; new finite-B HF capabilities should be added to `core/hf/finite_field.py` and then connected here.
 - `systems/tbg/zero_field/runners.py` and `hf_runners.py`: benchmark-facing orchestration and path-band diagnostics.
 
+### Pinned-source parity compatibility exception
+
+`systems/tbg/zero_field/companion_hf_scf.py` may duplicate the pinned reference Aufbau and ODA sequence only because the current core HF engine cannot express the source branch order, pre-mix convergence norm, strict zero-based minimum-iteration condition, and finalization sequence exactly. This exception is confined to a diagnostic/test compatibility lane: it must not become a package front door, production path, or place for new physics. Any reusable SCF or ODA capability change still belongs in `core/hf/`.
+
 This is the intended direction for future systems. A new graphene stacking should first try to reuse `core/hf/`, then add its own `systems/<name>/...` physics layer, and only after that add benchmark or CLI workflows.
 
 ## Script and devtool surface

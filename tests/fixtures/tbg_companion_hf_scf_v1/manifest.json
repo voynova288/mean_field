@@ -1,0 +1,891 @@
+{
+  "array_hash_convention": "sha256_little_endian_int64_shape_then_C_order_little_endian_array_bytes",
+  "array_hash_semantics": "source_fixture_integrity_and_same_environment_parity_not_production_result",
+  "arrays": {
+    "P_ref": {
+      "dtype": "<c16",
+      "sha256": "254777bb0dd7d352a6ad6594c4a8d2dfb4788e0ef9fbc673dadda49e8c67da04",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "final_H_D_ev": {
+      "dtype": "<c16",
+      "sha256": "dea0d3c06fd25a6263a347fd13dd0aacf5f9883f68d7ea01bbc3935ca5f330a9",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "final_H_E_ev": {
+      "dtype": "<c16",
+      "sha256": "f0e00d3485097e5bf4b6f18cdb038edd4bb005ee8a55597bbedf0b8406b4489e",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "final_H_ev": {
+      "dtype": "<c16",
+      "sha256": "3eeadc299b25d69ddf40948c979771f4ff3f71ef3ad340e9d7fd8f234206841d",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "final_P_mixed": {
+      "dtype": "<c16",
+      "sha256": "811f288d0071749ff73eedbf887a125fb38dd3355ec3e250e3788ad9a4f810f6",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "final_P_raw": {
+      "dtype": "<c16",
+      "sha256": "3397ae4bceb63d3928d666e3b8dadec0fd200b9625bb8fef5b800e62529be9bf",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "final_closure_difference": {
+      "dtype": "<f8",
+      "sha256": "06a4cdc1fb924ea280979a19a854d3467f447cb7bad355458773760b9d0c7ebd",
+      "shape": []
+    },
+    "final_eigenvalues_ev": {
+      "dtype": "<f8",
+      "sha256": "dfa2e61d0e5e620d13d6b750b56f3ff619c92ceeee131c1ab6355f865c7c43e9",
+      "shape": [
+        48
+      ]
+    },
+    "final_energy_ev": {
+      "dtype": "<f8",
+      "sha256": "07d8bf59a112fb740c90c02c3afd2f6065ef8fa97201924040a78976c0c8e4f1",
+      "shape": [
+        4
+      ]
+    },
+    "final_fill_indices": {
+      "dtype": "<i8",
+      "sha256": "c1a2e136ae2f938452d6c2d5f1fa0ec860f44c35e241f9f57490e377318c8df1",
+      "shape": [
+        24
+      ]
+    },
+    "final_source_difference": {
+      "dtype": "<f8",
+      "sha256": "06a4cdc1fb924ea280979a19a854d3467f447cb7bad355458773760b9d0c7ebd",
+      "shape": []
+    },
+    "final_source_energy_ev": {
+      "dtype": "<f8",
+      "sha256": "192c3b8781a25dddba5f917c07562514286d5b675fe2b8c218dec2223ba4a59d",
+      "shape": []
+    },
+    "final_source_flavor_occupations": {
+      "dtype": "<f8",
+      "sha256": "a902aa53568bd90fe745f0379339d1d40614e11162fc6d9c61327df780249e0d",
+      "shape": [
+        2,
+        2
+      ]
+    },
+    "final_source_gap_ev": {
+      "dtype": "<f8",
+      "sha256": "44d5095f549803269f7ed222ed06d6dcc7b6dd06cf6bd71c22cc4ef9057202aa",
+      "shape": []
+    },
+    "final_source_ivc": {
+      "dtype": "<f8",
+      "sha256": "63b40e0afd1ba3202cca2627c3a3610c357171c0e4109db307a287891218e080",
+      "shape": []
+    },
+    "final_source_local_occupations": {
+      "dtype": "<i8",
+      "sha256": "22ebfb142618aaef177a365a5acb1eac94ad7689d9f070038b1294a495a4b42a",
+      "shape": [
+        2,
+        3,
+        2
+      ]
+    },
+    "final_source_spin_polarization": {
+      "dtype": "<f8",
+      "sha256": "597c2b469cbcbf8badfc438f75975091d0fe7ed1117bc468972dc2c1ea49ec19",
+      "shape": []
+    },
+    "final_source_tp_break": {
+      "dtype": "<f8",
+      "sha256": "e5897ed16004d9100ad2f95077b48e8e743ac76e17fab2c581440fcb89e62ee4",
+      "shape": []
+    },
+    "final_source_valley_polarization": {
+      "dtype": "<f8",
+      "sha256": "8c746b2ff5541c851fc6e7db7f1a3577170b25b688740ef530f2dbfb88df3cc3",
+      "shape": []
+    },
+    "history_branches": {
+      "dtype": "<U13",
+      "sha256": "8a5e0ca896a7b4030b89c891d16058cbf25f88eb8582ac180b106abc61928d61",
+      "shape": [
+        4
+      ]
+    },
+    "history_coefficients": {
+      "dtype": "<f8",
+      "sha256": "af550553f51d943fe965d6960e47b22361cb60761bbcdcce2dc88c161dbd7368",
+      "shape": [
+        4,
+        6
+      ]
+    },
+    "history_differences": {
+      "dtype": "<f8",
+      "sha256": "c4dd288b27b0952b68d18edf92c07ee5a69b6dbf277f06bc1a08cf7d9aa033c7",
+      "shape": [
+        4
+      ]
+    },
+    "history_energies_ev": {
+      "dtype": "<f8",
+      "sha256": "3aa6fb8fa5f8a26a758d96c9336d232c6b03490ec2fc380b340cde31fe758a91",
+      "shape": [
+        4,
+        4
+      ]
+    },
+    "history_positive_linear": {
+      "dtype": "|b1",
+      "sha256": "1acd855e4657b0c3f4e203d3452dbfd1cf66eff0101b0ac539f0570f06990f9c",
+      "shape": [
+        4
+      ]
+    },
+    "initial_P": {
+      "dtype": "<c16",
+      "sha256": "f458298de7f722d6026a4c3ac68e15c9ad3081a70bc1944deefeb7bf2eef5972",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_000_H_D_dP_ev": {
+      "dtype": "<c16",
+      "sha256": "e17b093fa8949d1ceba1bafdca6453010ea0ecaa3b9061decb3fc00d74058643",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_000_H_D_mixed_ev": {
+      "dtype": "<c16",
+      "sha256": "d23da6d2e6742e60e9e24f8b515289108a465e8f58add3b1804cd1605d927818",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_000_H_D_old_ev": {
+      "dtype": "<c16",
+      "sha256": "c9bb5c034767cff8265143c85ad3f9d562134f6cc0a2dc3b59cd02950f4b6cd2",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_000_H_E_dP_ev": {
+      "dtype": "<c16",
+      "sha256": "6cbffe7a33070a1a8451f44b4e78aa63b021ebc5e002024bb3c45b0432eeffec",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_000_H_E_mixed_ev": {
+      "dtype": "<c16",
+      "sha256": "63a8d2225e575a2abe3cfd4420623767ddb746d7289b0539304bdf9b814e28a4",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_000_H_E_old_ev": {
+      "dtype": "<c16",
+      "sha256": "0eb43c7315373a311b7dd58f1086503efa077fc8a7f163412099647c83d8a285",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_000_H_old_ev": {
+      "dtype": "<c16",
+      "sha256": "940db9a24e1163d47879439267b4ee5691e6ad4abd0e65f48b5f3ad50755aa95",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_000_P_mixed": {
+      "dtype": "<c16",
+      "sha256": "58ad604de1bfbbd1890bae57eb302b6862e0dfaa242f12b66af599fb8e7103ee",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_000_P_old": {
+      "dtype": "<c16",
+      "sha256": "f458298de7f722d6026a4c3ac68e15c9ad3081a70bc1944deefeb7bf2eef5972",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_000_P_raw": {
+      "dtype": "<c16",
+      "sha256": "58ad604de1bfbbd1890bae57eb302b6862e0dfaa242f12b66af599fb8e7103ee",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_000_branch": {
+      "dtype": "<U13",
+      "sha256": "f4fe8949d3e868ca43aa7916b79d6d7e64c5067fdbd9dc6f286fe2aaad412a33",
+      "shape": []
+    },
+    "iter_000_coefficients": {
+      "dtype": "<f8",
+      "sha256": "583f8d667ca7a6d36ffc858280ef65c1487461d2aef0b543579001fc3bb041a6",
+      "shape": [
+        6
+      ]
+    },
+    "iter_000_difference": {
+      "dtype": "<f8",
+      "sha256": "a430c6712fc300c060ffaa17b1779dbe5ff00ab63e0472b846e4363b6214539f",
+      "shape": []
+    },
+    "iter_000_eigenvalues_ev": {
+      "dtype": "<f8",
+      "sha256": "e402846c171e1b13dd1e0e8acbea7cb7264883e2b8c447184ba281015b14706f",
+      "shape": [
+        48
+      ]
+    },
+    "iter_000_energy_ev": {
+      "dtype": "<f8",
+      "sha256": "922cd4b464070c454dc4281f78a134bd8e0dfd216ad49cb8ed4abb3637f8dc3e",
+      "shape": [
+        4
+      ]
+    },
+    "iter_000_fill_indices": {
+      "dtype": "<i8",
+      "sha256": "373e8f872f21b9bdfec37da8e7f1a314cc6ae8fb552f7d8f038dab4cdd726c07",
+      "shape": [
+        24
+      ]
+    },
+    "iter_000_positive_linear": {
+      "dtype": "|b1",
+      "sha256": "a536aa3cede6ea3c1f3e0357c3c60e0f216a8c89b853df13b29daa8f85065dfb",
+      "shape": []
+    },
+    "iter_001_H_D_dP_ev": {
+      "dtype": "<c16",
+      "sha256": "9171cae690697f9d1ab8d0ed59b4a4e661671e49def03ffa32d2c7dff11b69e5",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_001_H_D_mixed_ev": {
+      "dtype": "<c16",
+      "sha256": "af642ad5974bfe36ca7d4a64cd4aadc8b4e0d6e63cb20ba8ba488bea96205caa",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_001_H_D_old_ev": {
+      "dtype": "<c16",
+      "sha256": "d23da6d2e6742e60e9e24f8b515289108a465e8f58add3b1804cd1605d927818",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_001_H_E_dP_ev": {
+      "dtype": "<c16",
+      "sha256": "1f87011b430aabe6339e4fe0dde555854f325f9b9c33edc093552819cc83d313",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_001_H_E_mixed_ev": {
+      "dtype": "<c16",
+      "sha256": "a69253908fb552a8bcc0dbe3b8a65b0a1769b91574e509ad805381adda48fb2b",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_001_H_E_old_ev": {
+      "dtype": "<c16",
+      "sha256": "63a8d2225e575a2abe3cfd4420623767ddb746d7289b0539304bdf9b814e28a4",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_001_H_old_ev": {
+      "dtype": "<c16",
+      "sha256": "f184851ca7e27412040ec863836b937464a9e2099d9e25a11fb938b584e65342",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_001_P_mixed": {
+      "dtype": "<c16",
+      "sha256": "726bf45b54883e63beafdd6f7dce9607624a6dc44f3fe35ad54e02c8a5ff3318",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_001_P_old": {
+      "dtype": "<c16",
+      "sha256": "58ad604de1bfbbd1890bae57eb302b6862e0dfaa242f12b66af599fb8e7103ee",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_001_P_raw": {
+      "dtype": "<c16",
+      "sha256": "726bf45b54883e63beafdd6f7dce9607624a6dc44f3fe35ad54e02c8a5ff3318",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_001_branch": {
+      "dtype": "<U13",
+      "sha256": "f4fe8949d3e868ca43aa7916b79d6d7e64c5067fdbd9dc6f286fe2aaad412a33",
+      "shape": []
+    },
+    "iter_001_coefficients": {
+      "dtype": "<f8",
+      "sha256": "6f89631ca7fdb8563647c588939c5668a68208d83516ee1e466a1ed543526012",
+      "shape": [
+        6
+      ]
+    },
+    "iter_001_difference": {
+      "dtype": "<f8",
+      "sha256": "278362992922c9883c2cff71c586e09b0979d22db98cd5ca090968508fea516f",
+      "shape": []
+    },
+    "iter_001_eigenvalues_ev": {
+      "dtype": "<f8",
+      "sha256": "0692d38800145afbbca9cdff94b336e0f1b9d7bde6926ae354230d7c2d15f9c8",
+      "shape": [
+        48
+      ]
+    },
+    "iter_001_energy_ev": {
+      "dtype": "<f8",
+      "sha256": "2bc00c9e4d3d1e18fec468779bc40646cc365a8c5c0d373c90a7ead34e524118",
+      "shape": [
+        4
+      ]
+    },
+    "iter_001_fill_indices": {
+      "dtype": "<i8",
+      "sha256": "0ed0565c0baa0dd7c5b71d005b88de012fe6f496bb6345a3bfb629ac5ea82901",
+      "shape": [
+        24
+      ]
+    },
+    "iter_001_positive_linear": {
+      "dtype": "|b1",
+      "sha256": "a536aa3cede6ea3c1f3e0357c3c60e0f216a8c89b853df13b29daa8f85065dfb",
+      "shape": []
+    },
+    "iter_002_H_D_dP_ev": {
+      "dtype": "<c16",
+      "sha256": "b8d91b9b44d51e4f831796a3977b977f078e0438bc2f849c87b537b7ff10cef4",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_002_H_D_mixed_ev": {
+      "dtype": "<c16",
+      "sha256": "9a4c4af30701bfbd02f79912a31384bd8e6060e091d0424a372c0ee99861cd87",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_002_H_D_old_ev": {
+      "dtype": "<c16",
+      "sha256": "af642ad5974bfe36ca7d4a64cd4aadc8b4e0d6e63cb20ba8ba488bea96205caa",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_002_H_E_dP_ev": {
+      "dtype": "<c16",
+      "sha256": "ef9c1e8685f5ce8908d2077edb8f71dd505853c6985301bcf9d2bd91b4810f6a",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_002_H_E_mixed_ev": {
+      "dtype": "<c16",
+      "sha256": "ea36b2d03fb8faba4ce1af45008bd1a61d22d0b42652bf5c55cbb9e107e2eb61",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_002_H_E_old_ev": {
+      "dtype": "<c16",
+      "sha256": "a69253908fb552a8bcc0dbe3b8a65b0a1769b91574e509ad805381adda48fb2b",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_002_H_old_ev": {
+      "dtype": "<c16",
+      "sha256": "dac55d858fb7980a9870e58a138c43a283a0c0a207256b02fae967ccd83606c6",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_002_P_mixed": {
+      "dtype": "<c16",
+      "sha256": "9d8fefb620104a20d94b2b54eaf82acea69a6d6d2e09cb5ef8c9f0b202aa183f",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_002_P_old": {
+      "dtype": "<c16",
+      "sha256": "726bf45b54883e63beafdd6f7dce9607624a6dc44f3fe35ad54e02c8a5ff3318",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_002_P_raw": {
+      "dtype": "<c16",
+      "sha256": "9d8fefb620104a20d94b2b54eaf82acea69a6d6d2e09cb5ef8c9f0b202aa183f",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_002_branch": {
+      "dtype": "<U13",
+      "sha256": "f4fe8949d3e868ca43aa7916b79d6d7e64c5067fdbd9dc6f286fe2aaad412a33",
+      "shape": []
+    },
+    "iter_002_coefficients": {
+      "dtype": "<f8",
+      "sha256": "72845c79671c7991e9d61ac6fd53d5547c4df5006c9011fcab7d451b0dc338be",
+      "shape": [
+        6
+      ]
+    },
+    "iter_002_difference": {
+      "dtype": "<f8",
+      "sha256": "fb1585a75116915c37f02640a6685fdad0a431ec94cc58237248213386c4365c",
+      "shape": []
+    },
+    "iter_002_eigenvalues_ev": {
+      "dtype": "<f8",
+      "sha256": "181b0c18a825113d4fc96488733793a78e2f88a760e05668edff48463b1ca43c",
+      "shape": [
+        48
+      ]
+    },
+    "iter_002_energy_ev": {
+      "dtype": "<f8",
+      "sha256": "bea9be066b4d47259049b4fcdd75a7fe0d17dfbe95e8b3ccc037f9d8c202fc62",
+      "shape": [
+        4
+      ]
+    },
+    "iter_002_fill_indices": {
+      "dtype": "<i8",
+      "sha256": "02dabe6dccc9df0fa8156ff154860c7a83642ca9116bbc051a04bc5b81794003",
+      "shape": [
+        24
+      ]
+    },
+    "iter_002_positive_linear": {
+      "dtype": "|b1",
+      "sha256": "a536aa3cede6ea3c1f3e0357c3c60e0f216a8c89b853df13b29daa8f85065dfb",
+      "shape": []
+    },
+    "iter_003_H_D_dP_ev": {
+      "dtype": "<c16",
+      "sha256": "5407ca45cf57502ef1a0286ec597042b06e9fe53a1ccf283c6ef8f72be588e85",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_003_H_D_mixed_ev": {
+      "dtype": "<c16",
+      "sha256": "dea0d3c06fd25a6263a347fd13dd0aacf5f9883f68d7ea01bbc3935ca5f330a9",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_003_H_D_old_ev": {
+      "dtype": "<c16",
+      "sha256": "9a4c4af30701bfbd02f79912a31384bd8e6060e091d0424a372c0ee99861cd87",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_003_H_E_dP_ev": {
+      "dtype": "<c16",
+      "sha256": "0798eff0700efc1e6c9ede5f1f9b28bbb3ece525ff8e58d063fc671004674b72",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_003_H_E_mixed_ev": {
+      "dtype": "<c16",
+      "sha256": "f0e00d3485097e5bf4b6f18cdb038edd4bb005ee8a55597bbedf0b8406b4489e",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_003_H_E_old_ev": {
+      "dtype": "<c16",
+      "sha256": "ea36b2d03fb8faba4ce1af45008bd1a61d22d0b42652bf5c55cbb9e107e2eb61",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_003_H_old_ev": {
+      "dtype": "<c16",
+      "sha256": "992196f88f3fd6f1a80f97e8348f1f6ee0c568e63ba0b867c1c31e85f36de754",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_003_P_mixed": {
+      "dtype": "<c16",
+      "sha256": "811f288d0071749ff73eedbf887a125fb38dd3355ec3e250e3788ad9a4f810f6",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_003_P_old": {
+      "dtype": "<c16",
+      "sha256": "9d8fefb620104a20d94b2b54eaf82acea69a6d6d2e09cb5ef8c9f0b202aa183f",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_003_P_raw": {
+      "dtype": "<c16",
+      "sha256": "811f288d0071749ff73eedbf887a125fb38dd3355ec3e250e3788ad9a4f810f6",
+      "shape": [
+        2,
+        3,
+        2,
+        4,
+        4
+      ]
+    },
+    "iter_003_branch": {
+      "dtype": "<U13",
+      "sha256": "f4fe8949d3e868ca43aa7916b79d6d7e64c5067fdbd9dc6f286fe2aaad412a33",
+      "shape": []
+    },
+    "iter_003_coefficients": {
+      "dtype": "<f8",
+      "sha256": "08081b659d7d9a722032a3922c0f018648e7d7492136fcadee9e70e9390d56e0",
+      "shape": [
+        6
+      ]
+    },
+    "iter_003_difference": {
+      "dtype": "<f8",
+      "sha256": "ba191e5f929e22a32c4ac4fdd3726dcd8f907cbd97a2b7d313215be2659c43cb",
+      "shape": []
+    },
+    "iter_003_eigenvalues_ev": {
+      "dtype": "<f8",
+      "sha256": "9a31315066373157a02da82f641e0ace5aa6dd1f71a1716f7c1cad7fd08afff6",
+      "shape": [
+        48
+      ]
+    },
+    "iter_003_energy_ev": {
+      "dtype": "<f8",
+      "sha256": "07d8bf59a112fb740c90c02c3afd2f6065ef8fa97201924040a78976c0c8e4f1",
+      "shape": [
+        4
+      ]
+    },
+    "iter_003_fill_indices": {
+      "dtype": "<i8",
+      "sha256": "c1a2e136ae2f938452d6c2d5f1fa0ec860f44c35e241f9f57490e377318c8df1",
+      "shape": [
+        24
+      ]
+    },
+    "iter_003_positive_linear": {
+      "dtype": "|b1",
+      "sha256": "a536aa3cede6ea3c1f3e0357c3c60e0f216a8c89b853df13b29daa8f85065dfb",
+      "shape": []
+    }
+  },
+  "environment": {
+    "byteorder": "little",
+    "numpy": "2.3.5",
+    "platform": "Linux-5.14.0-611.5.1.el9_7.x86_64-x86_64-with-glibc2.34",
+    "python": "3.13.9",
+    "zlib_compile": "1.3.1",
+    "zlib_runtime": "1.3.1"
+  },
+  "fixture_npz": "fixture.npz",
+  "fixture_npz_sha256": "ec0f6d891540df3e290324ca6803b6209db51efd6ba6d31bbd838cb7fba5f56b",
+  "fixture_schema": "mean_field.tbg.companion_hf_scf.source_fixture",
+  "fixture_schema_version": 1,
+  "generator_script": "generate_fixture.py",
+  "generator_script_sha256": "c2d34372c3e490a79ab27370f3ae8167fe946cad4944663cf75942b41d03ad74",
+  "pinned_source": {
+    "main_program": {
+      "path": "reference/TBG-HF/mainProgram.py",
+      "sha256": "258c97e57164055de3273ba4471cd96be709c1f159e19f73481750c801aed401"
+    },
+    "measure": {
+      "path": "reference/TBG-HF/measure.py",
+      "sha256": "d1a47420400c3381247f4bc8c2e7700935077536b7782a14e52e1d25a1fd516e"
+    },
+    "projectors": {
+      "path": "reference/TBG-HF/projectors.py",
+      "sha256": "d7c7138ddf2107a71c24194ac70790bd27cdc05297ee9cdc997c1dc3882e5ede"
+    },
+    "reference_commit": "0d2a3d742aa901fa45ce46690c1385887165f58c",
+    "reference_repository": "reference/TBG-HF",
+    "routines": {
+      "path": "reference/TBG-HF/routines.py",
+      "sha256": "507e8b9e799f494777d354c9d7d481dd19d6ba42894d393630dd79ef16d02108"
+    },
+    "source_line_ranges": {
+      "mainProgram.ODA": "120-136",
+      "mainProgram.SCF_and_final_rebuild": "104-167",
+      "measure.boost0_Tp_and_observables": "5-14,35-72",
+      "projectors.average_central": "80-87",
+      "routines.aufbau": "155-198",
+      "routines.calc_E": "81-97",
+      "routines.calc_fock_matrix": "99-153"
+    }
+  },
+  "scf_input": {
+    "HF_itermax": 4,
+    "HF_itermin": 20,
+    "HF_tolerance": 1e-08,
+    "HF_type": "ODA",
+    "ODA_branch_threshold": 1e-12,
+    "filling": 0
+  },
+  "scf_input_sha256": "20271f8b1725bb51965e95c9da0ed782285e3dc977c64aa8a5ffd737a63e8296",
+  "scope": "four_iteration_source_oracle_not_production_HF_TDHF_or_Fig8",
+  "stage4_fixture": {
+    "array_sha256": {
+      "P": "f458298de7f722d6026a4c3ac68e15c9ad3081a70bc1944deefeb7bf2eef5972",
+      "P_ref": "254777bb0dd7d352a6ad6594c4a8d2dfb4788e0ef9fbc673dadda49e8c67da04",
+      "source_H_D_ev": "c9bb5c034767cff8265143c85ad3f9d562134f6cc0a2dc3b59cd02950f4b6cd2",
+      "source_H_E_ev": "0eb43c7315373a311b7dd58f1086503efa077fc8a7f163412099647c83d8a285",
+      "source_H_SP_ev": "3574afb01bbeff87cd16e733e3f8bd86ace1de3d09996817a81f7efdd34cbb6d",
+      "source_M_ev": "13e891267f78bea66ebc6559dd0f3990f65db0de52cb6916e038e48e6d5ab5f2",
+      "source_coeff": "666d106e52bf130ac341e0c706ae08472e6cdd506a93662bc03bb6fb920c9add",
+      "source_energy_ev": "f6f9c96c6750d4f8cea14cd886b02a250ea1a0874782bff8f2e81dc9d4169447",
+      "source_form": "ed65815ef55f8f7b4e4e6d99e932fd6b60c8762782c6d3978670be97db323bf0",
+      "source_form_branch": "df9d591c4b439d156805c7798ba20eb7cdb044e86caafd1de9609cce8d71eb4d",
+      "source_form_raw": "554b56e7d4a0e85da5a9ccf0bf53f8eb614cdcd512450666f3f45551b11635e8",
+      "source_raw_intFT_ev": "e70889243a36bc4b294b6264b990f8204b29d5d40db23b9fe6fcb8c7e486db26",
+      "source_screened_intFT_ev": "b51a70c2296e262cef65bef525991585bc08e29a9c7a119c62f26dd87aa981f4",
+      "source_sp_energy_ev": "7e2628b33b1b1ed5f336238ebbfaa76206ae3c7c3d4f5dab12fad26f9a4df549",
+      "source_tVE_ev": "1110dd453f43d6be62797990f39aa3356461e3acbe0f1becdd846df032ea266e"
+    },
+    "directory": "tests/fixtures/tbg_companion_hf_action_v1",
+    "fixture_npz_sha256": "fc2e916cf3cfee9a69eebec79d6494106f3dcdbe80d823d19d03fea9031a6eac",
+    "generator_sha256": "3e084ed78a782d9b414836f16baee2e9be37b931f0cf4acc7be6fe69d4c53ce8",
+    "resolved_input_sha256": "c7922c6e78d8bf23eb633877b8655d9aa71634b3ba24fe8595ddf6ff17496881"
+  },
+  "stored_projector_orientation": "P[alpha,beta]=<c_dagger_alpha c_beta>",
+  "units": {
+    "Hamiltonian_action_eigenvalues_energy": "eV",
+    "energy": "finite_system_eV_not_per_moire_cell"
+  }
+}

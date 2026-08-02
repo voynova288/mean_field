@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import replace
+from dataclasses import fields, replace
 import hashlib
 import importlib
 import json
@@ -22,6 +22,7 @@ from mean_field.systems.tbg.zero_field.companion_kivc_seed import (
     KWAN_EQ99_PDF_SHA256,
     KWAN_EQ99_PDF_SOURCE,
     KWAN_EQ99_REFERENCE,
+    MAX_PHASE_ANCHOR_MIN_RELATIVE_MAGNITUDE,
     MAX_VALIDATION_TOLERANCE,
     TBG_ZERO_FIELD_COMPANION_KIVC_BASIS_COVARIANCE_SCOPE,
     TBG_ZERO_FIELD_COMPANION_KIVC_CANONICAL_ORDER,
@@ -29,6 +30,7 @@ from mean_field.systems.tbg.zero_field.companion_kivc_seed import (
     TBG_ZERO_FIELD_COMPANION_KIVC_COMPANION_MEASURE_TP_SCOPE,
     TBG_ZERO_FIELD_COMPANION_KIVC_EXTERNAL_AUTHORITY_FILES,
     TBG_ZERO_FIELD_COMPANION_KIVC_FRAME_SCOPE,
+    TBG_ZERO_FIELD_COMPANION_KIVC_PHASE_ANCHOR_MIN_RELATIVE_MAGNITUDE,
     TBG_ZERO_FIELD_COMPANION_KIVC_SEED_SCOPE,
     TBG_ZERO_FIELD_COMPANION_KIVC_STORED_PROJECTOR_CONVENTION,
     TBG_ZERO_FIELD_COMPANION_KIVC_TP_SCOPE,
@@ -64,6 +66,25 @@ from mean_field.systems.tbg.zero_field.companion_hf_action import (
     gen_full_form_factors as companion_gen_full_form_factors,
     main_program_realify_form as companion_main_program_realify_form,
     prepare_tbg_zero_field_companion_hf_action,
+)
+from mean_field.systems.tbg.zero_field.companion_hf_scf import (
+    TBGZeroFieldCompanionHFQualificationReport,
+    TBGZeroFieldCompanionHFQualifierSpec,
+    TBGZeroFieldCompanionHFSCFSpec,
+    TBG_ZERO_FIELD_COMPANION_AUFBAU_REFERENCE_LINES,
+    TBG_ZERO_FIELD_COMPANION_AVERAGE_CENTRAL_REFERENCE_LINES,
+    TBG_ZERO_FIELD_COMPANION_HF_SCF_CONVERGENCE_CONVENTION,
+    TBG_ZERO_FIELD_COMPANION_HF_SCF_SCOPE,
+    TBG_ZERO_FIELD_COMPANION_HF_SCF_SOURCE_PARITY_EXCEPTION,
+    TBG_ZERO_FIELD_COMPANION_MAIN_ODA_REFERENCE_LINES,
+    TBG_ZERO_FIELD_COMPANION_MAIN_SCF_REFERENCE_LINES,
+    TBG_ZERO_FIELD_COMPANION_MEASURE_REFERENCE_LINES,
+    build_companion_average_central_reference,
+    companion_aufbau,
+    companion_oda_branch,
+    companion_oda_coefficients,
+    qualify_tbg_zero_field_companion_hf_diagnostic,
+    run_tbg_zero_field_companion_hf_diagnostic,
 )
 from mean_field.systems.tbg.zero_field.companion_interaction import (
     TBGZeroFieldCompanionInteractionSpec as TBGZeroFieldCompanionSourceInteractionSpec,
@@ -2817,7 +2838,7 @@ def test_companion_port_matches_pinned_source_fixture_gauge_invariants_and_c2t(
 
 
 # ---------------------------------------------------------------------------
-# Stage-5 Kwan Eq. (99) source-array-bound pivoted K-IVC diagnostic
+# Stage-5 Kwan Eq. (99) source-array-bound ordered-anchor K-IVC diagnostic
 # ---------------------------------------------------------------------------
 
 
@@ -2874,6 +2895,13 @@ def _companion_lifted_kivc_projector(source, seed, ik1: int, ik2: int) -> np.nda
     )
     return lifted_frame @ seed.P_conventional[ik1, ik2] @ lifted_frame.conj().T
 
+
+def _kivc_seed_array_mapping(seed) -> dict[str, np.ndarray]:
+    return {
+        field.name: getattr(seed, field.name)
+        for field in fields(seed.array_hashes)
+        if field.name != "convention"
+    }
 
 def test_kwan_eq99_explicit_matrices_and_valley_major_kronecker_order() -> None:
     expected_phi_zero = np.asarray(
@@ -2946,16 +2974,17 @@ def test_kwan_eq99_seed_actual_unstrained_stage2_invariants_and_scopes() -> None
     assert seed.P_conventional.shape == (params.N1, params.N2, 4, 4)
     assert seed.P_stored.shape == (params.N1, params.N2, 2, 4, 4)
     assert seed.U_Tp.shape == (params.N1, params.N2, 4, 4)
-    assert seed.pivot_indices_K.shape == (params.N1, params.N2, 2)
-    assert seed.pivot_relative_margins_K.shape == (params.N1, params.N2, 2)
+    assert seed.anchor_indices_K.shape == (params.N1, params.N2, 2)
+    assert seed.anchor_relative_magnitudes_K.shape == (params.N1, params.N2, 2)
     assert np.all(
-        seed.pivot_relative_margins_K > seed.pivot_tie_relative_tolerance
+        seed.anchor_relative_magnitudes_K
+        >= seed.phase_anchor_min_relative_magnitude
     )
-    assert seed.pivot_relative_margin_min == float(
-        np.min(seed.pivot_relative_margins_K)
+    assert seed.anchor_relative_magnitude_min == float(
+        np.min(seed.anchor_relative_magnitudes_K)
     )
-    assert len(seed.array_hashes.pivot_indices_K) == 64
-    assert len(seed.array_hashes.pivot_relative_margins_K) == 64
+    assert len(seed.array_hashes.anchor_indices_K) == 64
+    assert len(seed.array_hashes.anchor_relative_magnitudes_K) == 64
 
     for ik1 in range(params.N1):
         for ik2 in range(params.N2):
@@ -3050,7 +3079,8 @@ def test_kwan_eq99_seed_actual_unstrained_stage2_invariants_and_scopes() -> None
     }
     assert metadata["frame_scope"] == TBG_ZERO_FIELD_COMPANION_KIVC_FRAME_SCOPE
     assert metadata["frame_scope"] == (
-        "source-array-bound pivoted diagnostic; not cross-eigensolver reproducible; "
+        "source-array-bound ordered phase anchor in exact companion parent order; "
+        "active-subspace gauge-covariant; not cross-eigensolver reproducible; "
         "not a global smooth gauge"
     )
     assert metadata["basis_covariance_scope"] == (
@@ -3069,7 +3099,19 @@ def test_kwan_eq99_seed_actual_unstrained_stage2_invariants_and_scopes() -> None
     assert metadata["provenance"]["companion_measure_Tp_reference_lines"] == (
         TBG_ZERO_FIELD_COMPANION_MEASURE_TP_REFERENCE_LINES
     )
-    assert metadata["pivot_relative_margin_min"] == seed.pivot_relative_margin_min
+    assert metadata["anchor_relative_magnitude_min"] == (
+        seed.anchor_relative_magnitude_min
+    )
+    assert metadata["phase_anchor_min_relative_magnitude"] == (
+        TBG_ZERO_FIELD_COMPANION_KIVC_PHASE_ANCHOR_MIN_RELATIVE_MAGNITUDE
+    )
+    assert metadata["phase_anchor_min_relative_magnitude_hard_min"] == (
+        TBG_ZERO_FIELD_COMPANION_KIVC_PHASE_ANCHOR_MIN_RELATIVE_MAGNITUDE
+    )
+    assert metadata["phase_anchor_min_relative_magnitude_hard_max"] == (
+        MAX_PHASE_ANCHOR_MIN_RELATIVE_MAGNITUDE
+    )
+    assert metadata["schema_version"] == 2
     assert metadata["validation_tolerance_hard_max"] == MAX_VALIDATION_TOLERANCE
     assert metadata["stage2_array_hashes"]["fingerprint"] == (
         source.array_hashes.fingerprint
@@ -3087,8 +3129,8 @@ def test_kwan_eq99_seed_actual_unstrained_stage2_invariants_and_scopes() -> None
         seed.W_K,
         seed.W_Kprime,
         seed.W,
-        seed.pivot_indices_K,
-        seed.pivot_relative_margins_K,
+        seed.anchor_indices_K,
+        seed.anchor_relative_magnitudes_K,
         seed.Q_canonical,
         seed.Q_band,
         seed.P_conventional,
@@ -3246,7 +3288,7 @@ def test_kwan_eq99_seed_allows_paired_nondegenerate_U1_phase_covariance() -> Non
                 atol=MAX_VALIDATION_TOLERANCE,
             )
 
-def test_kwan_eq99_seed_rejects_nonpositive_or_loose_validation_tolerance() -> None:
+def test_kwan_eq99_seed_rejects_loose_validation_or_phase_anchor_thresholds() -> None:
     source = solve_tbg_zero_field_companion_single_particle(
         _small_companion_single_particle_params()
     )
@@ -3255,6 +3297,10 @@ def test_kwan_eq99_seed_rejects_nonpositive_or_loose_validation_tolerance() -> N
         validation_tolerance=MAX_VALIDATION_TOLERANCE,
     )
     assert accepted.validation_tolerance == MAX_VALIDATION_TOLERANCE == 1.0e-10
+    assert accepted.phase_anchor_min_relative_magnitude == (
+        TBG_ZERO_FIELD_COMPANION_KIVC_PHASE_ANCHOR_MIN_RELATIVE_MAGNITUDE
+    )
+    assert TBG_ZERO_FIELD_COMPANION_KIVC_PHASE_ANCHOR_MIN_RELATIVE_MAGNITUDE == 1.0e-12
     for rejected in (
         0.0,
         -1.0e-16,
@@ -3270,34 +3316,78 @@ def test_kwan_eq99_seed_rejects_nonpositive_or_loose_validation_tolerance() -> N
                 validation_tolerance=rejected,
             )
 
-def test_kwan_eq99_seed_fails_closed_on_Z_gap_and_lifted_pivot_tie() -> None:
+    for rejected in (
+        0.0,
+        np.nextafter(
+            TBG_ZERO_FIELD_COMPANION_KIVC_PHASE_ANCHOR_MIN_RELATIVE_MAGNITUDE,
+            0.0,
+        ),
+        np.nextafter(MAX_PHASE_ANCHOR_MIN_RELATIVE_MAGNITUDE, np.inf),
+    ):
+        with pytest.raises(
+            ValueError,
+            match=r"phase_anchor_min_relative_magnitude must be >=",
+        ):
+            build_tbg_zero_field_companion_kivc_seed(
+                source,
+                phase_anchor_min_relative_magnitude=rejected,
+            )
+
+def test_kwan_eq99_seed_accepts_equal_max_anchors_and_fails_without_anchor_or_Z_gap() -> None:
     source = solve_tbg_zero_field_companion_single_particle(
         _small_companion_single_particle_params()
     )
     params = source.params
 
-    baseline = build_tbg_zero_field_companion_kivc_seed(source)
-    with pytest.raises(ValueError, match="phase pivot is tied or near-tied"):
-        build_tbg_zero_field_companion_kivc_seed(
-            source,
-            pivot_tie_relative_tolerance=baseline.pivot_relative_margin_min,
-        )
-
-    tied_parent = np.zeros((params.parent_dimension, 2), dtype=np.complex128)
-    tied_parent[0, 0] = tied_parent[2, 0] = 1.0 / np.sqrt(2.0)
-    tied_parent[1, 1] = tied_parent[3, 1] = 1.0 / np.sqrt(2.0)
-    tied_point = tied_parent.reshape(
+    equal_max_parent = np.zeros((params.parent_dimension, 2), dtype=np.complex128)
+    equal_max_parent[0, 0] = equal_max_parent[2, 0] = 1.0 / np.sqrt(2.0)
+    equal_max_parent[1, 1] = equal_max_parent[3, 1] = 1.0 / np.sqrt(2.0)
+    equal_max_point = equal_max_parent.reshape(
         2 * params.Ng1,
         2 * params.Ng2,
         4,
         2,
     ).transpose(0, 1, 3, 2)
-    tied_coeff = np.zeros_like(source.coeff)
-    tied_coeff[0, 0, :, :, 0, :, :] = tied_point
-    tied_coeff[0, 0, :, :, 1, :, :] = tied_point
-    tied_source = _replace_companion_stage2_coeff(source, tied_coeff)
-    with pytest.raises(ValueError, match="phase pivot is tied or near-tied"):
-        build_tbg_zero_field_companion_kivc_seed(tied_source)
+    equal_max_coeff = np.zeros_like(source.coeff)
+    equal_max_coeff[0, 0, :, :, 0, :, :] = equal_max_point
+    equal_max_coeff[0, 0, :, :, 1, :, :] = equal_max_point
+    equal_max_source = _replace_companion_stage2_coeff(source, equal_max_coeff)
+    equal_max_seed = build_tbg_zero_field_companion_kivc_seed(
+        equal_max_source,
+        phase_anchor_min_relative_magnitude=0.5,
+    )
+    np.testing.assert_array_equal(
+        equal_max_seed.anchor_indices_K,
+        np.asarray([[[0, 1]]], dtype=np.int64),
+    )
+    np.testing.assert_allclose(
+        equal_max_seed.anchor_relative_magnitudes_K,
+        1.0 / np.sqrt(2.0),
+        rtol=0.0,
+        atol=1.0e-15,
+    )
+    for canonical_index in range(2):
+        lifted = equal_max_parent @ equal_max_seed.W_K[
+            0,
+            0,
+            :,
+            canonical_index,
+        ]
+        anchor = int(equal_max_seed.anchor_indices_K[0, 0, canonical_index])
+        qualifying = np.flatnonzero(np.abs(lifted) / np.linalg.norm(lifted) >= 0.5)
+        assert anchor == int(qualifying[0])
+        assert lifted[anchor].real > 0.0
+        assert abs(lifted[anchor].imag) <= 1.0e-15
+
+    assert np.all(equal_max_seed.anchor_relative_magnitudes_K < 0.75)
+    with pytest.raises(
+        ValueError,
+        match="no lifted microscopic phase anchor at or above",
+    ):
+        build_tbg_zero_field_companion_kivc_seed(
+            equal_max_source,
+            phase_anchor_min_relative_magnitude=0.75,
+        )
 
     gapless_parent = np.zeros((params.parent_dimension, 2), dtype=np.complex128)
     gapless_parent[0, 0] = gapless_parent[1, 0] = 1.0 / np.sqrt(2.0)
@@ -3315,6 +3405,80 @@ def test_kwan_eq99_seed_fails_closed_on_Z_gap_and_lifted_pivot_tie() -> None:
     with pytest.raises(ValueError, match="lacks one positive and one negative"):
         build_tbg_zero_field_companion_kivc_seed(gapless_source)
 
+
+@pytest.mark.parametrize("array_name", ("Z_projected", "Z_spectra", "U_Tp"))
+def test_kwan_eq99_seed_semantic_replay_rejects_coherent_array_hash_forgery(
+    array_name: str,
+) -> None:
+    source = _tiny_unstrained_companion_stage2()
+    seed = build_tbg_zero_field_companion_kivc_seed(source, phi=0.37)
+    forged = np.array(getattr(seed, array_name), copy=True)
+    forged.reshape(-1)[0] += 1.0e-6
+    arrays = _kivc_seed_array_mapping(seed)
+    arrays[array_name] = forged
+    refreshed_hashes = type(seed.array_hashes).from_arrays(arrays)
+    assert refreshed_hashes != seed.array_hashes
+
+    with pytest.raises(
+        ValueError,
+        match=rf"{array_name} does not match deterministic Stage-2 semantic replay",
+    ):
+        replace(
+            seed,
+            **{array_name: forged, "array_hashes": refreshed_hashes},
+        )
+
+@pytest.mark.parametrize(
+    ("array_name", "residual_field"),
+    (
+        ("source_TR_Z_residuals", "source_TR_Z_max_abs"),
+        (
+            "kprime_Z_diagonalization_residuals",
+            "kprime_Z_diagonalization_max_abs",
+        ),
+        ("tp_square_residuals", "tp_square_max_abs"),
+        ("tp_Q_invariance_residuals", "tp_Q_invariance_max_abs"),
+        ("tp_P_invariance_residuals", "tp_P_invariance_max_abs"),
+        (
+            "companion_measure_Tp_residuals",
+            "companion_measure_Tp_max_abs",
+        ),
+        ("chern_balance_trace", "chern_balance_max_abs"),
+    ),
+)
+def test_kwan_eq99_seed_semantic_replay_rejects_coherent_residual_forgery(
+    array_name: str,
+    residual_field: str,
+) -> None:
+    source = _tiny_unstrained_companion_stage2()
+    seed = build_tbg_zero_field_companion_kivc_seed(source, phi=0.37)
+    forged = np.array(getattr(seed, array_name), copy=True)
+    target = 0.5 * seed.validation_tolerance
+    if getattr(seed.residuals, residual_field) == target:
+        target = 0.25 * seed.validation_tolerance
+    forged.fill(target)
+    arrays = _kivc_seed_array_mapping(seed)
+    arrays[array_name] = forged
+    refreshed_hashes = type(seed.array_hashes).from_arrays(arrays)
+    refreshed_residuals = replace(
+        seed.residuals,
+        **{residual_field: float(np.max(np.abs(forged)))},
+    )
+    assert refreshed_hashes != seed.array_hashes
+    assert refreshed_residuals != seed.residuals
+
+    with pytest.raises(
+        ValueError,
+        match=rf"{array_name} does not match deterministic Stage-2 semantic replay",
+    ):
+        replace(
+            seed,
+            **{
+                array_name: forged,
+                "array_hashes": refreshed_hashes,
+                "residuals": refreshed_residuals,
+            },
+        )
 
 def test_kwan_eq99_seed_live_stage2_source_rehash_fails_on_array_drift() -> None:
     source = solve_tbg_zero_field_companion_single_particle(
@@ -3340,7 +3504,7 @@ def test_kwan_eq99_seed_live_stage2_source_rehash_fails_on_array_drift() -> None
 
 
 
-# Optional external-authority coverage; the eight tests above are clean-checkout core.
+# Optional external-authority coverage; the tests above are clean-checkout core.
 def test_kwan_eq99_optional_external_authorities_validate_and_detect_drift(
     tmp_path: Path,
 ) -> None:
@@ -5235,3 +5399,931 @@ def test_companion_hf_action_guards_shape_nonfinite_boost_hermiticity_and_energy
             reference_sha256="0" * 64,
             action_fingerprint="0" * 64,
         )
+
+
+# ---------------------------------------------------------------------------
+# Stage-6A source-faithful companion SCF diagnostic
+# ---------------------------------------------------------------------------
+
+_COMPANION_HF_SCF_FIXTURE_DIRECTORY = (
+    Path(__file__).resolve().parent / "fixtures" / "tbg_companion_hf_scf_v1"
+)
+
+
+_COMPANION_HF_SCF_FIXTURE_MANIFEST_KEYS = {
+    "array_hash_convention",
+    "array_hash_semantics",
+    "arrays",
+    "environment",
+    "fixture_npz",
+    "fixture_npz_sha256",
+    "fixture_schema",
+    "fixture_schema_version",
+    "generator_script",
+    "generator_script_sha256",
+    "pinned_source",
+    "scf_input",
+    "scf_input_sha256",
+    "scope",
+    "stage4_fixture",
+    "stored_projector_orientation",
+    "units",
+}
+_COMPANION_HF_SCF_ITERATION_ARRAY_SUFFIXES = {
+    "P_old",
+    "H_D_old_ev",
+    "H_E_old_ev",
+    "H_old_ev",
+    "P_raw",
+    "eigenvalues_ev",
+    "fill_indices",
+    "H_D_dP_ev",
+    "H_E_dP_ev",
+    "P_mixed",
+    "H_D_mixed_ev",
+    "H_E_mixed_ev",
+    "difference",
+    "coefficients",
+    "branch",
+    "positive_linear",
+    "energy_ev",
+}
+_COMPANION_HF_SCF_FIXTURE_ARRAY_KEYS = {
+    "initial_P",
+    "P_ref",
+    "history_differences",
+    "history_coefficients",
+    "history_energies_ev",
+    "history_branches",
+    "history_positive_linear",
+    "final_P_mixed",
+    "final_H_D_ev",
+    "final_H_E_ev",
+    "final_H_ev",
+    "final_P_raw",
+    "final_eigenvalues_ev",
+    "final_fill_indices",
+    "final_energy_ev",
+    "final_closure_difference",
+    "final_source_energy_ev",
+    "final_source_gap_ev",
+    "final_source_difference",
+    "final_source_local_occupations",
+    "final_source_flavor_occupations",
+    "final_source_valley_polarization",
+    "final_source_ivc",
+    "final_source_spin_polarization",
+    "final_source_tp_break",
+    *(
+        f"iter_{iteration:03d}_{suffix}"
+        for iteration in range(4)
+        for suffix in _COMPANION_HF_SCF_ITERATION_ARRAY_SUFFIXES
+    ),
+}
+_COMPANION_HF_SCF_SOURCE_LINE_RANGES = {
+    "routines.calc_E": TBG_ZERO_FIELD_COMPANION_CALC_E_REFERENCE_LINES,
+    "routines.calc_fock_matrix": (
+        TBG_ZERO_FIELD_COMPANION_CALC_FOCK_MATRIX_REFERENCE_LINES
+    ),
+    "routines.aufbau": TBG_ZERO_FIELD_COMPANION_AUFBAU_REFERENCE_LINES,
+    "mainProgram.SCF_and_final_rebuild": (
+        TBG_ZERO_FIELD_COMPANION_MAIN_SCF_REFERENCE_LINES
+    ),
+    "mainProgram.ODA": TBG_ZERO_FIELD_COMPANION_MAIN_ODA_REFERENCE_LINES,
+    "projectors.average_central": (
+        TBG_ZERO_FIELD_COMPANION_AVERAGE_CENTRAL_REFERENCE_LINES
+    ),
+    "measure.boost0_Tp_and_observables": (
+        TBG_ZERO_FIELD_COMPANION_MEASURE_REFERENCE_LINES
+    ),
+}
+_COMPANION_HF_SCF_STAGE4_RESOLVED_INPUT_SHA256 = (
+    "c7922c6e78d8bf23eb633877b8655d9aa71634b3ba24fe8595ddf6ff17496881"
+)
+
+# Every fixture array must be consumed by the parity test or documented here
+# with a scientific reason why no portable numerical comparison exists. Raw
+# eigensolver vectors are gauge-nonportable and are therefore not stored at all.
+_COMPANION_HF_SCF_NONCOMPARABLE_ARRAYS: dict[str, str] = {}
+
+@pytest.fixture(scope="module")
+def companion_hf_scf_source_fixture():
+    generator_path = _COMPANION_HF_SCF_FIXTURE_DIRECTORY / "generate_fixture.py"
+    manifest_path = _COMPANION_HF_SCF_FIXTURE_DIRECTORY / "manifest.json"
+    assert generator_path.is_file(), "Pinned companion Stage6A generator is absent"
+    assert manifest_path.is_file(), (
+        "Pinned companion Stage6A manifest is absent; explicitly run "
+        "tests/fixtures/tbg_companion_hf_scf_v1/generate_fixture.py first"
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    fixture_path = _COMPANION_HF_SCF_FIXTURE_DIRECTORY / manifest["fixture_npz"]
+    assert fixture_path.is_file(), (
+        "Pinned companion Stage6A NPZ is absent; explicitly run the source-only "
+        "fixture generator first"
+    )
+    assert manifest["fixture_npz_sha256"] == _companion_fixture_file_sha256(
+        fixture_path
+    )
+    assert manifest["generator_script_sha256"] == _companion_fixture_file_sha256(
+        generator_path
+    )
+    with np.load(fixture_path, allow_pickle=False) as archive:
+        arrays = {key: np.array(archive[key], copy=True) for key in archive.files}
+    assert set(arrays) == set(manifest["arrays"])
+    for key, array in arrays.items():
+        record = manifest["arrays"][key]
+        assert record["shape"] == list(array.shape)
+        assert record["dtype"] == array.dtype.str
+        assert record["sha256"] == _companion_fixture_array_sha256(array)
+    return manifest, arrays
+
+
+def test_companion_hf_scf_source_fixture_manifest_is_source_only_and_pinned(
+    companion_hf_scf_source_fixture,
+) -> None:
+    manifest, arrays = companion_hf_scf_source_fixture
+    assert set(manifest) == _COMPANION_HF_SCF_FIXTURE_MANIFEST_KEYS
+    assert set(manifest["arrays"]) == _COMPANION_HF_SCF_FIXTURE_ARRAY_KEYS
+    assert set(arrays) == _COMPANION_HF_SCF_FIXTURE_ARRAY_KEYS
+    for record in manifest["arrays"].values():
+        assert set(record) == {"dtype", "sha256", "shape"}
+    assert set(manifest["environment"]) == {
+        "byteorder",
+        "numpy",
+        "platform",
+        "python",
+        "zlib_compile",
+        "zlib_runtime",
+    }
+    assert all(
+        isinstance(value, str) and value
+        for value in manifest["environment"].values()
+    )
+    assert manifest["array_hash_convention"] == (
+        "sha256_little_endian_int64_shape_then_C_order_little_endian_array_bytes"
+    )
+    assert manifest["array_hash_semantics"] == (
+        "source_fixture_integrity_and_same_environment_parity_not_production_result"
+    )
+    assert manifest["fixture_npz"] == "fixture.npz"
+    assert manifest["generator_script"] == "generate_fixture.py"
+    assert manifest["stored_projector_orientation"] == (
+        "P[alpha,beta]=<c_dagger_alpha c_beta>"
+    )
+    assert set(manifest["units"]) == {
+        "Hamiltonian_action_eigenvalues_energy",
+        "energy",
+    }
+    assert manifest["units"] == {
+        "Hamiltonian_action_eigenvalues_energy": "eV",
+        "energy": "finite_system_eV_not_per_moire_cell",
+    }
+
+    pinned = manifest["pinned_source"]
+    assert set(pinned) == {
+        "main_program",
+        "measure",
+        "projectors",
+        "reference_commit",
+        "reference_repository",
+        "routines",
+        "source_line_ranges",
+    }
+    assert pinned["reference_repository"] == TBG_ZERO_FIELD_COMPANION_REFERENCE_REPOSITORY
+    assert pinned["reference_commit"] == TBG_ZERO_FIELD_COMPANION_REFERENCE_COMMIT
+    assert pinned["routines"] == {
+        "path": "reference/TBG-HF/routines.py",
+        "sha256": TBG_ZERO_FIELD_COMPANION_ROUTINES_SOURCE_SHA256,
+    }
+    assert pinned["main_program"] == {
+        "path": "reference/TBG-HF/mainProgram.py",
+        "sha256": TBG_ZERO_FIELD_COMPANION_MAIN_PROGRAM_SOURCE_SHA256,
+    }
+    assert pinned["projectors"] == {
+        "path": TBG_ZERO_FIELD_COMPANION_PROJECTORS_SOURCE,
+        "sha256": TBG_ZERO_FIELD_COMPANION_PROJECTORS_SOURCE_SHA256,
+    }
+    assert pinned["measure"] == {
+        "path": TBG_ZERO_FIELD_COMPANION_MEASURE_SOURCE,
+        "sha256": TBG_ZERO_FIELD_COMPANION_MEASURE_SOURCE_SHA256,
+    }
+    for source_record in (
+        pinned["routines"],
+        pinned["main_program"],
+        pinned["projectors"],
+        pinned["measure"],
+    ):
+        assert set(source_record) == {"path", "sha256"}
+        assert _is_sha256(source_record["sha256"])
+    assert set(pinned["source_line_ranges"]) == set(
+        _COMPANION_HF_SCF_SOURCE_LINE_RANGES
+    )
+    assert pinned["source_line_ranges"] == _COMPANION_HF_SCF_SOURCE_LINE_RANGES
+
+    assert set(manifest["scf_input"]) == {
+        "filling",
+        "HF_itermax",
+        "HF_itermin",
+        "HF_tolerance",
+        "HF_type",
+        "ODA_branch_threshold",
+    }
+    assert manifest["scf_input_sha256"] == _companion_fixture_json_sha256(
+        manifest["scf_input"]
+    )
+
+    stage4_fixture = manifest["stage4_fixture"]
+    assert set(stage4_fixture) == {
+        "array_sha256",
+        "directory",
+        "fixture_npz_sha256",
+        "generator_sha256",
+        "resolved_input_sha256",
+    }
+    assert stage4_fixture["directory"] == (
+        "tests/fixtures/tbg_companion_hf_action_v1"
+    )
+    stage4_manifest_path = _COMPANION_HF_ACTION_FIXTURE_DIRECTORY / "manifest.json"
+    stage4_manifest = json.loads(stage4_manifest_path.read_text(encoding="utf-8"))
+    expected_stage4_input = {
+        **_COMPANION_HF_ACTION_INPUT_OVERRIDES,
+        **_COMPANION_HF_ACTION_INHERITED_INTERACTION,
+        **_COMPANION_HF_ACTION_INHERITED_HF,
+    }
+    assert set(stage4_manifest["resolved_input"]) == set(expected_stage4_input)
+    assert stage4_manifest["resolved_input"] == expected_stage4_input
+    recomputed_stage4_digest = _companion_fixture_json_sha256(
+        stage4_manifest["resolved_input"]
+    )
+    assert recomputed_stage4_digest == (
+        _COMPANION_HF_SCF_STAGE4_RESOLVED_INPUT_SHA256
+    )
+    assert stage4_manifest["resolved_input_sha256"] == recomputed_stage4_digest
+    assert stage4_fixture["resolved_input_sha256"] == recomputed_stage4_digest
+    assert stage4_fixture["fixture_npz_sha256"] == (
+        stage4_manifest["fixture_npz_sha256"]
+    )
+    assert stage4_fixture["generator_sha256"] == (
+        stage4_manifest["generator_script_sha256"]
+    )
+    assert set(stage4_fixture["array_sha256"]) == (
+        _COMPANION_HF_ACTION_FIXTURE_ARRAY_KEYS
+    )
+    assert stage4_fixture["array_sha256"] == {
+        name: stage4_manifest["arrays"][name]["sha256"]
+        for name in _COMPANION_HF_ACTION_FIXTURE_ARRAY_KEYS
+    }
+
+    assert manifest["fixture_schema"] == (
+        "mean_field.tbg.companion_hf_scf.source_fixture"
+    )
+    assert manifest["fixture_schema_version"] == 1
+    assert manifest["scope"] == (
+        "four_iteration_source_oracle_not_production_HF_TDHF_or_Fig8"
+    )
+    assert manifest["scf_input"] == {
+        "filling": 0,
+        "HF_itermax": 4,
+        "HF_itermin": 20,
+        "HF_tolerance": 1.0e-8,
+        "HF_type": "ODA",
+        "ODA_branch_threshold": 1.0e-12,
+    }
+    pinned = manifest["pinned_source"]
+    assert pinned["routines"]["sha256"] == TBG_ZERO_FIELD_COMPANION_ROUTINES_SOURCE_SHA256
+    assert pinned["main_program"]["sha256"] == (
+        TBG_ZERO_FIELD_COMPANION_MAIN_PROGRAM_SOURCE_SHA256
+    )
+    assert pinned["projectors"]["sha256"] == TBG_ZERO_FIELD_COMPANION_PROJECTORS_SOURCE_SHA256
+    assert pinned["measure"]["sha256"] == TBG_ZERO_FIELD_COMPANION_MEASURE_SOURCE_SHA256
+    assert pinned["source_line_ranges"]["routines.aufbau"] == (
+        TBG_ZERO_FIELD_COMPANION_AUFBAU_REFERENCE_LINES
+    )
+    assert pinned["source_line_ranges"]["mainProgram.SCF_and_final_rebuild"] == (
+        TBG_ZERO_FIELD_COMPANION_MAIN_SCF_REFERENCE_LINES
+    )
+    assert pinned["source_line_ranges"]["mainProgram.ODA"] == (
+        TBG_ZERO_FIELD_COMPANION_MAIN_ODA_REFERENCE_LINES
+    )
+    assert pinned["source_line_ranges"]["projectors.average_central"] == (
+        TBG_ZERO_FIELD_COMPANION_AVERAGE_CENTRAL_REFERENCE_LINES
+    )
+    assert TBG_ZERO_FIELD_COMPANION_MEASURE_REFERENCE_LINES == "5-14,35-72"
+    assert pinned["source_line_ranges"]["measure.boost0_Tp_and_observables"] == (
+        TBG_ZERO_FIELD_COMPANION_MEASURE_REFERENCE_LINES
+    )
+    assert not any(name.endswith("_eigenvectors") for name in arrays)
+    assert arrays["history_differences"].shape == (4,)
+    assert arrays["history_coefficients"].shape == (4, 6)
+    assert arrays["history_energies_ev"].shape == (4, 4)
+    assert arrays["history_positive_linear"].dtype == np.dtype(np.bool_)
+    assert arrays["final_source_local_occupations"].shape == (2, 3, 2)
+    assert arrays["final_source_flavor_occupations"].shape == (2, 2)
+    for name in (
+        "final_source_energy_ev",
+        "final_source_gap_ev",
+        "final_source_difference",
+        "final_source_valley_polarization",
+        "final_source_ivc",
+        "final_source_spin_polarization",
+        "final_source_tp_break",
+    ):
+        assert arrays[name].shape == ()
+
+
+def test_companion_hf_scf_system_local_source_parity_exception_is_explicit() -> None:
+    exception = TBG_ZERO_FIELD_COMPANION_HF_SCF_SOURCE_PARITY_EXCEPTION
+    assert "generic_core_engine_is_non_equivalent" in exception
+    assert "ODA_branch_convergence_norm_index_and_finalization" in exception
+    assert "not_reusable_framework_fork" in exception
+    assert "not_frontdoor_production_TDHF_or_Fig8" in exception
+
+def test_companion_hf_scf_four_iteration_source_fixture_parity(
+    companion_hf_scf_source_fixture,
+    companion_hf_action_source_fixture,
+    companion_stage4_typed_inputs,
+) -> None:
+    _manifest, raw_oracle = companion_hf_scf_source_fixture
+    consumed_fixture_arrays: set[str] = set()
+
+    class _TrackedFixtureArrays(dict[str, np.ndarray]):
+        def __getitem__(self, key: str) -> np.ndarray:
+            consumed_fixture_arrays.add(key)
+            return super().__getitem__(key)
+
+    oracle = _TrackedFixtureArrays(raw_oracle)
+    _stage4_manifest, stage4, _generator, _fixture = companion_hf_action_source_fixture
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(
+        _source_gauge_single_particle(single_particle, stage4),
+        interaction,
+    )
+    spec = TBGZeroFieldCompanionHFSCFSpec(HF_itermax=4, HF_itermin=20)
+    run = run_tbg_zero_field_companion_hf_diagnostic(
+        prepared,
+        stage4["P"],
+        stage4["P_ref"],
+        spec,
+    )
+
+    np.testing.assert_array_equal(run.initial_projector, oracle["initial_P"])
+    np.testing.assert_array_equal(run.reference, oracle["P_ref"])
+    np.testing.assert_allclose(
+        run.history.differences,
+        oracle["history_differences"],
+        rtol=2.0e-12,
+        atol=2.0e-13,
+    )
+    np.testing.assert_allclose(
+        np.column_stack(
+            (
+                run.history.c1,
+                run.history.c01,
+                run.history.c11,
+                run.history.lin,
+                run.history.quad,
+                run.history.mixing_lambda,
+            )
+        ),
+        oracle["history_coefficients"],
+        rtol=2.0e-11,
+        atol=2.0e-12,
+    )
+    np.testing.assert_allclose(
+        run.history.energies_ev,
+        oracle["history_energies_ev"],
+        rtol=2.0e-11,
+        atol=2.0e-12,
+    )
+    assert run.history.branches == tuple(oracle["history_branches"].tolist())
+    np.testing.assert_array_equal(
+        run.history.positive_linear,
+        oracle["history_positive_linear"],
+    )
+
+    old = np.array(stage4["P"], copy=True)
+    reference = np.asarray(stage4["P_ref"])
+    Nk = prepared.params.N1 * prepared.params.N2
+    for iteration in range(4):
+        prefix = f"iter_{iteration:03d}"
+        old_evaluation = prepared.evaluate(old, reference)
+        aufbau = companion_aufbau(
+            prepared,
+            old_evaluation.H_total_ev,
+            filling=spec.filling,
+        )
+        difference = float(np.linalg.norm(old - aufbau.projector) / Nk)
+        oda = companion_oda_coefficients(
+            prepared,
+            old,
+            aufbau.projector,
+            reference,
+        )
+        mixed = np.asarray(
+            (1.0 - oda.mixing_lambda) * old
+            + oda.mixing_lambda * aufbau.projector
+        )
+        mixed_evaluation = prepared.evaluate(mixed, reference)
+
+        np.testing.assert_allclose(
+            old,
+            oracle[f"{prefix}_P_old"],
+            rtol=2.0e-11,
+            atol=2.0e-12,
+        )
+        for actual, suffix in (
+            (old_evaluation.action.H_D_ev, "H_D_old_ev"),
+            (old_evaluation.action.H_E_ev, "H_E_old_ev"),
+            (old_evaluation.H_total_ev, "H_old_ev"),
+            (aufbau.projector, "P_raw"),
+            (aufbau.eigenvalues_ev, "eigenvalues_ev"),
+            (oda.dP_action.H_D_ev, "H_D_dP_ev"),
+            (oda.dP_action.H_E_ev, "H_E_dP_ev"),
+            (mixed, "P_mixed"),
+            (mixed_evaluation.action.H_D_ev, "H_D_mixed_ev"),
+            (mixed_evaluation.action.H_E_ev, "H_E_mixed_ev"),
+            (mixed_evaluation.energy.components_ev, "energy_ev"),
+        ):
+            np.testing.assert_allclose(
+                actual,
+                oracle[f"{prefix}_{suffix}"],
+                rtol=2.0e-11,
+                atol=2.0e-12,
+            )
+        np.testing.assert_array_equal(
+            aufbau.fill_indices,
+            oracle[f"{prefix}_fill_indices"],
+        )
+        np.testing.assert_allclose(
+            difference,
+            oracle[f"{prefix}_difference"],
+            rtol=2.0e-12,
+            atol=2.0e-13,
+        )
+        actual_coefficients = np.asarray(
+            [oda.c1, oda.c01, oda.c11, oda.lin, oda.quad, oda.mixing_lambda]
+        )
+        np.testing.assert_allclose(
+            actual_coefficients,
+            oracle[f"{prefix}_coefficients"],
+            rtol=2.0e-11,
+            atol=2.0e-12,
+        )
+        assert oda.branch == oracle[f"{prefix}_branch"].item()
+        assert oda.positive_linear == bool(
+            oracle[f"{prefix}_positive_linear"].item()
+        )
+
+        assert run.history.old_projector_hashes[iteration] == (
+            _companion_fixture_array_sha256(old)
+        )
+        assert run.history.raw_projector_hashes[iteration] == (
+            _companion_fixture_array_sha256(aufbau.projector)
+        )
+        assert run.history.mixed_projector_hashes[iteration] == (
+            _companion_fixture_array_sha256(mixed)
+        )
+        assert run.history.hamiltonian_hashes[iteration] == (
+            _companion_fixture_array_sha256(old_evaluation.H_total_ev)
+        )
+        assert run.history.old_action_fingerprints[iteration] == (
+            old_evaluation.action.fingerprint
+        )
+        assert run.history.dP_action_fingerprints[iteration] == (
+            oda.dP_action.fingerprint
+        )
+        assert run.history.energy_fingerprints[iteration] == (
+            mixed_evaluation.energy.fingerprint
+        )
+        old = np.array(mixed, copy=True)
+
+    for actual, key in (
+        (run.final_projector_mixed, "final_P_mixed"),
+        (run.final_evaluation.action.H_D_ev, "final_H_D_ev"),
+        (run.final_evaluation.action.H_E_ev, "final_H_E_ev"),
+        (run.final_evaluation.H_total_ev, "final_H_ev"),
+        (run.final_aufbau.projector, "final_P_raw"),
+        (run.final_aufbau.eigenvalues_ev, "final_eigenvalues_ev"),
+        (run.final_evaluation.energy.components_ev, "final_energy_ev"),
+    ):
+        np.testing.assert_allclose(
+            actual,
+            oracle[key],
+            rtol=2.0e-11,
+            atol=2.0e-12,
+        )
+    np.testing.assert_array_equal(
+        run.final_aufbau.fill_indices,
+        oracle["final_fill_indices"],
+    )
+    np.testing.assert_allclose(
+        run.closure_difference,
+        oracle["final_closure_difference"],
+        rtol=2.0e-12,
+        atol=2.0e-13,
+    )
+
+    report = qualify_tbg_zero_field_companion_hf_diagnostic(run)
+    np.testing.assert_allclose(
+        run.final_evaluation.energy.components_ev[0],
+        oracle["final_source_energy_ev"],
+        rtol=2.0e-11,
+        atol=2.0e-12,
+    )
+    np.testing.assert_allclose(
+        report.gap_ev,
+        oracle["final_source_gap_ev"],
+        rtol=2.0e-11,
+        atol=2.0e-12,
+    )
+    np.testing.assert_allclose(
+        run.closure_difference,
+        oracle["final_source_difference"],
+        rtol=2.0e-12,
+        atol=2.0e-13,
+    )
+    np.testing.assert_array_equal(
+        report.local_occupations,
+        oracle["final_source_local_occupations"],
+    )
+    for actual, key in (
+        (report.flavor_occupations, "final_source_flavor_occupations"),
+        (report.valley_polarization, "final_source_valley_polarization"),
+        (report.source_ivc, "final_source_ivc"),
+        (report.spin_polarization, "final_source_spin_polarization"),
+        (report.tp_break, "final_source_tp_break"),
+    ):
+        np.testing.assert_allclose(actual, oracle[key], rtol=2.0e-11, atol=2.0e-12)
+    np.testing.assert_allclose(
+        report.spin_block_rms_difference,
+        np.linalg.norm(
+            oracle["final_P_mixed"][:, :, 0]
+            - oracle["final_P_mixed"][:, :, 1]
+        )
+        / np.sqrt(Nk),
+        rtol=2.0e-11,
+        atol=2.0e-12,
+    )
+    projector_hermiticity = max(
+        float(np.max(np.abs(array - np.swapaxes(array.conj(), -1, -2))))
+        for array in (
+            oracle["final_P_mixed"],
+            oracle["P_ref"],
+            oracle["final_P_raw"],
+        )
+    )
+    hamiltonian_hermiticity_ev = max(
+        float(np.max(np.abs(array - np.swapaxes(array.conj(), -1, -2))))
+        for array in (
+            oracle["final_H_ev"],
+            oracle["final_H_D_ev"],
+            oracle["final_H_E_ev"],
+        )
+    )
+    np.testing.assert_allclose(
+        report.maximum_projector_hermiticity_residual,
+        projector_hermiticity,
+        rtol=2.0e-11,
+        atol=2.0e-12,
+    )
+    np.testing.assert_allclose(
+        report.maximum_hamiltonian_hermiticity_residual_ev,
+        hamiltonian_hermiticity_ev,
+        rtol=2.0e-11,
+        atol=2.0e-12,
+    )
+
+    noncomparable = set(_COMPANION_HF_SCF_NONCOMPARABLE_ARRAYS)
+    assert consumed_fixture_arrays.isdisjoint(noncomparable)
+    assert set(oracle) == consumed_fixture_arrays | noncomparable, {
+        "unconsumed": sorted(set(oracle) - consumed_fixture_arrays - noncomparable),
+        "unknown_allowlist": sorted(noncomparable - set(oracle)),
+    }
+
+
+def test_companion_average_central_reference_and_aufbau_stored_orientation(
+    companion_stage4_typed_inputs,
+) -> None:
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(single_particle, interaction)
+    reference = build_companion_average_central_reference(prepared)
+    expected = 0.5 * np.eye(4, dtype=np.complex128)
+    np.testing.assert_array_equal(reference, np.broadcast_to(expected, reference.shape))
+    assert not reference.flags.writeable
+
+    shape = prepared.H_SP_ev.shape
+    H = np.zeros(shape, dtype=np.complex128)
+    for sector, matrix in enumerate(H.reshape((-1, 4, 4))):
+        matrix[:] = np.diag(1000.0 + 10.0 * sector + np.arange(4))
+    unitary = np.asarray(
+        [[1.0, 1.0j], [1.0j, 1.0]],
+        dtype=np.complex128,
+    ) / np.sqrt(2.0)
+    target_spectrum = np.asarray([0.0, 200.0])
+    H[0, 0, 0, :2, :2] = unitary @ np.diag(target_spectrum) @ unitary.conj().T
+    for sector in range(1, 6):
+        H.reshape((-1, 4, 4))[sector, 0, 0] = float(sector)
+    result = companion_aufbau(prepared, H, filling=-3)
+    vector = result.eigenvectors[0, :, 0]
+    assert abs(result.projector[0, 0, 0, 0, 1]) > 0.0
+    np.testing.assert_allclose(
+        result.projector[0, 0, 0, 0, 1],
+        np.conj(vector[0]) * vector[1],
+        rtol=0.0,
+        atol=1.0e-15,
+    )
+
+
+def test_companion_aufbau_uses_global_c_order_fill(
+    companion_stage4_typed_inputs,
+) -> None:
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(single_particle, interaction)
+    H = np.zeros_like(prepared.H_SP_ev, dtype=np.complex128)
+    flat_matrices = H.reshape((-1, 4, 4), order="C")
+    for sector, matrix in enumerate(flat_matrices):
+        matrix[:] = np.diag(4 * sector + np.arange(4, dtype=float))
+    result = companion_aufbau(prepared, H, filling=0)
+    expected = np.arange(result.electron_count, dtype=np.int64)
+    np.testing.assert_array_equal(result.fill_indices, expected)
+    assert result.array_hashes.fill_indices == _companion_fixture_array_sha256(expected)
+
+
+@pytest.mark.parametrize(
+    ("lin", "quad", "expected_lambda", "expected_branch", "positive"),
+    (
+        (2.0e-3, -100.0, 1.0, "positive_linear", True),
+        (-2.0, 1.0, 1.0, "endpoint_quad", False),
+        (5.0e-13, 1.0, 1.0, "linear_near_zero", False),
+        (-2.0, 2.0, 0.5, "interior", False),
+    ),
+)
+def test_companion_oda_every_source_branch_is_ordered_exactly(
+    lin,
+    quad,
+    expected_lambda,
+    expected_branch,
+    positive,
+) -> None:
+    mixing_lambda, branch, positive_linear = companion_oda_branch(lin, quad)
+    assert mixing_lambda == expected_lambda
+    assert branch == expected_branch
+    assert positive_linear is positive
+
+
+def test_companion_scf_convergence_is_zero_based_strict_and_pre_mixing(
+    companion_stage4_typed_inputs,
+) -> None:
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(single_particle, interaction)
+    reference = build_companion_average_central_reference(prepared)
+    run = run_tbg_zero_field_companion_hf_diagnostic(
+        prepared,
+        reference,
+        reference,
+        TBGZeroFieldCompanionHFSCFSpec(
+            HF_itermax=3,
+            HF_itermin=0,
+            tolerance=1.0e9,
+        ),
+    )
+    assert run.converged
+    assert run.convergence_iteration == 1
+    np.testing.assert_array_equal(run.history.iterations, np.asarray([0, 1]))
+    assert np.all(run.history.differences < run.spec.tolerance)
+    assert TBG_ZERO_FIELD_COMPANION_HF_SCF_CONVERGENCE_CONVENTION.startswith(
+        "zero_based_iteration"
+    )
+
+
+def test_companion_scf_accepts_direct_stage5_seed_and_reports_only(
+    companion_stage4_typed_inputs,
+) -> None:
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(single_particle, interaction)
+    seed = build_tbg_zero_field_companion_kivc_seed(single_particle)
+    reference = build_companion_average_central_reference(prepared)
+    run = run_tbg_zero_field_companion_hf_diagnostic(
+        prepared,
+        seed,
+        reference,
+        TBGZeroFieldCompanionHFSCFSpec(HF_itermax=1, HF_itermin=20),
+    )
+    assert run.initial_source == "stage5_kivc_seed"
+    assert run.stage5_seed is seed
+    assert run.stage5_seed_fingerprint == seed.fingerprint
+    np.testing.assert_array_equal(run.initial_projector, seed.P_stored)
+    report = qualify_tbg_zero_field_companion_hf_diagnostic(
+        run,
+        TBGZeroFieldCompanionHFQualifierSpec(),
+    )
+    assert report.scientific_scope == TBG_ZERO_FIELD_COMPANION_HF_SCF_SCOPE
+    assert "converged" in dict(report.checks)
+    assert report.stage5_eq99_projection_magnitude is not None
+    assert "production" in report.scientific_scope
+    assert "not_production" in report.scientific_scope
+
+
+def test_companion_scf_run_fails_closed_on_prepared_and_source_mutation(
+    companion_stage4_typed_inputs,
+) -> None:
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(single_particle, interaction)
+    reference = build_companion_average_central_reference(prepared)
+    run = run_tbg_zero_field_companion_hf_diagnostic(
+        prepared,
+        reference,
+        reference,
+        TBGZeroFieldCompanionHFSCFSpec(HF_itermax=1, HF_itermin=20),
+    )
+    _assert_stage4_readonly_bytes_mutation_fails_closed(
+        prepared.H_SP_ev,
+        lambda: run.fingerprint,
+        match="prepared array_hashes no longer match live prepared arrays",
+    )
+    _assert_stage4_readonly_bytes_mutation_fails_closed(
+        prepared.single_particle_source.coeff,
+        lambda: run.fingerprint,
+        match=r"single_particle_source\.coeff no longer matches its source hash",
+    )
+    _assert_stage4_readonly_bytes_mutation_fails_closed(
+        run.history.differences,
+        lambda: run.fingerprint,
+        match="history array_hashes no longer match live arrays",
+    )
+    _assert_stage4_readonly_bytes_mutation_fails_closed(
+        run.final_projector_mixed,
+        lambda: run.fingerprint,
+        match="run array_hashes no longer match live arrays",
+    )
+
+def test_companion_scf_run_replay_rejects_coherent_history_forgery(
+    companion_stage4_typed_inputs,
+) -> None:
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(single_particle, interaction)
+    reference = build_companion_average_central_reference(prepared)
+    run = run_tbg_zero_field_companion_hf_diagnostic(
+        prepared,
+        reference,
+        reference,
+        TBGZeroFieldCompanionHFSCFSpec(HF_itermax=1, HF_itermin=20),
+    )
+
+    forged_differences = np.array(run.history.differences, copy=True)
+    forged_differences[0] += 1.0e-6
+    history_arrays = {
+        "iterations": run.history.iterations,
+        "differences": forged_differences,
+        "c1": run.history.c1,
+        "c01": run.history.c01,
+        "c11": run.history.c11,
+        "lin": run.history.lin,
+        "quad": run.history.quad,
+        "mixing_lambda": run.history.mixing_lambda,
+        "positive_linear": run.history.positive_linear,
+        "energies_ev": run.history.energies_ev,
+    }
+    forged_history = replace(
+        run.history,
+        differences=forged_differences,
+        array_hashes=type(run.history.array_hashes).from_arrays(history_arrays),
+    )
+    with pytest.raises(
+        ValueError,
+        match=r"history\.differences does not match deterministic trajectory replay",
+    ):
+        replace(run, history=forged_history)
+
+    forged_receipts = replace(
+        run.history,
+        raw_projector_hashes=("0" * 64,),
+    )
+    with pytest.raises(
+        ValueError,
+        match=r"history\.raw_projector_hashes do not match deterministic trajectory replay",
+    ):
+        replace(run, history=forged_receipts)
+
+def test_companion_qualification_report_recomputes_every_live_field(
+    companion_stage4_typed_inputs,
+) -> None:
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(single_particle, interaction)
+    reference = build_companion_average_central_reference(prepared)
+    run = run_tbg_zero_field_companion_hf_diagnostic(
+        prepared,
+        reference,
+        reference,
+        TBGZeroFieldCompanionHFSCFSpec(HF_itermax=1, HF_itermin=20),
+    )
+    qualifier_spec = TBGZeroFieldCompanionHFQualifierSpec()
+    report = qualify_tbg_zero_field_companion_hf_diagnostic(run, qualifier_spec)
+    assert isinstance(report, TBGZeroFieldCompanionHFQualificationReport)
+    assert qualifier_spec.projector_hermiticity_threshold == 1.0e-9
+    assert qualifier_spec.hamiltonian_hermiticity_threshold_ev == 1.0e-9
+    assert qualifier_spec.spin_block_rms_tolerance == 1.0e-8
+    np.testing.assert_allclose(
+        report.spin_block_rms_difference,
+        np.linalg.norm(
+            run.final_projector_mixed[:, :, 0]
+            - run.final_projector_mixed[:, :, 1]
+        )
+        / np.sqrt(prepared.params.N1 * prepared.params.N2),
+        rtol=0.0,
+        atol=0.0,
+    )
+
+    spec_metadata = qualifier_spec.to_metadata()
+    assert spec_metadata == {
+        name: getattr(qualifier_spec, name)
+        for name in qualifier_spec.__dataclass_fields__
+    } | {"fingerprint": qualifier_spec.fingerprint}
+    metadata = report.to_metadata()
+    assert metadata["spec"] == spec_metadata
+    assert metadata["spec_fingerprint"] == qualifier_spec.fingerprint
+    assert metadata["local_occupations_sha256"] == (
+        report.local_occupations_sha256
+    )
+    assert metadata["flavor_occupations_sha256"] == (
+        report.flavor_occupations_sha256
+    )
+    assert metadata["checks"] == dict(report.checks)
+    assert metadata["metrics"] == {
+        "expected_occupied_count": report.expected_occupied_count,
+        "gap_ev": report.gap_ev,
+        "fermi_tie": report.fermi_tie,
+        "maximum_hamiltonian_hermiticity_residual_ev": (
+            report.maximum_hamiltonian_hermiticity_residual_ev
+        ),
+        "maximum_projector_hermiticity_residual": (
+            report.maximum_projector_hermiticity_residual
+        ),
+        "nu": report.nu,
+        "nu_residual": report.nu_residual,
+        "occupied_count": report.occupied_count,
+        "source_ivc": report.source_ivc,
+        "spin_block_rms_difference": report.spin_block_rms_difference,
+        "spin_polarization": report.spin_polarization,
+        "stage5_eq99_projection_magnitude": (
+            report.stage5_eq99_projection_magnitude
+        ),
+        "tp_break": report.tp_break,
+        "valley_polarization": report.valley_polarization,
+    }
+
+    for name in (
+        "maximum_projector_hermiticity_residual",
+        "maximum_hamiltonian_hermiticity_residual_ev",
+        "gap_ev",
+        "nu",
+        "nu_residual",
+        "source_ivc",
+        "tp_break",
+        "valley_polarization",
+        "spin_polarization",
+        "spin_block_rms_difference",
+    ):
+        with pytest.raises(ValueError, match=rf"qualification {name} does not match"):
+            replace(report, **{name: getattr(report, name) + 1.0e-6})
+    with pytest.raises(ValueError, match="qualification occupied_count does not match"):
+        replace(report, occupied_count=report.occupied_count + 1)
+    with pytest.raises(ValueError, match="qualification fermi_tie does not match"):
+        replace(report, fermi_tie=not report.fermi_tie)
+    with pytest.raises(
+        ValueError,
+        match="qualification stage5_eq99_projection_magnitude does not match",
+    ):
+        replace(report, stage5_eq99_projection_magnitude=0.5)
+
+    with pytest.raises(ValueError, match="qualification passed flag does not match"):
+        replace(report, passed=not report.passed)
+    forged_checks = tuple((name, True) for name, _value in report.checks)
+    assert forged_checks != report.checks
+    with pytest.raises(ValueError, match="qualification checks do not match live run"):
+        replace(report, passed=report.passed, checks=forged_checks)
+
+    direct_fields = {
+        name: getattr(report, name) for name in report.__dataclass_fields__
+    }
+    direct_fields["expected_occupied_count"] = report.expected_occupied_count + 1
+    with pytest.raises(
+        ValueError,
+        match="qualification expected_occupied_count does not match live run",
+    ):
+        TBGZeroFieldCompanionHFQualificationReport(**direct_fields)
+
+    forged_local = np.array(report.local_occupations, copy=True)
+    forged_local[0, 0, 0] += 1
+    coherent_occupation_fields = {
+        name: getattr(report, name) for name in report.__dataclass_fields__
+    }
+    coherent_occupation_fields.update(
+        local_occupations=forged_local,
+        local_occupations_sha256=_companion_fixture_array_sha256(forged_local),
+    )
+    with pytest.raises(
+        ValueError,
+        match="qualification local_occupations do not match live run",
+    ):
+        TBGZeroFieldCompanionHFQualificationReport(**coherent_occupation_fields)
