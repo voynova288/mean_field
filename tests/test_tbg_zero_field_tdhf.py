@@ -17,6 +17,19 @@ from mean_field.core.hf import (
     compute_hf_energy,
 )
 from mean_field.systems.tbg.params import TBGParameters
+from mean_field.systems.tbg.zero_field.companion_interaction import (
+    TBGZeroFieldCompanionInteractionSpec as TBGZeroFieldCompanionSourceInteractionSpec,
+    TBG_ZERO_FIELD_COMPANION_INTERACTION_ARRAY_HASH_SEMANTICS as SOURCE_INTERACTION_ARRAY_HASH_SEMANTICS,
+    TBG_ZERO_FIELD_COMPANION_INTERACTION_FINITE_Q_KERNEL_REFERENCE_LINES as SOURCE_INTERACTION_FINITE_Q_KERNEL_REFERENCE_LINES,
+    TBG_ZERO_FIELD_COMPANION_INTERACTION_Q0_REFERENCE_LINES as SOURCE_INTERACTION_Q0_REFERENCE_LINES,
+    TBG_ZERO_FIELD_COMPANION_INTERACTION_REFERENCE_LINES as SOURCE_INTERACTION_REFERENCE_LINES,
+    TBG_ZERO_FIELD_COMPANION_INTERACTION_SCOPE,
+    TBG_ZERO_FIELD_COMPANION_INTERACTION_SOURCE_DSC_M,
+    TBG_ZERO_FIELD_COMPANION_INTERACTION_SUPPORT_REFERENCE_LINES as SOURCE_INTERACTION_SUPPORT_REFERENCE_LINES,
+    echarge as companion_echarge,
+    epsilon0 as companion_epsilon0,
+    solve_tbg_zero_field_companion_interaction,
+)
 from mean_field.systems.tbg.zero_field.companion_single_particle import (
     Beta,
     CCa,
@@ -33,6 +46,7 @@ from mean_field.systems.tbg.zero_field.companion_single_particle import (
     TBG_ZERO_FIELD_COMPANION_SINGLE_PARTICLE_SCOPE,
     gen_RLVs as gen_companion_RLVs,
     gen_moire_hamiltonian as gen_companion_moire_hamiltonian,
+    kD as companion_kD,
     solve_tbg_zero_field_companion_single_particle,
     vhbar as companion_vhbar,
 )
@@ -2751,3 +2765,354 @@ def test_companion_port_matches_pinned_source_fixture_gauge_invariants_and_c2t(
             rtol=0.0,
             atol=5.0e-10,
         )
+
+
+# ---------------------------------------------------------------------------
+# Stage-3 source-faithful companion interaction diagnostic
+# ---------------------------------------------------------------------------
+
+_COMPANION_INTERACTION_FIXTURE_DIRECTORY = (
+    Path(__file__).resolve().parent / "fixtures" / "tbg_companion_interaction_v1"
+)
+_COMPANION_INTERACTION_FIXTURE_ARRAY_KEYS = {"source_intFT"}
+_COMPANION_INTERACTION_FIXTURE_MANIFEST_KEYS = {
+    "array_hash_convention",
+    "array_hash_semantics",
+    "arrays",
+    "environment",
+    "fixture_npz",
+    "fixture_npz_sha256",
+    "fixture_schema",
+    "fixture_schema_version",
+    "generator_script",
+    "generator_script_sha256",
+    "inherited_input",
+    "input_overrides",
+    "output_units",
+    "pinned_source",
+    "resolved_input",
+    "resolved_input_sha256",
+}
+_COMPANION_INTERACTION_INPUT_OVERRIDES = {
+    "N1": 2,
+    "N2": 3,
+    "Ng1": 2,
+    "Ng2": 2,
+    "n_active": 1,
+    "theta": 1.08,
+    "wAA": 0.07,
+    "wAB": 0.11,
+    "strain": 0.003,
+    "varphi": 17.0,
+}
+_COMPANION_INTERACTION_INHERITED_INPUT = {
+    "NG1": 5,
+    "NG2": 5,
+    "dsc": 2.5000000000000002e-8,
+    "gates": "dual",
+    "include_q=0": True,
+}
+_COMPANION_INTERACTION_SOURCE_LINE_RANGES = {
+    "finite_q_kernels": "251-257",
+    "gen_interaction": "205-258",
+    "q0_branch": "240-250",
+    "support_and_allocation": "220-239",
+}
+
+
+@pytest.fixture(scope="module")
+def companion_interaction_source_fixture():
+    manifest_path = _COMPANION_INTERACTION_FIXTURE_DIRECTORY / "manifest.json"
+    generator_path = _COMPANION_INTERACTION_FIXTURE_DIRECTORY / "generate_fixture.py"
+    assert manifest_path.is_file(), (
+        "Pinned companion interaction manifest is absent; explicitly run "
+        "tests/fixtures/tbg_companion_interaction_v1/generate_fixture.py first"
+    )
+    assert generator_path.is_file(), "Pinned companion interaction generator is absent"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    fixture_path = _COMPANION_INTERACTION_FIXTURE_DIRECTORY / manifest["fixture_npz"]
+    assert fixture_path.is_file(), (
+        "Pinned companion interaction NPZ is absent; explicitly run "
+        "tests/fixtures/tbg_companion_interaction_v1/generate_fixture.py first"
+    )
+    with np.load(fixture_path, allow_pickle=False) as archive:
+        arrays = {key: np.array(archive[key], copy=True) for key in archive.files}
+    return manifest, arrays, generator_path, fixture_path
+
+
+def test_companion_interaction_fixture_manifest_and_payload_are_exactly_bound(
+    companion_interaction_source_fixture,
+) -> None:
+    manifest, arrays, generator_path, fixture_path = companion_interaction_source_fixture
+
+    assert set(manifest) == _COMPANION_INTERACTION_FIXTURE_MANIFEST_KEYS
+    assert manifest["fixture_schema"] == (
+        "mean_field.tbg.companion_interaction.source_fixture"
+    )
+    assert manifest["fixture_schema_version"] == 1
+    assert manifest["array_hash_convention"] == (
+        "sha256_little_endian_int64_shape_then_C_order_little_endian_array_bytes"
+    )
+    assert manifest["array_hash_semantics"] == SOURCE_INTERACTION_ARRAY_HASH_SEMANTICS
+    assert manifest["output_units"] == {"source_intFT": "eV"}
+    assert manifest["input_overrides"] == _COMPANION_INTERACTION_INPUT_OVERRIDES
+    assert set(manifest["input_overrides"]) == set(_COMPANION_INTERACTION_INPUT_OVERRIDES)
+    assert manifest["inherited_input"] == _COMPANION_INTERACTION_INHERITED_INPUT
+    assert manifest["inherited_input"]["dsc"] == 2.5000000000000002e-8
+    assert manifest["inherited_input"]["dsc"] != 25e-9
+
+    expected_resolved_input = {
+        **_COMPANION_INTERACTION_INPUT_OVERRIDES,
+        **_COMPANION_INTERACTION_INHERITED_INPUT,
+    }
+    assert manifest["resolved_input"] == expected_resolved_input
+    assert manifest["resolved_input_sha256"] == _companion_fixture_json_sha256(
+        manifest["resolved_input"]
+    )
+
+    pinned_source = manifest["pinned_source"]
+    assert set(pinned_source) == {
+        "constants",
+        "default_input",
+        "reference_commit",
+        "reference_repository",
+        "single_particle",
+        "source_line_ranges",
+    }
+    assert pinned_source["reference_repository"] == (
+        TBG_ZERO_FIELD_COMPANION_REFERENCE_REPOSITORY
+    )
+    assert pinned_source["reference_commit"] == TBG_ZERO_FIELD_COMPANION_REFERENCE_COMMIT
+    assert pinned_source["default_input"] == {
+        "path": TBG_ZERO_FIELD_COMPANION_DEFAULT_INPUT_SOURCE,
+        "sha256": TBG_ZERO_FIELD_COMPANION_DEFAULT_INPUT_SOURCE_SHA256,
+    }
+    assert pinned_source["single_particle"] == {
+        "path": (
+            f"{TBG_ZERO_FIELD_COMPANION_REFERENCE_REPOSITORY}/"
+            f"{TBG_ZERO_FIELD_COMPANION_REFERENCE_SOURCE}"
+        ),
+        "sha256": TBG_ZERO_FIELD_COMPANION_REFERENCE_SOURCE_SHA256,
+    }
+    assert pinned_source["constants"] == {
+        "path": (
+            f"{TBG_ZERO_FIELD_COMPANION_REFERENCE_REPOSITORY}/"
+            f"{TBG_ZERO_FIELD_COMPANION_CONSTANTS_SOURCE}"
+        ),
+        "sha256": TBG_ZERO_FIELD_COMPANION_CONSTANTS_SOURCE_SHA256,
+    }
+    assert pinned_source["source_line_ranges"] == (
+        _COMPANION_INTERACTION_SOURCE_LINE_RANGES
+    )
+
+    assert set(manifest["environment"]) == {
+        "numpy",
+        "python",
+        "zlib_compile",
+        "zlib_runtime",
+    }
+    assert all(
+        isinstance(version, str) and version
+        for version in manifest["environment"].values()
+    )
+    assert manifest["generator_script"] == generator_path.name
+    assert _is_sha256(manifest["generator_script_sha256"])
+    assert manifest["generator_script_sha256"] == _companion_fixture_file_sha256(
+        generator_path
+    )
+    assert manifest["fixture_npz"] == fixture_path.name
+    assert _is_sha256(manifest["fixture_npz_sha256"])
+    assert manifest["fixture_npz_sha256"] == _companion_fixture_file_sha256(fixture_path)
+
+    assert set(manifest["arrays"]) == _COMPANION_INTERACTION_FIXTURE_ARRAY_KEYS
+    assert set(arrays) == _COMPANION_INTERACTION_FIXTURE_ARRAY_KEYS
+    record = manifest["arrays"]["source_intFT"]
+    array = arrays["source_intFT"]
+    assert set(record) == {"dtype", "sha256", "shape"}
+    assert record["shape"] == [2, 3, 10, 10] == list(array.shape)
+    assert record["dtype"] == "<f8" == array.dtype.str
+    assert _is_sha256(record["sha256"])
+    assert record["sha256"] == _companion_fixture_array_sha256(array)
+
+
+def test_companion_source_interaction_spec_freezes_source_fields_and_lines() -> None:
+    spec = TBGZeroFieldCompanionSourceInteractionSpec()
+
+    assert TBG_ZERO_FIELD_COMPANION_INTERACTION_SOURCE_DSC_M == (
+        2.5000000000000002e-8
+    )
+    assert TBG_ZERO_FIELD_COMPANION_INTERACTION_SOURCE_DSC_M != 25e-9
+    assert spec.to_companion_input() == _COMPANION_INTERACTION_INHERITED_INPUT
+    metadata = spec.to_metadata()
+    assert metadata["reference_function"] == "gen_interaction"
+    assert metadata["reference_lines"] == SOURCE_INTERACTION_REFERENCE_LINES == "205-258"
+    assert SOURCE_INTERACTION_SUPPORT_REFERENCE_LINES == "220-239"
+    assert SOURCE_INTERACTION_Q0_REFERENCE_LINES == "240-250"
+    assert SOURCE_INTERACTION_FINITE_Q_KERNEL_REFERENCE_LINES == "251-257"
+    assert metadata["source_units"] == {
+        "b1_b2": "dimensionless_in_units_of_2*kD*sin(theta/2)",
+        "coulomb_prefactor": "eV*m",
+        "dsc": "m",
+        "intFT": "eV",
+        "physical_q": "m^-1",
+        "theta": "degree",
+        "total_real_space_area": "m^2",
+    }
+    assert metadata["fingerprint"] == spec.fingerprint
+
+    with pytest.raises(ValueError, match="freezes NG1=5 and NG2=5"):
+        replace(spec, NG1=4)
+    with pytest.raises(ValueError, match="dsc_m=2.5000000000000002e-8 m"):
+        replace(spec, dsc_m=25e-9)
+    with pytest.raises(ValueError, match="gates must be either"):
+        replace(spec, gates="none")  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="include_q0 must be bool"):
+        replace(spec, include_q0=np.bool_(True))  # type: ignore[arg-type]
+
+
+def test_companion_source_interaction_port_matches_isolated_fixture(
+    companion_interaction_source_fixture,
+) -> None:
+    manifest, arrays, _generator_path, _fixture_path = companion_interaction_source_fixture
+    params = _small_companion_single_particle_params(N1=2, N2=3)
+    result = solve_tbg_zero_field_companion_interaction(params)
+
+    assert manifest["resolved_input"] == {
+        **result.params.to_companion_input(),
+        **result.spec.to_companion_input(),
+    }
+    np.testing.assert_allclose(
+        result.intFT_ev,
+        arrays["source_intFT"],
+        rtol=5.0e-15,
+        atol=0.0,
+    )
+    assert result.intFT_ev.shape == (2, 3, 10, 10)
+    assert result.intFT_ev.dtype == np.dtype(np.float64)
+    assert not result.intFT_ev.flags.writeable
+    assert result.array_hashes.intFT_ev == _companion_fixture_array_sha256(
+        result.intFT_ev
+    )
+    assert result.array_hashes.semantics == SOURCE_INTERACTION_ARRAY_HASH_SEMANTICS
+    assert result.provenance.interaction_reference_lines == "205-258"
+    assert result.provenance.interaction_support_reference_lines == "220-239"
+    assert result.provenance.interaction_q0_reference_lines == "240-250"
+    assert result.provenance.interaction_finite_q_kernel_reference_lines == "251-257"
+    assert result.provenance.scientific_scope == TBG_ZERO_FIELD_COMPANION_INTERACTION_SCOPE
+    assert result.provenance.scientific_scope == (
+        "diagnostic_interaction_parity_only_not_production_HF_or_TDHF"
+    )
+
+    metadata = result.to_metadata()
+    assert metadata["params"] == result.params.to_metadata()
+    assert metadata["params_fingerprint"] == result.params.fingerprint
+    assert metadata["rlv_geometry"] == result.rlv_geometry.to_metadata()
+    assert metadata["rlv_geometry_fingerprint"] == result.rlv_geometry.fingerprint
+    assert metadata["fingerprint"] == result.fingerprint
+
+
+def test_companion_source_interaction_q0_interior_outside_support_and_source_units() -> None:
+    params = _small_companion_single_particle_params(N1=2, N2=3)
+    dual = solve_tbg_zero_field_companion_interaction(
+        params,
+        TBGZeroFieldCompanionSourceInteractionSpec(gates="dual", include_q0=True),
+    )
+    dual_without_q0 = solve_tbg_zero_field_companion_interaction(
+        params,
+        TBGZeroFieldCompanionSourceInteractionSpec(gates="dual", include_q0=False),
+    )
+    single = solve_tbg_zero_field_companion_interaction(
+        params,
+        TBGZeroFieldCompanionSourceInteractionSpec(gates="single", include_q0=True),
+    )
+
+    b1 = dual.rlv_geometry.b1
+    b2 = dual.rlv_geometry.b2
+    q_scale_m_inv = 2.0 * companion_kD * np.sin(params.theta_rad / 2.0)
+    reciprocal_cell_area = abs(b1[0] * b2[1] - b1[1] * b2[0])
+    area_m2 = (
+        params.N1
+        * params.N2
+        * (4.0 * np.pi**2)
+        / reciprocal_cell_area
+        / q_scale_m_inv**2
+    )
+    U_ev_m = companion_echarge**2 / (2.0 * companion_epsilon0) / companion_echarge
+    q0_index = (0, 0, dual.spec.NG1, dual.spec.NG2)
+    np.testing.assert_allclose(
+        dual.intFT_ev[q0_index],
+        U_ev_m * dual.spec.dsc_m / area_m2,
+        rtol=2.0e-15,
+        atol=0.0,
+    )
+    np.testing.assert_allclose(
+        single.intFT_ev[q0_index],
+        2.0 * U_ev_m * single.spec.dsc_m / area_m2,
+        rtol=2.0e-15,
+        atol=0.0,
+    )
+    assert dual_without_q0.intFT_ev[q0_index] == 0.0
+
+    interior_index = (0, 0, dual.spec.NG1, dual.spec.NG2 + 1)
+    modq_m_inv = np.linalg.norm(q_scale_m_inv * b2)
+    expected_dual_ev = (
+        U_ev_m
+        * np.tanh(modq_m_inv * dual.spec.dsc_m)
+        / modq_m_inv
+        / area_m2
+    )
+    expected_single_ev = (
+        U_ev_m
+        * (1.0 - np.exp(-2.0 * single.spec.dsc_m * modq_m_inv))
+        / modq_m_inv
+        / area_m2
+    )
+    np.testing.assert_allclose(
+        dual.intFT_ev[interior_index],
+        expected_dual_ev,
+        rtol=2.0e-15,
+        atol=0.0,
+    )
+    np.testing.assert_allclose(
+        single.intFT_ev[interior_index],
+        expected_single_ev,
+        rtol=2.0e-15,
+        atol=0.0,
+    )
+    assert dual_without_q0.intFT_ev[interior_index] == dual.intFT_ev[interior_index]
+
+    R1 = dual.spec.NG1 * np.linalg.norm(
+        b1 - b2 * np.dot(b1, b2) / np.dot(b2, b2)
+    )
+    R2 = dual.spec.NG1 * np.linalg.norm(
+        b2 - b1 * np.dot(b1, b2) / np.dot(b1, b1)
+    )
+    radius = min(R1, R2)
+    expected_support = np.zeros(dual.intFT_ev.shape, dtype=bool)
+    for ik1 in range(params.N1):
+        for ik2 in range(params.N2):
+            for G1 in range(-dual.spec.NG1, dual.spec.NG1):
+                for G2 in range(-dual.spec.NG2, dual.spec.NG2):
+                    Q = (
+                        ik1 * b1 / params.N1
+                        + ik2 * b2 / params.N2
+                        + G1 * b1
+                        + G2 * b2
+                    )
+                    expected_support[
+                        ik1,
+                        ik2,
+                        G1 + dual.spec.NG1,
+                        G2 + dual.spec.NG2,
+                    ] = np.linalg.norm(Q) < radius - 1.0e-5
+    np.testing.assert_array_equal(dual.intFT_ev > 0.0, expected_support)
+    outside_index = (0, 0, 0, 0)
+    assert not expected_support[outside_index]
+    assert dual.intFT_ev[outside_index] == 0.0
+
+    metadata = dual.to_metadata()
+    assert metadata["coulomb_prefactor_ev_m"] == dual.coulomb_prefactor_ev_m
+    assert metadata["physical_q_scale_m_inv"] == dual.physical_q_scale_m_inv
+    assert metadata["total_real_space_area_m2"] == dual.total_real_space_area_m2
+    assert metadata["source_units"]["intFT"] == "eV"
+    assert metadata["source_units"]["physical_q"] == "m^-1"

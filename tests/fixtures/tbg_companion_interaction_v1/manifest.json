@@ -1,0 +1,90 @@
+{
+  "array_hash_convention": "sha256_little_endian_int64_shape_then_C_order_little_endian_array_bytes",
+  "array_hash_semantics": "artifact_integrity_only_not_cross_platform_float_parity",
+  "arrays": {
+    "source_intFT": {
+      "dtype": "<f8",
+      "sha256": "ff35903643e9facd45d6989cae7247aa60994d4d220ce0cf21f8824a34634dff",
+      "shape": [
+        2,
+        3,
+        10,
+        10
+      ]
+    }
+  },
+  "environment": {
+    "numpy": "2.3.5",
+    "python": "3.13.9",
+    "zlib_compile": "1.3.1",
+    "zlib_runtime": "1.3.1"
+  },
+  "fixture_npz": "fixture.npz",
+  "fixture_npz_sha256": "55e12029e325622b557fc5675373756e0232b17069bfed811cdff4402a286f55",
+  "fixture_schema": "mean_field.tbg.companion_interaction.source_fixture",
+  "fixture_schema_version": 1,
+  "generator_script": "generate_fixture.py",
+  "generator_script_sha256": "08d0ea05437a82cb1597aa02e64feb40f3ae546792f4a64b3adee0480b01b719",
+  "inherited_input": {
+    "NG1": 5,
+    "NG2": 5,
+    "dsc": 2.5000000000000002e-08,
+    "gates": "dual",
+    "include_q=0": true
+  },
+  "input_overrides": {
+    "N1": 2,
+    "N2": 3,
+    "Ng1": 2,
+    "Ng2": 2,
+    "n_active": 1,
+    "strain": 0.003,
+    "theta": 1.08,
+    "varphi": 17.0,
+    "wAA": 0.07,
+    "wAB": 0.11
+  },
+  "output_units": {
+    "source_intFT": "eV"
+  },
+  "pinned_source": {
+    "constants": {
+      "path": "reference/TBG-HF/constants.py",
+      "sha256": "8d25bcccd54e41207788ff4a9e1b934a50347fabdad46ba44408fc535573ec62"
+    },
+    "default_input": {
+      "path": "reference/TBG-HF/int_input.json",
+      "sha256": "c143c294ad95cf94d91cfbabd0437556e5c2a342850d54484c9b47caaf84b4de"
+    },
+    "reference_commit": "0d2a3d742aa901fa45ce46690c1385887165f58c",
+    "reference_repository": "reference/TBG-HF",
+    "single_particle": {
+      "path": "reference/TBG-HF/singleParticle.py",
+      "sha256": "a050fa545c4d399b227a178bcc4705a110bd7962edcb9e1f69e300b5e1a3e43b"
+    },
+    "source_line_ranges": {
+      "finite_q_kernels": "251-257",
+      "gen_interaction": "205-258",
+      "q0_branch": "240-250",
+      "support_and_allocation": "220-239"
+    }
+  },
+  "resolved_input": {
+    "N1": 2,
+    "N2": 3,
+    "NG1": 5,
+    "NG2": 5,
+    "Ng1": 2,
+    "Ng2": 2,
+    "dsc": 2.5000000000000002e-08,
+    "gates": "dual",
+    "include_q=0": true,
+    "n_active": 1,
+    "strain": 0.003,
+    "theta": 1.08,
+    "varphi": 17.0,
+    "wAA": 0.07,
+    "wAB": 0.11
+  },
+  "resolved_input_sha256": "ace4597af41155dcc14efa27f737077d2700eb19d1d6dc3f9e53749188ba07a2"
+}
