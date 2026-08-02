@@ -11,10 +11,13 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+import mean_field.systems.tbg.zero_field.companion_tdhf as companion_tdhf_module
 from mean_field.core.hf import (
     build_projected_interaction_hamiltonian,
     calculate_norm_convergence,
+    classify_tdhf_stability,
     compute_hf_energy,
+    solve_tdhf_liouvillian,
 )
 from mean_field.systems.tbg.params import TBGParameters
 from mean_field.systems.tbg.zero_field.companion_kivc_seed import (
@@ -85,6 +88,39 @@ from mean_field.systems.tbg.zero_field.companion_hf_scf import (
     companion_oda_coefficients,
     qualify_tbg_zero_field_companion_hf_diagnostic,
     run_tbg_zero_field_companion_hf_diagnostic,
+)
+from mean_field.systems.tbg.zero_field.companion_tdhf import (
+    Stage7ADiagnosticConsumptionReceipt,
+    TBGZeroFieldCompanionTDHFSource,
+    TBG_ZERO_FIELD_COMPANION_TDHF_ARCHITECTURE_EXCEPTION,
+    TBG_ZERO_FIELD_COMPANION_TDHF_COMMON_SPIN_BASIS_ATOL_EV,
+    TBG_ZERO_FIELD_COMPANION_TDHF_COMMON_SPIN_BASIS_SOURCE,
+    TBG_ZERO_FIELD_COMPANION_TDHF_DEGENERACY_ATOL_EV,
+    TBG_ZERO_FIELD_COMPANION_TDHF_DIAGNOSTIC_CONSUMPTION_SCOPE,
+    TBG_ZERO_FIELD_COMPANION_TDHF_EVIDENCE_BUNDLE_SCHEMA,
+    TBG_ZERO_FIELD_COMPANION_TDHF_EVIDENCE_BUNDLE_SCHEMA_VERSION,
+    TBG_ZERO_FIELD_COMPANION_TDHF_EQ90_SIGN_CONVENTION,
+    TBG_ZERO_FIELD_COMPANION_TDHF_MAX_MIXED_AUFBAU_CLOSURE,
+    TBG_ZERO_FIELD_COMPANION_TDHF_PAPER_ARXIV,
+    TBG_ZERO_FIELD_COMPANION_TDHF_PAPER_EQUATIONS,
+    TBG_ZERO_FIELD_COMPANION_TDHF_Q0_RAW_PAIRING_RESIDUAL_ATOL_EV,
+    TBG_ZERO_FIELD_COMPANION_TDHF_RAW_EIGENSOLVER_RESIDUAL_ATOL_EV,
+    TBG_ZERO_FIELD_COMPANION_TDHF_SCOPE,
+    TBG_ZERO_FIELD_COMPANION_TDHF_SELECTED_EIGENSOLVER_RESIDUAL_ATOL_EV,
+    TBG_ZERO_FIELD_COMPANION_TDHF_SUMMARY_SCHEMA,
+    TBG_ZERO_FIELD_COMPANION_TDHF_SUMMARY_SCHEMA_VERSION,
+    _build_tbg_zero_field_companion_single_spin_q0_parity_oracle,
+    build_tbg_zero_field_companion_hf_form_factors,
+    build_tbg_zero_field_companion_q0_parity_oracle,
+    build_tbg_zero_field_companion_signed_q_label,
+    build_tbg_zero_field_companion_static_kernel,
+    build_tbg_zero_field_companion_tdhf_source_from_in_memory_arrays,
+    build_tbg_zero_field_companion_tdhf_source_from_stage6_run,
+    build_tbg_zero_field_companion_transition_inventories,
+    evaluate_tbg_zero_field_companion_static_matrix_action,
+    load_tbg_zero_field_companion_tdhf_source_from_stage6_artifacts,
+    solve_tbg_zero_field_companion_dense_spectrum,
+    tbg_zero_field_companion_signed_spectral_pairing,
 )
 from mean_field.systems.tbg.zero_field.companion_interaction import (
     TBGZeroFieldCompanionInteractionSpec as TBGZeroFieldCompanionSourceInteractionSpec,
@@ -6327,3 +6363,1232 @@ def test_companion_qualification_report_recomputes_every_live_field(
         match="qualification local_occupations do not match live run",
     ):
         TBGZeroFieldCompanionHFQualificationReport(**coherent_occupation_fields)
+
+
+# ---------------------------------------------------------------------------
+# Stage-7A diagnostic-only companion finite-q TDHF core
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def companion_stage7a_source(
+    companion_hf_action_source_fixture,
+    companion_stage4_typed_inputs,
+) -> TBGZeroFieldCompanionTDHFSource:
+    """Tiny source-gauge Stage4 plus typed Stage6 fixed point; not production."""
+
+    _manifest, stage4, _generator, _fixture = companion_hf_action_source_fixture
+    single_particle, interaction = companion_stage4_typed_inputs
+    prepared = prepare_tbg_zero_field_companion_hf_action(
+        _source_gauge_single_particle(single_particle, stage4),
+        interaction,
+    )
+    stationary = companion_aufbau(prepared, prepared.H_SP_ev, filling=0)
+    run = run_tbg_zero_field_companion_hf_diagnostic(
+        prepared,
+        stationary.projector,
+        stationary.projector,
+        TBGZeroFieldCompanionHFSCFSpec(
+            filling=0,
+            HF_itermax=3,
+            HF_itermin=0,
+            tolerance=1.0e-8,
+        ),
+    )
+    assert run.converged
+    assert run.closure_difference <= (
+        TBG_ZERO_FIELD_COMPANION_TDHF_MAX_MIXED_AUFBAU_CLOSURE
+    )
+    return build_tbg_zero_field_companion_tdhf_source_from_stage6_run(run)
+
+
+def _stage7a_in_memory_source(
+    source: TBGZeroFieldCompanionTDHFSource,
+    *,
+    eigenvectors: np.ndarray | None = None,
+    H_total_ev: np.ndarray | None = None,
+) -> TBGZeroFieldCompanionTDHFSource:
+    return build_tbg_zero_field_companion_tdhf_source_from_in_memory_arrays(
+        source.prepared,
+        final_projector_mixed=source.final_projector_mixed,
+        reference=source.reference,
+        H_total_ev=(source.H_total_ev if H_total_ev is None else H_total_ev),
+        eigenvalues_ev=source.eigenvalues_ev,
+        eigenvectors=(source.eigenvectors if eigenvectors is None else eigenvectors),
+        fill_indices=source.fill_indices,
+        occupations=source.occupations,
+        final_projector_aufbau=source.final_projector_aufbau,
+        filling=source.filling,
+        electron_count=source.electron_count,
+    )
+
+def _stage7a_job_state_payload(
+    source: TBGZeroFieldCompanionTDHFSource,
+) -> dict[str, np.ndarray]:
+    dimension = source.dimension
+    return {
+        "final_H_total_ev": source.H_total_ev,
+        "final_fill_indices": source.fill_indices,
+        "final_hf_eigenvalues_ev": np.reshape(
+            source.eigenvalues_ev,
+            (-1,),
+            order="C",
+        ),
+        "final_hf_eigenvectors": np.reshape(
+            source.eigenvectors,
+            (-1, dimension, dimension),
+            order="C",
+        ),
+        "final_projector_aufbau_stored": source.final_projector_aufbau,
+        "final_projector_mixed_stored": source.final_projector_mixed,
+        "history_iterations": np.asarray([0], dtype=np.int64),
+        "reference_projector_stored": source.reference,
+    }
+
+
+def _stage7a_file_record(root: Path, path: Path) -> dict[str, object]:
+    payload = path.read_bytes()
+    return {
+        "path": str(path.relative_to(root)),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "size_bytes": len(payload),
+    }
+
+
+def _stage7a_write_job_artifacts(
+    root: Path,
+    source: TBGZeroFieldCompanionTDHFSource,
+    *,
+    payload: dict[str, np.ndarray] | None = None,
+    declared_array_keys: list[str] | None = None,
+    summary_schema: str = TBG_ZERO_FIELD_COMPANION_TDHF_SUMMARY_SCHEMA,
+    summary_status: str = "pass",
+    summary_scope: str = (
+        "N10_companion_HF_prerequisite_diagnostic_"
+        "not_production_not_TDHF_not_Fig8_reproduction"
+    ),
+    summary_limitations: list[str] | None = None,
+    target_filling: int | None = None,
+    prepared_fingerprint: str | None = None,
+    evidence_status: str = "pass",
+    evidence_job_id: str = "201962",
+) -> SimpleNamespace:
+    output = root / "output"
+    controller = root / "controller"
+    output.mkdir(parents=True)
+    controller.mkdir(parents=True)
+    state_path = output / "hfdiag_state_201962.npz"
+    state_payload = _stage7a_job_state_payload(source) if payload is None else payload
+    np.savez(state_path, **state_payload)
+    state_bytes = state_path.read_bytes()
+    state_sha = hashlib.sha256(state_bytes).hexdigest()
+    source_commit = "1" * 40
+    source_commit_path = root / "SOURCE_COMMIT.txt"
+    source_commit_path.write_text(source_commit + "\n", encoding="utf-8")
+    manifest_path = root / "STATIC_SHA256SUMS.txt"
+    manifest_path.write_text("job-style fixture manifest\n", encoding="utf-8")
+    limitations = (
+        [
+            "No TDHF implementation or Kwan Fig.8(a) spectrum was computed.",
+            "The NPZ is a diagnostic snapshot, not restart authority.",
+        ]
+        if summary_limitations is None
+        else summary_limitations
+    )
+    summary = {
+        "schema": summary_schema,
+        "schema_version": TBG_ZERO_FIELD_COMPANION_TDHF_SUMMARY_SCHEMA_VERSION,
+        "status": summary_status,
+        "scope": summary_scope,
+        "source_commit": source_commit,
+        "job": {
+            "job_id": "201962",
+            "allocation_attestation": {"job_id": "201962", "status": "pass"},
+        },
+        "target": {"filling": source.filling if target_filling is None else target_filling},
+        "limitations": limitations,
+        "fingerprints": {
+            "prepared_hf_action": (
+                source.prepared_fingerprint
+                if prepared_fingerprint is None
+                else prepared_fingerprint
+            ),
+            "scf_run": "2" * 64,
+        },
+        "state": {
+            "array_keys": (
+                sorted(state_payload)
+                if declared_array_keys is None
+                else declared_array_keys
+            ),
+            "path": str(state_path.resolve()),
+            "scope": (
+                "diagnostic_complete_HF_state_not_restart_authority_"
+                "not_TDHF_source"
+            ),
+            "sha256": state_sha,
+            "size_bytes": len(state_bytes),
+        },
+    }
+    summary_path = output / "hfdiag_summary_201962.json"
+    summary_path.write_text(
+        json.dumps(summary, sort_keys=True, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    records = {
+        "source_commit": _stage7a_file_record(root, source_commit_path),
+        "state": _stage7a_file_record(root, state_path),
+        "static_source_manifest": _stage7a_file_record(root, manifest_path),
+        "summary": _stage7a_file_record(root, summary_path),
+    }
+    evidence = {
+        "schema": TBG_ZERO_FIELD_COMPANION_TDHF_EVIDENCE_BUNDLE_SCHEMA,
+        "schema_version": (
+            TBG_ZERO_FIELD_COMPANION_TDHF_EVIDENCE_BUNDLE_SCHEMA_VERSION
+        ),
+        "status": evidence_status,
+        "scope": (
+            "qualified_single_seed_companion_HF_prerequisite_diagnostic_"
+            "not_production_not_TDHF_not_Fig8"
+        ),
+        "job_id": evidence_job_id,
+        "limitations": [
+            "state is diagnostic snapshot, not restart authority",
+            "no global-ground-state, TDHF, or Fig8 claim",
+        ],
+        "records": records,
+    }
+    evidence_path = controller / "evidence_bundle_201962.json"
+    evidence_path.write_text(
+        json.dumps(evidence, sort_keys=True, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    return SimpleNamespace(
+        state=state_path,
+        summary=summary_path,
+        evidence=evidence_path,
+        manifest=manifest_path,
+        state_sha256=state_sha,
+        summary_sha256=hashlib.sha256(summary_path.read_bytes()).hexdigest(),
+        evidence_sha256=hashlib.sha256(evidence_path.read_bytes()).hexdigest(),
+    )
+
+
+
+def test_companion_stage7a_scope_authority_and_no_package_export(
+    companion_stage7a_source,
+) -> None:
+    source = companion_stage7a_source
+    assert TBG_ZERO_FIELD_COMPANION_TDHF_SCOPE == (
+        "Stage7A_diagnostic_only_not_generic_TDHF_authority_production_or_Fig8"
+    )
+    assert TBG_ZERO_FIELD_COMPANION_TDHF_PAPER_ARXIV == "2511.21683v1"
+    assert TBG_ZERO_FIELD_COMPANION_TDHF_PAPER_EQUATIONS == (
+        15,
+        16,
+        17,
+        18,
+        64,
+        82,
+        83,
+        84,
+        88,
+        89,
+        90,
+    )
+    assert "system_local_q_label_only_binds_companion_form_and_reciprocal_carry" in (
+        TBG_ZERO_FIELD_COMPANION_TDHF_ARCHITECTURE_EXCEPTION
+    )
+    assert "generic_eigensolver_metric_normalization_and_stability_from_core_hf" in (
+        TBG_ZERO_FIELD_COMPANION_TDHF_ARCHITECTURE_EXCEPTION
+    )
+    assert "not_package_export_not_production_not_Fig8" in (
+        TBG_ZERO_FIELD_COMPANION_TDHF_ARCHITECTURE_EXCEPTION
+    )
+    front_door = importlib.import_module("mean_field.systems.tbg.zero_field")
+    for name in (
+        "TBGZeroFieldCompanionTDHFSource",
+        "build_tbg_zero_field_companion_static_kernel",
+        "evaluate_tbg_zero_field_companion_static_matrix_action",
+        "load_tbg_zero_field_companion_tdhf_source_from_checkpoint_npz",
+        "load_tbg_zero_field_companion_tdhf_source_from_stage6_artifacts",
+        "solve_tbg_zero_field_companion_dense_spectrum",
+    ):
+        assert not hasattr(front_door, name)
+    assert source.stage6_run is not None
+    assert source.prepared.form is source.stage6_run.prepared.form
+    assert source.prepared.screened_intFT_ev is (
+        source.stage6_run.prepared.screened_intFT_ev
+    )
+    assert source.residuals.positive_gap_ev > 0.0
+    assert source.residuals.mixed_aufbau_closure <= 1.0e-8
+    assert source.residuals.spin_occupied_subspace_max_abs <= 1.0e-10
+    assert source.residuals.common_spin_basis_eigenpair_max_abs_ev <= (
+        TBG_ZERO_FIELD_COMPANION_TDHF_COMMON_SPIN_BASIS_ATOL_EV
+    )
+    assert "exactly identical by construction" in (
+        TBG_ZERO_FIELD_COMPANION_TDHF_COMMON_SPIN_BASIS_SOURCE
+    )
+    assert source.diagnostic_consumption_receipt is None
+    residual_metadata = source.residuals.to_metadata()
+    assert set(residual_metadata) == {
+        field.name for field in fields(type(source.residuals))
+    }
+    json.dumps(residual_metadata, sort_keys=True, allow_nan=False)
+
+
+def test_companion_stage7a_raw_endpoint_q_labels_keep_distinct_provenance(
+    companion_stage7a_source,
+) -> None:
+    source = companion_stage7a_source
+    minus_endpoint = build_tbg_zero_field_companion_signed_q_label(source, (-1, 0))
+    plus_endpoint = build_tbg_zero_field_companion_signed_q_label(source, (1, 0))
+    assert minus_endpoint.raw != plus_endpoint.raw
+    assert minus_endpoint.canonical_delta == plus_endpoint.canonical_delta == (1, 0)
+    assert minus_endpoint.reciprocal_carry == (-1, 0)
+    assert plus_endpoint.reciprocal_carry == (0, 0)
+    assert minus_endpoint.fingerprint != plus_endpoint.fingerprint
+    assert minus_endpoint.leg_carry(0, 0) == (-1, 0)
+    assert plus_endpoint.leg_carry(1, 0) == (1, 0)
+
+    minus_form = build_tbg_zero_field_companion_hf_form_factors(
+        source,
+        minus_endpoint,
+    )
+    plus_form = build_tbg_zero_field_companion_hf_form_factors(source, plus_endpoint)
+    np.testing.assert_array_equal(minus_form.values, plus_form.values)
+    assert not np.array_equal(minus_form.raw_g_labels, plus_form.raw_g_labels)
+    assert minus_form.fingerprint != plus_form.fingerprint
+
+
+def test_companion_stage7a_eq16_boundary_carry_and_hash_receipts(
+    companion_stage7a_source,
+) -> None:
+    source = companion_stage7a_source
+    q = build_tbg_zero_field_companion_signed_q_label(source, (1, 2))
+    receipt = build_tbg_zero_field_companion_hf_form_factors(source, q)
+    assert q.canonical_delta == (1, 2)
+    assert ((-q.canonical_delta[0]) // q.N1, (-q.canonical_delta[1]) // q.N2) == (
+        -1,
+        -1,
+    )
+    expected_active = int(
+        np.count_nonzero(
+            source.prepared.screened_intFT_ev[
+                q.canonical_delta[0],
+                q.canonical_delta[1],
+            ]
+        )
+    )
+    assert receipt.interaction_active_count == expected_active
+    assert receipt.inverse_mapped_count == expected_active
+    assert receipt.inverse_missing_count == 0
+    assert receipt.inverse_weight_max_abs_ev <= 1.0e-14
+    assert receipt.eq16_matrix_comparison_count == expected_active * q.N1 * q.N2
+    assert receipt.eq16_carry_max_abs <= 1.0e-10
+    assert receipt.values_sha256 == _companion_fixture_array_sha256(receipt.values)
+    assert receipt.source_g_labels_sha256 == _companion_fixture_array_sha256(
+        receipt.source_g_labels
+    )
+    assert receipt.raw_g_labels_sha256 == _companion_fixture_array_sha256(
+        receipt.raw_g_labels
+    )
+
+def test_companion_stage7a_eq16_incomplete_interaction_support_fails_closed(
+    companion_stage7a_source,
+    monkeypatch,
+) -> None:
+    source = companion_stage7a_source
+    q = build_tbg_zero_field_companion_signed_q_label(source, (1, 2))
+    minus_q = build_tbg_zero_field_companion_signed_q_label(
+        source,
+        (-q.raw[0], -q.raw[1]),
+    )
+    original_weights = companion_tdhf_module._interaction_weights
+    labels = companion_tdhf_module._source_g_labels(source)
+    label_to_index = {g: index for index, g in enumerate(labels)}
+    source_weights = original_weights(source, q)
+    inverse_weights = original_weights(source, minus_q)
+    inverse_carry = (
+        (-q.canonical_delta[0]) // q.N1,
+        (-q.canonical_delta[1]) // q.N2,
+    )
+    selected_pair = None
+    for source_index in np.flatnonzero(source_weights != 0.0):
+        g1, g2 = labels[int(source_index)]
+        inverse_index = label_to_index.get(
+            (inverse_carry[0] - g1, inverse_carry[1] - g2)
+        )
+        if inverse_index is not None and inverse_weights[inverse_index] != 0.0:
+            selected_pair = (int(source_index), inverse_index)
+            break
+    assert selected_pair is not None, (
+        "fixture must contain an Eq. (16)-mapped interaction-active transfer"
+    )
+    selected_source_index, selected_inverse_index = selected_pair
+    assert source_weights[selected_source_index] != 0.0
+    assert inverse_weights[selected_inverse_index] != 0.0
+
+    def incomplete_inverse_weights(source_arg, q_arg):
+        weights = np.array(original_weights(source_arg, q_arg), copy=True)
+        if q_arg.raw == minus_q.raw:
+            weights[selected_inverse_index] = 0.0
+        return weights
+
+    monkeypatch.setattr(
+        companion_tdhf_module,
+        "_interaction_weights",
+        incomplete_inverse_weights,
+    )
+    with pytest.raises(ValueError, match="inverse support is incomplete"):
+        build_tbg_zero_field_companion_hf_form_factors(source, q)
+
+
+def test_companion_stage7a_transition_roles_q_maps_and_generic_static_structure(
+    companion_stage7a_source,
+) -> None:
+    source = companion_stage7a_source
+    inventories = build_tbg_zero_field_companion_transition_inventories(source, (1, 0))
+    q_inventory = inventories.q
+    minus_inventory = inventories.minus_q
+    assert TBG_ZERO_FIELD_COMPANION_TDHF_EQ90_SIGN_CONVENTION == (
+        "paper_occupation_sign=n_mu(k+q)-n_nu(k)=-core_metric_sign;"
+        "Eq90_is_K_phi=paper_occupation_sign*eta*omega*phi;"
+        "L=J_core*K;lambda_L=-eta*omega"
+    )
+    assert all(pair.role == "ph" for pair in q_inventory.pairs[: q_inventory.ph_count])
+    assert all(
+        (pair.core_metric_sign, pair.paper_occupation_sign) == (1, -1)
+        for pair in q_inventory.pairs[: q_inventory.ph_count]
+    )
+    assert all(pair.role == "hp" for pair in q_inventory.pairs[q_inventory.ph_count :])
+    assert all(
+        (pair.core_metric_sign, pair.paper_occupation_sign) == (-1, 1)
+        for pair in q_inventory.pairs[q_inventory.ph_count :]
+    )
+    occupations = source.canonical_occupations
+    for pair in q_inventory.pairs:
+        assert pair.paper_occupation_sign == (
+            int(
+                occupations[
+                    pair.k_target[0],
+                    pair.k_target[1],
+                    pair.mu_target,
+                ]
+            )
+            - int(
+                occupations[
+                    pair.k_source[0],
+                    pair.k_source[1],
+                    pair.nu_source,
+                ]
+            )
+        )
+        assert pair.paper_occupation_sign == -pair.core_metric_sign
+    for index, mapped in enumerate(q_inventory.conjugate_indices_at_minus_q):
+        assert minus_inventory.conjugate_indices_at_minus_q[int(mapped)] == index
+        pair = q_inventory.pairs[index]
+        conjugate = minus_inventory.pairs[int(mapped)]
+        assert conjugate.k_source == pair.k_target
+        assert conjugate.k_target == pair.k_source
+        assert conjugate.mu_target == pair.nu_source
+        assert conjugate.nu_source == pair.mu_target
+
+    q_kernel = build_tbg_zero_field_companion_static_kernel(
+        source,
+        (1, 0),
+        spin_sector="triplet",
+    )
+    minus_kernel = build_tbg_zero_field_companion_static_kernel(
+        source,
+        (-1, 0),
+        spin_sector="triplet",
+    )
+    assert q_kernel.direct_multiplier == minus_kernel.direct_multiplier == 0
+    assert q_kernel.residuals.K_hermiticity_max_abs_ev <= 1.0e-10
+    assert q_kernel.residuals.L_pseudo_hermiticity_max_abs_ev <= 1.0e-10
+    np.testing.assert_array_equal(
+        q_kernel.core_metric,
+        np.asarray(
+            [pair.core_metric_sign for pair in q_kernel.inventory.pairs],
+            dtype=np.float64,
+        ),
+    )
+    np.testing.assert_array_equal(
+        q_kernel.L_ev,
+        q_kernel.core_metric[:, None] * q_kernel.K_ev,
+    )
+
+    assert TBG_ZERO_FIELD_COMPANION_TDHF_DEGENERACY_ATOL_EV == 1.0e-10
+    assert TBG_ZERO_FIELD_COMPANION_TDHF_RAW_EIGENSOLVER_RESIDUAL_ATOL_EV == 1.0e-9
+    assert (
+        TBG_ZERO_FIELD_COMPANION_TDHF_SELECTED_EIGENSOLVER_RESIDUAL_ATOL_EV
+        == 1.0e-9
+    )
+    assert TBG_ZERO_FIELD_COMPANION_TDHF_Q0_RAW_PAIRING_RESIDUAL_ATOL_EV == 1.0e-9
+    q_spectrum = solve_tbg_zero_field_companion_dense_spectrum(q_kernel)
+    minus_spectrum = solve_tbg_zero_field_companion_dense_spectrum(minus_kernel)
+    n_pairs = q_kernel.inventory.ph_count
+    core_spectrum = solve_tdhf_liouvillian(
+        q_kernel.L_ev,
+        n_pairs=n_pairs,
+        energy_tol=(
+            companion_tdhf_module.TBG_ZERO_FIELD_COMPANION_TDHF_EIGEN_CLASSIFICATION_ATOL_EV
+        ),
+        imag_tol=(
+            companion_tdhf_module.TBG_ZERO_FIELD_COMPANION_TDHF_EIGEN_CLASSIFICATION_ATOL_EV
+        ),
+        norm_tol=(
+            companion_tdhf_module.TBG_ZERO_FIELD_COMPANION_TDHF_METRIC_CLASSIFICATION_ATOL
+        ),
+        degeneracy_tol=TBG_ZERO_FIELD_COMPANION_TDHF_DEGENERACY_ATOL_EV,
+    )
+    np.testing.assert_allclose(
+        q_spectrum.raw_eigenvalues_ev,
+        core_spectrum.raw_eigenvalues,
+        rtol=0.0,
+        atol=1.0e-13,
+    )
+    np.testing.assert_allclose(
+        q_spectrum.raw_J_metric_norms,
+        core_spectrum.raw_eta_norms,
+        rtol=0.0,
+        atol=1.0e-13,
+    )
+    np.testing.assert_allclose(
+        q_spectrum.raw_eigensolver_residuals_ev,
+        core_spectrum.raw_residuals,
+        rtol=0.0,
+        atol=1.0e-13,
+    )
+    np.testing.assert_allclose(
+        q_spectrum.selected_right_eigenvectors,
+        core_spectrum.amplitudes,
+        rtol=0.0,
+        atol=1.0e-13,
+    )
+    np.testing.assert_allclose(
+        q_spectrum.selected_eigensolver_residuals_ev,
+        core_spectrum.residuals,
+        rtol=0.0,
+        atol=1.0e-13,
+    )
+    assert q_spectrum.selected_right_eigenvectors.shape == (
+        q_spectrum.selected_eigenvalues_ev.size,
+        len(q_kernel.inventory.pairs),
+    )
+    np.testing.assert_array_equal(
+        q_spectrum.paper_eta_omega_ev,
+        -q_spectrum.selected_eigenvalues_ev,
+    )
+    expected_classification = classify_tdhf_stability(
+        core_spectrum.raw_eigenvalues,
+        core_spectrum.energies,
+        n_pairs=n_pairs,
+        structure_ok=True,
+        imag_tol=(
+            companion_tdhf_module.TBG_ZERO_FIELD_COMPANION_TDHF_EIGEN_CLASSIFICATION_ATOL_EV
+        ),
+        energy_tol=(
+            companion_tdhf_module.TBG_ZERO_FIELD_COMPANION_TDHF_EIGEN_CLASSIFICATION_ATOL_EV
+        ),
+    )
+    assert q_spectrum.anomaly_classification == expected_classification
+    assert q_spectrum.diagnostic_passed
+    assert q_spectrum.diagnostic_failure_reasons == ()
+    assert q_spectrum.raw_eigensolver_residual_max_ev <= (
+        TBG_ZERO_FIELD_COMPANION_TDHF_RAW_EIGENSOLVER_RESIDUAL_ATOL_EV
+    )
+    assert len(q_spectrum.raw_eigenvalues_ev) == len(q_kernel.inventory.pairs)
+    assert q_spectrum.raw_eigenvalues_ev.dtype == np.dtype(np.complex128)
+    classified = set(q_spectrum.complex_indices.tolist())
+    classified.update(q_spectrum.negative_real_indices.tolist())
+    classified.update(q_spectrum.static_real_indices.tolist())
+    classified.update(
+        np.flatnonzero(
+            (np.abs(q_spectrum.raw_eigenvalues_ev.imag) <= 1.0e-10)
+            & (q_spectrum.raw_eigenvalues_ev.real > 1.0e-10)
+        ).tolist()
+    )
+    assert classified == set(range(len(q_spectrum.raw_eigenvalues_ev)))
+    pairing = tbg_zero_field_companion_signed_spectral_pairing(
+        q_spectrum,
+        minus_spectrum,
+    )
+    assert pairing.q_raw == (1, 0)
+    assert pairing.minus_q_raw == (-1, 0)
+    assert pairing.max_abs_ev <= 1.0e-9
+
+
+def test_companion_stage7a_signed_spectral_pairing_preserves_duplicate_multiplicity(
+) -> None:
+    q_kernel = SimpleNamespace(
+        inventory=SimpleNamespace(q=SimpleNamespace(raw=(1, 0))),
+        source_fingerprint="synthetic-stage7a-source",
+        spin_sector="triplet",
+    )
+    minus_kernel = SimpleNamespace(
+        inventory=SimpleNamespace(q=SimpleNamespace(raw=(-1, 0))),
+        source_fingerprint="synthetic-stage7a-source",
+        spin_sector="triplet",
+    )
+    q_spectrum = SimpleNamespace(
+        kernel=q_kernel,
+        raw_eigenvalues_ev=np.asarray([1.0, 1.0, 2.0], dtype=np.complex128),
+    )
+    minus_spectrum = SimpleNamespace(
+        kernel=minus_kernel,
+        raw_eigenvalues_ev=np.asarray([-1.0, -2.0, -2.0], dtype=np.complex128),
+    )
+
+    pairing = tbg_zero_field_companion_signed_spectral_pairing(
+        q_spectrum,
+        minus_spectrum,
+    )
+    assert pairing.q_to_minus_q_max_abs_ev == 1.0
+    assert pairing.minus_q_to_q_max_abs_ev == 1.0
+    assert pairing.max_abs_ev == 1.0
+
+    unequal_minus_spectrum = SimpleNamespace(
+        kernel=minus_kernel,
+        raw_eigenvalues_ev=np.asarray([-1.0, -2.0], dtype=np.complex128),
+    )
+    with pytest.raises(ValueError, match="must have the same size"):
+        tbg_zero_field_companion_signed_spectral_pairing(
+            q_spectrum,
+            unequal_minus_spectrum,
+        )
+
+
+def test_companion_stage7a_dense_spectrum_fails_result_on_material_raw_residual(
+    companion_stage7a_source,
+    monkeypatch,
+) -> None:
+    kernel = build_tbg_zero_field_companion_static_kernel(
+        companion_stage7a_source,
+        (1, 0),
+        spin_sector="triplet",
+    )
+    core_solver = companion_tdhf_module.solve_tdhf_liouvillian
+
+    def solver_with_material_raw_residual(*args, **kwargs):
+        spectrum = core_solver(*args, **kwargs)
+        return replace(
+            spectrum,
+            raw_residuals=np.full_like(
+                spectrum.raw_residuals,
+                2.0 * TBG_ZERO_FIELD_COMPANION_TDHF_RAW_EIGENSOLVER_RESIDUAL_ATOL_EV,
+            ),
+        )
+
+    monkeypatch.setattr(
+        companion_tdhf_module,
+        "solve_tdhf_liouvillian",
+        solver_with_material_raw_residual,
+    )
+    result = solve_tbg_zero_field_companion_dense_spectrum(kernel)
+    assert not result.diagnostic_passed
+    assert result.diagnostic_failure_reasons == (
+        "max_raw_eigensolver_residual_exceeds_1e-9_eV",
+    )
+    assert result.raw_eigensolver_residual_max_ev > (
+        TBG_ZERO_FIELD_COMPANION_TDHF_RAW_EIGENSOLVER_RESIDUAL_ATOL_EV
+    )
+    assert result.raw_eigenvalues_ev.size == len(kernel.inventory.pairs)
+    assert result.raw_J_metric_norms.size == len(kernel.inventory.pairs)
+    assert result.raw_eigensolver_residuals_ev.size == len(kernel.inventory.pairs)
+
+
+def test_companion_stage7a_dense_spectrum_fails_when_selected_residual_fails(
+    companion_stage7a_source,
+    monkeypatch,
+) -> None:
+    kernel = build_tbg_zero_field_companion_static_kernel(
+        companion_stage7a_source,
+        (1, 0),
+        spin_sector="triplet",
+    )
+    core_solver = companion_tdhf_module.solve_tdhf_liouvillian
+
+    def solver_with_material_selected_residual(*args, **kwargs):
+        assert len(args) == 1
+        assert args[0] is kernel.L_ev
+        assert kwargs == {
+            "n_pairs": kernel.inventory.ph_count,
+            "energy_tol": (
+                companion_tdhf_module.TBG_ZERO_FIELD_COMPANION_TDHF_EIGEN_CLASSIFICATION_ATOL_EV
+            ),
+            "imag_tol": (
+                companion_tdhf_module.TBG_ZERO_FIELD_COMPANION_TDHF_EIGEN_CLASSIFICATION_ATOL_EV
+            ),
+            "norm_tol": (
+                companion_tdhf_module.TBG_ZERO_FIELD_COMPANION_TDHF_METRIC_CLASSIFICATION_ATOL
+            ),
+            "degeneracy_tol": TBG_ZERO_FIELD_COMPANION_TDHF_DEGENERACY_ATOL_EV,
+        }
+        spectrum = core_solver(*args, **kwargs)
+        assert np.all(np.isfinite(spectrum.raw_residuals))
+        assert np.max(np.abs(spectrum.raw_residuals)) <= (
+            TBG_ZERO_FIELD_COMPANION_TDHF_RAW_EIGENSOLVER_RESIDUAL_ATOL_EV
+        )
+        material_selected_residual = (
+            2.0
+            * TBG_ZERO_FIELD_COMPANION_TDHF_SELECTED_EIGENSOLVER_RESIDUAL_ATOL_EV
+        )
+        synthetic_X = np.zeros((1, spectrum.X.shape[1]), dtype=np.complex128)
+        synthetic_X[0, 0] = 1.0
+        return replace(
+            spectrum,
+            eigenvalues=np.asarray([0.0 + 0.0j], dtype=np.complex128),
+            energies=np.asarray([0.0], dtype=np.float64),
+            X=synthetic_X,
+            Y=np.zeros_like(synthetic_X),
+            eta_norms=np.asarray([1.0], dtype=np.float64),
+            residuals=np.asarray([material_selected_residual], dtype=np.float64),
+            selected_indices=np.asarray([0], dtype=np.int64),
+        )
+
+    monkeypatch.setattr(
+        companion_tdhf_module,
+        "solve_tdhf_liouvillian",
+        solver_with_material_selected_residual,
+    )
+    result = solve_tbg_zero_field_companion_dense_spectrum(kernel)
+    assert not result.diagnostic_passed
+    assert result.diagnostic_failure_reasons == (
+        "max_selected_normalized_mode_eigensolver_residual_exceeds_1e-9_eV",
+    )
+    assert result.raw_eigensolver_residual_max_ev <= (
+        TBG_ZERO_FIELD_COMPANION_TDHF_RAW_EIGENSOLVER_RESIDUAL_ATOL_EV
+    )
+    assert np.max(np.abs(result.selected_eigensolver_residuals_ev)) > (
+        TBG_ZERO_FIELD_COMPANION_TDHF_SELECTED_EIGENSOLVER_RESIDUAL_ATOL_EV
+    )
+
+def test_companion_stage7a_dense_spectrum_q0_gates_same_matrix_pairing(
+    companion_stage7a_source,
+    monkeypatch,
+) -> None:
+    kernel = build_tbg_zero_field_companion_static_kernel(
+        companion_stage7a_source,
+        (0, 0),
+        spin_sector="triplet",
+    )
+    core_solver = companion_tdhf_module.solve_tdhf_liouvillian
+    material_pairing_residual = (
+        2.0 * TBG_ZERO_FIELD_COMPANION_TDHF_Q0_RAW_PAIRING_RESIDUAL_ATOL_EV
+    )
+
+    def solver_with_material_pairing_residual(*args, **kwargs):
+        spectrum = core_solver(*args, **kwargs)
+        return replace(spectrum, pairing_residual=material_pairing_residual)
+
+    monkeypatch.setattr(
+        companion_tdhf_module,
+        "solve_tdhf_liouvillian",
+        solver_with_material_pairing_residual,
+    )
+    result = solve_tbg_zero_field_companion_dense_spectrum(kernel)
+    assert kernel.inventory.q.raw == (0, 0)
+    assert not result.diagnostic_passed
+    assert result.diagnostic_failure_reasons == (
+        "q0_same_matrix_raw_pairing_residual_exceeds_1e-9_eV",
+    )
+    assert result.raw_pairing_residual_ev == material_pairing_residual
+
+def test_companion_stage7a_dense_spectrum_generic_q_does_not_gate_same_matrix_pairing_or_anomaly(
+    companion_stage7a_source,
+    monkeypatch,
+) -> None:
+    kernel = build_tbg_zero_field_companion_static_kernel(
+        companion_stage7a_source,
+        (1, 0),
+        spin_sector="triplet",
+    )
+    core_solver = companion_tdhf_module.solve_tdhf_liouvillian
+    core_classifier = companion_tdhf_module.classify_tdhf_stability
+    material_pairing_residual = (
+        2.0 * TBG_ZERO_FIELD_COMPANION_TDHF_Q0_RAW_PAIRING_RESIDUAL_ATOL_EV
+    )
+
+    def solver_with_material_pairing_residual(*args, **kwargs):
+        spectrum = core_solver(*args, **kwargs)
+        return replace(spectrum, pairing_residual=material_pairing_residual)
+
+    def classify_as_unstable(*args, **kwargs):
+        classification = core_classifier(*args, **kwargs)
+        return replace(
+            classification,
+            stable=False,
+            complex_eigenvalues=True,
+            complex_count=max(1, classification.complex_count),
+            reason="test_control_flow_unstable",
+        )
+
+    monkeypatch.setattr(
+        companion_tdhf_module,
+        "solve_tdhf_liouvillian",
+        solver_with_material_pairing_residual,
+    )
+    monkeypatch.setattr(
+        companion_tdhf_module,
+        "classify_tdhf_stability",
+        classify_as_unstable,
+    )
+    result = solve_tbg_zero_field_companion_dense_spectrum(kernel)
+    assert kernel.inventory.q.raw == (1, 0)
+    assert result.raw_pairing_residual_ev == material_pairing_residual
+    assert not result.anomaly_classification.stable
+    assert result.diagnostic_passed
+    assert result.diagnostic_failure_reasons == ()
+
+def test_companion_stage7a_finite_q_direct_action_matches_each_dense_eq90_term(
+    companion_stage7a_source,
+) -> None:
+    source = companion_stage7a_source
+    kernel = build_tbg_zero_field_companion_static_kernel(
+        source,
+        (1, 0),
+        spin_sector="singlet",
+    )
+    rng = np.random.default_rng(7301)
+    vector = rng.standard_normal(len(kernel.inventory.pairs)) + 1.0j * rng.standard_normal(
+        len(kernel.inventory.pairs)
+    )
+    direct = evaluate_tbg_zero_field_companion_static_matrix_action(
+        source,
+        (1, 0),
+        vector,
+        spin_sector="singlet",
+    )
+    assert direct.inventory.pairs == kernel.inventory.pairs
+    assert np.max(np.abs(kernel.hartree_ev)) > 0.0
+    assert np.max(np.abs(kernel.exchange_ev)) > 0.0
+    for direct_term, dense_term in (
+        (direct.bare_action_ev, kernel.bare_ev),
+        (direct.hartree_action_ev, kernel.hartree_ev),
+        (direct.exchange_action_ev, kernel.exchange_ev),
+        (direct.K_action_ev, kernel.K_ev),
+    ):
+        np.testing.assert_allclose(
+            direct_term,
+            dense_term @ vector,
+            rtol=0.0,
+            atol=1.0e-12,
+        )
+
+def test_companion_stage7a_q0_scalar_response_all_columns_factor_one_triplet_singlet(
+    companion_stage7a_source,
+) -> None:
+    source = companion_stage7a_source
+    single_spin = _build_tbg_zero_field_companion_single_spin_q0_parity_oracle(source)
+    triplet = build_tbg_zero_field_companion_q0_parity_oracle(
+        source,
+        spin_sector="triplet",
+    )
+    singlet = build_tbg_zero_field_companion_q0_parity_oracle(
+        source,
+        spin_sector="singlet",
+    )
+    assert single_spin.direct_multiplier == 1
+    assert triplet.direct_multiplier == 0
+    assert singlet.direct_multiplier == 2
+    assert single_spin.columns == triplet.columns == singlet.columns
+    for oracle in (single_spin, triplet, singlet):
+        assert oracle.residuals.H_D_A_max_abs_ev <= 1.0e-12
+        assert oracle.residuals.H_E_A_max_abs_ev <= 1.0e-12
+        assert oracle.residuals.H_D_B_max_abs_ev <= 1.0e-12
+        assert oracle.residuals.H_E_B_max_abs_ev <= 1.0e-12
+        assert oracle.residuals.max_abs_ev <= 1.0e-12
+
+
+def test_companion_stage7a_random_pointwise_u1_gauge_covariance_is_entrywise(
+    companion_stage7a_source,
+) -> None:
+    source = companion_stage7a_source
+    rng = np.random.default_rng(7319)
+    state_phases = np.exp(
+        1.0j
+        * rng.uniform(
+            -np.pi,
+            np.pi,
+            size=(
+                source.prepared.params.N1,
+                source.prepared.params.N2,
+                source.dimension,
+            ),
+        )
+    )
+    gauged_vectors = source.eigenvectors * state_phases[:, :, None, None, :]
+    gauged_source = _stage7a_in_memory_source(source, eigenvectors=gauged_vectors)
+    assert gauged_source.source_kind == "in_memory_diagnostic_arrays"
+    assert gauged_source.source_artifact_sha256 is None
+    assert gauged_source.diagnostic_consumption_receipt is None
+    base_kernel = build_tbg_zero_field_companion_static_kernel(
+        source,
+        (1, 0),
+        spin_sector="singlet",
+    )
+    gauged_kernel = build_tbg_zero_field_companion_static_kernel(
+        gauged_source,
+        (1, 0),
+        spin_sector="singlet",
+    )
+    assert gauged_kernel.inventory.pairs == base_kernel.inventory.pairs
+    transition_phases = np.asarray(
+        [
+            np.conj(
+                state_phases[
+                    pair.k_source[0],
+                    pair.k_source[1],
+                    pair.nu_source,
+                ]
+            )
+            * state_phases[
+                pair.k_target[0],
+                pair.k_target[1],
+                pair.mu_target,
+            ]
+            for pair in base_kernel.inventory.pairs
+        ],
+        dtype=np.complex128,
+    )
+    for base_term, gauged_term in (
+        (base_kernel.hartree_ev, gauged_kernel.hartree_ev),
+        (base_kernel.exchange_ev, gauged_kernel.exchange_ev),
+        (base_kernel.K_ev, gauged_kernel.K_ev),
+    ):
+        expected = (
+            np.conj(transition_phases)[:, None]
+            * base_term
+            * transition_phases[None, :]
+        )
+        np.testing.assert_allclose(gauged_term, expected, rtol=0.0, atol=2.0e-12)
+
+
+def test_companion_stage7a_job_artifact_loader_binds_receipt_and_real_keys(
+    companion_stage7a_source,
+    tmp_path,
+) -> None:
+    source = companion_stage7a_source
+    artifacts = _stage7a_write_job_artifacts(tmp_path / "job201962", source)
+    loaded = load_tbg_zero_field_companion_tdhf_source_from_stage6_artifacts(
+        source.prepared,
+        artifacts.state,
+        artifacts.summary,
+        artifacts.evidence,
+    )
+    assert loaded.source_kind == "stage6_diagnostic_artifacts"
+    assert loaded.source_artifact_sha256 == artifacts.state_sha256
+    assert loaded.source_summary_sha256 == artifacts.summary_sha256
+    assert loaded.array_hashes == source.array_hashes
+    np.testing.assert_array_equal(loaded.occupations, source.occupations)
+    receipt = loaded.diagnostic_consumption_receipt
+    assert isinstance(receipt, Stage7ADiagnosticConsumptionReceipt)
+    assert receipt.consumption_scope == (
+        TBG_ZERO_FIELD_COMPANION_TDHF_DIAGNOSTIC_CONSUMPTION_SCOPE
+    )
+    assert receipt.summary_schema == (
+        "mean_field.tbg.kwan2511_fig8a.stage6_hf_diagnostic"
+    )
+    assert receipt.summary_status == receipt.evidence_status == "pass"
+    assert receipt.evidence_schema == (
+        "mean_field.tbg.kwan2511.stage6_hfdiag_evidence_bundle"
+    )
+    assert receipt.job_id == "201962"
+    assert receipt.source_commit == "1" * 40
+    assert receipt.prepared_fingerprint == source.prepared_fingerprint
+    assert receipt.state_sha256 == artifacts.state_sha256
+    assert receipt.summary_sha256 == artifacts.summary_sha256
+    assert receipt.evidence_bundle_sha256 == artifacts.evidence_sha256
+    assert tuple(record.name for record in receipt.records) == (
+        "source_commit",
+        "state",
+        "static_source_manifest",
+        "summary",
+    )
+    assert "not_TDHF" in receipt.summary_scope
+    assert "not_restart_authority" in receipt.state_scope
+    assert "not_TDHF" in receipt.evidence_scope
+    assert any("No TDHF implementation" in x for x in receipt.summary_limitations)
+    assert len(receipt.fingerprint) == len(loaded.fingerprint) == 64
+
+def test_companion_stage7a_job_artifact_loader_hashes_every_record_fail_closed(
+    companion_stage7a_source,
+    tmp_path,
+) -> None:
+    source = companion_stage7a_source
+    manifest_artifacts = _stage7a_write_job_artifacts(
+        tmp_path / "manifest_tamper",
+        source,
+    )
+    manifest_artifacts.manifest.write_text("tampered\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="static_source_manifest SHA-256"):
+        load_tbg_zero_field_companion_tdhf_source_from_stage6_artifacts(
+            source.prepared,
+            manifest_artifacts.state,
+            manifest_artifacts.summary,
+            manifest_artifacts.evidence,
+        )
+
+    state_artifacts = _stage7a_write_job_artifacts(tmp_path / "state_tamper", source)
+    state_artifacts.state.write_bytes(state_artifacts.state.read_bytes() + b"tampered")
+    with pytest.raises(ValueError, match="evidence record state SHA-256"):
+        load_tbg_zero_field_companion_tdhf_source_from_stage6_artifacts(
+            source.prepared,
+            state_artifacts.state,
+            state_artifacts.summary,
+            state_artifacts.evidence,
+        )
+
+def test_companion_stage7a_job_schema_scope_inventory_and_shape_fail_closed(
+    companion_stage7a_source,
+    tmp_path,
+) -> None:
+    source = companion_stage7a_source
+
+    bad_schema = _stage7a_write_job_artifacts(
+        tmp_path / "bad_schema",
+        source,
+        summary_schema="wrong.schema",
+    )
+    with pytest.raises(ValueError, match="summary schema"):
+        load_tbg_zero_field_companion_tdhf_source_from_stage6_artifacts(
+            source.prepared,
+            bad_schema.state,
+            bad_schema.summary,
+            bad_schema.evidence,
+        )
+
+    bad_status = _stage7a_write_job_artifacts(
+        tmp_path / "bad_status",
+        source,
+        summary_status="scientific_gate_failed",
+    )
+    with pytest.raises(ValueError, match="summary status must be pass"):
+        load_tbg_zero_field_companion_tdhf_source_from_stage6_artifacts(
+            source.prepared,
+            bad_status.state,
+            bad_status.summary,
+            bad_status.evidence,
+        )
+
+    bad_evidence_status = _stage7a_write_job_artifacts(
+        tmp_path / "bad_evidence_status",
+        source,
+        evidence_status="fail",
+    )
+    with pytest.raises(ValueError, match="evidence bundle status must be pass"):
+        load_tbg_zero_field_companion_tdhf_source_from_stage6_artifacts(
+            source.prepared,
+            bad_evidence_status.state,
+            bad_evidence_status.summary,
+            bad_evidence_status.evidence,
+        )
+
+    bad_job_id = _stage7a_write_job_artifacts(
+        tmp_path / "bad_job_id",
+        source,
+        evidence_job_id="201963",
+    )
+    with pytest.raises(ValueError, match="summary and evidence bundle job ids differ"):
+        load_tbg_zero_field_companion_tdhf_source_from_stage6_artifacts(
+            source.prepared,
+            bad_job_id.state,
+            bad_job_id.summary,
+            bad_job_id.evidence,
+        )
+
+    bad_scope = _stage7a_write_job_artifacts(
+        tmp_path / "bad_scope",
+        source,
+        summary_scope="diagnostic_without_explicit_limit",
+    )
+    with pytest.raises(ValueError, match="scope must explicitly remain not_TDHF"):
+        load_tbg_zero_field_companion_tdhf_source_from_stage6_artifacts(
+            source.prepared,
+            bad_scope.state,
+            bad_scope.summary,
+            bad_scope.evidence,
+        )
+
+    bad_limitation = _stage7a_write_job_artifacts(
+        tmp_path / "bad_limitation",
+        source,
+        summary_limitations=["No production claim."],
+    )
+    with pytest.raises(ValueError, match="explicitly state no TDHF implementation"):
+        load_tbg_zero_field_companion_tdhf_source_from_stage6_artifacts(
+            source.prepared,
+            bad_limitation.state,
+            bad_limitation.summary,
+            bad_limitation.evidence,
+        )
+
+    payload = _stage7a_job_state_payload(source)
+    inventory_mismatch = _stage7a_write_job_artifacts(
+        tmp_path / "inventory_mismatch",
+        source,
+        payload=payload,
+        declared_array_keys=sorted((*payload, "summary_only_array")),
+    )
+    with pytest.raises(ValueError, match="inventory does not exactly equal"):
+        load_tbg_zero_field_companion_tdhf_source_from_stage6_artifacts(
+            source.prepared,
+            inventory_mismatch.state,
+            inventory_mismatch.summary,
+            inventory_mismatch.evidence,
+        )
+
+    missing_required_payload = {
+        name: value
+        for name, value in _stage7a_job_state_payload(source).items()
+        if name != "final_H_total_ev"
+    }
+    missing_required = _stage7a_write_job_artifacts(
+        tmp_path / "missing_required",
+        source,
+        payload=missing_required_payload,
+    )
+    with pytest.raises(ValueError, match="omit required Stage6 arrays"):
+        load_tbg_zero_field_companion_tdhf_source_from_stage6_artifacts(
+            source.prepared,
+            missing_required.state,
+            missing_required.summary,
+            missing_required.evidence,
+        )
+
+    bad_shape_payload = _stage7a_job_state_payload(source)
+    bad_shape_payload["final_hf_eigenvectors"] = bad_shape_payload[
+        "final_hf_eigenvectors"
+    ][..., :-1]
+    bad_shape = _stage7a_write_job_artifacts(
+        tmp_path / "bad_shape",
+        source,
+        payload=bad_shape_payload,
+    )
+    with pytest.raises(ValueError, match="final_hf_eigenvectors must have exact shape"):
+        load_tbg_zero_field_companion_tdhf_source_from_stage6_artifacts(
+            source.prepared,
+            bad_shape.state,
+            bad_shape.summary,
+            bad_shape.evidence,
+        )
+
+    wrong_prepared = _stage7a_write_job_artifacts(
+        tmp_path / "wrong_prepared",
+        source,
+        prepared_fingerprint="0" * 64,
+    )
+    with pytest.raises(ValueError, match="prepared_hf_action fingerprint"):
+        load_tbg_zero_field_companion_tdhf_source_from_stage6_artifacts(
+            source.prepared,
+            wrong_prepared.state,
+            wrong_prepared.summary,
+            wrong_prepared.evidence,
+        )
+
+def test_companion_stage7a_actual_job201962_artifacts_when_present() -> None:
+    root = Path(
+        "/data/home/ziyuzhu/.runs/"
+        "Mean_Field_1683426_tbg_kwan_stage6_hfdiag_v2_20260802"
+    )
+    state_path = root / "output/hfdiag_state_201962.npz"
+    summary_path = root / "output/hfdiag_summary_201962.json"
+    evidence_path = root / "controller/evidence_bundle_201962.json"
+    if not all(path.is_file() for path in (state_path, summary_path, evidence_path)):
+        pytest.skip("immutable job201962 Stage6 artifact triplet is not present")
+
+    params = TBGZeroFieldCompanionSingleParticleParams(
+        N1=10,
+        N2=10,
+        Ng1=4,
+        Ng2=4,
+        n_active=1,
+        theta_deg=1.05,
+        wAA_ev=0.08,
+        wAB_ev=0.11,
+        strain=0.0,
+        strain_angle_deg=0.0,
+    )
+    single_particle = solve_tbg_zero_field_companion_single_particle(params)
+    interaction = solve_tbg_zero_field_companion_interaction(
+        params,
+        TBGZeroFieldCompanionSourceInteractionSpec(),
+        rlv_geometry=single_particle.rlv_geometry,
+    )
+    prepared = prepare_tbg_zero_field_companion_hf_action(
+        single_particle,
+        interaction,
+        spec=TBGZeroFieldCompanionHFActionSpec(epsr=10.0, exchange=True),
+    )
+    assert prepared.fingerprint == (
+        "19a0f744a1532c10f4eba901f7fbf875923d75d29b8e3f23c63dbb786dbb1882"
+    )
+    loaded = load_tbg_zero_field_companion_tdhf_source_from_stage6_artifacts(
+        prepared,
+        state_path,
+        summary_path,
+        evidence_path,
+    )
+    receipt = loaded.diagnostic_consumption_receipt
+    assert isinstance(receipt, Stage7ADiagnosticConsumptionReceipt)
+    assert receipt.job_id == "201962"
+    assert receipt.source_commit == "1683426959a009a2e31631b786199ecc13b6249d"
+    assert receipt.prepared_fingerprint == prepared.fingerprint
+    assert receipt.state_sha256 == (
+        "3c5bc2ce20851c4ddb0c04ed0b7ba88f93d5a4cd91e37af022b3db023ee79c0c"
+    )
+    assert receipt.state_size_bytes == 158852
+    assert receipt.summary_sha256 == (
+        "485e236e1460aa9b3588b6a49cfae80ee7b2224b711909b08402adc3b4d94775"
+    )
+    assert receipt.evidence_bundle_sha256 == (
+        "719ffaac4205573e078c1e2aa11c05d99db1e8888aff9d6b23a34b00c0a370ff"
+    )
+    summary_fingerprints = dict(receipt.summary_fingerprints)
+    assert summary_fingerprints["prepared_hf_action"] == prepared.fingerprint
+    assert summary_fingerprints["scf_run"] == (
+        "d3f499eb4de2c41c947772f00159d26cac5e24cb34528a77f76a45393e858b35"
+    )
+    record_hashes = {record.name: record.sha256 for record in receipt.records}
+    assert record_hashes["state"] == receipt.state_sha256
+    assert record_hashes["summary"] == receipt.summary_sha256
+    assert record_hashes["source_commit"] == (
+        "77fc66ce832d11f2e973398423cc110e1e3790336926a13771ffface254114fc"
+    )
+    assert loaded.residuals.checkpoint_eigenpair_max_abs_ev <= 1.0e-12
+    assert loaded.residuals.eigenvector_unitarity_max_abs <= 2.0e-15
+    assert loaded.residuals.common_spin_basis_eigenpair_max_abs_ev <= 1.0e-10
+    assert loaded.residuals.mixed_aufbau_closure == pytest.approx(
+        8.5339254776197e-9,
+        rel=0.0,
+        abs=1.0e-15,
+    )
+    assert loaded.residuals.positive_gap_ev == pytest.approx(
+        0.024959582701741298,
+        rel=0.0,
+        abs=1.0e-14,
+    )
+    assert len(loaded.array_hashes.fingerprint) == len(receipt.fingerprint) == 64
+    assert len(loaded.fingerprint) == 64
+
+
+def test_companion_stage7a_source_and_in_memory_mutations_fail_closed(
+    companion_stage7a_source,
+) -> None:
+    source = companion_stage7a_source
+    _assert_stage4_readonly_bytes_mutation_fails_closed(
+        source.eigenvectors,
+        lambda: source.fingerprint,
+        match="Stage7A source array hashes no longer match live arrays",
+    )
+    _assert_stage4_readonly_bytes_mutation_fails_closed(
+        source.prepared.form,
+        lambda: source.fingerprint,
+        match="prepared array_hashes no longer match live prepared arrays",
+    )
+
+    altered_H = np.array(source.H_total_ev, copy=True)
+    altered_H[0, 0, 0, 0, 0] += 1.0e-6
+    with pytest.raises(ValueError, match="H_total_ev does not match live prepared.evaluate"):
+        _stage7a_in_memory_source(source, H_total_ev=altered_H)

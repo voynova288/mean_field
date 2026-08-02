@@ -123,6 +123,10 @@ The zero-field TBG port now has three explicit layers instead of one large `hf.p
 
 `systems/tbg/zero_field/companion_hf_scf.py` may duplicate the pinned reference Aufbau and ODA sequence only because the current core HF engine cannot express the source branch order, pre-mix convergence norm, strict zero-based minimum-iteration condition, and finalization sequence exactly. This exception is confined to a diagnostic/test compatibility lane: it must not become a package front door, production path, or place for new physics. Any reusable SCF or ODA capability change still belongs in `core/hf/`.
 
+### Stage7A companion finite-q diagnostic exception
+
+`systems/tbg/zero_field/companion_tdhf.py` is a narrow system-local exception because the pinned companion source release contains no finite-q TDHF implementation, so its finite-q formula authority is Kwan et al. Eq. (90), not companion source code. It must remain unexported and diagnostic-only, with no production or paper-figure authority; reusable signed-q bookkeeping and eigensolver logic remain core responsibilities rather than expanding this exception.
+
 This is the intended direction for future systems. A new graphene stacking should first try to reuse `core/hf/`, then add its own `systems/<name>/...` physics layer, and only after that add benchmark or CLI workflows.
 
 ## Script and devtool surface
