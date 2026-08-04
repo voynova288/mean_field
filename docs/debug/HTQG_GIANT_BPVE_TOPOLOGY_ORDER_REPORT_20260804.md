@@ -21,12 +21,12 @@ The neutral Type-I `alpha_beta_alpha` source is gapless and has a spurious large
 
 Concrete current-authority reference points are:
 
-- Figure 1 Type-II tensor-envelope norm: `4.7397e4 microA nm/V^2` at 16.6 meV;
-- projected-active8 `eta=8 meV` component: `+2.3699e4` at 16.6 meV;
-- directly P2-approved continuum component: `+2.3678e4 microA nm/V^2` at 16.6 meV and `eta=8 meV`;
-- broadening diagnostics: approximately `4.97e4`, `4.19e4`, and `6.876e4` for `eta=2,3,1 meV`, respectively.
+- directly P2-approved continuum **single component**: `+2.3678e4 microA nm/V^2` at 16.6 meV and `eta=8 meV`;
+- projected-active8 `eta=8 meV` component and tensor-envelope norm: `2.3699e4` and `4.7397e4 microA nm/V^2`;
+- `eta=1 meV` broadening diagnostic component and tensor-envelope norm: `6.876e4` and `1.375e5 microA nm/V^2` at 17.8 meV;
+- all-eight central-`c_to_c` tensor-component `W_low` for `eta=1`: `2.824e6 microA nm meV/V^2`, which has an extra energy unit and is not a peak coefficient.
 
-The `eta=1 meV` value is the largest finite-frequency peak in the scanned broadening family, but it is not the recommended material headline because peak height is strongly broadening dependent. A publication must use one convention consistently.
+Thus the earlier `1e5` scale was not lost: in the current convention it is the `eta=1` all-eight tensor-envelope norm. The values approaching `1e6` in earlier broadening/scan heatmaps were frequency-integrated `W_low`, not a single peak coefficient. A publication must keep component peaks, tensor norms, and integrated weights in separate columns.
 
 ---
 
@@ -72,7 +72,7 @@ This is the structural starting point of the story:
 
 ![Broadening scan](htqg_giant_bpve_topology_order_report_20260804/figures/02_giant_peak_broadening_scan.png)
 
-**Figure 2.** At historical normalization, the dominant Type-II component reaches about `9.9e4`, `8.4e4`, and `1.375e5` for `eta=2,3,1 meV`. These correspond to current-authority magnitudes of approximately `4.97e4`, `4.19e4`, and `6.876e4`. The last is the largest finite-frequency peak in the scan, near 17.8 meV, but all three are broadening diagnostics rather than the approved `eta=8 meV` headline coefficient. The narrowest curve develops fine spectral structure, as expected when resolved transition lines are broadened less.
+**Figure 2.** This historical plot shows one dominant Type-II component. Historical component magnitudes `9.9e4`, `8.4e4`, and `1.375e5` for `eta=2,3,1 meV` become current-authority component magnitudes `4.97e4`, `4.19e4`, and `6.876e4`. At `eta=1`, the simultaneous current-authority all-eight tensor-envelope norm is `1.375e5 microA nm/V^2`, while the all-eight central-`c_to_c` tensor-component `W_low` is `2.824e6 microA nm meV/V^2`. These are three different quantities. The narrowest result is a broadening diagnostic rather than the approved `eta=8 meV` headline component.
 
 The crucial observations are:
 
@@ -208,17 +208,34 @@ The natural experimental window is the terahertz/far-infrared regime: 16.6 meV c
 
 ---
 
-## 11. Largest response, enhancement strategies, and effective bulk units
+## 11. Response ledger, enhancement strategies, and effective bulk units
 
-![Magnitude, enhancement, and thickness conversion](htqg_giant_bpve_topology_order_report_20260804/figures/12_magnitude_enhancement_thickness_conversion.png)
+![Response quantity ledger and thickness conversion](htqg_giant_bpve_topology_order_report_20260804/figures/12_magnitude_enhancement_thickness_conversion.png)
 
-**Figure 12.** This figure separates the largest scanned peak from the recommended approved coefficient and converts the two-dimensional sheet coefficient to an effective three-dimensional engineering unit.
+**Figure 12.** The report now keeps three response classes separate: the largest signed tensor component, the all-eight tensor-envelope norm, and the frequency-integrated absolute weight `W_low`. The ideal-current panel uses only a signed component; neither a tensor norm nor `W_low` can be inserted as though it were one measured component.
+
+### Reconciliation with the earlier `1e5-1e6` figures
+
+| `alpha_beta_gamma`, current convention | `eta=1 meV` | `eta=2 meV` | `eta=3 meV` | `eta=5 meV` | `eta=8 meV` |
+|---|---:|---:|---:|---:|---:|
+| largest component (`microA nm/V^2`) | `6.876e4` | `4.970e4` | `4.192e4` | `3.232e4` | `2.370e4` |
+| tensor-envelope norm (`microA nm/V^2`) | `1.375e5` | `9.940e4` | `8.383e4` | `6.464e4` | `4.740e4` |
+| all-eight central-`c_to_c` `W_low` (`microA nm meV/V^2`) | `2.824e6` | `2.718e6` | `2.616e6` | `2.427e6` | `2.184e6` |
+
+The apparent discrepancy has three sources:
+
+1. The old `eta=1` plot showed a **historical single component** of `1.375e5`; after the signed-prefactor correction this component is `6.876e4`.
+2. At the same `eta=1` frequency, the **current tensor norm** is again `1.375e5`, because four symmetry-related large components give a norm twice one component. A norm is not one experimentally contracted component.
+3. The old B2 heatmap was component-resolved, `W_low^{abc}=integral|sigma_c_to_c^{abc}| d omega`; its largest `eta=1` current value is `0.706e6 microA nm meV/V^2` for one component. Figure 12 additionally sums all eight central-`c_to_c` tensor components, giving `2.824e6`. The D1 heatmap used the all-eight central-`c_to_c` sum. Its clean Type-II point `(theta,kappa)=(2.30 deg,0.60)` has current `central2_W_low=2.331e6 microA nm meV/V^2`, but its current central-`c_to_c` peak component is only `2.498e4 microA nm/V^2` at 20.4 meV.
+
+The old active4/D1 Type-I plots also contain `1e5-1e8` low-frequency component peaks. Those occur at the lowest sampled frequency in zero-direct-gap, negative-indirect-gap sources; they are the gapless artifact explicitly excluded from the revised report, not missing insulating BPVE results.
 
 ### Largest reported values
 
-- **Largest peak in the finite-frequency broadening scan:** `6.876e4 microA nm/V^2` at approximately 17.8 meV for `eta=1 meV`. It corresponds, under the ideal assumptions below, to about `129.5 nA` across a `10 micrometre` width at `I=1e6 W/m^2` and `n_eff=2`. This is a broadening diagnostic, not the robust headline.
-- **Recommended approved component:** `+2.3678e4 microA nm/V^2` at 16.6 meV and `eta=8 meV` from the P2 continuum approval. The corresponding ideal current is about `44.6 nA` for the same intensity, refractive index, and width.
-- **Current `eta=8 meV` tensor-envelope norm:** `4.7397e4 microA nm/V^2`. This norm is useful for structural comparison but is not itself one directly measured tensor component.
+- **Largest clean scanned single component:** `6.876e4 microA nm/V^2` at approximately 17.8 meV for `eta=1 meV`. It gives about `129.5 nA` under the stated ideal conditions. This is a broadening diagnostic.
+- **Largest corresponding tensor norm:** `1.375e5 microA nm/V^2`. It is a structural envelope, not one directly measurable component and not an input to the ideal-current estimate.
+- **Largest corresponding all-eight central-`c_to_c` integrated weight:** `2.824e6 microA nm meV/V^2`; the extra `meV` prevents direct comparison with a bulk shift-current coefficient.
+- **Recommended approved component:** `+2.3678e4 microA nm/V^2` at 16.6 meV and `eta=8 meV` from the P2 continuum approval. It gives about `44.6 nA` under the same ideal assumptions.
 
 ### How to increase the response
 
@@ -243,7 +260,8 @@ where `t_eff` is expressed in nanometres. For helical trilayer graphene, the out
 | P2-approved `eta=8` component | `2.3678e4` | `2.37e4` | `3.53e4` |
 | `eta=8` tensor-envelope norm | `4.7397e4` | `4.74e4` | `7.07e4` |
 | `eta=2` diagnostic component | `4.97e4` | `4.97e4` | `7.42e4` |
-| `eta=1` maximum diagnostic component | `6.876e4` | `6.88e4` | `1.03e5` |
+| `eta=1` diagnostic component | `6.876e4` | `6.88e4` | `1.03e5` |
+| `eta=1` tensor-envelope norm | `1.375e5` | `1.38e5` | `2.05e5` |
 
 The effective 3D number depends inversely on the chosen atomically thin thickness convention. It is appropriate for coefficient-level comparison with bulk engineering materials, but it is not a unique microscopic bulk property of a two-dimensional sheet.
 
@@ -253,7 +271,7 @@ For the ideal plane-wave estimate used here,
 j_{2D}=\sigma_{2D}\,10^{-15}\frac{I}{c\epsilon_0 n_{\rm eff}},\qquad I_{\rm collected}=j_{2D}W.
 \]
 
-This conversion is an ideal single-domain full-collection scale, not a measured-device-current prediction.
+This conversion is an ideal single-domain full-collection scale, not a measured-device-current prediction. It uses a signed tensor component; the tensor norm and `W_low` are deliberately not substituted into this formula.
 
 ---
 
@@ -304,6 +322,8 @@ Prioritize domain-resolved, polarization-resolved THz photocurrent near the Type
 - Signed amplitudes/integrands in historical Figures 2-9 require `-old/2`; norms/envelopes/absolute weights require `/2` without a sign. Figures 1 and 10-12 are already current-authority.
 - The neutral Type-I H0 source is gapless; `hbar omega < 5 meV` is excluded from revised plots, and the remaining Type-I H0 curve is diagnostic only.
 - The thickness-converted `microA/V^2` values depend on the chosen `0.67-1.0 nm` effective thickness convention.
+- Every `W_low` must state its channel and tensor-component scope; it carries an extra `meV` and must not be quoted as a `microA nm/V^2` peak coefficient or inserted into an ideal-current formula.
+- A tensor-envelope norm is a comparison scalar, not one signed polarization-contracted component.
 - The clean Type-II result is a projected continuum-envelope, internal-interband, resonant shift-current result; microscopic orbital-position/external terms remain absent.
 - Local Berry-curvature/metric similarity is not by itself a causal proof.
 - Domain mixtures are structural-population models, not calculated thermodynamic populations.
