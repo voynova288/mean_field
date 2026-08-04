@@ -109,9 +109,13 @@ assembles `K(q)` and `K(-q)` on a 2x3 fixture, exercises a true generic
 explicit transition conjugation map, and requires matrix parity with the core
 H blocks.  Exact-boundary aliases are never averaged: distinct raw kernels
 must be byte-identical before one branch can be certified as the canonical
-self-conjugate payload.  The saved N=10 Fig. 8(a) artifacts have not yet been
-replayed through this new front door, so their prior diagnostic conclusion is
-unchanged rather than silently upgraded.
+self-conjugate payload.  The saved N=10 Fig. 8(a) q=+/-1 triplet and singlet
+matrices were replayed through commit `9faf9b8` in sealed Slurm job `205051`.
+Both sectors retained 400 modes at each assigned sign, remained dynamically
+real and statically positive definite, and matched saved raw/assigned spectra
+at about `1e-15 eV`.  This is saved-matrix/API parity only: it does not rebuild
+BM, HF, or the Eq. (90) contractions and does not upgrade the single-seed
+K-IVC diagnostic to a global-ground-state claim.
 
 The first independent exact oracle is
 `systems/hubbard_1d/tdhf_alavirad_sau.py`.  It projects the literal periodic
