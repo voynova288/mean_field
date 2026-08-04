@@ -113,6 +113,18 @@ self-conjugate payload.  The saved N=10 Fig. 8(a) artifacts have not yet been
 replayed through this new front door, so their prior diagnostic conclusion is
 unchanged rather than silently upgraded.
 
+The first independent exact oracle is
+`systems/hubbard_1d/tdhf_alavirad_sau.py`.  It projects the literal periodic
+one-dimensional Hubbard Hamiltonian of Alavirad--Sau Eq. (14) with explicit
+fermionic bitstrings onto the Eq. (13) one-magnon basis
+`|psi_q> = sum_p phi_qp c^dagger_{p+q,down} c_{p,up}|FM>`, independently
+constructs the saturated-FM interspin TDHF action, and requires entrywise
+matrix and spectrum equality.  Its gates cover the q=0 spin-flip Goldstone
+mode, computed HF stationarity, negative finite-q mode, and large-U
+`rho_s -> -2t^2/U`.  This is authority only for a half-filled saturated SU(2)
+ferromagnet with `B=0`; it is not a full mixed-sector RPA, K-IVC, or general
+moire soft-mode benchmark.
+
 The older `TDHFMatrices`, `solve_tdhf_liouvillian`, and
 `analyze_tdhf_signed_stability` APIs remain for compatibility and existing
 q=0/toy workflows.  New generic-q system adapters and all new paper benchmarks
