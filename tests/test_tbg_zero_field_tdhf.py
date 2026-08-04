@@ -12,7 +12,9 @@ import numpy as np
 import pytest
 
 import mean_field.systems.tbg.zero_field.companion_tdhf as companion_tdhf_module
+from mean_field.api import TDHFConfig, analyze_tdhf_sector, run_tdhf
 from mean_field.core.hf import (
+    TDHFGenericSignedQSector,
     build_projected_interaction_hamiltonian,
     calculate_norm_convergence,
     classify_tdhf_stability,
@@ -92,6 +94,7 @@ from mean_field.systems.tbg.zero_field.companion_hf_scf import (
 from mean_field.systems.tbg.zero_field.companion_tdhf import (
     Stage7ADiagnosticConsumptionReceipt,
     TBGZeroFieldCompanionTDHFSource,
+    TBGZeroFieldCompanionTDHFTypedProvider,
     TBG_ZERO_FIELD_COMPANION_TDHF_ARCHITECTURE_EXCEPTION,
     TBG_ZERO_FIELD_COMPANION_TDHF_COMMON_SPIN_BASIS_ATOL_EV,
     TBG_ZERO_FIELD_COMPANION_TDHF_COMMON_SPIN_BASIS_SOURCE,
@@ -115,6 +118,7 @@ from mean_field.systems.tbg.zero_field.companion_tdhf import (
     build_tbg_zero_field_companion_signed_q_label,
     build_tbg_zero_field_companion_static_kernel,
     build_tbg_zero_field_companion_tdhf_source_from_in_memory_arrays,
+    build_tbg_zero_field_companion_typed_sector_from_kernels,
     build_tbg_zero_field_companion_tdhf_source_from_stage6_run,
     build_tbg_zero_field_companion_transition_inventories,
     evaluate_tbg_zero_field_companion_static_matrix_action,
@@ -6743,11 +6747,51 @@ def test_companion_stage7a_eq16_incomplete_interaction_support_fails_closed(
         build_tbg_zero_field_companion_hf_form_factors(source, q)
 
 
+def test_companion_stage7a_public_typed_provider_exact_boundary_front_door(
+    companion_stage7a_source,
+    monkeypatch,
+) -> None:
+    source = companion_stage7a_source
+    q_kernel = build_tbg_zero_field_companion_static_kernel(
+        source, (1, 0), spin_sector="triplet"
+    )
+    minus_kernel = build_tbg_zero_field_companion_static_kernel(
+        source, (-1, 0), spin_sector="triplet"
+    )
+
+    def cached_builder(source_arg, q_arg, *, spin_sector):
+        assert source_arg is source
+        assert spin_sector == "triplet"
+        return q_kernel if q_arg.raw == (1, 0) else minus_kernel
+
+    monkeypatch.setattr(
+        companion_tdhf_module,
+        "build_tbg_zero_field_companion_static_kernel",
+        cached_builder,
+    )
+    analysis = run_tdhf(
+        TBGZeroFieldCompanionTDHFTypedProvider(source),
+        TDHFConfig(
+            q_sector=(1, 0),
+            channel="triplet",
+            degeneracy_tolerance=TBG_ZERO_FIELD_COMPANION_TDHF_DEGENERACY_ATOL_EV,
+            pairing_tolerance=TBG_ZERO_FIELD_COMPANION_TDHF_Q0_RAW_PAIRING_RESIDUAL_ATOL_EV,
+            eigensolver_tolerance=TBG_ZERO_FIELD_COMPANION_TDHF_RAW_EIGENSOLVER_RESIDUAL_ATOL_EV,
+        ),
+    )
+    np.testing.assert_allclose(analysis.matrices.H, q_kernel.K_ev)
+    assert analysis.matrices.raw_signed_diagnostic is not None
+    np.testing.assert_allclose(
+        analysis.matrices.raw_signed_diagnostic.H_minus, minus_kernel.K_ev
+    )
+    assert analysis.matrices.structure.ok
+
+
 def test_companion_stage7a_transition_roles_q_maps_and_generic_static_structure(
     companion_stage7a_source,
 ) -> None:
     source = companion_stage7a_source
-    inventories = build_tbg_zero_field_companion_transition_inventories(source, (1, 0))
+    inventories = build_tbg_zero_field_companion_transition_inventories(source, (0, 1))
     q_inventory = inventories.q
     minus_inventory = inventories.minus_q
     assert TBG_ZERO_FIELD_COMPANION_TDHF_EQ90_SIGN_CONVENTION == (
@@ -6795,15 +6839,47 @@ def test_companion_stage7a_transition_roles_q_maps_and_generic_static_structure(
 
     q_kernel = build_tbg_zero_field_companion_static_kernel(
         source,
-        (1, 0),
+        (0, 1),
         spin_sector="triplet",
     )
     minus_kernel = build_tbg_zero_field_companion_static_kernel(
         source,
-        (-1, 0),
+        (0, -1),
         spin_sector="triplet",
     )
     assert q_kernel.direct_multiplier == minus_kernel.direct_multiplier == 0
+    typed_sector = build_tbg_zero_field_companion_typed_sector_from_kernels(
+        q_kernel, minus_kernel
+    )
+    reordered_pairs = list(minus_kernel.inventory.pairs)
+    reordered_pairs[0], reordered_pairs[1] = reordered_pairs[1], reordered_pairs[0]
+    reordered_minus = replace(
+        minus_kernel,
+        inventory=replace(
+            minus_kernel.inventory,
+            pairs=tuple(reordered_pairs),
+        ),
+    )
+    with pytest.raises(ValueError, match="inventory digest mismatch"):
+        build_tbg_zero_field_companion_typed_sector_from_kernels(
+            q_kernel, reordered_minus
+        )
+    typed_analysis = analyze_tdhf_sector(
+        typed_sector,
+        TDHFConfig(
+            q_sector=(0, 1),
+            channel="triplet",
+            degeneracy_tolerance=TBG_ZERO_FIELD_COMPANION_TDHF_DEGENERACY_ATOL_EV,
+            pairing_tolerance=TBG_ZERO_FIELD_COMPANION_TDHF_Q0_RAW_PAIRING_RESIDUAL_ATOL_EV,
+            eigensolver_tolerance=TBG_ZERO_FIELD_COMPANION_TDHF_RAW_EIGENSOLVER_RESIDUAL_ATOL_EV,
+        ),
+    )
+    assert isinstance(typed_sector, TDHFGenericSignedQSector)
+    assert typed_sector.q.plus_canonical != typed_sector.q.minus_canonical
+    np.testing.assert_allclose(typed_analysis.matrices.H_plus, q_kernel.K_ev)
+    np.testing.assert_allclose(typed_analysis.matrices.H_minus, minus_kernel.K_ev)
+    assert typed_analysis.matrices.structure.ok
+    assert typed_analysis.dynamic.kind in ("real", "complex")
     assert q_kernel.residuals.K_hermiticity_max_abs_ev <= 1.0e-10
     assert q_kernel.residuals.L_pseudo_hermiticity_max_abs_ev <= 1.0e-10
     np.testing.assert_array_equal(
@@ -6827,6 +6903,17 @@ def test_companion_stage7a_transition_roles_q_maps_and_generic_static_structure(
     assert TBG_ZERO_FIELD_COMPANION_TDHF_Q0_RAW_PAIRING_RESIDUAL_ATOL_EV == 1.0e-9
     q_spectrum = solve_tbg_zero_field_companion_dense_spectrum(q_kernel)
     minus_spectrum = solve_tbg_zero_field_companion_dense_spectrum(minus_kernel)
+    np.testing.assert_allclose(
+        np.sort_complex(typed_analysis.assignment.raw_eigenvalues),
+        np.sort_complex(q_spectrum.raw_eigenvalues_ev),
+        rtol=0.0,
+        atol=1.0e-12,
+    )
+    assert (
+        typed_analysis.assignment.plus_energies.size
+        + typed_analysis.assignment.minus_energies.size
+        > 0
+    )
     n_pairs = q_kernel.inventory.ph_count
     core_spectrum = solve_tdhf_liouvillian(
         q_kernel.L_ev,
@@ -6914,8 +7001,8 @@ def test_companion_stage7a_transition_roles_q_maps_and_generic_static_structure(
         q_spectrum,
         minus_spectrum,
     )
-    assert pairing.q_raw == (1, 0)
-    assert pairing.minus_q_raw == (-1, 0)
+    assert pairing.q_raw == (0, 1)
+    assert pairing.minus_q_raw == (0, -1)
     assert pairing.max_abs_ev <= 1.0e-9
 
 

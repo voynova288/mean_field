@@ -1,7 +1,22 @@
+"""Public system-agnostic TDHF/RPA front door.
+
+Physical systems provide a typed signed-momentum sector through
+``TDHFSectorProviderProtocol``.  The public API owns generic structure,
+static/dynamic, Wang assignment, and Ward-certificate analysis.  Legacy
+objects exposing ``run_tdhf`` remain supported during migration.
+"""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import KW_ONLY, dataclass, field
 from typing import Any
+
+from mean_field.core.hf.tdhf_signed import (
+    TDHFSectorProviderProtocol,
+    TDHFTypedAnalysis,
+    TDHFTypedSector,
+    TDHFWardCertificate,
+    analyze_tdhf_typed_sector,
+)
 
 
 @dataclass(frozen=True)
@@ -12,18 +27,86 @@ class TDHFConfig:
     max_dense_memory_gb: float = 8.0
     assembly: str = "auto"
     metadata: dict[str, object] = field(default_factory=dict)
+    _: KW_ONLY
+    structure_tolerance: float = 1.0e-10
+    hessian_tolerance: float = 1.0e-10
+    imag_tolerance: float = 1.0e-10
+    norm_tolerance: float = 1.0e-10
+    zero_tolerance: float = 1.0e-10
+    degeneracy_tolerance: float = 1.0e-10
+    pairing_tolerance: float = 1.0e-9
+    eigensolver_tolerance: float = 1.0e-9
 
 
-def run_tdhf(hf_result_or_archive: object, config: TDHFConfig, **kwargs: Any) -> object:
-    """Public TDHF/RPA façade.
+def analyze_tdhf_sector(
+    sector: TDHFTypedSector,
+    config: TDHFConfig,
+    *,
+    ward_certificate: TDHFWardCertificate | None = None,
+) -> TDHFTypedAnalysis:
+    """Analyze one already-assembled typed sector through the public API."""
 
-    Phase 1 freezes the call shape.  Existing dense q=0 pilots remain in
-    system/devtool adapters until they can be moved behind this hook.
+    return analyze_tdhf_typed_sector(
+        sector,
+        structure_tolerance=config.structure_tolerance,
+        hessian_tolerance=config.hessian_tolerance,
+        imag_tolerance=config.imag_tolerance,
+        norm_tolerance=config.norm_tolerance,
+        zero_tolerance=config.zero_tolerance,
+        degeneracy_tolerance=config.degeneracy_tolerance,
+        pairing_tolerance=config.pairing_tolerance,
+        eigensolver_tolerance=config.eigensolver_tolerance,
+        ward=ward_certificate,
+    )
+
+
+def run_tdhf_typed(
+    provider: TDHFSectorProviderProtocol,
+    config: TDHFConfig,
+    **kwargs: Any,
+) -> TDHFTypedAnalysis:
+    """Explicit typed-provider TDHF entry point."""
+
+    ward_certificate = kwargs.pop("ward_certificate", None)
+    if ward_certificate is not None and not isinstance(
+        ward_certificate, TDHFWardCertificate
+    ):
+        raise TypeError("ward_certificate must be a TDHFWardCertificate")
+    sector = provider.build_tdhf_sector(config, **kwargs)
+    from mean_field.core.hf.tdhf_signed import (
+        TDHFGenericSignedQSector,
+        TDHFSelfConjugateQSector,
+    )
+
+    if not isinstance(sector, (TDHFGenericSignedQSector, TDHFSelfConjugateQSector)):
+        raise TypeError("typed provider returned an unsupported TDHF sector")
+    return analyze_tdhf_sector(
+        sector,
+        config,
+        ward_certificate=ward_certificate,
+    )
+
+
+def run_tdhf(
+    hf_result_or_archive: object,
+    config: TDHFConfig,
+    **kwargs: Any,
+) -> object:
+    """Build and analyze TDHF through a system adapter.
+
+    New adapters implement ``build_tdhf_sector(config, **kwargs)`` and return a
+    typed generic or self-conjugate signed-q sector.  During migration, legacy
+    objects with their own ``run_tdhf`` method retain their prior behavior.
     """
 
     if hasattr(hf_result_or_archive, "run_tdhf"):
         return hf_result_or_archive.run_tdhf(config, **kwargs)  # type: ignore[attr-defined]
-    raise NotImplementedError("Unified run_tdhf requires an HF result/archive adapter exposing run_tdhf(config)")
+    if isinstance(hf_result_or_archive, TDHFSectorProviderProtocol):
+        return run_tdhf_typed(hf_result_or_archive, config, **kwargs)
+    raise NotImplementedError(
+        "run_tdhf requires TDHFSectorProviderProtocol.build_tdhf_sector(...) "
+        "or a legacy run_tdhf(config) adapter"
+    )
 
 
-__all__ = ["TDHFConfig", "run_tdhf"]
+__all__ = ["TDHFConfig", "analyze_tdhf_sector", "run_tdhf", "run_tdhf_typed"]

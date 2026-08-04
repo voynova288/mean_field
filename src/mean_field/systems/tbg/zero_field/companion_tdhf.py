@@ -33,6 +33,18 @@ from typing import Final, Literal, Sequence
 import numpy as np
 
 from mean_field.core.hf import (
+    ParticleHolePair,
+    TDHFGenericSignedQ,
+    TDHFGenericSignedQSector,
+    TDHFNambuSewing,
+    TDHFSelfConjugateQ,
+    TDHFSelfConjugateQSector,
+    TDHFSignedQBlocks,
+    TDHFTypedSector,
+    build_tdhf_self_conjugate_matrices,
+    build_tdhf_signed_q_matrices,
+    classify_tdhf_signed_q,
+    fingerprint_tdhf_pairs,
     TDHFStabilityClassification,
     classify_tdhf_stability,
     signed_q_particle_hole_assignment_residual,
@@ -2372,6 +2384,222 @@ def build_tbg_zero_field_companion_static_kernel(
         direct_multiplier=multiplier,
         spin_sector=spin_sector,
     )
+
+
+def _companion_transition_to_core_pair(
+    source: TBGZeroFieldCompanionTDHFSource,
+    transition: TBGZeroFieldCompanionTransition,
+) -> ParticleHolePair:
+    params = source.prepared.params
+    internal_dimension = 2 * params.active_band_count
+    source_k = transition.k_source[0] * params.N2 + transition.k_source[1]
+    target_k = transition.k_target[0] * params.N2 + transition.k_target[1]
+    return ParticleHolePair(
+        particle=target_k * internal_dimension + transition.mu_target,
+        hole=source_k * internal_dimension + transition.nu_source,
+        particle_momentum=transition.k_target,
+        hole_momentum=transition.k_source,
+        particle_flavor=(transition.mu_target, transition.role),
+        hole_flavor=(transition.nu_source, transition.role),
+    )
+
+
+def build_tbg_zero_field_companion_typed_sector_from_kernels(
+    plus: TBGZeroFieldCompanionStaticKernel,
+    minus: TBGZeroFieldCompanionStaticKernel,
+) -> TDHFTypedSector:
+    """Convert independently assembled companion kernels to the core API."""
+
+    plus._validate_live_state()
+    minus._validate_live_state()
+    if plus.source_fingerprint != minus.source_fingerprint:
+        raise ValueError("signed companion kernels have different sources")
+    if plus.spin_sector != minus.spin_sector:
+        raise ValueError("signed companion kernels have different spin sectors")
+    expected_minus = _minus_q_label(plus.inventory.q)
+    if minus.inventory.q.raw != expected_minus.raw:
+        raise ValueError("minus kernel is not the independently assembled -q partner")
+    if _inventory_digest(plus.inventory.pairs) != plus.inventory.inventory_sha256:
+        raise ValueError("plus companion transition inventory digest mismatch")
+    if _inventory_digest(minus.inventory.pairs) != minus.inventory.inventory_sha256:
+        raise ValueError("minus companion transition inventory digest mismatch")
+    n_plus = plus.inventory.ph_count
+    n_minus = minus.inventory.ph_count
+    if len(plus.inventory.pairs) != n_plus + n_minus:
+        raise ValueError("plus companion inventory does not have ph/hp signed blocks")
+    if len(minus.inventory.pairs) != n_minus + n_plus:
+        raise ValueError("minus companion inventory does not have ph/hp signed blocks")
+    plus_pairs = tuple(
+        _companion_transition_to_core_pair(plus.source, transition)
+        for transition in plus.inventory.pairs[:n_plus]
+    )
+    minus_pairs = tuple(
+        _companion_transition_to_core_pair(minus.source, transition)
+        for transition in minus.inventory.pairs[:n_minus]
+    )
+    blocks = TDHFSignedQBlocks(
+        plus_pairs=plus_pairs,
+        minus_pairs=minus_pairs,
+        A_plus=np.asarray(plus.K_ev[:n_plus, :n_plus]),
+        B_plus_minus=np.asarray(plus.K_ev[:n_plus, n_plus:]),
+        A_minus=np.asarray(minus.K_ev[:n_minus, :n_minus]),
+        B_minus_plus=np.asarray(minus.K_ev[:n_minus, n_minus:]),
+    )
+    map_plus = np.asarray(
+        plus.inventory.conjugate_indices_at_minus_q, dtype=np.int64
+    )
+    map_minus = np.asarray(
+        minus.inventory.conjugate_indices_at_minus_q, dtype=np.int64
+    )
+    total = n_plus + n_minus
+    if map_plus.shape != (total,) or map_minus.shape != (total,):
+        raise ValueError("companion signed transition maps have wrong shape")
+    if (
+        np.any(map_plus < 0)
+        or np.any(map_plus >= total)
+        or np.any(map_minus < 0)
+        or np.any(map_minus >= total)
+    ):
+        raise ValueError("companion signed transition map is out of range")
+    for index, mapped in enumerate(map_plus):
+        mapped_index = int(mapped)
+        if int(map_minus[mapped_index]) != index:
+            raise ValueError("companion signed transition maps do not close")
+        transition = plus.inventory.pairs[index]
+        conjugate = minus.inventory.pairs[mapped_index]
+        if (
+            conjugate.k_source != transition.k_target
+            or conjugate.k_target != transition.k_source
+            or conjugate.mu_target != transition.nu_source
+            or conjugate.nu_source != transition.mu_target
+            or conjugate.core_metric_sign != -transition.core_metric_sign
+        ):
+            raise ValueError("companion signed transition map identity mismatch")
+    plus_to_minus = np.zeros((total, total), dtype=np.complex128)
+    minus_to_plus = np.zeros((total, total), dtype=np.complex128)
+    plus_to_minus[map_plus, np.arange(total)] = 1.0
+    minus_to_plus[map_minus, np.arange(total)] = 1.0
+    closure = float(
+        max(
+            np.max(
+                np.abs(minus_to_plus @ np.conj(plus_to_minus) - np.eye(total)),
+                initial=0.0,
+            ),
+            np.max(
+                np.abs(plus_to_minus @ np.conj(minus_to_plus) - np.eye(total)),
+                initial=0.0,
+            ),
+        )
+    )
+    sewing = TDHFNambuSewing(
+        plus_to_minus=plus_to_minus,
+        minus_to_plus=minus_to_plus,
+        source_fingerprint=plus.source_fingerprint,
+        plus_pairs_fingerprint=fingerprint_tdhf_pairs(plus_pairs),
+        minus_pairs_fingerprint=fingerprint_tdhf_pairs(minus_pairs),
+        construction=(
+            "tbg_companion_explicit_transition_conjugation_map_v1;"
+            f"plus_inventory={plus.inventory.fingerprint};"
+            f"minus_inventory={minus.inventory.fingerprint};"
+            f"plus_map={_array_sha256(map_plus)};minus_map={_array_sha256(map_minus)}"
+        ),
+        closure_residual=closure,
+    )
+    q_kind = classify_tdhf_signed_q(
+        plus_raw=plus.inventory.q.raw,
+        minus_raw=minus.inventory.q.raw,
+        plus_canonical=plus.inventory.q.canonical_delta,
+        minus_canonical=minus.inventory.q.canonical_delta,
+        provenance=(
+            "companion_raw_q_floor_carry_and_transition_inventory_v1;"
+            f"plus={plus.inventory.fingerprint};minus={minus.inventory.fingerprint}"
+        ),
+    )
+    interaction_fingerprint = _json_sha256(
+        {
+            "prepared": plus.source.prepared.fingerprint,
+            "spin_sector": plus.spin_sector,
+            "direct_multiplier": plus.direct_multiplier,
+        }
+    )
+    response_scope = (
+        "tbg_companion_kwan_eq90_scalar_hessian_diagnostic_only_v1"
+    )
+    if isinstance(q_kind, TDHFGenericSignedQ):
+        sector: TDHFTypedSector = TDHFGenericSignedQSector(
+            q=q_kind,
+            blocks=blocks,
+            sewing=sewing,
+            source_fingerprint=plus.source_fingerprint,
+            interaction_fingerprint=interaction_fingerprint,
+            response_scope=response_scope,
+            static_hessian_authority="scalar_hessian",
+        )
+        core = build_tdhf_signed_q_matrices(
+            blocks, sewing, structure_tolerance=1.0e-10
+        )
+        if np.max(np.abs(core.H_plus - plus.K_ev), initial=0.0) > 1.0e-12:
+            raise ValueError("core H(q) does not reproduce companion K(q)")
+        if np.max(np.abs(core.H_minus - minus.K_ev), initial=0.0) > 1.0e-12:
+            raise ValueError("core H(-q) does not reproduce companion K(-q)")
+        return sector
+    is_raw_boundary_alias = q_kind.plus_raw != q_kind.minus_raw
+    if is_raw_boundary_alias and not np.array_equal(plus.K_ev, minus.K_ev):
+        raise ValueError(
+            "companion exact-M raw kernels differ; canonical scalar sewing is not certified"
+        )
+    canonical_sewing_provenance = (
+        "independent_raw_exact_boundary_kernels_byte_identical_plus_branch_v1"
+        if is_raw_boundary_alias
+        else "literal_q0_companion_inventory_v1"
+    )
+    sector = TDHFSelfConjugateQSector(
+        q=q_kind,
+        canonical_pairs=plus_pairs,
+        A=np.asarray(plus.K_ev[:n_plus, :n_plus]),
+        B=np.asarray(plus.K_ev[:n_plus, n_plus:]),
+        source_fingerprint=plus.source_fingerprint,
+        interaction_fingerprint=interaction_fingerprint,
+        response_scope=response_scope,
+        static_hessian_authority="scalar_hessian",
+        canonical_sewing_provenance=canonical_sewing_provenance,
+        raw_signed_diagnostic_blocks=blocks if is_raw_boundary_alias else None,
+        raw_signed_diagnostic_sewing=sewing if is_raw_boundary_alias else None,
+    )
+    core_self = build_tdhf_self_conjugate_matrices(
+        sector, structure_tolerance=1.0e-10
+    )
+    if np.max(np.abs(core_self.H - plus.K_ev), initial=0.0) > 1.0e-12:
+        raise ValueError("core self-conjugate H does not reproduce q0 companion K")
+    return sector
+
+
+@dataclass(frozen=True, slots=True)
+class TBGZeroFieldCompanionTDHFTypedProvider:
+    """Diagnostic-only companion adapter for ``mean_field.api.run_tdhf``."""
+
+    source: TBGZeroFieldCompanionTDHFSource
+
+    def build_tdhf_sector(self, config: object, **kwargs: object) -> TDHFTypedSector:
+        if kwargs:
+            raise TypeError(f"unexpected companion TDHF adapter kwargs: {sorted(kwargs)}")
+        q_sector = getattr(config, "q_sector", None)
+        channel = getattr(config, "channel", None)
+        if not isinstance(q_sector, tuple) or len(q_sector) != 2:
+            raise TypeError("companion typed TDHF requires an integer tuple q_sector")
+        if channel not in ("triplet", "singlet"):
+            raise ValueError("companion typed TDHF channel must be triplet or singlet")
+        label = build_tbg_zero_field_companion_signed_q_label(self.source, q_sector)
+        minus = _minus_q_label(label)
+        plus_kernel = build_tbg_zero_field_companion_static_kernel(
+            self.source, label, spin_sector=channel
+        )
+        minus_kernel = build_tbg_zero_field_companion_static_kernel(
+            self.source, minus, spin_sector=channel
+        )
+        return build_tbg_zero_field_companion_typed_sector_from_kernels(
+            plus_kernel, minus_kernel
+        )
 
 
 @dataclass(frozen=True, slots=True)
