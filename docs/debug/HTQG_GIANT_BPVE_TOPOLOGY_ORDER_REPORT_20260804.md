@@ -6,25 +6,27 @@
 
 > **Narrative correction.** The few-thousand `microA nm/V^2` active6 Type-I results are valuable convergence and mechanism controls, but they cannot carry the giant-BPVE headline. The main giant-BPVE platform in the existing evidence is the clean Type-II `alpha_beta_gamma` sector. Type-I `alpha_beta_alpha` is the essential structural, topological, and ordered-state contrast.
 
-## Normalization notice
+## Normalization and plot-scope notice
 
-Figures 1-10 are immutable Plan-B historical products generated before the final named-prefactor review. Figure 11 is a later corrected P5 product and must **not** be converted again.
+Figures 2-9 are immutable Plan-B historical products generated before the final named-prefactor review. Figures 1 and 10 were re-plotted from the same saved spectra in the current convention; Figure 11 is the corrected P5 Type-II panel; Figure 12 is a current-authority derived engineering summary.
 
-| Figure quantity | Current-authority conversion |
+| Figure quantity | Convention |
 |---|---|
-| Signed spectra or signed integrands in Figures 1-10 | `sigma_current = -sigma_historical / 2` |
-| Tensor norms, envelopes, and integrated absolute weights in Figures 1-10 | `Q_current = Q_historical / 2`; a norm has no sign |
+| Signed spectra or signed integrands in Figures 2-9 | `sigma_current = -sigma_historical / 2` |
+| Tensor norms, envelopes, and integrated absolute weights in Figures 2-9 | `Q_current = Q_historical / 2`; a norm has no sign |
+| Figures 1, 10, 11, and 12 | already current-authority; no further conversion |
 | JDOS, gaps, Chern labels, order labels, Berry maps, and metric diagnostics | unchanged |
-| Figure 11 | already corrected; no further conversion |
 
-Concrete reference points are:
+The neutral Type-I `alpha_beta_alpha` source is gapless and has a spurious large response at zero frequency. The interval `hbar omega < 5 meV` is therefore excluded from all revised Type-I frequency plots rather than presented as physical BPVE evidence. This exclusion does not alter the finite-frequency Type-II peak.
 
-- Figure 1 historical tensor-envelope norm `9.4795e4` becomes current norm `4.7397e4 microA nm/V^2`;
-- Figure 2 historical signed peaks `9.94e4` and `8.38e4` at `eta=2,3 meV` become approximately `4.97e4` and `4.19e4`, with the signed-component reversal;
-- the current projected-active8 `eta=8 meV` component is `+2.3699e4` at 16.6 meV;
-- the directly P2-approved continuum result is `+2.3678e4 microA nm/V^2` at 16.6 meV and `eta=8 meV`.
+Concrete current-authority reference points are:
 
-These conversions do **not** change the Type-II/Type-I hierarchy, peak frequency, numerical-stability conclusions, or channel interpretation. A publication must use one convention consistently.
+- Figure 1 Type-II tensor-envelope norm: `4.7397e4 microA nm/V^2` at 16.6 meV;
+- projected-active8 `eta=8 meV` component: `+2.3699e4` at 16.6 meV;
+- directly P2-approved continuum component: `+2.3678e4 microA nm/V^2` at 16.6 meV and `eta=8 meV`;
+- broadening diagnostics: approximately `4.97e4`, `4.19e4`, and `6.876e4` for `eta=2,3,1 meV`, respectively.
+
+The `eta=1 meV` value is the largest finite-frequency peak in the scanned broadening family, but it is not the recommended material headline because peak height is strongly broadening dependent. A publication must use one convention consistently.
 
 ---
 
@@ -55,9 +57,9 @@ where the gauge-covariant integrand contains interband optical matrix elements a
 
 ![Type contrast and active-window test](htqg_giant_bpve_topology_order_report_20260804/figures/01_moire_type_contrast_active_window.png)
 
-**Figure 1.** The upper panels compare the central `c_to_c` tensor envelopes of Type-I `alpha_beta_alpha` and Type-II `alpha_beta_gamma`. The Type-II peak occurs at a nonzero photon energy near 16.6 meV and reaches the historical tensor-envelope norm of `9.4795e4 microA nm/V^2`, corresponding to the current norm `4.7397e4`. The Type-I central response is much smaller and is entangled with a gapless low-frequency structure.
+**Figure 1.** The upper panels compare the current-authority central `c_to_c` tensor envelopes of Type-I `alpha_beta_alpha` and Type-II `alpha_beta_gamma`. The erroneous Type-I interval below `5 meV`, including its spurious zero-frequency maximum, is not plotted. The remaining Type-I curve is still a gapless diagnostic, not an insulating-material coefficient. The Type-II peak occurs near 16.6 meV and reaches the current tensor-envelope norm `4.7397e4 microA nm/V^2`.
 
-The active8 and active12 Type-II curves lie on top of one another. Its peak position and tensor-envelope scale therefore survive active-window enlargement. By contrast, the large high-frequency Type-I remote-assisted feature in the lower-left panel does not survive active8-to-active12 enlargement and is not part of the clean giant-BPVE claim.
+The active8 and active12 Type-II curves lie on top of one another, so its peak position and envelope scale survive active-window enlargement. By contrast, the large high-frequency Type-I remote-assisted active8 feature in the lower-left panel is not reproduced by active12 and is not part of the clean giant-BPVE claim.
 
 This is the structural starting point of the story:
 
@@ -70,7 +72,7 @@ This is the structural starting point of the story:
 
 ![Broadening scan](htqg_giant_bpve_topology_order_report_20260804/figures/02_giant_peak_broadening_scan.png)
 
-**Figure 2.** At historical normalization, the dominant Type-II component reaches about `9.9e4` for `eta=2 meV` and `8.4e4` for `eta=3 meV`, at photon energies near 17 meV. These correspond to current-authority magnitudes of approximately `4.97e4` and `4.19e4`; they are broadening diagnostics, not the approved `eta=8 meV` headline coefficient. The narrowest `eta=1 meV` curve becomes taller and develops fine spectral structure, as expected when resolved transition lines are broadened less.
+**Figure 2.** At historical normalization, the dominant Type-II component reaches about `9.9e4`, `8.4e4`, and `1.375e5` for `eta=2,3,1 meV`. These correspond to current-authority magnitudes of approximately `4.97e4`, `4.19e4`, and `6.876e4`. The last is the largest finite-frequency peak in the scan, near 17.8 meV, but all three are broadening diagnostics rather than the approved `eta=8 meV` headline coefficient. The narrowest curve develops fine spectral structure, as expected when resolved transition lines are broadened less.
 
 The crucial observations are:
 
@@ -188,7 +190,7 @@ This is evidence that the optical magnitude is not determined by the topological
 
 ![Partner-domain cancellation](htqg_giant_bpve_topology_order_report_20260804/figures/10_partner_domain_cancellation.png)
 
-**Figure 10.** The two Type-II structural partners have nearly equal and opposite signed tensors. Their equal-area laboratory-frame average nearly vanishes, despite each domain having a giant local response. Type-I partners show the corresponding mirror/sign relation at a much smaller clean central scale.
+**Figure 10.** The two Type-II structural partners have nearly equal and opposite current-authority signed tensors. Their equal-area laboratory-frame average nearly vanishes, despite each domain having a giant local response. The erroneous Type-I interval below `5 meV` is omitted; the remaining Type-I curves are shown only as gapless partner-symmetry diagnostics.
 
 This does not weaken the giant-BPVE result. It determines how it must be measured:
 
@@ -200,13 +202,62 @@ This does not weaken the giant-BPVE result. It determines how it must be measure
 
 ![Polarization response](htqg_giant_bpve_topology_order_report_20260804/figures/11_polarization_response.png)
 
-**Figure 11.** The full tensor contraction predicts a strong polarization-dependent current vector for the clean Type-II sector. The partner domain reverses the vector while retaining nearly the same magnitude. The Type-I row is included only as a gapless coefficient diagnostic and is not a device-current prediction.
+**Figure 11.** The corrected full-tensor contraction predicts a strong polarization-dependent current vector for the clean Type-II sector. The partner domain reverses the vector while retaining nearly the same magnitude. The former Type-I gapless diagnostic row has been removed from the report.
 
 The natural experimental window is the terahertz/far-infrared regime: 16.6 meV corresponds to approximately 4 THz. HF ordering and screening can move strong features into the tens-of-meV range, so gate/filling and dielectric environment become tunable spectroscopy axes.
 
 ---
 
-## 11. Reframed core narrative
+## 11. Largest response, enhancement strategies, and effective bulk units
+
+![Magnitude, enhancement, and thickness conversion](htqg_giant_bpve_topology_order_report_20260804/figures/12_magnitude_enhancement_thickness_conversion.png)
+
+**Figure 12.** This figure separates the largest scanned peak from the recommended approved coefficient and converts the two-dimensional sheet coefficient to an effective three-dimensional engineering unit.
+
+### Largest reported values
+
+- **Largest peak in the finite-frequency broadening scan:** `6.876e4 microA nm/V^2` at approximately 17.8 meV for `eta=1 meV`. It corresponds, under the ideal assumptions below, to about `129.5 nA` across a `10 micrometre` width at `I=1e6 W/m^2` and `n_eff=2`. This is a broadening diagnostic, not the robust headline.
+- **Recommended approved component:** `+2.3678e4 microA nm/V^2` at 16.6 meV and `eta=8 meV` from the P2 continuum approval. The corresponding ideal current is about `44.6 nA` for the same intensity, refractive index, and width.
+- **Current `eta=8 meV` tensor-envelope norm:** `4.7397e4 microA nm/V^2`. This norm is useful for structural comparison but is not itself one directly measured tensor component.
+
+### How to increase the response
+
+1. **Use the Type-II `alpha_beta_gamma` structure near neutrality.** It supplies the clean central-flat `c_to_c` resonance; Type-I is much weaker after the invalid zero-frequency interval is removed.
+2. **Reduce interaction-induced reshaping.** The neutral noninteracting H0 `eta=8 meV` component is about `2.66` times the active4 `epsilon=10`, `nu=0` HF peak (`2.3678e4` versus approximately `8.9e3 microA nm/V^2`). However, the HF/H0 integrated low-energy-weight ratio is still `0.905`; interactions mainly shift and redistribute the response rather than simply eliminating it. The dielectric continuation scan also shows increasing low-energy weight as screening weakens interactions, but it is not a multiseed global-ground-state scan.
+3. **Reduce disorder/scattering when experimentally possible.** Smaller `eta` sharpens the peak, but the integrated weight changes much less; this raises peak height rather than creating new oscillator strength.
+4. **Select polarization and structural domain.** Align the incident polarization with the dominant tensor contraction and use a single or strongly imbalanced Type-II domain. Equal partner-domain populations almost cancel the macroscopic current.
+5. **Increase incident intensity or device width within the perturbative regime.** The ideal current scales linearly with intensity and width, but absorption, contacts, local fields, collection efficiency, relaxation, and saturation must be modeled for a device prediction.
+
+### Thickness conversion for engineering comparison
+
+For a sheet coefficient `sigma_2D` in `microA nm/V^2`, define the conventional effective bulk coefficient
+
+\[
+\sigma_{3D}^{\rm eff}=\frac{\sigma_{2D}}{t_{\rm eff}},
+\]
+
+where `t_eff` is expressed in nanometres. For helical trilayer graphene, the outer-layer center separation is approximately `2 x 0.335 = 0.67 nm`; allowing an effective optical slab thickness of `1.0 nm` gives a transparent comparison range:
+
+| Quantity | Sheet coefficient (`microA nm/V^2`) | `t_eff=1.0 nm` (`microA/V^2`) | `t_eff=0.67 nm` (`microA/V^2`) |
+|---|---:|---:|---:|
+| P2-approved `eta=8` component | `2.3678e4` | `2.37e4` | `3.53e4` |
+| `eta=8` tensor-envelope norm | `4.7397e4` | `4.74e4` | `7.07e4` |
+| `eta=2` diagnostic component | `4.97e4` | `4.97e4` | `7.42e4` |
+| `eta=1` maximum diagnostic component | `6.876e4` | `6.88e4` | `1.03e5` |
+
+The effective 3D number depends inversely on the chosen atomically thin thickness convention. It is appropriate for coefficient-level comparison with bulk engineering materials, but it is not a unique microscopic bulk property of a two-dimensional sheet.
+
+For the ideal plane-wave estimate used here,
+
+\[
+j_{2D}=\sigma_{2D}\,10^{-15}\frac{I}{c\epsilon_0 n_{\rm eff}},\qquad I_{\rm collected}=j_{2D}W.
+\]
+
+This conversion is an ideal single-domain full-collection scale, not a measured-device-current prediction.
+
+---
+
+## 12. Reframed core narrative
 
 The result chain should be presented in this order:
 
@@ -221,7 +272,7 @@ The completed active6 Type-I P1-P5 work remains useful as a controlled remote-as
 
 ---
 
-## 12. Research program needed to close the topology/order story
+## 13. Research program needed to close the topology/order story
 
 ### A. Structural origin of the giant contrast
 
@@ -250,8 +301,9 @@ Prioritize domain-resolved, polarization-resolved THz photocurrent near the Type
 
 ## Boundaries
 
-- Signed amplitudes/integrands in Figures 1-10 require `-old/2`; norms/envelopes/absolute weights require `/2` without a sign. Figure 11 is already corrected and must not be converted again.
-- The neutral Type-I H0 low-frequency response is gapless and diagnostic only.
+- Signed amplitudes/integrands in historical Figures 2-9 require `-old/2`; norms/envelopes/absolute weights require `/2` without a sign. Figures 1 and 10-12 are already current-authority.
+- The neutral Type-I H0 source is gapless; `hbar omega < 5 meV` is excluded from revised plots, and the remaining Type-I H0 curve is diagnostic only.
+- The thickness-converted `microA/V^2` values depend on the chosen `0.67-1.0 nm` effective thickness convention.
 - The clean Type-II result is a projected continuum-envelope, internal-interband, resonant shift-current result; microscopic orbital-position/external terms remain absent.
 - Local Berry-curvature/metric similarity is not by itself a causal proof.
 - Domain mixtures are structural-population models, not calculated thermodynamic populations.
@@ -265,12 +317,14 @@ Prioritize domain-resolved, polarization-resolved THz photocurrent near the Type
 
 ## Figure provenance
 
-Figures 1-10 are exact copies of historical Plan-B products and require the quantity-specific conversion stated above. Figure 11 is an exact copy of the corrected P5 neutral-H0 product. Only `alpha_beta_gamma` is directly P2 full-continuum approved; the `gamma_beta_alpha` partner tensor is projected-active8 and was not independently full-continuum audited.
+Figures 2-9 are exact historical Plan-B products. Figures 1 and 10 are current-authority re-plots of saved Plan-B spectra with the invalid Type-I interval below `5 meV` explicitly excluded. Figure 11 is the corrected P5 Type-II panel, and Figure 12 is derived from validated report values and the stated thickness/current formulas. Only `alpha_beta_gamma` is directly P2 full-continuum approved; the `gamma_beta_alpha` partner tensor is projected-active8 and was not independently full-continuum audited.
 
 Sources:
 
 ```text
 results/HTQG_Fujimoto2025_hf/giant_bpve_mechanism_planB_20260709/
+results/HTQG_Fujimoto2025_hf/noninteracting_active8_neutral_bpve_shift_all32_20260705/
+results/HTQG_Fujimoto2025_hf/noninteracting_active12_neutral_bpve_shift_all48_20260705/
 results/HTQG_Fujimoto2025_nextstage_20260712/P5_domain_experimental_observables/
 ```
 
