@@ -74,7 +74,10 @@ assigned_energy = metric_sign * Re(eigenvalue)
 ```
 
 Negative assigned energies remain visible.  Complex, zero-eigenvalue, and
-null-metric modes are retained raw and are not assigned by this rule.
+null-metric modes are retained raw and are not assigned by this rule.  The
+null-metric classification tolerance and the selected-basis eta-Gram
+orthogonality tolerance are separate controls; the latter must not be inferred
+from the former in a large near-degenerate sector.
 
 ### Self-conjugate momentum
 

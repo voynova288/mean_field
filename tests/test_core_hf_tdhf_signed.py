@@ -298,6 +298,39 @@ def test_tdhf_nonfinite_retained_assignment_residual_is_invalid(
     assert analysis.dynamic.kind == "invalid"
 
 
+def test_tdhf_metric_gram_gate_is_distinct_from_null_norm_tolerance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sector = _generic_sector(
+        np.asarray([[2.0]]),
+        np.asarray([[0.0]]),
+        np.asarray([[2.0]]),
+        np.asarray([[0.0]]),
+    )
+    matrices = build_tdhf_signed_q_matrices(sector.blocks, sector.sewing)
+    assignment = replace(
+        solve_tdhf_wang_signed_modes(matrices),
+        metric_gram_residual=5.0e-10,
+    )
+    monkeypatch.setattr(
+        "mean_field.core.hf.tdhf_signed.solve_tdhf_wang_signed_modes",
+        lambda *args, **kwargs: assignment,
+    )
+    accepted = analyze_tdhf_typed_sector(
+        sector,
+        norm_tolerance=1.0e-10,
+        metric_gram_tolerance=1.0e-9,
+    )
+    rejected = analyze_tdhf_typed_sector(
+        sector,
+        norm_tolerance=1.0e-10,
+        metric_gram_tolerance=1.0e-11,
+    )
+    assert accepted.dynamic.kind == "real"
+    assert rejected.dynamic.kind == "invalid"
+    assert accepted.dynamic.metric_gram_tolerance == 1.0e-9
+
+
 def test_tdhf_static_and_dynamic_statuses_are_independent() -> None:
     sector = _generic_sector(
         np.asarray([[0.5]]),

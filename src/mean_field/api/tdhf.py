@@ -36,6 +36,7 @@ class TDHFConfig:
     degeneracy_tolerance: float = 1.0e-10
     pairing_tolerance: float = 1.0e-9
     eigensolver_tolerance: float = 1.0e-9
+    metric_gram_tolerance: float = 1.0e-9
 
 
 def analyze_tdhf_sector(
@@ -56,6 +57,7 @@ def analyze_tdhf_sector(
         degeneracy_tolerance=config.degeneracy_tolerance,
         pairing_tolerance=config.pairing_tolerance,
         eigensolver_tolerance=config.eigensolver_tolerance,
+        metric_gram_tolerance=config.metric_gram_tolerance,
         ward=ward_certificate,
     )
 

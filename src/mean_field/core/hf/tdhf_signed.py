@@ -313,6 +313,7 @@ class TDHFDynamicStatus:
     pairing_tolerance: float
     eigensolver_tolerance: float
     degeneracy_tolerance: float
+    metric_gram_tolerance: float
     structure_tolerance: float
 
 
@@ -918,6 +919,7 @@ def analyze_tdhf_typed_sector(
     degeneracy_tolerance: float = 1.0e-10,
     pairing_tolerance: float = 1.0e-9,
     eigensolver_tolerance: float = 1.0e-9,
+    metric_gram_tolerance: float = 1.0e-9,
     ward: TDHFWardCertificate | None = None,
 ) -> TDHFTypedAnalysis:
     """Run structure, static, dynamic, and zero-origin analyses independently."""
@@ -939,6 +941,9 @@ def analyze_tdhf_typed_sector(
     )
     eigensolver_tolerance = _validated_tolerance(
         "eigensolver_tolerance", eigensolver_tolerance
+    )
+    metric_gram_tolerance = _validated_tolerance(
+        "metric_gram_tolerance", metric_gram_tolerance
     )
 
     if isinstance(sector, TDHFGenericSignedQSector):
@@ -1050,7 +1055,7 @@ def analyze_tdhf_typed_sector(
         or max_residual_plus > eigensolver_tolerance
         or max_residual_minus > eigensolver_tolerance
         or selected_residual > eigensolver_tolerance
-        or metric_gram_residual > norm_tolerance
+        or metric_gram_residual > metric_gram_tolerance
     ):
         dynamic_kind: Literal["real", "complex", "invalid"] = "invalid"
     elif complex_count:
@@ -1070,6 +1075,7 @@ def analyze_tdhf_typed_sector(
         pairing_tolerance=pairing_tolerance,
         eigensolver_tolerance=eigensolver_tolerance,
         degeneracy_tolerance=degeneracy_tolerance,
+        metric_gram_tolerance=metric_gram_tolerance,
         structure_tolerance=structure_tolerance,
     )
 
