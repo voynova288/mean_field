@@ -102,6 +102,19 @@ certificate is bound to source and interaction fingerprints, exact H/L bytes,
 scalar-Hessian authority, stationarity, generator provenance, action residual,
 and static-null overlap.  It cannot be reused for another sector.
 
+For several broken generators, `core/hf/tdhf_goldstone.py` independently
+certifies the full generator tangent subspace and the physical real
+antisymmetric commutator matrix `rho_ab`.  Following the
+Watanabe--Murayama theorem it reports type-A
+`n_A = n_BG-rank(rho)` and type-B `n_B = rank(rho)/2`; therefore five
+Ward-certified static null directions may represent only three dynamic
+branches.  Mapping type-A/type-B to linear/quadratic dispersion requires the
+system's regular spatial-gradient structure and remains adapter-local.  The
+core never antisymmetrizes a supplied `rho`, drops dependent generators, or
+infers Goldstone type from eigenvalue sorting.  A typed analysis accepts the
+certificate only after rebinding source/interaction/sector and exact H/L,
+generator-basis, and `rho` fingerprints and recomputing its action/null gates.
+
 The first typed consumer is the diagnostic-only Kwan companion adapter in
 `systems/tbg/zero_field/companion_tdhf.py`.  Its unit canary independently
 assembles `K(q)` and `K(-q)` on a 2x3 fixture, exercises a true generic

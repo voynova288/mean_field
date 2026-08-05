@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import KW_ONLY, dataclass, field
 from typing import Any
 
+from mean_field.core.hf.tdhf_goldstone import TDHFWardSubspaceCertificate
 from mean_field.core.hf.tdhf_signed import (
     TDHFSectorProviderProtocol,
     TDHFTypedAnalysis,
@@ -44,6 +45,7 @@ def analyze_tdhf_sector(
     config: TDHFConfig,
     *,
     ward_certificate: TDHFWardCertificate | None = None,
+    ward_subspace_certificate: TDHFWardSubspaceCertificate | None = None,
 ) -> TDHFTypedAnalysis:
     """Analyze one already-assembled typed sector through the public API."""
 
@@ -59,6 +61,7 @@ def analyze_tdhf_sector(
         eigensolver_tolerance=config.eigensolver_tolerance,
         metric_gram_tolerance=config.metric_gram_tolerance,
         ward=ward_certificate,
+        ward_subspace=ward_subspace_certificate,
     )
 
 
@@ -70,10 +73,17 @@ def run_tdhf_typed(
     """Explicit typed-provider TDHF entry point."""
 
     ward_certificate = kwargs.pop("ward_certificate", None)
+    ward_subspace_certificate = kwargs.pop("ward_subspace_certificate", None)
     if ward_certificate is not None and not isinstance(
         ward_certificate, TDHFWardCertificate
     ):
         raise TypeError("ward_certificate must be a TDHFWardCertificate")
+    if ward_subspace_certificate is not None and not isinstance(
+        ward_subspace_certificate, TDHFWardSubspaceCertificate
+    ):
+        raise TypeError(
+            "ward_subspace_certificate must be a TDHFWardSubspaceCertificate"
+        )
     sector = provider.build_tdhf_sector(config, **kwargs)
     from mean_field.core.hf.tdhf_signed import (
         TDHFGenericSignedQSector,
@@ -86,6 +96,7 @@ def run_tdhf_typed(
         sector,
         config,
         ward_certificate=ward_certificate,
+        ward_subspace_certificate=ward_subspace_certificate,
     )
 
 

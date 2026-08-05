@@ -19,12 +19,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
-from typing import Any, Hashable, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Hashable, Literal, Protocol, runtime_checkable
 
 import numpy as np
 from scipy import linalg as scipy_linalg
 
 from .tdhf import ParticleHolePair, signed_q_particle_hole_assignment_residual
+
+if TYPE_CHECKING:
+    from .tdhf_goldstone import TDHFWardSubspaceCertificate
 
 TDHF_TYPED_API_VERSION = "typed_signed_q_v1"
 
@@ -364,6 +367,7 @@ class TDHFTypedAnalysis:
     dynamic: TDHFDynamicStatus
     zero_mode: TDHFZeroModeStatus
     ward: TDHFWardCertificate | None
+    ward_subspace: TDHFWardSubspaceCertificate | None
 
 
 @runtime_checkable
@@ -921,6 +925,7 @@ def analyze_tdhf_typed_sector(
     eigensolver_tolerance: float = 1.0e-9,
     metric_gram_tolerance: float = 1.0e-9,
     ward: TDHFWardCertificate | None = None,
+    ward_subspace: TDHFWardSubspaceCertificate | None = None,
 ) -> TDHFTypedAnalysis:
     """Run structure, static, dynamic, and zero-origin analyses independently."""
 
@@ -1209,6 +1214,25 @@ def analyze_tdhf_typed_sector(
             )
         ward_bound = True
 
+    ward_subspace_bound = False
+    if ward_subspace is not None:
+        from .tdhf_goldstone import validate_tdhf_ward_subspace_certificate
+
+        if static.kind != "positive_semidefinite":
+            raise ValueError(
+                "Ward-subspace certificate requires a positive-semidefinite static Hessian"
+            )
+        validate_tdhf_ward_subspace_certificate(
+            ward_subspace,
+            sector=sector,
+            hessian=h,
+            liouvillian=l,
+            static_zero_count=static.zero_count,
+            expected_static_null_tolerance=hessian_tolerance,
+        )
+        ward_subspace_bound = True
+
+    ward_bound = ward_bound or ward_subspace_bound
     dynamic_zero_count = int(
         np.count_nonzero(np.abs(raw_plus_values) <= zero_tolerance)
     )
@@ -1234,6 +1258,7 @@ def analyze_tdhf_typed_sector(
         dynamic=dynamic,
         zero_mode=zero_mode,
         ward=ward,
+        ward_subspace=ward_subspace,
     )
 
 

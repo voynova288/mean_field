@@ -186,6 +186,15 @@ from .tdhf import (
     two_body_matrix_element,
     validate_tdhf_structures,
 )
+from .tdhf_goldstone import (
+    TDHFGoldstoneCount,
+    TDHFSymplecticProvenance,
+    TDHFWardSubspaceCertificate,
+    analyze_tdhf_goldstone_symplectic_matrix,
+    certify_tdhf_ward_subspace,
+    count_tdhf_goldstones_from_rank,
+    validate_tdhf_ward_subspace_certificate,
+)
 from .tdhf_signed import (
     TDHFDynamicStatus,
     TDHF_TYPED_API_VERSION,
@@ -426,5 +435,13 @@ __all__ = [
     "fingerprint_tdhf_sector",
     "solve_tdhf_self_conjugate_modes",
     "solve_tdhf_wang_signed_modes",
+
+    "TDHFGoldstoneCount",
+    "TDHFSymplecticProvenance",
+    "TDHFWardSubspaceCertificate",
+    "analyze_tdhf_goldstone_symplectic_matrix",
+    "certify_tdhf_ward_subspace",
+    "count_tdhf_goldstones_from_rank",
+    "validate_tdhf_ward_subspace_certificate",
 
 ]

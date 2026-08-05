@@ -17,6 +17,7 @@ from typing import Any, Literal, Protocol, runtime_checkable
 
 import numpy as np
 
+from mean_field.core.hf.tdhf_goldstone import count_tdhf_goldstones_from_rank
 from mean_field.core.hf.tdhf_signed import TDHFSignedQ, classify_tdhf_signed_q
 
 KHALAF_FIG3_ARXIV = "2009.14827v2"
@@ -196,10 +197,16 @@ class KhalafFig3ExpectedModes:
             self.gapped_degeneracies
         ) != self.total_soft_modes:
             raise ValueError("Khalaf mode-count decomposition does not close")
-        if self.linear_goldstones != self.static_ward_directions - self.symplectic_rank:
-            raise ValueError("Khalaf type-I count is inconsistent with rank rho")
-        if self.quadratic_goldstones * 2 != self.symplectic_rank:
-            raise ValueError("Khalaf type-II count is inconsistent with rank rho")
+        count = count_tdhf_goldstones_from_rank(
+            self.static_ward_directions,
+            self.symplectic_rank,
+        )
+        # Khalaf's regular-gradient sigma model maps theorem type-A/type-B
+        # counts to its reported linear/quadratic branches.
+        if self.linear_goldstones != count.type_a_count:
+            raise ValueError("Khalaf linear count is inconsistent with rank rho")
+        if self.quadratic_goldstones != count.type_b_count:
+            raise ValueError("Khalaf quadratic count is inconsistent with rank rho")
 
 
 @dataclass(frozen=True, slots=True)
