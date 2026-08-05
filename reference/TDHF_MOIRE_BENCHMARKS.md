@@ -154,10 +154,15 @@ not author raw numerical arrays.
   - the source's `780 meV*a0^2`, `n=6e11 cm^-2 per valley`, and
     `rho_s=0.28 meV` imply a factor-two density-normalization ambiguity; these
     values remain source-reported context, not acceptance thresholds;
-  - `systems/abc_trilayer/vituri2024.py` implements only the pinned six-band
+  - `systems/abc_trilayer/vituri2024.py` implements the pinned six-band
     Hamiltonian and a locally nondegenerate, gauge-independent third-band
-    projector with C3/TR covariance. Interaction, HF and TDHF remain
-    fail-closed.
+    projector with C3/TR covariance;
+  - `systems/abc_trilayer/vituri2024_interaction.py` implements the paper's
+    scalar `V0/VTF` formulas and same-valley third-band density form factor.
+    Gate distance and the numerical `e^2` realization require explicit
+    non-paper receipts; q=0 can only be rejected or evaluated as the analytic
+    kernel limit, which does not establish a neutralizing/HF background.
+    Interaction meshes, HF and TDHF remain fail-closed.
 
 ### Wang et al., *Putting a new spin on the incommensurate Kekule spiral: from spin-valley locking and collective modes to fermiology and implications for superconductivity*
 
