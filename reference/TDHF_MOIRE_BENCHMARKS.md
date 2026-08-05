@@ -141,6 +141,23 @@ not author raw numerical arrays.
 - Scope limitation: this is dual-gated ABC trilayer graphene with a single
   active band, not MA-TBG. Use it to validate generic finite-q IVC
   susceptibility/instability logic, not numerical equality to the TBG spectrum.
+- Authority and implementation status:
+  - the source gives the complete six-band parent matrix, hopping/onsite
+    parameters, third-lowest active band, Thomas-Fermi screening form,
+    unrestricted-HF/optimal-damping logic and generalized-RPA equations;
+  - it does not give gate distance `d`, UV domain/cutoff, interaction q=0
+    policy, exact meshes/quadrature, CDW harmonic cutoff/q scan, SCF seeds and
+    tolerances, or raw HF/TDHF arrays;
+  - the displayed basis `(A1,B3,B1,A2,B2,A3)` puts B3 at index 2, while the
+    gauge paragraph calls B3 `psi_6/U_6,3`; the paper phase gauge is therefore
+    unresolved and must not be guessed;
+  - the source's `780 meV*a0^2`, `n=6e11 cm^-2 per valley`, and
+    `rho_s=0.28 meV` imply a factor-two density-normalization ambiguity; these
+    values remain source-reported context, not acceptance thresholds;
+  - `systems/abc_trilayer/vituri2024.py` implements only the pinned six-band
+    Hamiltonian and a locally nondegenerate, gauge-independent third-band
+    projector with C3/TR covariance. Interaction, HF and TDHF remain
+    fail-closed.
 
 ### Wang et al., *Putting a new spin on the incommensurate Kekule spiral: from spin-valley locking and collective modes to fermiology and implications for superconductivity*
 
