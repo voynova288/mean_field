@@ -822,15 +822,19 @@ def load_tbg_zero_field_complete_hf_state_archive_npz(
     if (
         not isinstance(mesh_shape, list)
         or len(mesh_shape) != 2
-        or mesh_shape[0] != mesh_shape[1]
+        or any(
+            isinstance(value, bool) or not isinstance(value, int) or value <= 0
+            for value in mesh_shape
+        )
         or not isinstance(g1_pair, list)
         or len(g1_pair) != 2
         or not isinstance(g2_pair, list)
         or len(g2_pair) != 2
     ):
         raise ValueError("Validated complete HF state archive mesh metadata is malformed")
+    n1, n2 = int(mesh_shape[0]), int(mesh_shape[1])
     mesh = TBGZeroFieldTorusMesh(
-        mesh_size=int(mesh_shape[0]),
+        mesh_size=n1 if n1 == n2 else (n1, n2),
         g1=complex(float(g1_pair[0]), float(g1_pair[1])),
         g2=complex(float(g2_pair[0]), float(g2_pair[1])),
         k_grid_frac=np.asarray(arrays["mesh_k_grid_frac"], dtype=np.float64),
@@ -1483,12 +1487,17 @@ def _typed_runtime_environment_payload(runtime: object) -> dict[str, object]:
             payload[key] = _json_safe(getattr(runtime, key))
     return payload
 
-def _b0_reported_grid_size(result: object) -> int:
+def _b0_reported_grid_descriptor(result: object) -> dict[str, object]:
+    """Return legacy square ``lk`` or an explicit rectangular mesh shape."""
+
     grid_solution = getattr(result, "grid_solution", None)
     mesh = None if grid_solution is None else getattr(grid_solution, "torus_mesh", None)
-    if mesh is not None:
-        return int(mesh.mesh_size)
-    return int(getattr(result, "path_result").lk)
+    if mesh is None:
+        return {"lk": int(getattr(result, "path_result").lk)}
+    n1, n2 = (int(value) for value in mesh.mesh_shape)
+    if n1 == n2:
+        return {"lk": n1}
+    return {"mesh_shape": [n1, n2]}
 
 def _b0_hf_validation_payload(
     result: object,
@@ -1728,7 +1737,7 @@ def _b0_hf_suite_case_summary(result: object) -> dict[str, object]:
         "init_mode": str(getattr(result, "path_result").init_mode),
         "normalized_init_mode": str(getattr(result, "path_result").normalized_init_mode),
         "seed": int(getattr(result, "path_result").seed),
-        "lk": _b0_reported_grid_size(result),
+        **_b0_reported_grid_descriptor(result),
         "lg": int(getattr(result, "path_result").lg),
         "converged": bool(hf_run.converged),
         "exit_reason": str(hf_run.exit_reason),
@@ -1839,7 +1848,7 @@ def write_b0_hf_benchmark_contract_sidecars(
                 "theta_deg": theta_deg,
                 "nu": float(provenance.nu),
                 "hf_mode": str(provenance.hf_mode),
-                "lk": _b0_reported_grid_size(result),
+                **_b0_reported_grid_descriptor(result),
                 "lg": int(grid_solution.lg),
                 "overlap_lg": int(screened_block_bundle.overlap_lg),
                 "beta": float(provenance.beta),
@@ -1857,7 +1866,7 @@ def write_b0_hf_benchmark_contract_sidecars(
             "init_mode": str(provenance.normalized_init_mode),
             "normalized_init_mode": str(provenance.normalized_init_mode),
             "seed": int(provenance.seed),
-            "lk": _b0_reported_grid_size(result),
+            **_b0_reported_grid_descriptor(result),
             "lg": int(grid_solution.lg),
             "overlap_lg": int(screened_block_bundle.overlap_lg),
             "beta": float(provenance.beta),
@@ -1877,7 +1886,7 @@ def write_b0_hf_benchmark_contract_sidecars(
             extra={
                 "theta_deg": float(case.theta_deg),
                 "nu": int(case.nu),
-                "lk": _b0_reported_grid_size(result),
+                **_b0_reported_grid_descriptor(result),
                 "lg": int(path_result.lg),
                 "overlap_lg": None if path_result.overlap_lg is None else int(path_result.overlap_lg),
                 "beta": float(path_result.beta),
@@ -1892,7 +1901,7 @@ def write_b0_hf_benchmark_contract_sidecars(
             "init_mode": str(path_result.init_mode),
             "normalized_init_mode": str(path_result.normalized_init_mode),
             "seed": int(path_result.seed),
-            "lk": _b0_reported_grid_size(result),
+            **_b0_reported_grid_descriptor(result),
             "lg": int(path_result.lg),
             "points_per_segment": int(path_result.points_per_segment),
             "overlap_lg": None if path_result.overlap_lg is None else int(path_result.overlap_lg),
@@ -2004,7 +2013,7 @@ def write_b0_hf_suite_contract_sidecars(
             "nu": int(getattr(result, "case").nu),
             "init_mode": str(getattr(result, "path_result").init_mode),
             "seed": int(getattr(result, "path_result").seed),
-            "lk": _b0_reported_grid_size(result),
+            **_b0_reported_grid_descriptor(result),
             "lg": int(getattr(result, "path_result").lg),
         }
         for result in case_results

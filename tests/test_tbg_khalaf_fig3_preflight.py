@@ -9,6 +9,7 @@ from mean_field.core.hf.tdhf_signed import (
     TDHFGenericSignedQ,
     TDHFSelfConjugateQ,
 )
+from mean_field.systems.tbg.params import TBGParameters
 from mean_field.systems.tbg.zero_field.khalaf_fig3 import (
     KHALAF_FIG3_PDF_SHA256,
     KhalafCutoffAuthority,
@@ -18,6 +19,9 @@ from mean_field.systems.tbg.zero_field.khalaf_fig3 import (
     KhalafPinnedValue,
     KhalafRectangularTorus,
     KhalafRemoteClosureAuthority,
+)
+from mean_field.systems.tbg.zero_field.model import (
+    build_tbg_zero_field_half_open_torus_mesh,
 )
 
 
@@ -267,6 +271,33 @@ def test_khalaf_rectangular_label_binds_shape_filling_basis_and_q_type() -> None
     assert neutral.label((0, 6)).fingerprint != half.label((0, 6)).fingerprint
     assert isinstance(neutral.signed_q_kind((0, 6)), TDHFGenericSignedQ)
     assert isinstance(half.signed_q_kind((0, 6)), TDHFSelfConjugateQ)
+
+
+def test_khalaf_rectangular_torus_binds_actual_rectangular_bm_mesh() -> None:
+    # The bridge test binds only reciprocal geometry; it does not resolve the
+    # still-unpublished Fig.3 tunnelling amplitudes.
+    params = TBGParameters.from_degrees(1.08)
+    bm_mesh = build_tbg_zero_field_half_open_torus_mesh(params, (18, 12))
+    torus = KhalafRectangularTorus.from_bm_mesh(-2, bm_mesh)
+    assert torus.shape == bm_mesh.mesh_shape == (18, 12)
+    assert torus.reciprocal_basis_fingerprint == (
+        bm_mesh.reciprocal_basis_fingerprint
+    )
+    for canonical in ((0, 0), (9, 0), (0, 6), (17, 11)):
+        assert torus.flatten(canonical) == canonical[0] + 18 * canonical[1]
+        assert bm_mesh.k_grid_frac[torus.flatten(canonical)].tolist() == [
+            canonical[0] / 18.0,
+            canonical[1] / 12.0,
+        ]
+    for raw in ((9, 0), (0, 6)):
+        plus, minus = torus.signed_pair(raw)
+        assert plus.canonical == minus.canonical
+        assert plus.raw != minus.raw
+        assert plus.reciprocal_carry != minus.reciprocal_carry
+        assert isinstance(torus.signed_q_kind(raw), TDHFSelfConjugateQ)
+    wrong_mesh = build_tbg_zero_field_half_open_torus_mesh(params, 18)
+    with pytest.raises(ValueError, match="does not match"):
+        KhalafRectangularTorus.from_bm_mesh(-2, wrong_mesh)
 
 
 def test_khalaf_rectangular_torus_m_gamma_m_path_and_roundtrip() -> None:

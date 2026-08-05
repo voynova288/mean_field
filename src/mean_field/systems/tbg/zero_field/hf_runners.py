@@ -29,7 +29,7 @@ class HFPathResult:
     band_data: FlavorBandData
     mu: float
     nu: float
-    lk: int
+    lk: int | None
     lg: int
     points_per_segment: int
     init_mode: str
@@ -44,6 +44,7 @@ class HFPathResult:
     zero_cutoff: float = 1e-6
     interaction_spec_fingerprint: str | None = None
     include_interaction: bool = True
+    mesh_shape: tuple[int, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -69,12 +70,13 @@ class HFSCFPathPlotResult:
     band_data: FlavorBandData
     mu: float
     nu: float
-    lk: int
+    lk: int | None
     lg: int
     init_mode: str
     normalized_init_mode: str
     seed: int
     exit_reason: str
+    mesh_shape: tuple[int, int] | None = None
 
 
 def _has_typed_hf_source(hf_run: RestrictedHartreeFockRun) -> bool:
@@ -86,11 +88,20 @@ def _has_typed_hf_source(hf_run: RestrictedHartreeFockRun) -> bool:
         or getattr(receipt, "interaction_contract", None) == "typed"
     )
 
-def _reported_grid_size(grid_solution: BMSolution) -> int:
-    """Report N for half-open NxN meshes and legacy lk for endpoint grids."""
+def _reported_grid_shape(grid_solution: BMSolution) -> tuple[int, int] | None:
+    """Carry exact typed-torus shape; legacy endpoint grids remain shape-less."""
 
-    if grid_solution.torus_mesh is not None:
-        return int(grid_solution.torus_mesh.mesh_size)
+    if grid_solution.torus_mesh is None:
+        return None
+    mesh_shape = grid_solution.torus_mesh.mesh_shape
+    return (int(mesh_shape[0]), int(mesh_shape[1]))
+
+def _reported_grid_size(grid_solution: BMSolution) -> int | None:
+    """Report the square/legacy scalar alias, never one side of a rectangle."""
+
+    mesh_shape = _reported_grid_shape(grid_solution)
+    if mesh_shape is not None:
+        return mesh_shape[0] if mesh_shape[0] == mesh_shape[1] else None
     return int(round(np.sqrt(grid_solution.nk))) - 1
 
 def build_restricted_hf_scf_path_plot_result(
@@ -146,6 +157,7 @@ def build_restricted_hf_scf_path_plot_result(
         normalized_init_mode=hf_run.init_mode,
         seed=hf_run.seed,
         exit_reason=hf_run.exit_reason,
+        mesh_shape=_reported_grid_shape(grid_solution),
     )
 
 
@@ -332,6 +344,7 @@ def evaluate_restricted_hf_path(
         normalized_init_mode=hf_run.init_mode,
         seed=hf_run.seed,
         exit_reason=hf_run.exit_reason,
+        mesh_shape=_reported_grid_shape(grid_solution),
         beta=resolved_beta,
         overlap_lg=resolved_overlap_lg,
         relative_permittivity=resolved_epsr,
@@ -436,7 +449,13 @@ def write_hf_path_summary(path: Path, result: HFPathResult, *, hf_state_path: st
         ("init_mode", result.init_mode),
         ("normalized_init_mode", result.normalized_init_mode),
         ("seed", str(result.seed)),
-        ("lk", str(result.lk)),
+        ("lk", "" if result.lk is None else str(result.lk)),
+    ]
+    if result.mesh_shape is not None:
+        entries.append(
+            ("mesh_shape", f"{result.mesh_shape[0]}x{result.mesh_shape[1]}")
+        )
+    entries.extend([
         ("lg", str(result.lg)),
         ("overlap_lg", "" if result.overlap_lg is None else str(result.overlap_lg)),
         ("beta", f"{result.beta}"),
@@ -450,7 +469,7 @@ def write_hf_path_summary(path: Path, result: HFPathResult, *, hf_state_path: st
         ("mu", f"{result.mu}"),
         ("exit_reason", result.exit_reason),
         ("path", path_label),
-    ]
+    ])
     with path.open("w", encoding="utf-8") as handle:
         for key, value in entries:
             handle.write(f"{key}={value}\n")

@@ -20,6 +20,8 @@ import numpy as np
 from mean_field.core.hf.tdhf_goldstone import count_tdhf_goldstones_from_rank
 from mean_field.core.hf.tdhf_signed import TDHFSignedQ, classify_tdhf_signed_q
 
+from .model import TBGZeroFieldTorusMesh
+
 KHALAF_FIG3_ARXIV = "2009.14827v2"
 KHALAF_FIG3_PDF_SHA256 = (
     "991c348090db78d25d2d06e69858f9df58ff35c411bc5a199478b70326280730"
@@ -631,6 +633,23 @@ class KhalafRectangularTorus:
             KhalafFig3Spec.paper_target(filling).mesh_shape,
             filling,
             reciprocal_basis_fingerprint,
+        )
+
+    @classmethod
+    def from_bm_mesh(
+        cls,
+        filling: int,
+        mesh: TBGZeroFieldTorusMesh,
+    ) -> "KhalafRectangularTorus":
+        if not isinstance(mesh, TBGZeroFieldTorusMesh):
+            raise TypeError("Khalaf torus bridge requires a typed TBG BM mesh")
+        target = KhalafFig3Spec.paper_target(filling)
+        if mesh.mesh_shape != target.mesh_shape:
+            raise ValueError("typed BM mesh does not match the Khalaf Fig.3 target")
+        return cls(
+            target.mesh_shape,
+            filling,
+            mesh.reciprocal_basis_fingerprint,
         )
 
     def label(self, raw: tuple[int, int]) -> KhalafRectangularMomentumLabel:

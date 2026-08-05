@@ -72,6 +72,22 @@ not author raw numerical arrays.
   - independent q/-q RPA pairing;
   - scalar static-Hessian positivity for the stable source;
   - source-bound Ward certificates and exact-boundary sewing.
+- Executable-authority audit:
+  - the arXiv v1/v2 source packages contain only TeX and compiled vector
+    figures; no code, raw arrays, ancillary files, or embedded configuration
+    metadata were found;
+  - Fig. 3 does not state absolute `w1`/`w0`, `v_F` or monolayer `t0`, the BM
+    reciprocal-plane-wave cutoff, or the numerical interaction-transfer cutoff;
+  - Ref. 27 explicitly uses a full nearest-neighbor monolayer parent and the
+    subtraction `h=h_BM-1/2 H_MF[P0]`, with `P0` the neutral density of two
+    decoupled graphene layers; it also describes cancellation of filled
+    projected-out valence bands against their matching `P0` subtraction;
+  - the Ref. 27 defaults (`t0=2.8 eV`, `w1=110 meV`) and the independent
+    Xie--MacDonald/Shang conventions are cited-reference values, not a direct
+    Fig. 3 parameter receipt and must not be silently inherited;
+  - rectangular typed-torus/BM/HF/archive geometry may be validated
+    independently, but it does not resolve the six-band source or cutoff
+    authority.
 
 ### Kumar, Xie, and MacDonald, *Lattice Collective Modes from a Continuum Model of Magic-Angle Twisted Bilayer Graphene*
 

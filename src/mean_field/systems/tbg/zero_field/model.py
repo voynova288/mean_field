@@ -37,15 +37,49 @@ def _canonical_array_sha256(values: np.ndarray, *, dtype: str) -> str:
     return digest.hexdigest()
 
 
+def _is_torus_mesh_dimension(value: object) -> bool:
+    return (
+        not isinstance(value, (bool, np.bool_))
+        and isinstance(value, (int, np.integer))
+    )
+
+
+def _resolve_torus_mesh_shape(
+    mesh_size: int | tuple[int, int],
+) -> tuple[int, int]:
+    if _is_torus_mesh_dimension(mesh_size):
+        size = int(mesh_size)
+        if size <= 0:
+            raise ValueError(f"mesh_size must be a positive integer, got {mesh_size!r}")
+        return (size, size)
+    if not isinstance(mesh_size, tuple) or len(mesh_size) != 2:
+        raise ValueError(
+            "mesh_size must be a positive integer or a strict (N1, N2) "
+            f"positive-integer tuple, got {mesh_size!r}"
+        )
+    if any(not _is_torus_mesh_dimension(value) for value in mesh_size):
+        raise ValueError(
+            "mesh_size tuple entries N1 and N2 must be strict positive integers, "
+            f"got {mesh_size!r}"
+        )
+    n1, n2 = (int(mesh_size[0]), int(mesh_size[1]))
+    if n1 <= 0 or n2 <= 0:
+        raise ValueError(
+            "mesh_size tuple entries N1 and N2 must be strict positive integers, "
+            f"got {mesh_size!r}"
+        )
+    return (n1, n2)
+
+
 @dataclass(frozen=True)
 class TBGZeroFieldTorusMesh:
-    """Exact half-open square torus in the zero-field BM flattening order.
+    """Exact half-open torus in the zero-field BM flattening order.
 
     The mesh owns immutable copies of both arrays.  Construction is deliberately
-    strict: callers cannot attach the type to an arbitrary square point cloud.
+    strict: callers cannot attach the type to an arbitrary point cloud.
     """
 
-    mesh_size: int
+    mesh_size: int | tuple[int, int]
     g1: complex
     g2: complex
     k_grid_frac: np.ndarray
@@ -68,13 +102,8 @@ class TBGZeroFieldTorusMesh:
             raise ValueError("TBG zero-field torus mesh index_order must be 'F'")
         if self.fractional_domain != "[0,1)x[0,1)":
             raise ValueError("TBG zero-field torus mesh must use the half-open [0,1)x[0,1) domain")
-        if isinstance(self.mesh_size, (bool, np.bool_)) or not isinstance(
-            self.mesh_size, (int, np.integer)
-        ):
-            raise ValueError(f"mesh_size must be a positive integer, got {self.mesh_size!r}")
-        size = int(self.mesh_size)
-        if size <= 0:
-            raise ValueError(f"mesh_size must be a positive integer, got {self.mesh_size!r}")
+        scalar_mesh_size = _is_torus_mesh_dimension(self.mesh_size)
+        n1, n2 = _resolve_torus_mesh_shape(self.mesh_size)
         g1 = complex(self.g1)
         g2 = complex(self.g2)
         if not all(math.isfinite(value) for value in (g1.real, g1.imag, g2.real, g2.imag)):
@@ -86,13 +115,19 @@ class TBGZeroFieldTorusMesh:
         # can alias caller-owned storage and merely mark that storage read-only.
         frac = np.array(self.k_grid_frac, dtype=np.float64, order="C", copy=True)
         kvec = np.array(self.kvec, dtype=np.complex128, order="C", copy=True).reshape(-1)
-        if frac.shape != (size * size, 2):
-            raise ValueError(f"k_grid_frac must have shape {(size * size, 2)}, got {frac.shape}")
-        if kvec.shape != (size * size,):
-            raise ValueError(f"kvec must have shape {(size * size,)}, got {kvec.shape}")
+        point_count = n1 * n2
+        if frac.shape != (point_count, 2):
+            raise ValueError(f"k_grid_frac must have shape {(point_count, 2)}, got {frac.shape}")
+        if kvec.shape != (point_count,):
+            raise ValueError(f"kvec must have shape {(point_count,)}, got {kvec.shape}")
 
-        coordinate = np.arange(size, dtype=np.float64) / float(size)
-        f1, f2 = np.meshgrid(coordinate, coordinate, indexing="ij")
+        coordinate_1 = np.arange(n1, dtype=np.float64) / float(n1)
+        coordinate_2 = (
+            coordinate_1
+            if n1 == n2
+            else np.arange(n2, dtype=np.float64) / float(n2)
+        )
+        f1, f2 = np.meshgrid(coordinate_1, coordinate_2, indexing="ij")
         expected_frac = np.stack(
             [np.ravel(f1, order="F"), np.ravel(f2, order="F")],
             axis=1,
@@ -100,7 +135,7 @@ class TBGZeroFieldTorusMesh:
         if not np.array_equal(frac, expected_frac):
             raise ValueError(
                 "TBG zero-field torus coordinates must be exactly the Fortran-ordered "
-                "(i/N,j/N), i,j=0,...,N-1 grid"
+                "(i/N1,j/N2) grid with flattened index i+N1*j"
             )
         expected_kvec = expected_frac[:, 0] * g1 + expected_frac[:, 1] * g2
         if not np.array_equal(kvec, expected_kvec):
@@ -111,7 +146,11 @@ class TBGZeroFieldTorusMesh:
 
         frac.setflags(write=False)
         kvec.setflags(write=False)
-        object.__setattr__(self, "mesh_size", size)
+        object.__setattr__(
+            self,
+            "mesh_size",
+            n1 if scalar_mesh_size else (n1, n2),
+        )
         object.__setattr__(self, "schema_version", int(self.schema_version))
         object.__setattr__(self, "g1", g1)
         object.__setattr__(self, "g2", g2)
@@ -119,8 +158,15 @@ class TBGZeroFieldTorusMesh:
         object.__setattr__(self, "kvec", kvec)
 
     @property
+    def mesh_shape(self) -> tuple[int, int]:
+        if isinstance(self.mesh_size, tuple):
+            return self.mesh_size
+        return (self.mesh_size, self.mesh_size)
+
+    @property
     def nk(self) -> int:
-        return int(self.mesh_size * self.mesh_size)
+        n1, n2 = self.mesh_shape
+        return int(n1 * n2)
 
     @property
     def fractional_coordinates_sha256(self) -> str:
@@ -130,6 +176,20 @@ class TBGZeroFieldTorusMesh:
     def kvec_sha256(self) -> str:
         return _canonical_array_sha256(self.kvec, dtype="<c16")
 
+    @property
+    def reciprocal_basis_fingerprint(self) -> str:
+        payload = json.dumps(
+            {
+                "coordinate_convention": TBG_ZERO_FIELD_B0_COORDINATE_CONVENTION,
+                "g1": [float(self.g1.real), float(self.g1.imag)],
+                "g2": [float(self.g2.real), float(self.g2.imag)],
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
+
     def _payload(self) -> dict[str, object]:
         return {
             "fractional_coordinates_sha256": self.fractional_coordinates_sha256,
@@ -138,7 +198,7 @@ class TBGZeroFieldTorusMesh:
             "g2": [float(self.g2.real), float(self.g2.imag)],
             "index_order": self.index_order,
             "kvec_sha256": self.kvec_sha256,
-            "mesh_shape": [self.mesh_size, self.mesh_size],
+            "mesh_shape": list(self.mesh_shape),
             "point_count": self.nk,
             "schema": self.schema,
             "schema_version": self.schema_version,
@@ -824,7 +884,7 @@ class TBGZeroFieldBMModel:
 
     def bands_on_grid(
         self,
-        mesh_size: int,
+        mesh_size: int | tuple[int, int],
         *,
         valley: int = 1,
         n_bands: int | None = None,
@@ -833,27 +893,51 @@ class TBGZeroFieldBMModel:
         frac_shift: tuple[float, float] = (0.0, 0.0),
     ) -> GridBandsResult:
         _resolve_bm_band_count(n_bands)
-        mesh = int(mesh_size)
-        if mesh <= 0:
-            raise ValueError(f"mesh_size must be positive, got {mesh_size}")
-        if endpoint:
-            frac_1d = np.linspace(0.0, 1.0, mesh, dtype=float)
+        n1, n2 = _resolve_torus_mesh_shape(mesh_size)
+        scalar_mesh_size = _is_torus_mesh_dimension(mesh_size)
+        if scalar_mesh_size:
+            mesh = int(mesh_size)
+            if endpoint:
+                frac_1d = np.linspace(0.0, 1.0, mesh, dtype=float)
+            else:
+                frac_1d = (np.arange(mesh, dtype=float) + np.asarray(frac_shift, dtype=float)[0]) / float(mesh)
+            frac_y = frac_1d if endpoint else (np.arange(mesh, dtype=float) + np.asarray(frac_shift, dtype=float)[1]) / float(mesh)
         else:
-            frac_1d = (np.arange(mesh, dtype=float) + np.asarray(frac_shift, dtype=float)[0]) / float(mesh)
-        frac_y = frac_1d if endpoint else (np.arange(mesh, dtype=float) + np.asarray(frac_shift, dtype=float)[1]) / float(mesh)
+            shift = np.asarray(frac_shift, dtype=float)
+            if endpoint:
+                frac_1d = np.linspace(0.0, 1.0, n1, dtype=float)
+                frac_y = np.linspace(0.0, 1.0, n2, dtype=float)
+            else:
+                frac_1d = (np.arange(n1, dtype=float) + shift[0]) / float(n1)
+                frac_y = (np.arange(n2, dtype=float) + shift[1]) / float(n2)
         f1, f2 = np.meshgrid(frac_1d, frac_y, indexing="ij")
         kvec = f1 * self.params.g1 + f2 * self.params.g2
-        solution = self._solve(np.asarray(kvec, dtype=np.complex128).reshape(-1))
+        flattening_order = "C" if scalar_mesh_size else "F"
+        solution = self._solve(
+            np.ravel(np.asarray(kvec, dtype=np.complex128), order=flattening_order)
+        )
         valley_index = _resolve_bm_valley_index(valley)
-        energies = np.asarray(solution.spectrum[:, valley_index, :], dtype=float).T.reshape(mesh, mesh, 2)
+        flat_energies = np.asarray(solution.spectrum[:, valley_index, :], dtype=float).T
+        if scalar_mesh_size:
+            energies = flat_energies.reshape(n1, n2, 2)
+        else:
+            point_indices = np.arange(n1 * n2).reshape(n1, n2, order="F")
+            energies = flat_energies[point_indices]
         eigenvectors = None
         if return_eigenvectors:
-            eigenvectors = np.transpose(np.asarray(solution.uk[:, :, valley_index, :], dtype=np.complex128), (2, 0, 1)).reshape(
-                mesh,
-                mesh,
-                self.matrix_dim,
-                2,
+            flat_eigenvectors = np.transpose(
+                np.asarray(solution.uk[:, :, valley_index, :], dtype=np.complex128),
+                (2, 0, 1),
             )
+            if scalar_mesh_size:
+                eigenvectors = flat_eigenvectors.reshape(
+                    n1,
+                    n2,
+                    self.matrix_dim,
+                    2,
+                )
+            else:
+                eigenvectors = flat_eigenvectors[point_indices]
         return GridBandsResult(
             k_grid_frac=np.stack([f1, f2], axis=-1),
             kvec=np.asarray(kvec, dtype=np.complex128),
@@ -887,32 +971,33 @@ def build_b0_uniform_lattice(params: TBGParameters, lk: int) -> LatticeGrid:
 
 def build_tbg_zero_field_half_open_torus_mesh(
     params: TBGParameters,
-    mesh_size: int,
+    mesh_size: int | tuple[int, int],
 ) -> TBGZeroFieldTorusMesh:
-    """Build ``k=(i/N)g1+(j/N)g2`` for ``i,j=0,...,N-1``.
+    """Build ``k=(i/N1)g1+(j/N2)g2`` on a half-open torus.
 
-    Flattening uses Fortran order, matching the current BM/B0 indexing: the
-    first fractional coordinate varies fastest.  Unlike
+    ``mesh_size=N`` preserves the square ``N x N`` API.  A strict positive
+    integer tuple ``(N1, N2)`` selects a rectangular mesh.  Flattening uses
+    Fortran order, matching the current BM/B0 indexing: the first fractional
+    coordinate varies fastest with flattened index ``i + N1*j``.  Unlike
     :func:`build_b0_uniform_lattice`, this helper never includes either unit
     endpoint.
     """
 
-    if isinstance(mesh_size, (bool, np.bool_)) or not isinstance(
-        mesh_size, (int, np.integer)
-    ):
-        raise ValueError(f"mesh_size must be a positive integer, got {mesh_size!r}")
-    size = int(mesh_size)
-    if size <= 0:
-        raise ValueError(f"mesh_size must be a positive integer, got {mesh_size!r}")
-    frac = np.arange(size, dtype=np.float64) / float(size)
-    f1, f2 = np.meshgrid(frac, frac, indexing="ij")
+    n1, n2 = _resolve_torus_mesh_shape(mesh_size)
+    coordinate_1 = np.arange(n1, dtype=np.float64) / float(n1)
+    coordinate_2 = (
+        coordinate_1
+        if n1 == n2
+        else np.arange(n2, dtype=np.float64) / float(n2)
+    )
+    f1, f2 = np.meshgrid(coordinate_1, coordinate_2, indexing="ij")
     coordinates = np.stack(
         [np.ravel(f1, order="F"), np.ravel(f2, order="F")],
         axis=1,
     )
     kvec = np.ravel(f1 * params.g1 + f2 * params.g2, order="F")
     return TBGZeroFieldTorusMesh(
-        mesh_size=size,
+        mesh_size=int(mesh_size) if _is_torus_mesh_dimension(mesh_size) else (n1, n2),
         g1=params.g1,
         g2=params.g2,
         k_grid_frac=coordinates,
@@ -1179,7 +1264,7 @@ def solve_bm_model(
 
 def solve_bm_model_on_torus(
     params: TBGParameters,
-    mesh_size: int,
+    mesh_size: int | tuple[int, int],
     *,
     lg: int = 9,
     sigma_rotation: bool = True,

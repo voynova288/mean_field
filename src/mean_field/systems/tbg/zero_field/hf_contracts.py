@@ -552,6 +552,7 @@ def _projected_basis(run: RestrictedHartreeFockRun, grid_solution: BMSolution) -
             "source_kvec_b0_code_sha256": tbg_zero_field_lattice_kvec_sha256(raw_kvec),
             "kvec_nm_inv_sha256": tbg_zero_field_lattice_kvec_sha256(physical_kvec),
             "torus_mesh_fingerprint": mesh.fingerprint,
+            "grid_mesh_shape": [int(value) for value in mesh.mesh_shape],
             "wavefunctions_axis_order": "bm_micro_basis,bm_band,valley,k",
             "spin_degeneracy_implicit_in_micro_wavefunctions": True,
             "density_axis_order": "abk",
@@ -809,8 +810,27 @@ class TBGZeroFieldRunHFConfig:
                 )
 
 
-def _tbg_zero_field_grid_side(solution: BMSolution) -> int:
-    return int(_carried_torus_mesh(solution).mesh_size)
+def _tbg_zero_field_grid_shape(solution: BMSolution) -> tuple[int, int]:
+    mesh_shape = _carried_torus_mesh(solution).mesh_shape
+    return (int(mesh_shape[0]), int(mesh_shape[1]))
+
+def _tbg_zero_field_grid_metadata(solution: BMSolution) -> dict[str, object]:
+    mesh_shape = _tbg_zero_field_grid_shape(solution)
+    metadata: dict[str, object] = {
+        "grid_mesh_shape": [mesh_shape[0], mesh_shape[1]],
+    }
+    if mesh_shape[0] == mesh_shape[1]:
+        metadata["grid_mesh_size"] = mesh_shape[0]
+    return metadata
+
+def _tbg_zero_field_grid_metadata_claims(solution: BMSolution) -> dict[str, object]:
+    """Expected optional metadata, including the square-only scalar alias."""
+
+    mesh_shape = _tbg_zero_field_grid_shape(solution)
+    return {
+        "grid_mesh_shape": [mesh_shape[0], mesh_shape[1]],
+        "grid_mesh_size": mesh_shape[0] if mesh_shape[0] == mesh_shape[1] else None,
+    }
 
 
 
@@ -823,8 +843,7 @@ def _resolved_screening_lm(config: TBGZeroFieldRunHFConfig) -> float:
 
 def _validate_tbg_zero_field_public_hf_config(config: "HFConfig", tbg_config: TBGZeroFieldRunHFConfig) -> None:
     solution = tbg_config.grid_solution
-    side = _tbg_zero_field_grid_side(solution)
-    mesh = (side, side)
+    mesh = _tbg_zero_field_grid_shape(solution)
     if config.mesh != mesh:
         raise ValueError(
             "TBG zero-field public run_hf requires HFConfig.mesh to match the carried "
@@ -911,6 +930,7 @@ def _validate_tbg_zero_field_public_hf_config(config: "HFConfig", tbg_config: TB
         "max_iter": int(tbg_config.max_iter),
         "max_iterations": int(tbg_config.max_iter),
         "requested_max_iterations": int(tbg_config.max_iter),
+        **_tbg_zero_field_grid_metadata_claims(solution),
     }
     tolerant_metadata = {
         "beta": _TBG_RUN_FLOAT_ATOL,
@@ -1006,7 +1026,7 @@ def tbg_zero_field_hf_run_to_hf_run_result(
         "seed": provenance.seed,
         "hf_run_provenance": provenance.to_metadata(),
         "grid_solution_available": True,
-        "grid_mesh_size": int(mesh.mesh_size),
+        **_tbg_zero_field_grid_metadata(grid_solution),
         "torus_mesh_fingerprint": mesh.fingerprint,
         "bm_generation_fingerprint": screened_block_bundle.bm_generation_fingerprint,
         "bm_solution_sha256": screened_block_bundle.bm_solution_sha256,
@@ -1082,7 +1102,7 @@ def _default_hf_config_from_run(run: RestrictedHartreeFockRun, grid_solution: BM
         raise ValueError("Cannot derive HFConfig without immutable typed run provenance")
     return HFConfig(
         filling=provenance.nu,
-        mesh=(_tbg_zero_field_grid_side(grid_solution), _tbg_zero_field_grid_side(grid_solution)),
+        mesh=_tbg_zero_field_grid_shape(grid_solution),
         interaction_scheme="average",
         density_convention="stored_delta",
         epsilon_r=float(interaction_spec.epsr),
@@ -1108,7 +1128,7 @@ def _default_hf_config_from_run(run: RestrictedHartreeFockRun, grid_solution: BM
             "interaction_spec_fingerprint": provenance.interaction_spec_fingerprint,
             "bm_generation_fingerprint": provenance.bm_generation_fingerprint,
             "mesh_fingerprint": provenance.mesh_fingerprint,
-            "grid_mesh_size": int(_carried_torus_mesh(grid_solution).mesh_size),
+            **_tbg_zero_field_grid_metadata(grid_solution),
             "bm_lg": int(grid_solution.lg),
             "interaction_spec": interaction_spec.to_metadata(),
         },
@@ -1161,7 +1181,7 @@ def _validate_hf_config_matches_run(
         "interaction_spec_fingerprint": provenance.interaction_spec_fingerprint,
         "bm_generation_fingerprint": provenance.bm_generation_fingerprint,
         "mesh_fingerprint": provenance.mesh_fingerprint,
-        "grid_mesh_size": int(_carried_torus_mesh(grid_solution).mesh_size),
+        **_tbg_zero_field_grid_metadata_claims(grid_solution),
         "bm_lg": int(grid_solution.lg),
         "interaction_spec": interaction_spec.to_metadata(),
     }
@@ -1286,7 +1306,7 @@ def _result_observables(run: RestrictedHartreeFockRun, grid_solution: BMSolution
         "seed": int(run.seed),
         "iterations": int(max(len(run.iter_energy), len(run.iter_err), len(run.iter_oda))),
         "raw_density_convention": "stored_delta",
-        "grid_mesh_size": int(mesh.mesh_size),
+        **_tbg_zero_field_grid_metadata(grid_solution),
         "torus_mesh_fingerprint": mesh.fingerprint,
         "bm_lg": int(grid_solution.lg),
         "sigma_rotation": bool(grid_solution.sigma_rotation),
@@ -1339,6 +1359,8 @@ def tbg_zero_field_hf_run_to_hf_result(
         "max_iterations",
         "normalized_init_mode",
         "mesh",
+        "grid_mesh_shape",
+        "grid_mesh_size",
         "mesh_fingerprint",
         "mesh_provenance",
         "source",
