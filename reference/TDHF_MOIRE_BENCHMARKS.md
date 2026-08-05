@@ -85,9 +85,10 @@ not author raw numerical arrays.
   - the Ref. 27 defaults (`t0=2.8 eV`, `w1=110 meV`) and the independent
     Xie--MacDonald/Shang conventions are cited-reference values, not a direct
     Fig. 3 parameter receipt and must not be silently inherited;
-  - rectangular typed-torus/BM/HF/archive geometry may be validated
-    independently, but it does not resolve the six-band source or cutoff
-    authority.
+  - rectangular typed-torus/BM/HF/archive geometry and a generic central
+    even-band BM window may be validated independently; the latter still uses
+    this repository's existing linear-Dirac parent and is diagnostic-only, so
+    neither capability resolves the Khalaf six-band parent or cutoff authority.
 
 ### Kumar, Xie, and MacDonald, *Lattice Collective Modes from a Continuum Model of Magic-Angle Twisted Bilayer Graphene*
 

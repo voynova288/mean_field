@@ -105,6 +105,7 @@ from .model import (
     build_tbg_zero_field_half_open_torus_mesh,
     tbg_zero_field_bm_generation_fingerprint,
     solve_bm_model,
+    solve_bm_model_band_window_on_torus,
     solve_bm_model_on_torus,
 )
 from .tdhf import (
@@ -385,6 +386,7 @@ __all__ = [
     "screened_coulomb",
     "select_adjacent_m_point",
     "solve_bm_model",
+    "solve_bm_model_band_window_on_torus",
     "solve_bm_model_on_torus",
     "stored_density_to_conventional_projector",
     "stored_tangent_to_conventional_tangent",

@@ -217,6 +217,32 @@ class TBGZeroFieldTorusMesh:
         return payload
 
 
+def _resolve_retained_bm_band_count(
+    retained_band_count: object,
+    *,
+    dim: int,
+) -> int:
+    if (
+        isinstance(retained_band_count, (bool, np.bool_))
+        or not isinstance(retained_band_count, (int, np.integer))
+    ):
+        raise TypeError(
+            "retained_band_count must be a strict positive even integer, "
+            f"got {retained_band_count!r}"
+        )
+    count = int(retained_band_count)
+    if count <= 0 or count % 2 != 0:
+        raise ValueError(
+            "retained_band_count must be a strict positive even integer, "
+            f"got {retained_band_count!r}"
+        )
+    if count > int(dim):
+        raise ValueError(
+            "retained_band_count cannot exceed the BM parent dimension "
+            f"{int(dim)}, got {count}"
+        )
+    return count
+
 def tbg_zero_field_bm_generation_fingerprint(
     params: TBGParameters,
     *,
@@ -225,12 +251,17 @@ def tbg_zero_field_bm_generation_fingerprint(
     sigma_rotation: bool,
     calculate_chern_operator: bool = True,
     torus_mesh_fingerprint: str,
+    retained_band_count: int = 2,
 ) -> str:
     """Hash every independent BM input and the exact torus identity."""
 
     resolved_lg = int(lg)
     if resolved_lg <= 0:
         raise ValueError(f"BM generation lg must be positive, got {lg!r}")
+    resolved_band_count = _resolve_retained_bm_band_count(
+        retained_band_count,
+        dim=4 * resolved_lg * resolved_lg,
+    )
     mesh_fingerprint = str(torus_mesh_fingerprint).strip().lower()
     if len(mesh_fingerprint) != 64 or any(
         character not in "0123456789abcdef" for character in mesh_fingerprint
@@ -266,6 +297,12 @@ def tbg_zero_field_bm_generation_fingerprint(
         "sigma_rotation": bool(sigma_rotation),
         "torus_mesh_fingerprint": mesh_fingerprint,
     }
+    # Preserve the legacy two-band payload byte-for-byte.  Wider windows add
+    # their count as a generation input instead of aliasing the default hash.
+    if resolved_band_count != 2:
+        payload["retained_band_count"] = resolved_band_count
+        payload["retained_band_gauge"] = "nonabelian_c2t_real_v1"
+        payload["boundary_degeneracy_policy"] = "scale_aware_fail_closed_v1"
     encoded = json.dumps(
         payload, sort_keys=True, separators=(",", ":"), allow_nan=False
     ).encode("utf-8")
@@ -332,8 +369,8 @@ class BMSolutionSourceAttestation:
     def __post_init__(self) -> None:
         if not isinstance(self._issuer, _BMSolutionSourceAttestationIssuer):
             raise ValueError(
-                "BMSolutionSourceAttestation may be issued only by "
-                "solve_bm_model or solve_bm_model_on_torus"
+                "BMSolutionSourceAttestation may be issued only by a supported "
+                "solve_bm_model entrypoint"
             )
         if self.solver_schema != TBG_ZERO_FIELD_BM_SOLVER_SCHEMA:
             raise ValueError(f"Unsupported BM solver schema {self.solver_schema!r}")
@@ -344,6 +381,7 @@ class BMSolutionSourceAttestation:
         if self.solver_entrypoint not in (
             "solve_bm_model",
             "solve_bm_model_on_torus",
+            "solve_bm_model_band_window_on_torus",
         ):
             raise ValueError(f"Unsupported BM solver entrypoint {self.solver_entrypoint!r}")
         dimensions = {
@@ -380,11 +418,14 @@ class BMSolutionSourceAttestation:
                 ),
             )
         if (
-            self.solver_entrypoint == "solve_bm_model_on_torus"
+            self.solver_entrypoint in (
+                "solve_bm_model_on_torus",
+                "solve_bm_model_band_window_on_torus",
+            )
             and self.torus_mesh_fingerprint is None
         ):
             raise ValueError(
-                "solve_bm_model_on_torus attestation requires a torus fingerprint"
+                "BM torus-solver attestation requires a torus fingerprint"
             )
         if (
             self.solver_entrypoint == "solve_bm_model"
@@ -518,7 +559,7 @@ class BMSolutionSourceAttestation:
         )
         if require_torus and live_mesh_fingerprint is None:
             raise ValueError(
-                "Typed TBG zero-field BM source requires solve_bm_model_on_torus"
+                "Typed TBG zero-field BM source requires a torus solver entrypoint"
             )
         if live_mesh_fingerprint != self.torus_mesh_fingerprint:
             raise ValueError(
@@ -683,6 +724,7 @@ class BMSolution:
             sigma_rotation=self.sigma_rotation,
             calculate_chern_operator=self.calculate_chern_operator,
             torus_mesh_fingerprint=self.torus_mesh.fingerprint,
+            retained_band_count=self.nb,
         )
 
     @property
@@ -1118,6 +1160,107 @@ def _c2t_operator(lg: int) -> np.ndarray:
     return np.kron(ig, np.kron(s0, s1))
 
 
+def _c2t_takagi_factor(lg: int) -> np.ndarray:
+    """Return C with ``C @ C.T == C2T`` for the antiunitary real basis."""
+
+    identity = np.eye(2, dtype=np.complex128)
+    sublattice_factor = np.asarray(
+        [[1.0, 1.0j], [1.0, -1.0j]],
+        dtype=np.complex128,
+    ) / np.sqrt(2.0)
+    ig = np.eye(lg * lg, dtype=np.complex128)
+    factor = np.kron(ig, np.kron(identity, sublattice_factor))
+    c2t = _c2t_operator(lg)
+    residual = float(np.max(np.abs(factor @ factor.T - c2t), initial=0.0))
+    if residual > 1.0e-14:
+        raise RuntimeError("C2T Takagi factor construction failed")
+    return factor
+
+
+def _solve_c2t_real_band_window(
+    hamiltonian: np.ndarray,
+    *,
+    c2t: np.ndarray,
+    c2t_factor: np.ndarray,
+    start: int,
+    stop: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Solve one wider central window in a non-Abelian-safe C2T-real frame.
+
+    The imaginary part in the Takagi basis is discarded only after a
+    scale-aware fail-closed reality check.  Exact/roundoff boundary
+    degeneracies are rejected rather than cutting a multiplet.
+    """
+
+    h = np.asarray(hamiltonian, dtype=np.complex128)
+    dim = h.shape[0]
+    if h.shape != (dim, dim) or c2t.shape != h.shape or c2t_factor.shape != h.shape:
+        raise ValueError("C2T band-window matrix shapes disagree")
+    transformed = np.conj(c2t_factor.T) @ h @ c2t_factor
+    scale = max(float(np.linalg.norm(transformed, ord=2)), 1.0)
+    relative_tolerance = float(
+        512.0 * np.finfo(float).eps * max(dim, 1)
+    )
+    spectral_tolerance = relative_tolerance * scale
+    reality_residual = float(np.linalg.norm(transformed.imag, ord=2))
+    symmetry_residual = float(
+        np.linalg.norm(transformed.real - transformed.real.T, ord=2)
+    )
+    if (
+        reality_residual > spectral_tolerance
+        or symmetry_residual > spectral_tolerance
+    ):
+        raise RuntimeError(
+            "BM parent is not C2T-real within the scale-aware window tolerance"
+        )
+    real_hamiltonian = np.asarray(transformed.real, dtype=np.float64)
+
+    padded_start = max(0, start - 1)
+    padded_stop = min(dim - 1, stop + 1)
+    padded_eigenvalues = eigh(
+        real_hamiltonian,
+        subset_by_index=[padded_start, padded_stop],
+        eigvals_only=True,
+        driver="evr",
+    )
+    first = start - padded_start
+    last = stop - padded_start
+    if start > 0:
+        lower_gap = float(padded_eigenvalues[first] - padded_eigenvalues[first - 1])
+        if lower_gap <= spectral_tolerance:
+            raise RuntimeError("retained BM window cuts a lower boundary degeneracy")
+    if stop < dim - 1:
+        upper_gap = float(padded_eigenvalues[last + 1] - padded_eigenvalues[last])
+        if upper_gap <= spectral_tolerance:
+            raise RuntimeError("retained BM window cuts an upper boundary degeneracy")
+
+    eigenvalues, real_eigenvectors = eigh(
+        real_hamiltonian,
+        subset_by_index=[start, stop],
+        driver="evr",
+    )
+    eigenvectors = c2t_factor @ np.asarray(real_eigenvectors, dtype=np.complex128)
+    gram_residual = float(
+        np.linalg.norm(
+            np.conj(eigenvectors.T) @ eigenvectors
+            - np.eye(eigenvectors.shape[1]),
+            ord=2,
+        )
+    )
+    c2t_residual = float(
+        np.linalg.norm(c2t @ np.conj(eigenvectors) - eigenvectors, ord=2)
+    )
+    eigen_residual = float(
+        np.linalg.norm(h @ eigenvectors - eigenvectors * eigenvalues[None, :], ord=2)
+    )
+    if (
+        max(gram_residual, c2t_residual, eigen_residual / scale)
+        > relative_tolerance
+    ):
+        raise RuntimeError("C2T-real retained BM eigensystem failed validation")
+    return np.asarray(eigenvalues, dtype=float), np.asarray(eigenvectors)
+
+
 def _sigma_z_operator(lg: int) -> np.ndarray:
     s0 = np.asarray([[1.0, 0.0], [0.0, 1.0]], dtype=np.complex128)
     sz = np.asarray([[1.0, 0.0], [0.0, -1.0]], dtype=np.complex128)
@@ -1156,11 +1299,13 @@ def _solve_bm_model(
     periodic_g_grid: bool,
     torus_mesh: TBGZeroFieldTorusMesh | None,
     solver_entrypoint: str,
+    retained_band_count: int = 2,
 ) -> BMSolution:
     lattice = np.asarray(lattice_kvec, dtype=np.complex128).reshape(-1)
-    n_eta, n_spin, nb, nlocal = 2, 2, 2, 4
+    n_eta, n_spin, nlocal = 2, 2, 4
     nk = int(lattice.size)
     dim = nlocal * lg * lg
+    nb = _resolve_retained_bm_band_count(retained_band_count, dim=dim)
     gvec = _generate_gvec(params, lg)
 
     hamiltonian = np.zeros((dim, dim, n_eta, nk), dtype=np.complex128)
@@ -1169,11 +1314,14 @@ def _solve_bm_model(
     sigma_z = np.zeros((n_spin * n_eta * nb, n_spin * n_eta * nb, nk), dtype=np.complex128)
 
     c2t = _c2t_operator(lg)
+    c2t_factor = _c2t_takagi_factor(lg) if nb != 2 else None
     sigma_z_local = _sigma_z_operator(lg)
     tunnel_builder = _generate_t12 if periodic_g_grid else _generate_t12_zero_fill
     tunnel = {1: tunnel_builder(params, lg, 1), -1: tunnel_builder(params, lg, -1)}
 
-    start = dim // 2 - 1
+    # Both dim and nb are even, so this is symmetric about the half-filling
+    # cut between parent indices dim/2-1 and dim/2.
+    start = (dim - nb) // 2
     stop = start + nb - 1
 
     for ieta, zeta in enumerate((1, -1)):
@@ -1182,10 +1330,21 @@ def _solve_bm_model(
             h0 = _construct_diagonal_block(params, gvec, lg, complex(kval), zeta, sigma_rotation)
             h = h0 + valley_tunnel - params.chemical_potential * np.eye(dim, dtype=np.complex128)
             hamiltonian[:, :, ieta, ik] = h
-            evals, evecs = eigh(h, subset_by_index=[start, stop], driver="evr")
-            evecs = evecs + c2t @ np.conj(evecs)
-            norms = np.linalg.norm(evecs, axis=0)
-            evecs = evecs / norms[None, :]
+            if nb == 2:
+                # Legacy path is intentionally byte-for-byte unchanged.
+                evals, evecs = eigh(h, subset_by_index=[start, stop], driver="evr")
+                evecs = evecs + c2t @ np.conj(evecs)
+                norms = np.linalg.norm(evecs, axis=0)
+                evecs = evecs / norms[None, :]
+            else:
+                assert c2t_factor is not None
+                evals, evecs = _solve_c2t_real_band_window(
+                    h,
+                    c2t=c2t,
+                    c2t_factor=c2t_factor,
+                    start=start,
+                    stop=stop,
+                )
             spectrum[:, ieta, ik] = evals
             uk[:, :, ieta, ik] = evecs
 
@@ -1283,4 +1442,36 @@ def solve_bm_model_on_torus(
         periodic_g_grid=periodic_g_grid,
         torus_mesh=mesh,
         solver_entrypoint="solve_bm_model_on_torus",
+    )
+
+def solve_bm_model_band_window_on_torus(
+    params: TBGParameters,
+    mesh_size: int | tuple[int, int],
+    *,
+    retained_band_count: int = 6,
+    lg: int = 9,
+    sigma_rotation: bool = True,
+    calculate_chern_operator: bool = True,
+    periodic_g_grid: bool = True,
+) -> BMSolution:
+    """Solve a central even window of the existing linear-Dirac BM parent.
+
+    This entrypoint changes only the retained eigenspace.  It does not replace
+    or further qualify the current parent model and is not qualified for typed
+    or production HF.  Legacy callers must not treat a wider diagnostic window
+    as a Khalaf source.  Rectangular and square meshes use the same canonical
+    half-open torus.
+    """
+
+    mesh = build_tbg_zero_field_half_open_torus_mesh(params, mesh_size)
+    return _solve_bm_model(
+        params,
+        mesh.kvec,
+        lg=lg,
+        sigma_rotation=sigma_rotation,
+        calculate_chern_operator=calculate_chern_operator,
+        periodic_g_grid=periodic_g_grid,
+        torus_mesh=mesh,
+        solver_entrypoint="solve_bm_model_band_window_on_torus",
+        retained_band_count=retained_band_count,
     )
