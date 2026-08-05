@@ -27,6 +27,26 @@ not author raw numerical arrays.
 
 ## Primary numerical TDHF targets
 
+### Alavirad and Sau, *Ferromagnetism and its stability from the one-magnon spectrum in twisted bilayer graphene*
+
+- Local PDF: `reference/1907.13633v1.pdf`
+- arXiv: <https://arxiv.org/abs/1907.13633v1>
+- Journal: Phys. Rev. B 102, 235123 (2020)
+- SHA256: `1ed85a7cec13d96428856768c88a6f6b4dacf847843acc9d9278f338beb612fd`
+- Why it is unusually useful:
+- the single-spin-flip Hilbert space is diagonalized exactly at fixed q,
+  independently of a TDHF implementation;
+- for a saturated SU(2) ferromagnetic Slater state, this is the exact
+  one-magnon oracle for the interspin TDHF sector;
+- it exposes the q=0 spin Goldstone mode, quadratic stiffness, finite-q
+  negative modes, and the transition from positive to negative stiffness.
+- Scope limitation:
+- the paper uses a screened Hubbard-like interaction and saturated
+  spin/valley-polarized states near the chiral flat-band limit, not the K-IVC
+  source used by the Kwan benchmark;
+- it validates interspin algebra and stability diagnostics, not the complete
+  intraflavor K-IVC spectrum.
+
 ### Khalaf et al., *Soft modes in magic angle twisted bilayer graphene*
 
 - Local PDF: `reference/2009.14827v2.pdf`
@@ -35,19 +55,23 @@ not author raw numerical arrays.
 - Why it is the primary benchmark:
   - direct TDHF calculation plus nonlinear sigma-model interpretation;
   - Appendix A gives the microscopic TDHF contractions;
-  - Fig. 3 supplies a fully stated K-IVC benchmark.
+  - Fig. 3 supplies unusually strong K-IVC numerical checkpoints, but not a
+    complete executable parent/subtraction/cutoff specification.
 - Fig. 3 parameters:
-  - `(Nx,Ny)=(18,18)`;
-  - `nu=0` and `nu=-2`;
+  - `nu=0`: `(Nx,Ny)=(18,18)`;
+  - `nu=-2`: `(Nx,Ny)=(18,12)` (an `18x18` run would be a separate square-grid control, not the published Fig. 3 mesh);
   - `theta=1.08 deg`, `kappa=w0/w1=0.75`;
   - `epsilon_r=12.5`, dual-gate distance `d_s=40 nm`;
   - two remote valence and two remote conduction bands retained per
     spin/valley in the numerical projection.
-- Checkpoints:
+- Paper checkpoints:
   - mean-field gaps approximately `25 meV` (`nu=0`) and `14 meV` (`nu=-2`);
   - `nu=0`: 16 soft modes, fourfold degeneracy, four Goldstone modes;
-  - `nu=-2`: 12 modes, including two quadratic and one linear Goldstone mode;
-  - q/-q RPA pairing and static-Hessian positivity for the stable source.
+  - `nu=-2`: 12 modes, including two quadratic and one linear Goldstone mode.
+- Framework acceptance gates, not reported Fig. 3 numbers:
+  - independent q/-q RPA pairing;
+  - scalar static-Hessian positivity for the stable source;
+  - source-bound Ward certificates and exact-boundary sewing.
 
 ### Kumar, Xie, and MacDonald, *Lattice Collective Modes from a Continuum Model of Magic-Angle Twisted Bilayer Graphene*
 
@@ -67,6 +91,43 @@ not author raw numerical arrays.
     particle-hole gap;
   - exactly gapless q=0 spin wave and seven low-energy collective branches;
   - Fig. 4 provides dispersion-scale and degeneracy checks.
+
+### Vituri et al., *Incommensurate inter-valley coherent states in ABC graphene: collective modes and superconductivity*
+
+- Local PDF: `reference/2408.10309v1.pdf`
+- arXiv: <https://arxiv.org/abs/2408.10309v1>
+- Journal: Phys. Rev. B 111, 075103 (2025)
+- SHA256: `ec761a2b494a8e5983ff3fb6cfb842e114526cc0ba8b3e7cdc7c128f5d204bc8`
+- Cross-system finite-q instability benchmark:
+- Supplement Sec. III, Eqs. (12)-(24), gives the generalized-RPA/TDHF
+  susceptibility and the Hermitian H / non-Hermitian `Sigma_z H` construction;
+- Eqs. (22)-(23) give explicit finite-q intervalley excitation and
+  de-excitation contractions;
+- Figs. 3 and 8 connect C3-related finite-q susceptibility maxima, mode
+  softening, and the onset of imaginary frequencies;
+- the intravalley magnon supplies a separate small spin-stiffness checkpoint.
+- Scope limitation: this is dual-gated ABC trilayer graphene with a single
+  active band, not MA-TBG. Use it to validate generic finite-q IVC
+  susceptibility/instability logic, not numerical equality to the TBG spectrum.
+
+### Wang et al., *Putting a new spin on the incommensurate Kekule spiral: from spin-valley locking and collective modes to fermiology and implications for superconductivity*
+
+- Local PDF: `reference/2509.12320v1.pdf`
+- arXiv: <https://arxiv.org/abs/2509.12320v1>
+- SHA256: `1e648ad06731c46815d3216ff2da9f3dbedd65dd61ab1c237cd944de06a01d94`
+- Strong signed-q structural benchmark:
+- Appendix A, Eqs. (A2)-(A5), defines A, B, the Hermitian stability matrix,
+  and the Liouvillian;
+- Eqs. (A6)-(A8) explicitly distinguish TRIM from non-TRIM q and combine
+  independent q and -q sectors;
+- Eq. (A8) gives the outer signed-q block and the paper's norm/sign-based
+  spectral assignment;
+- the numerical IKS spectra test Goldstone counting and linear versus
+  quadratic modes on 10x10 and 20x20 meshes.
+- Priority interpretation: this is P1 for our non-TRIM signed-q algebra,
+  because it directly targets the convention that was hardest to validate. It
+  remains P2 as a full numerical reproduction target because that requires a
+  strained IKS HF source, perturbations, and its own reference conventions.
 
 ### Lin et al., *Collective excitations of the Chern-insulator states in commensurate double moire superlattices of twisted bilayer graphene on hexagonal boron nitride*
 
@@ -91,14 +152,33 @@ not author raw numerical arrays.
    - `theta=1.05 deg`, `wAA=80 meV`, `wAB=110 meV`, `epsilon_r=10`;
    - require four gapless modes and twelve gapped low-energy modes, all
      fourfold degenerate, before comparing detailed energies.
-3. **Khalaf Fig. 3 production benchmark**
-   - fresh `18x18` K-IVC sources at `nu=0,-2` with the paper parameters;
+3. **Exact interspin one-magnon oracle — implemented**
+   - `systems/hubbard_1d/tdhf_alavirad_sau.py` independently projects the
+     real-space Eq. (14) bitstring Hamiltonian into the Eq. (13) `psi_q` basis
+     and constructs the interspin TDHF spin-flip action;
+   - entrywise matrices, q=0 Ward/Goldstone, the first negative mode, and the
+     large-U stiffness limit are gated in the test suite.
+4. **Khalaf Fig. 3 production benchmark — authority closure required first**
+   - fresh K-IVC sources at `nu=0` on `18x18` and `nu=-2` on `18x12`;
+   - do not submit production work until absolute `w1`, `v_F`, parent/transfer
+     cutoffs, projected-out remote-valence self-energy, and double-counting
+     subtraction are bound to an executable source;
    - compare mode counts, degeneracies, Goldstone dispersion type, HF gaps,
      and only then the plotted dispersion.
-4. **Independent Kumar-Xie-MacDonald benchmark**
+5. **Independent Kumar-Xie-MacDonald benchmark**
    - reproduce q=0 spin Ward/Goldstone and the seven low-energy branches at
      `nu=-3` under that paper's reference and interaction conventions.
-5. **TBG/hBN benchmark**
+6. **Wang non-TRIM signed-q benchmark**
+   - the typed core now validates independent A(q), A(-q), B(q), B(-q), the
+     Appendix-A outer-block construction, eta-degenerate normalization, and
+     norm/sign spectral assignment;
+   - a full numerical strained-IKS target remains separate and requires its own
+     HF source, perturbations, and reference conventions.
+7. **Vituri ABC finite-q instability benchmark**
+   - reproduce susceptibility enhancement at three C3-related q vectors,
+     real-mode softening, and the onset of imaginary frequency using one shared
+     HF/TDHF interaction source.
+8. **TBG/hBN benchmark**
    - compare active-band and full-HF collective excitations after pristine TBG
      passes.
 
