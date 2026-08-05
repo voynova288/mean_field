@@ -103,11 +103,26 @@ not author raw numerical arrays.
   - Appendix B derives the static Hessian;
   - Appendix C derives the q=0 spin-rotation Goldstone vector.
 - Main numerical target:
-  - `nu=-3`, `theta=1.1 deg`, `epsilon_r^{-1}=0.06`;
-  - low-energy spin-, valley-, and intraflavor collective modes below the HF
-    particle-hole gap;
-  - exactly gapless q=0 spin wave and seven low-energy collective branches;
-  - Fig. 4 provides dispersion-scale and degeneracy checks.
+  - `nu=-3`, `theta=1.1 deg`, `wAA/wAB=0.8`, `epsilon^{-1}=0.06`;
+  - one intraflavor, two spin, two valley, and two spin-valley branches;
+  - one exactly gapless quadratic q=0 spin Goldstone;
+  - paper scales, not exact thresholds: modes below approximately `2 meV`,
+    bandwidth `lesssim 1 meV`, valley gap approximately `0.2 meV`, and charge
+    gap approximately `10 meV`.
+- Executable-authority audit:
+  - printed interaction is bare `2*pi*e^2/(epsilon*q)`, not dual-gate
+    screening;
+  - the full density uses `rho-rho_iso`, with `rho_iso` from isolated neutral
+    graphene sheets, and occupied remote single-particle states are frozen;
+  - absolute tunnelling, `v_F`, plane-wave/transfer/remote cutoffs, k mesh,
+    q=0/background prescription, exact path coordinates/sampling, and SCF
+    branch/convergence policy are unpublished;
+  - a square k-torus is only a C3 candidate until a typed receipt binds the
+    reciprocal basis, C3 map, orbit map, reciprocal carries, and quadrature
+    weights;
+  - `systems/tbg/zero_field/kumar2010.py` records this preflight and binds
+    metadata receipts only; it does not implement HF/TDHFA and deliberately
+    exposes no execution-readiness claim.
 
 ### Vituri et al., *Incommensurate inter-valley coherent states in ABC graphene: collective modes and superconductivity*
 
