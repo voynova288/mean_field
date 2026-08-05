@@ -156,10 +156,33 @@ not author raw numerical arrays.
   spectral assignment;
 - the numerical IKS spectra test Goldstone counting and linear versus
   quadratic modes on 10x10 and 20x20 meshes.
-- Priority interpretation: this is P1 for our non-TRIM signed-q algebra,
-  because it directly targets the convention that was hardest to validate. It
-  remains P2 as a full numerical reproduction target because that requires a
-  strained IKS HF source, perturbations, and its own reference conventions.
+- Paper-direct numerical prescription:
+  - local BM model with `theta=1.05 deg`, `wAA=80 meV`, `wAB=110 meV`,
+    `vF=8.8e5 m/s`, `0.3%` uniaxial heterostrain, angle zero and Poisson
+    ratio `0.16`;
+  - dual-gate Coulomb with `d=25 nm`, `epsilon_r=10`, average central-band
+    subtraction, two central bands per spin/valley, and no non-local
+    tunnelling in the collective-mode figures;
+  - principal `10x10` TDHF at `qIKS=0.5 G1`, plus a `20x20` check of
+    linear/quadratic Goldstone character.
+- Authority boundary:
+  - the paper leaves strain `beta`, parent/transfer cutoffs, q=0 policy,
+    exact `P_ref`, mesh registration/carries, IKS scan/SCF policy, exact q
+    list/tolerances, and executable TDHF provider unresolved;
+  - source-PNG-only perturbation labels and the plotted `[-0.5,+0.5]` path
+    extent are raster evidence, not caption-direct numerical authority;
+  - later author-family `ziweiwang-code/TBG-HF` code pins useful static-HF
+    conventions (`beta=3.14`, Ng=4, NG=5, finite q0, Gamma registration),
+    but uses `theta=1.08 deg`, `wAA=70 meV` and contains no EPC,
+    intervalley-Coulomb or TDHF implementation, so it is not target-run
+    authority;
+  - `systems/tbg/zero_field/wang2025.py` records this metadata-only
+    preflight, keeps ground-state `qIKS` distinct from TDHF transfer q, and
+    preserves independently raw `+M/-M` aliases under the common
+    self-conjugate exact-M classification.
+- Priority interpretation: Appendix-A algebra is already implemented in the
+  typed core. Full strained-IKS production remains fail-closed until a shared
+  scalar-energy/SCF-derivative/finite-q-Hessian source/provider is certified.
 
 ### Lin et al., *Collective excitations of the Chern-insulator states in commensurate double moire superlattices of twisted bilayer graphene on hexagonal boron nitride*
 
