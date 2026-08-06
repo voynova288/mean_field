@@ -1,4 +1,5 @@
 """Lightweight contract tests for the receipt-only Vituri HF preflight."""
+import ast
 from dataclasses import asdict, replace
 import hashlib
 import inspect
@@ -11,6 +12,7 @@ import pytest
 
 import mean_field.systems.abc_trilayer as abc
 import mean_field.systems.abc_trilayer.vituri2024_hf_preflight as preflight
+import mean_field.systems.abc_trilayer.vituri2024_hf_functional_replay as functional
 import mean_field.systems.abc_trilayer.vituri2024_hf_replay as replay
 
 _SHA = {str(index): str(index) * 64 for index in range(10)}
@@ -18,6 +20,13 @@ _COMMIT = "a" * 40
 _SOURCE_ARTIFACT = "b" * 64
 _PROVIDER_FINGERPRINT = _SHA["8"]
 _REPLAY_LOADER_IMPLEMENTATION_FINGERPRINT = _SHA["5"]
+_FUNCTIONAL_PROBE_LOADER_IMPLEMENTATION_FINGERPRINT = _SHA["6"]
+_DIRECT_DISPLACED_FOCK_IMPLEMENTATION_FINGERPRINT = _SHA["7"]
+_DIRECT_INTERACTION_BUILDER_IMPLEMENTATION_FINGERPRINT = _SHA["8"]
+_DIRECT_FULL_FOCK_BUILDER_IMPLEMENTATION_FINGERPRINT = _SHA["9"]
+_FUNCTIONAL_G = 0.125
+_FUNCTIONAL_GQ = 0.375 + 0.125j
+_DIRECT_DENSITY_SENSITIVITY = 0.03125
 
 def _canonical_replay_arrays() -> dict[str, np.ndarray]:
     mesh = np.asarray(
@@ -36,9 +45,9 @@ def _canonical_replay_arrays() -> dict[str, np.ndarray]:
     diagonal = np.arange(4)
     fock[diagonal, diagonal, :] = energies
     projector[diagonal, diagonal, :] = occupations
-    interaction_h = np.zeros_like(fock)
-    for flavor in range(4):
-        interaction_h[flavor, flavor, :] = (flavor + 1) / 256.0
+    # The canonical synthetic functional is genuinely density dependent:
+    # F(D)=h0+gD and the saved interaction is its value gP at the anchor.
+    interaction_h = _FUNCTIONAL_G * projector
     h0 = fock - interaction_h
     active_band_states = np.zeros((2, 6, 20), dtype=np.complex128)
     for valley_index in range(2):
@@ -104,6 +113,184 @@ def _fp(payload: object) -> str:
             payload, sort_keys=True, separators=(",", ":"), allow_nan=False
         ).encode("utf-8")
     ).hexdigest()
+
+
+def _semantically_mutated_functional_source(source: str) -> str:
+    tree = ast.parse(source)
+    targets = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_validate_source_q_charts"
+    ]
+    assert len(targets) == 1
+    targets[0].body.insert(
+        0,
+        ast.Raise(
+            exc=ast.Call(
+                func=ast.Name(id="RuntimeError", ctx=ast.Load()),
+                args=[ast.Constant(value="semantic q-validation mutation")],
+                keywords=[],
+            ),
+            cause=None,
+        ),
+    )
+    ast.fix_missing_locations(tree)
+    return ast.unparse(tree)
+
+
+def _normalized_complex(array: np.ndarray) -> np.ndarray:
+    norm = float(np.sqrt(np.sum(np.abs(array) ** 2)))
+    assert norm > 0.0
+    return np.asarray(array / norm, dtype=np.complex128)
+
+
+def _q_chart(
+    q_probe_index: int,
+    q_label: str,
+    displacement: tuple[int, int],
+    cartesian_q: tuple[float, float],
+) -> abc.Vituri2024SignedQProbeChart:
+    rows, columns = 4, 5
+    nk = rows * columns
+    source = np.arange(nk, dtype=np.int64)
+    targets = np.full((2, nk), -1, dtype=np.int64)
+    masks = np.zeros((2, nk), dtype=np.bool_)
+    for sign_index, multiplier in enumerate((1, -1)):
+        for source_index in range(nk):
+            row, column = divmod(source_index, columns)
+            target_row = row + multiplier * displacement[0]
+            target_column = column + multiplier * displacement[1]
+            if 0 <= target_row < rows and 0 <= target_column < columns:
+                masks[sign_index, source_index] = True
+                targets[sign_index, source_index] = (
+                    target_row * columns + target_column
+                )
+    return abc.Vituri2024SignedQProbeChart(
+        q_probe_index=q_probe_index,
+        q_label=q_label,
+        mesh_shape=(rows, columns),
+        mesh_displacement=np.asarray(displacement, dtype=np.int64),
+        cartesian_q=np.asarray(cartesian_q, dtype=np.float64),
+        source_k_indices=source,
+        target_maps=targets,
+        validity_masks=masks,
+        reverse_edge_map=targets.copy(),
+    )
+
+
+def _functional_probe_arrays() -> tuple[
+    tuple[str, ...],
+    np.ndarray,
+    tuple[str, ...],
+    np.ndarray,
+    tuple[str, ...],
+    np.ndarray,
+    np.ndarray,
+    tuple[abc.Vituri2024SignedQProbeChart, ...],
+]:
+    nk = 20
+    q0 = np.zeros((5, 4, 4, nk), dtype=np.complex128)
+    q0[0, 0, 0, 0] = 1.0
+    q0[0, 1, 1, 0] = -1.0
+    q0[1, 2, 2, 1] = 1.0
+    q0[1, 2, 2, 2] = -1.0
+    q0[2, 0, 1, 3] = q0[2, 1, 0, 3] = 1.0
+    q0[3, 0, 1, 4] = 1.0j
+    q0[3, 1, 0, 4] = -1.0j
+    for k_index in range(nk):
+        raw = np.empty((4, 4), dtype=np.complex128)
+        for row in range(4):
+            for column in range(4):
+                raw[row, column] = complex(
+                    1 + row + 2 * column + k_index,
+                    row - column + 2 * k_index,
+                )
+        hermitian = raw + raw.conj().T
+        q0[4, :, :, k_index] = hermitian
+    trace_shift = np.sum(np.trace(q0[4], axis1=0, axis2=1)) / (4 * nk)
+    for k_index in range(nk):
+        q0[4, :, :, k_index] -= trace_shift * np.eye(4)
+    for probe_index in range(q0.shape[0]):
+        q0[probe_index] = _normalized_complex(q0[probe_index])
+
+    anchors = np.zeros((3, 4, 4, nk), dtype=np.complex128)
+    anchors[1] = 0.25 * q0[3]
+    anchors[2] = 0.2 * q0[4]
+
+    charts = (
+        _q_chart(0, abc.Q_CHART_LABELS[0], (1, 0), (0.01, 0.0)),
+        _q_chart(1, abc.Q_CHART_LABELS[1], (0, 1), (0.0, 0.01)),
+    )
+    signed = np.zeros((6, 2, 4, 4, nk), dtype=np.complex128)
+    for q_index, chart in enumerate(charts):
+        plus_boundary = np.flatnonzero(
+            chart.validity_masks[0] & ~chart.validity_masks[1]
+        )
+        minus_boundary = np.flatnonzero(
+            chart.validity_masks[1] & ~chart.validity_masks[0]
+        )
+        interior = np.flatnonzero(
+            chart.validity_masks[0] & chart.validity_masks[1]
+        )
+        base = 3 * q_index
+        for offset, k_index in enumerate(plus_boundary):
+            signed[base, 0, 0, 1, k_index] = complex(1 + offset, 2 - offset)
+        for offset, k_index in enumerate(minus_boundary):
+            signed[base + 1, 1, 2, 3, k_index] = complex(2 - offset, 1 + offset)
+        for offset, k_index in enumerate(interior):
+            signed[base + 2, 0, 0, 2, k_index] = complex(1 + offset, -2)
+            signed[base + 2, 1, 1, 3, k_index] = complex(-1, 2 + offset)
+    for probe_index in range(signed.shape[0]):
+        signed[probe_index] = _normalized_complex(signed[probe_index])
+    q_indices = np.repeat(np.arange(2, dtype=np.int64), 3)
+    return (
+        abc.AFFINE_ANCHOR_LABELS,
+        anchors,
+        abc.Q0_PROBE_LABELS,
+        q0,
+        abc.SIGNED_Q_PROBE_LABELS,
+        signed,
+        q_indices,
+        charts,
+    )
+
+
+(
+    _AFFINE_ANCHOR_LABELS,
+    _AFFINE_ANCHOR_OFFSETS,
+    _Q0_LABELS,
+    _Q0_DIRECTIONS,
+    _SIGNED_Q_LABELS,
+    _SIGNED_Q_PROBES,
+    _SIGNED_Q_PROBE_INDICES,
+    _SIGNED_Q_CHARTS,
+) = _functional_probe_arrays()
+_AFFINE_ANCHOR_INVENTORY_SHA256 = abc.affine_anchor_inventory_sha256(
+    _AFFINE_ANCHOR_LABELS, _AFFINE_ANCHOR_OFFSETS
+)
+_Q0_PROBE_INVENTORY_SHA256 = abc.q0_probe_inventory_sha256(
+    _Q0_LABELS, _Q0_DIRECTIONS
+)
+_SIGNED_Q_PROBE_INVENTORY_SHA256 = abc.signed_q_probe_inventory_sha256(
+    _SIGNED_Q_LABELS, _SIGNED_Q_PROBES, _SIGNED_Q_PROBE_INDICES
+)
+_Q_CHART_INVENTORY_SHA256 = abc.signed_q_chart_inventory_sha256(_SIGNED_Q_CHARTS)
+_DIRECT_BUILDER_DEPENDENCY_ARCHIVE_FINGERPRINT = (
+    abc.direct_builder_dependency_archive_fingerprint(
+        source_commit=_COMMIT,
+        source_artifact_sha256=_SOURCE_ARTIFACT,
+        direct_displaced_fock_implementation_fingerprint=(
+            _DIRECT_DISPLACED_FOCK_IMPLEMENTATION_FINGERPRINT
+        ),
+        interaction_builder_implementation_fingerprint=(
+            _DIRECT_INTERACTION_BUILDER_IMPLEMENTATION_FINGERPRINT
+        ),
+        full_fock_builder_implementation_fingerprint=(
+            _DIRECT_FULL_FOCK_BUILDER_IMPLEMENTATION_FINGERPRINT
+        ),
+    )
+)
 
 
 def _area(
@@ -451,12 +638,27 @@ def _fd(
         ),
         "geometry_receipt_fingerprint": geometry.fingerprint,
         "ensemble_receipt_fingerprint": ensemble.fingerprint,
-        "perturbation_inventory_sha256": _SHA["7"],
+        "perturbation_inventory_sha256": (
+            _SIGNED_Q_PROBE_INVENTORY_SHA256
+            if kind == "finite_q_hessian"
+            else _Q0_PROBE_INVENTORY_SHA256
+        ),
         "perturbation_normalization": (
-            "unit_frobenius_norm_hermitian_projector_tangent"
+            abc.FINITE_Q_HESSIAN_NORMALIZATION
+            if kind == "finite_q_hessian"
+            else abc.FOCK_FIRST_DERIVATIVE_NORMALIZATION
         ),
         "matrix_norm": "frobenius",
-        "q_probe_inventory_sha256": _SHA["8"] if kind == "finite_q_hessian" else None,
+        "fock_output": abc.FOCK_OUTPUT_CONVENTION,
+        "stored_density_pairing": abc.STORED_DENSITY_PAIRING,
+        "density_direction_convention": (
+            abc.FIXED_DENSITY_DIRECTION_CONVENTION
+        ),
+        "q_probe_inventory_sha256": (
+            _Q_CHART_INVENTORY_SHA256
+            if kind == "finite_q_hessian"
+            else None
+        ),
         "finite_difference_step_ladder": (1.0e-3, 3.0e-4, 1.0e-4),
         "comparison_identity": comparison_identity,
         "left_implementation_fingerprint": left_implementation,
@@ -486,6 +688,11 @@ def _fd(
                 ],
                 "perturbation_normalization": values["perturbation_normalization"],
                 "matrix_norm": values["matrix_norm"],
+                "fock_output": values["fock_output"],
+                "stored_density_pairing": values["stored_density_pairing"],
+                "density_direction_convention": values[
+                    "density_direction_convention"
+                ],
                 "q_probe_inventory_sha256": values["q_probe_inventory_sha256"],
                 "finite_difference_step_ladder": values[
                     "finite_difference_step_ladder"
@@ -511,6 +718,7 @@ def _shared(
     ensemble: abc.Vituri2024HFEnsembleReceipt,
     *,
     array_hashes: dict[str, str] | None = None,
+    q_probe_inventory_sha256: str = _Q_CHART_INVENTORY_SHA256,
     **overrides: object,
 ) -> abc.Vituri2024SharedFunctionalReceipt:
     scalar = _component("scalar_energy", "canonical_energy", _SHA["1"])
@@ -547,6 +755,12 @@ def _shared(
             geometry,
             ensemble,
             array_hashes=array_hashes,
+            q_probe_inventory_sha256=q_probe_inventory_sha256,
+        ),
+        "fock_output": abc.FOCK_OUTPUT_CONVENTION,
+        "stored_density_pairing": abc.STORED_DENSITY_PAIRING,
+        "density_direction_convention": (
+            abc.FIXED_DENSITY_DIRECTION_CONVENTION
         ),
         "authority_kind": "independent_provider_explicit",
         "provenance": "Synthetic one-source functional receipt.",
@@ -889,6 +1103,7 @@ def _spec_for_arrays(
     *,
     geometry_overrides: dict[str, object] | None = None,
     source_overrides: dict[str, object] | None = None,
+    q_probe_inventory_sha256: str = _Q_CHART_INVENTORY_SHA256,
 ) -> abc.Vituri2024HalfMetalHFSpec:
     hashes = _canonical_hashes(arrays)
     geometry_values: dict[str, object] = {
@@ -898,7 +1113,12 @@ def _spec_for_arrays(
         geometry_values.update(geometry_overrides)
     geometry = _geometry(**geometry_values)
     ensemble, scf = _ensemble(), _scf()
-    shared = _shared(geometry, ensemble, array_hashes=hashes)
+    shared = _shared(
+        geometry,
+        ensemble,
+        array_hashes=hashes,
+        q_probe_inventory_sha256=q_probe_inventory_sha256,
+    )
     source = _source(
         geometry,
         ensemble,
@@ -946,6 +1166,7 @@ class _Provider:
         self,
         spec: abc.Vituri2024HalfMetalHFSpec,
         payload: abc.Vituri2024HalfMetalHFReplayPayload | None = None,
+        functional_payload: abc.Vituri2024FunctionalReplayPayload | None = None,
     ) -> None:
         assert spec.geometry and spec.ensemble and spec.scf_policy
         assert spec.shared_functional and spec.attested_source
@@ -972,7 +1193,6 @@ class _Provider:
         self.replay_payload_schema_fingerprint = (
             spec.attested_source.replay_payload_schema_fingerprint
         )
-        self.loader_mutation: tuple[str, object] | None = None
         self.scalar_energy_implementation_fingerprint = (
             shared.scalar_energy.implementation_fingerprint
         )
@@ -985,8 +1205,85 @@ class _Provider:
         self.interaction_form_factor_implementation_fingerprint = (
             shared.interaction_form_factor.implementation_fingerprint
         )
+        self.functional_probe_loader_implementation_fingerprint = (
+            _FUNCTIONAL_PROBE_LOADER_IMPLEMENTATION_FINGERPRINT
+        )
+        self.functional_replay_payload_schema_fingerprint = (
+            abc.FUNCTIONAL_REPLAY_PAYLOAD_SCHEMA_FINGERPRINT
+        )
+        self.functional_replay_abi_fingerprint = (
+            abc.FUNCTIONAL_REPLAY_ABI_FINGERPRINT
+        )
+        self.direct_displaced_fock_implementation_fingerprint = (
+            _DIRECT_DISPLACED_FOCK_IMPLEMENTATION_FINGERPRINT
+        )
+        self.direct_interaction_builder_implementation_fingerprint = (
+            _DIRECT_INTERACTION_BUILDER_IMPLEMENTATION_FINGERPRINT
+        )
+        self.direct_full_fock_builder_implementation_fingerprint = (
+            _DIRECT_FULL_FOCK_BUILDER_IMPLEMENTATION_FINGERPRINT
+        )
+        self.direct_builder_dependency_archive_fingerprint = (
+            _DIRECT_BUILDER_DEPENDENCY_ARCHIVE_FINGERPRINT
+        )
+        self.functional_provider_fingerprint = abc.functional_provider_fingerprint(
+            base_provider_fingerprint=self.provider_fingerprint,
+            functional_replay_abi_fingerprint=(
+                self.functional_replay_abi_fingerprint
+            ),
+            functional_replay_payload_schema_fingerprint=(
+                self.functional_replay_payload_schema_fingerprint
+            ),
+            functional_probe_loader_implementation_fingerprint=(
+                self.functional_probe_loader_implementation_fingerprint
+            ),
+            direct_displaced_fock_implementation_fingerprint=(
+                self.direct_displaced_fock_implementation_fingerprint
+            ),
+            direct_builder_dependency_archive_fingerprint=(
+                self.direct_builder_dependency_archive_fingerprint
+            ),
+        )
+        self.direct_displaced_fock_construction = (
+            abc.DIRECT_DISPLACED_FOCK_CONSTRUCTION
+        )
+        self.fock_output = abc.FOCK_OUTPUT_CONVENTION
+        self.stored_density_pairing = abc.STORED_DENSITY_PAIRING
+        self.density_direction_convention = (
+            abc.FIXED_DENSITY_DIRECTION_CONVENTION
+        )
         self.replay_payload = payload
+        self.functional_payload = functional_payload
+        self.loader_mutation: tuple[str, object] | None = None
+        self.functional_loader_mutation: tuple[str, object] | None = None
+        self.call_mutation: tuple[str, object] | None = None
+        self.mutate_input_method: str | None = None
         self.replay_loader_calls: list[str] = []
+        self.functional_loader_calls: list[str] = []
+        self.scalar_energy_calls = 0
+        self.fock_derivative_calls = 0
+        self.direct_displaced_calls = 0
+        self.hessian_calls = 0
+        if payload is not None:
+            nk = payload.projector.shape[2]
+            raw_anchor = float(
+                np.real(
+                    np.sum(payload.h0 * payload.projector)
+                    + 0.5 * np.sum(
+                        (_FUNCTIONAL_G * payload.projector) * payload.projector
+                    )
+                )
+                / nk
+            )
+            self.energy_offset = (
+                spec.attested_source.selected_branch_energy_ev - raw_anchor
+            )
+        else:
+            self.energy_offset = 0.0
+
+    def _maybe_mutate_metadata(self) -> None:
+        if self.call_mutation is not None:
+            setattr(self, self.call_mutation[0], self.call_mutation[1])
 
     def evaluate_scalar_energy(
         self,
@@ -994,17 +1291,186 @@ class _Provider:
         h0: preflight.ComplexArray,
         density: preflight.ComplexArray,
     ) -> float:
-        raise AssertionError("metadata attestation must not execute providers")
+        if self.mutate_input_method == "evaluate_scalar_energy":
+            density[0, 0, 0] += 1.0
+        self._maybe_mutate_metadata()
+        self.scalar_energy_calls += 1
+        nk = density.shape[2]
+        # Independent scalar implementation.  On the proper affine call path
+        # interaction_h=gD, this is offset+[sum(h0 D)+g/2 sum(D D)]/Nk.
+        return float(
+            self.energy_offset
+            + np.real(
+                np.sum(h0 * density)
+                + 0.5 * np.sum(interaction_h * density)
+            )
+            / nk
+        )
 
     def evaluate_fock_derivative(
         self, density: preflight.ComplexArray
     ) -> preflight.ComplexArray:
-        raise AssertionError("metadata attestation must not execute providers")
+        if self.replay_payload is None:
+            raise AssertionError("Fock evaluation payload was not configured")
+        if self.mutate_input_method == "evaluate_fock_derivative":
+            density[0, 0, 0] += 1.0
+        self._maybe_mutate_metadata()
+        self.fock_derivative_calls += 1
+        # Kept separate from evaluate_scalar_energy by construction.
+        return np.asarray(
+            self.replay_payload.h0 + _FUNCTIONAL_G * density,
+            dtype=np.complex128,
+        )
+
+    def _validate_q_call(
+        self,
+        q_probe_index: int,
+        mesh_displacement: np.ndarray,
+        cartesian_q: np.ndarray,
+        target_maps: np.ndarray,
+        reverse_edge_map: np.ndarray,
+    ) -> abc.Vituri2024SignedQProbeChart:
+        if self.functional_payload is None:
+            raise AssertionError("functional probe payload was not configured")
+        if q_probe_index not in range(len(self.functional_payload.q_charts)):
+            raise AssertionError("finite-q probe index was not configured")
+        chart = self.functional_payload.q_charts[q_probe_index]
+        for actual, required, label in (
+            (mesh_displacement, chart.mesh_displacement, "mesh displacement"),
+            (cartesian_q, chart.cartesian_q, "Cartesian q"),
+            (target_maps, chart.target_maps, "target maps"),
+            (reverse_edge_map, chart.reverse_edge_map, "reverse map"),
+        ):
+            if not np.array_equal(actual, required):
+                raise ValueError(f"synthetic q call {label} mismatch")
+        return chart
 
     def evaluate_finite_q_hessian(
-        self, perturbation: preflight.ComplexArray, *, q_probe_index: int
+        self,
+        perturbation: preflight.ComplexArray,
+        *,
+        q_probe_index: int,
+        mesh_displacement: np.ndarray,
+        cartesian_q: np.ndarray,
+        target_maps: np.ndarray,
+        reverse_edge_map: np.ndarray,
     ) -> preflight.ComplexArray:
-        raise AssertionError("metadata attestation must not execute providers")
+        chart = self._validate_q_call(
+            q_probe_index,
+            mesh_displacement,
+            cartesian_q,
+            target_maps,
+            reverse_edge_map,
+        )
+        if self.mutate_input_method == "evaluate_finite_q_hessian":
+            perturbation[0, 0, 0, 0] += 1.0
+        self._maybe_mutate_metadata()
+        self.hessian_calls += 1
+        # Independent analytic Hessian implementation: explicit cross-sign
+        # routing from the supplied maps, without any direct-builder call.
+        result = np.zeros_like(perturbation)
+        for sign_index in range(2):
+            opposite = 1 - sign_index
+            for source_index in range(target_maps.shape[1]):
+                target = int(target_maps[sign_index, source_index])
+                reverse = int(reverse_edge_map[sign_index, source_index])
+                if target >= 0:
+                    if reverse != target:
+                        raise ValueError("analytic Hessian reverse routing mismatch")
+                    result[sign_index, :, :, source_index] = (
+                        _FUNCTIONAL_GQ
+                        * perturbation[opposite, :, :, target]
+                    )
+        for sign_index in range(2):
+            result[sign_index, :, :, ~chart.validity_masks[sign_index]] = 0.0
+        return result
+
+    def evaluate_displaced_fock(
+        self,
+        density: preflight.ComplexArray,
+        signed_q_displacement: preflight.ComplexArray,
+        *,
+        q_probe_index: int,
+        mesh_displacement: np.ndarray,
+        cartesian_q: np.ndarray,
+        target_maps: np.ndarray,
+        reverse_edge_map: np.ndarray,
+        caller_nonce: str,
+    ) -> abc.Vituri2024DirectDisplacedFockResponse:
+        chart = self._validate_q_call(
+            q_probe_index,
+            mesh_displacement,
+            cartesian_q,
+            target_maps,
+            reverse_edge_map,
+        )
+        if self.replay_payload is None:
+            raise AssertionError("direct displaced-Fock source was not configured")
+        if self.mutate_input_method == "evaluate_displaced_fock":
+            signed_q_displacement[0, 0, 0, 0] += 1.0
+        self._maybe_mutate_metadata()
+        self.direct_displaced_calls += 1
+
+        # Source-closed direct interaction/full-Fock builders.  The base
+        # density is materially consumed; changing it changes the direct
+        # response.  This path never calls evaluate_finite_q_hessian.
+        interaction_builder_calls = 1
+        base_interaction = _FUNCTIONAL_G * density
+        full_fock_builder_calls = 1
+        full_fock = self.replay_payload.h0 + base_interaction
+        reference_full_fock = (
+            self.replay_payload.h0
+            + _FUNCTIONAL_G * self.replay_payload.projector
+        )
+        density_marker = float(
+            np.real(full_fock[0, 0, 0] - reference_full_fock[0, 0, 0])
+            / _FUNCTIONAL_G
+        )
+        coefficient = _FUNCTIONAL_GQ + _DIRECT_DENSITY_SENSITIVITY * density_marker
+        result = np.zeros_like(signed_q_displacement)
+        target_reads = 0
+        reverse_reads = 0
+        # Deliberately algorithmically separate from the scalar-loop analytic
+        # Hessian above: each direct lane gathers its routed opposite-sign
+        # source in one vectorized operation and never calls the Hessian.
+        for sign_index in range(2):
+            opposite = 1 - sign_index
+            target_lane = target_maps[sign_index]
+            reverse_lane = reverse_edge_map[sign_index]
+            target_reads += target_lane.size
+            reverse_reads += reverse_lane.size
+            valid = target_lane >= 0
+            if not np.array_equal(target_lane[valid], reverse_lane[valid]):
+                raise ValueError("direct builder reverse routing mismatch")
+            routes = target_lane[valid]
+            result[sign_index][:, :, valid] = coefficient * np.take(
+                signed_q_displacement[opposite], routes, axis=2
+            )
+        for sign_index in range(2):
+            result[sign_index, :, :, ~chart.validity_masks[sign_index]] = 0.0
+        trace = abc.Vituri2024DirectBuilderDependencyTrace(
+            caller_nonce_sha256=caller_nonce,
+            q_probe_index=q_probe_index,
+            q_label=chart.q_label,
+            interaction_builder_implementation_fingerprint=(
+                self.direct_interaction_builder_implementation_fingerprint
+            ),
+            full_fock_builder_implementation_fingerprint=(
+                self.direct_full_fock_builder_implementation_fingerprint
+            ),
+            target_maps_sha256=abc.canonical_array_sha256(target_maps),
+            reverse_edge_map_sha256=abc.canonical_array_sha256(reverse_edge_map),
+            target_map_read_count=target_reads,
+            reverse_edge_map_read_count=reverse_reads,
+            interaction_builder_call_count=interaction_builder_calls,
+            full_fock_builder_call_count=full_fock_builder_calls,
+            finite_q_hessian_call_count=0,
+        )
+        return abc.Vituri2024DirectDisplacedFockResponse(
+            caller_nonce_sha256=caller_nonce,
+            response=result,
+            dependency_trace=trace,
+        )
 
     def load_attested_source_arrays(
         self, source_artifact_sha256: str
@@ -1020,6 +1486,20 @@ class _Provider:
         if self.loader_mutation is not None:
             setattr(self, self.loader_mutation[0], self.loader_mutation[1])
         return self.replay_payload
+
+    def load_functional_replay_payload(
+        self, source_artifact_sha256: str
+    ) -> abc.Vituri2024FunctionalReplayPayload:
+        self.functional_loader_calls.append(source_artifact_sha256)
+        if self.functional_payload is None:
+            raise AssertionError("functional replay payload was not configured")
+        if self.functional_loader_mutation is not None:
+            setattr(
+                self,
+                self.functional_loader_mutation[0],
+                self.functional_loader_mutation[1],
+            )
+        return self.functional_payload
 
 
 class _BaseBindingSnapshotSubstitutionProvider(_Provider):
@@ -1119,6 +1599,187 @@ def _replay_case(
     payload = _payload(spec, actual_arrays)
     provider = _Provider(spec, payload)
     return abc.Vituri2024HalfMetalHFProviderBinding(spec, provider), payload, provider
+
+
+def _functional_payload(
+    spec: abc.Vituri2024HalfMetalHFSpec,
+    q_charts: tuple[abc.Vituri2024SignedQProbeChart, ...] = _SIGNED_Q_CHARTS,
+) -> abc.Vituri2024FunctionalReplayPayload:
+    functional_provider = abc.functional_provider_fingerprint(
+        base_provider_fingerprint=_PROVIDER_FINGERPRINT,
+        functional_replay_abi_fingerprint=abc.FUNCTIONAL_REPLAY_ABI_FINGERPRINT,
+        functional_replay_payload_schema_fingerprint=(
+            abc.FUNCTIONAL_REPLAY_PAYLOAD_SCHEMA_FINGERPRINT
+        ),
+        functional_probe_loader_implementation_fingerprint=(
+            _FUNCTIONAL_PROBE_LOADER_IMPLEMENTATION_FINGERPRINT
+        ),
+        direct_displaced_fock_implementation_fingerprint=(
+            _DIRECT_DISPLACED_FOCK_IMPLEMENTATION_FINGERPRINT
+        ),
+        direct_builder_dependency_archive_fingerprint=(
+            _DIRECT_BUILDER_DEPENDENCY_ARCHIVE_FINGERPRINT
+        ),
+    )
+    assert spec.attested_source is not None
+    return abc.Vituri2024FunctionalReplayPayload(
+        provider_fingerprint=_PROVIDER_FINGERPRINT,
+        functional_provider_fingerprint=functional_provider,
+        source_commit=_COMMIT,
+        source_artifact_sha256=_SOURCE_ARTIFACT,
+        spec_fingerprint=spec.fingerprint,
+        source_state_sha256=spec.attested_source.source_state_sha256,
+        functional_probe_loader_implementation_fingerprint=(
+            _FUNCTIONAL_PROBE_LOADER_IMPLEMENTATION_FINGERPRINT
+        ),
+        functional_replay_payload_schema_fingerprint=(
+            abc.FUNCTIONAL_REPLAY_PAYLOAD_SCHEMA_FINGERPRINT
+        ),
+        affine_anchor_labels=_AFFINE_ANCHOR_LABELS,
+        affine_anchor_offsets=_AFFINE_ANCHOR_OFFSETS,
+        q0_labels=_Q0_LABELS,
+        q0_directions=_Q0_DIRECTIONS,
+        signed_q_labels=_SIGNED_Q_LABELS,
+        signed_q_probes=_SIGNED_Q_PROBES,
+        signed_q_probe_indices=_SIGNED_Q_PROBE_INDICES,
+        q_charts=q_charts,
+    )
+
+
+def _functional_case(
+    *,
+    q_charts: tuple[abc.Vituri2024SignedQProbeChart, ...] = _SIGNED_Q_CHARTS,
+    geometry_overrides: dict[str, object] | None = None,
+) -> tuple[
+    abc.Vituri2024HalfMetalHFProviderBinding,
+    abc.Vituri2024FunctionalReplayContract,
+    _Provider,
+]:
+    arrays = _array_copy()
+    q_inventory = abc.signed_q_chart_inventory_sha256(q_charts)
+    spec = _spec_for_arrays(
+        arrays,
+        geometry_overrides=geometry_overrides,
+        q_probe_inventory_sha256=q_inventory,
+    )
+    array_payload = _payload(spec, arrays)
+    probes = _functional_payload(spec, q_charts)
+    provider = _Provider(spec, array_payload, probes)
+    binding = abc.Vituri2024HalfMetalHFProviderBinding(spec, provider)
+    assert spec.geometry and spec.ensemble and spec.shared_functional
+    assert spec.attested_source
+    expected_manifest = abc.expected_array_payload_manifest_sha256(spec)
+    choice = abc.Vituri2024FunctionalReplayChoice()
+    verifier_ast_manifest = abc.functional_replay_module_ast_manifest_sha256()
+    approval = abc.Vituri2024FunctionalReplayApproval(
+        choice_fingerprint=choice.fingerprint,
+        verifier_implementation_schema_fingerprint=(
+            abc.FUNCTIONAL_REPLAY_VERIFIER_IMPLEMENTATION_SCHEMA_FINGERPRINT
+        ),
+        verifier_module_ast_manifest_sha256=verifier_ast_manifest,
+        functional_provider_fingerprint=provider.functional_provider_fingerprint,
+        source_commit=provider.source_commit,
+        source_artifact_sha256=provider.source_artifact_sha256,
+        spec_fingerprint=spec.fingerprint,
+        source_state_sha256=spec.attested_source.source_state_sha256,
+        expected_array_payload_manifest_sha256=expected_manifest,
+        affine_anchor_inventory_sha256=_AFFINE_ANCHOR_INVENTORY_SHA256,
+        q0_probe_inventory_sha256=_Q0_PROBE_INVENTORY_SHA256,
+        signed_q_probe_inventory_sha256=_SIGNED_Q_PROBE_INVENTORY_SHA256,
+        q_probe_inventory_sha256=q_inventory,
+        fock_step_ladder=(
+            spec.shared_functional.fock_finite_difference.finite_difference_step_ladder
+        ),
+        hessian_step_ladder=(
+            spec.shared_functional.hessian_finite_difference.finite_difference_step_ladder
+        ),
+        direct_displaced_fock_implementation_fingerprint=(
+            provider.direct_displaced_fock_implementation_fingerprint
+        ),
+        direct_builder_dependency_archive_fingerprint=(
+            provider.direct_builder_dependency_archive_fingerprint
+        ),
+        provenance="Detached synthetic approval constructed before provider calls.",
+    )
+    assert provider.replay_loader_calls == []
+    assert provider.functional_loader_calls == []
+    assert provider.scalar_energy_calls == 0
+    assert provider.fock_derivative_calls == 0
+    assert provider.hessian_calls == 0
+    assert provider.direct_displaced_calls == 0
+    contract = abc.Vituri2024FunctionalReplayContract(
+        choice=choice,
+        choice_fingerprint=choice.fingerprint,
+        verifier_implementation_schema_fingerprint=(
+            abc.FUNCTIONAL_REPLAY_VERIFIER_IMPLEMENTATION_SCHEMA_FINGERPRINT
+        ),
+        verifier_module_ast_manifest_sha256=(
+            approval.verifier_module_ast_manifest_sha256
+        ),
+        provider_fingerprint=provider.provider_fingerprint,
+        functional_provider_fingerprint=provider.functional_provider_fingerprint,
+        source_commit=provider.source_commit,
+        source_artifact_sha256=provider.source_artifact_sha256,
+        spec_fingerprint=spec.fingerprint,
+        source_state_sha256=spec.attested_source.source_state_sha256,
+        geometry_receipt_fingerprint=spec.geometry.fingerprint,
+        ensemble_receipt_fingerprint=spec.ensemble.fingerprint,
+        normal_order_reference_fingerprint=(
+            spec.ensemble.normal_order_reference_fingerprint
+        ),
+        q0_policy_fingerprint=spec.ensemble.q0_policy_fingerprint,
+        interaction_receipt_fingerprint=(
+            spec.shared_functional.interaction_receipt_fingerprint
+        ),
+        shared_functional_receipt_fingerprint=spec.shared_functional.fingerprint,
+        attested_source_receipt_fingerprint=spec.attested_source.fingerprint,
+        expected_array_payload_manifest_sha256=expected_manifest,
+        affine_anchor_inventory_sha256=_AFFINE_ANCHOR_INVENTORY_SHA256,
+        q0_probe_inventory_sha256=_Q0_PROBE_INVENTORY_SHA256,
+        signed_q_probe_inventory_sha256=(
+            _SIGNED_Q_PROBE_INVENTORY_SHA256
+        ),
+        q_probe_inventory_sha256=q_inventory,
+        fock_step_ladder=(
+            spec.shared_functional.fock_finite_difference.finite_difference_step_ladder
+        ),
+        hessian_step_ladder=(
+            spec.shared_functional.hessian_finite_difference.finite_difference_step_ladder
+        ),
+        replay_loader_implementation_fingerprint=(
+            provider.replay_loader_implementation_fingerprint
+        ),
+        functional_probe_loader_implementation_fingerprint=(
+            provider.functional_probe_loader_implementation_fingerprint
+        ),
+        functional_replay_payload_schema_fingerprint=(
+            provider.functional_replay_payload_schema_fingerprint
+        ),
+        functional_replay_abi_fingerprint=(
+            provider.functional_replay_abi_fingerprint
+        ),
+        direct_displaced_fock_implementation_fingerprint=(
+            provider.direct_displaced_fock_implementation_fingerprint
+        ),
+        direct_interaction_builder_implementation_fingerprint=(
+            provider.direct_interaction_builder_implementation_fingerprint
+        ),
+        direct_full_fock_builder_implementation_fingerprint=(
+            provider.direct_full_fock_builder_implementation_fingerprint
+        ),
+        direct_builder_dependency_archive_fingerprint=(
+            provider.direct_builder_dependency_archive_fingerprint
+        ),
+        detached_approval_manifest_sha256=approval.manifest_sha256,
+        detached_approval_provenance=approval.provenance,
+    )
+    assert provider.replay_loader_calls == []
+    assert provider.functional_loader_calls == []
+    assert provider.scalar_energy_calls == 0
+    assert provider.fock_derivative_calls == 0
+    assert provider.hessian_calls == 0
+    assert provider.direct_displaced_calls == 0
+    return binding, contract, provider
 
 
 def test_paper_facts_are_exact_and_qualified() -> None:
@@ -1308,9 +1969,27 @@ def test_shared_functional_binds_e_f_and_f_h_fd_comparison_pairs() -> None:
         shared.fock_derivative.implementation_fingerprint,
         shared.finite_q_hessian.implementation_fingerprint,
     )
-    assert shared.hessian_finite_difference.q_probe_inventory_sha256 == _SHA["8"]
+    assert (
+        shared.fock_finite_difference.perturbation_normalization
+        == "unit_frobenius_hermitian_trace_zero_density_direction"
+    )
+    assert shared.fock_finite_difference.q_probe_inventory_sha256 is None
+    assert (
+        shared.hessian_finite_difference.perturbation_normalization
+        == "unit_frobenius_complexified_independent_signed_q_block_pair"
+    )
+    assert (
+        shared.hessian_finite_difference.q_probe_inventory_sha256
+        == _Q_CHART_INVENTORY_SHA256
+    )
     assert len(shared.hessian_finite_difference.finite_difference_step_ladder) == 3
     assert shared.hessian_finite_difference.matrix_norm == "frobenius"
+    assert shared.fock_output == "full_fock_h0_plus_interaction"
+    assert shared.stored_density_pairing == (
+        "real_bilinear_sum_abk_no_conjugation_over_nk"
+    )
+    assert shared.density_direction_convention == "fixed_density_affine_directions"
+    assert "projector_tangent" not in shared.fock_finite_difference.perturbation_normalization
 
     alien_component = replace(shared.fock_derivative, source_commit="c" * 40)
     with pytest.raises(ValueError, match=r"one source artifact\+commit"):
@@ -2457,3 +3136,870 @@ def test_replay_protocol_exports_and_requires_callable_loader() -> None:
     assert "evaluate_scalar_energy(" not in source
     assert "evaluate_fock_derivative(" not in source
     assert "evaluate_finite_q_hessian(" not in source
+
+
+def test_functional_replay_executes_all_registered_probes_with_narrow_claims() -> None:
+    binding, contract, provider = _functional_case()
+    assert provider.replay_loader_calls == []
+    assert provider.functional_loader_calls == []
+    assert provider.scalar_energy_calls == provider.fock_derivative_calls == 0
+    assert provider.hessian_calls == provider.direct_displaced_calls == 0
+
+    receipt = abc.replay_vituri2024_half_metal_hf_functional(binding, contract)
+
+    assert receipt.contract_fingerprint == contract.fingerprint
+    assert receipt.choice_fingerprint == contract.choice.fingerprint
+    assert receipt.verifier_implementation_schema_fingerprint == (
+        abc.FUNCTIONAL_REPLAY_VERIFIER_IMPLEMENTATION_SCHEMA_FINGERPRINT
+    )
+    assert receipt.verifier_module_ast_manifest_sha256 == (
+        contract.verifier_module_ast_manifest_sha256
+    )
+    assert receipt.verifier_module_ast_manifest_sha256 == (
+        abc.functional_replay_module_ast_manifest_sha256()
+    )
+    assert receipt.detached_approval_manifest_sha256 == (
+        contract.detached_approval_manifest_sha256
+    )
+    assert receipt.approval_precedes_execution is True
+    assert receipt.expected_array_payload_manifest_sha256 == (
+        receipt.array_replay_payload_manifest_sha256
+    )
+    assert receipt.affine_anchor_inventory_sha256 == (
+        _AFFINE_ANCHOR_INVENTORY_SHA256
+    )
+    assert receipt.q0_probe_inventory_sha256 == _Q0_PROBE_INVENTORY_SHA256
+    assert receipt.signed_q_probe_inventory_sha256 == (
+        _SIGNED_Q_PROBE_INVENTORY_SHA256
+    )
+    assert receipt.q_probe_inventory_sha256 == _Q_CHART_INVENTORY_SHA256
+    assert receipt.scope == abc.FUNCTIONAL_REPLAY_SCOPE
+    assert (
+        receipt.affine_anchor_count,
+        receipt.q0_probe_count,
+        receipt.signed_q_probe_count,
+        receipt.q_chart_count,
+    ) == (3, 5, 6, 2)
+    assert receipt.source_anchor.fock_entrywise_residual <= (
+        receipt.source_anchor.fock_entrywise_registered_bound
+    )
+    assert receipt.source_anchor.interaction_entrywise_residual <= (
+        receipt.source_anchor.interaction_entrywise_registered_bound
+    )
+    assert receipt.source_anchor.scalar_energy_residual <= (
+        receipt.source_anchor.scalar_energy_registered_bound
+    )
+    assert receipt.source_anchor.fock_entrywise_operation_count == 2
+    assert receipt.source_anchor.interaction_entrywise_operation_count == 3
+    assert receipt.source_anchor.scalar_energy_operation_count == 2
+    assert receipt.source_anchor.fock_entrywise_termwise_magnitude >= (
+        receipt.source_anchor.fock_entrywise_result_scale
+    )
+    assert receipt.source_anchor.interaction_entrywise_termwise_magnitude >= (
+        receipt.source_anchor.interaction_entrywise_result_scale
+    )
+    assert receipt.source_anchor.scalar_energy_termwise_magnitude >= (
+        receipt.source_anchor.scalar_energy_result_scale
+    )
+    assert len(receipt.scalar_steps) == 3 * 5 * 3
+    assert len(receipt.scalar_local_gates) == 3 * 5
+    for probe_index in range(5):
+        assert max(
+            item.informativeness_abs
+            for item in receipt.scalar_local_gates
+            if item.probe_index == probe_index
+        ) >= contract.choice.informativeness_floor
+    assert len(receipt.matrix_steps) == 2 * (1 + 1 + 2) * 3
+    assert len(receipt.matrix_local_gates) == 2 * (1 + 1 + 2)
+    assert len(receipt.reciprocity) == 2 * 3
+    assert all(item.residual <= item.registered_bound for item in receipt.scalar_steps)
+    assert all(
+        item.stability_max_abs <= item.stability_registered_bound
+        for item in receipt.scalar_local_gates
+    )
+    assert all(
+        item.residual_norm <= item.registered_bound for item in receipt.matrix_steps
+    )
+    assert all(
+        item.stability_max_frobenius <= item.stability_registered_bound
+        for item in receipt.matrix_local_gates
+    )
+    assert all(item.residual <= item.registered_bound for item in receipt.reciprocity)
+    assert all(item.operation_count > 0 for item in receipt.scalar_steps)
+    assert all(item.operation_count > 0 for item in receipt.matrix_steps)
+    assert all(item.operation_count > 0 for item in receipt.reciprocity)
+    assert provider.hessian_calls == 6
+    assert provider.direct_displaced_calls == 6 * (1 + 2 * 3)
+    assert len(receipt.call_records) == 239
+    assert receipt.call_records[0].method == receipt.call_records[1].method
+    assert receipt.call_records[0].argument_hashes == receipt.call_records[1].argument_hashes
+    assert receipt.call_records[0].output_sha256 == receipt.call_records[1].output_sha256
+    assert receipt.transcript_sha256 == _fp([asdict(item) for item in receipt.call_records])
+    direct_records = [
+        item for item in receipt.call_records
+        if item.method == "evaluate_displaced_fock"
+    ]
+    assert direct_records and all(
+        item.dependency_trace_sha256 is not None for item in direct_records
+    )
+    status = receipt.status
+    assert status.local_registered_functional_probes_replayed is True
+    assert status.global_functional_chain_verified is False
+    assert status.scope == abc.FUNCTIONAL_REPLAY_SCOPE
+    assert (
+        status.affine_anchor_count,
+        status.q0_probe_count,
+        status.signed_q_probe_count,
+        status.q_chart_count,
+    ) == (3, 5, 6, 2)
+    assert status.scf_trajectory_replayed is False
+    assert status.branch_table_replayed is False
+    assert status.pocket_refinement_replayed is False
+    assert status.scientific_execution_verified is False
+    assert status.paper_reproduction_verified is False
+    assert "functional_chain_replayed" not in asdict(status)
+    assert "projector_tangent" not in inspect.getsource(functional)
+    assert "np.vdot" not in inspect.getsource(functional._pairing)
+
+
+def test_functional_replay_ast_manifest_hashes_the_canonical_full_module() -> None:
+    source = Path(functional.__file__).read_text(encoding="utf-8")
+    canonical_ast = ast.dump(
+        ast.parse(source),
+        annotate_fields=True,
+        include_attributes=False,
+    )
+    independently_generated = hashlib.sha256(
+        canonical_ast.encode("utf-8")
+    ).hexdigest()
+    assert functional.functional_replay_module_ast_manifest_sha256() == (
+        independently_generated
+    )
+    assert functional.functional_replay_module_ast_manifest_sha256(source) == (
+        independently_generated
+    )
+    reformatted_source = ast.unparse(ast.parse(source))
+    assert functional.functional_replay_module_ast_manifest_sha256(
+        reformatted_source
+    ) == independently_generated
+    mutated_source = _semantically_mutated_functional_source(source)
+    assert functional.functional_replay_module_ast_manifest_sha256(
+        mutated_source
+    ) != independently_generated
+
+
+def test_functional_replay_rejects_stale_ast_manifest_before_provider_calls(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    binding, contract, provider = _functional_case()
+    source = Path(functional.__file__).read_text(encoding="utf-8")
+    mutated_source = _semantically_mutated_functional_source(source)
+    mutated_path = tmp_path / "vituri2024_hf_functional_replay.py"
+    mutated_path.write_text(mutated_source, encoding="utf-8")
+    assert functional.functional_replay_module_ast_manifest_sha256(
+        mutated_source
+    ) != contract.verifier_module_ast_manifest_sha256
+
+    monkeypatch.setattr(functional, "__file__", str(mutated_path))
+    with pytest.raises(ValueError, match="verifier AST/source manifest"):
+        abc.replay_vituri2024_half_metal_hf_functional(binding, contract)
+
+    assert provider.replay_loader_calls == []
+    assert provider.functional_loader_calls == []
+    assert provider.scalar_energy_calls == 0
+    assert provider.fock_derivative_calls == 0
+    assert provider.hessian_calls == 0
+    assert provider.direct_displaced_calls == 0
+
+
+def test_functional_probe_and_q_inventory_hashes_have_independent_goldens() -> None:
+    assert abc.FUNCTIONAL_REPLAY_VERIFIER_IMPLEMENTATION_SCHEMA_FINGERPRINT == (
+        "93eb57bbe188f99307f8d9bedb78af2104704bafbb0c31887a8b6639aa52e034"
+    )
+    assert abc.Vituri2024FunctionalReplayChoice().fingerprint == (
+        "9bf4d931ee68125e94d5de3e75de5b1e738c78b810913e2aada1f478344acc3b"
+    )
+    assert _AFFINE_ANCHOR_INVENTORY_SHA256 == (
+        "f2ec507092d6c3b0859620ad93b4314555f57c48b2f623d6fd46c2b22118abdc"
+    )
+    assert _Q0_PROBE_INVENTORY_SHA256 == (
+        "f844b2c5745702ff9b8b46f36db3ac02e4e9d0ecdfef912c15852ffb86418f3a"
+    )
+    assert _SIGNED_Q_PROBE_INVENTORY_SHA256 == (
+        "9f0a754ecdc30716be23bd58b5e16a18a81e7ee8b7a67c03c97bf2490ffb8a74"
+    )
+    assert _Q_CHART_INVENTORY_SHA256 == (
+        "49326562e251ae128b5315ce17255f5687d5a2ab733d037f6097b89d48376891"
+    )
+    assert tuple(chart.q_probe_index for chart in _SIGNED_Q_CHARTS) == (0, 1)
+    assert tuple(chart.q_label for chart in _SIGNED_Q_CHARTS) == abc.Q_CHART_LABELS
+    assert not np.array_equal(
+        _SIGNED_Q_CHARTS[0].mesh_displacement,
+        _SIGNED_Q_CHARTS[1].mesh_displacement,
+    )
+    assert np.array_equal(_SIGNED_Q_PROBE_INDICES, np.asarray((0, 0, 0, 1, 1, 1)))
+    for q_index, chart in enumerate(_SIGNED_Q_CHARTS):
+        base = 3 * q_index
+        plus_boundary = chart.validity_masks[0] & ~chart.validity_masks[1]
+        minus_boundary = chart.validity_masks[1] & ~chart.validity_masks[0]
+        interior = chart.validity_masks[0] & chart.validity_masks[1]
+        assert np.any(_SIGNED_Q_PROBES[base, 0, :, :, plus_boundary] != 0.0)
+        assert np.all(_SIGNED_Q_PROBES[base, 1] == 0.0)
+        assert np.any(_SIGNED_Q_PROBES[base + 1, 1, :, :, minus_boundary] != 0.0)
+        assert np.all(_SIGNED_Q_PROBES[base + 1, 0] == 0.0)
+        assert np.any(_SIGNED_Q_PROBES[base + 2, :, :, :, interior] != 0.0)
+        assert np.allclose(
+            np.sqrt(np.sum(np.abs(_SIGNED_Q_PROBES[base : base + 3]) ** 2, axis=(1, 2, 3, 4))),
+            1.0,
+        )
+
+
+def test_functional_replay_binds_q_charts_to_geometry_and_source_mesh() -> None:
+    binding, contract, provider = _functional_case(
+        geometry_overrides={"mesh_shape": (5, 4)}
+    )
+    with pytest.raises(
+        ValueError,
+        match=r"mesh_shape does not equal spec\.geometry\.mesh_shape",
+    ):
+        abc.replay_vituri2024_half_metal_hf_functional(binding, contract)
+    assert provider.fock_derivative_calls == 0
+    assert provider.hessian_calls == provider.direct_displaced_calls == 0
+
+    # The synthetic provider's q action has one common coefficient and accepts
+    # whichever registered Cartesian q it is given.  A self-consistent but
+    # physically wrong chart registration must therefore be stopped by source
+    # mesh coordinates, not by provider q dependence.
+    wrong_q_charts = (
+        replace(
+            _SIGNED_Q_CHARTS[0],
+            cartesian_q=np.asarray((0.02, -0.01), dtype=np.float64),
+        ),
+        replace(
+            _SIGNED_Q_CHARTS[1],
+            cartesian_q=np.asarray((-0.015, 0.025), dtype=np.float64),
+        ),
+    )
+    binding, contract, provider = _functional_case(q_charts=wrong_q_charts)
+    with pytest.raises(ValueError, match="does not match source momentum mesh edges"):
+        abc.replay_vituri2024_half_metal_hf_functional(binding, contract)
+    assert provider.fock_derivative_calls == 0
+    assert provider.hessian_calls == provider.direct_displaced_calls == 0
+
+
+def test_detached_approval_binds_choice_conventions_and_verifier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, contract, _ = _functional_case()
+
+    tolerance_constants = (
+        ("absolute_tolerance", "_REGISTERED_ABSOLUTE_TOLERANCE"),
+        ("relative_tolerance", "_REGISTERED_RELATIVE_TOLERANCE"),
+        ("roundoff_ulps", "_REGISTERED_ROUNDOFF_ULPS"),
+        (
+            "slope_stability_tolerance",
+            "_REGISTERED_SLOPE_STABILITY_TOLERANCE",
+        ),
+        ("informativeness_floor", "_REGISTERED_INFORMATIVENESS_FLOOR"),
+        (
+            "source_mesh_q_coordinate_tolerance_inverse_angstrom",
+            "_REGISTERED_SOURCE_MESH_Q_COORDINATE_TOLERANCE_INVERSE_ANGSTROM",
+        ),
+    )
+    for field_name, constant_name in tolerance_constants:
+        with monkeypatch.context() as patch:
+            changed_tolerance = 2.0 * float(getattr(contract.choice, field_name))
+            patch.setattr(functional, constant_name, changed_tolerance)
+            changed_choice = replace(
+                contract.choice, **{field_name: changed_tolerance}
+            )
+            with pytest.raises(ValueError, match="detached approval manifest"):
+                replace(
+                    contract,
+                    choice=changed_choice,
+                    choice_fingerprint=changed_choice.fingerprint,
+                )
+
+    convention_fields = (
+        ("fock_output", "FOCK_OUTPUT_CONVENTION", "changed_full_fock"),
+        (
+            "stored_density_pairing",
+            "STORED_DENSITY_PAIRING",
+            "changed_stored_density_pairing",
+        ),
+        (
+            "density_direction_convention",
+            "FIXED_DENSITY_DIRECTION_CONVENTION",
+            "changed_density_direction",
+        ),
+    )
+    for field_name, constant_name, changed_convention in convention_fields:
+        with monkeypatch.context() as patch:
+            patch.setattr(functional, constant_name, changed_convention)
+            changed_choice = replace(
+                contract.choice,
+                **{field_name: changed_convention},
+            )
+            with pytest.raises(ValueError, match="detached approval manifest"):
+                replace(
+                    contract,
+                    choice=changed_choice,
+                    choice_fingerprint=changed_choice.fingerprint,
+                )
+
+    with monkeypatch.context() as patch:
+        changed_verifier = _SHA["4"]
+        patch.setattr(
+            functional,
+            "FUNCTIONAL_REPLAY_VERIFIER_IMPLEMENTATION_SCHEMA_FINGERPRINT",
+            changed_verifier,
+        )
+        with pytest.raises(ValueError, match="detached approval manifest"):
+            replace(
+                contract,
+                verifier_implementation_schema_fingerprint=changed_verifier,
+            )
+
+
+def test_source_anchor_high_cancellation_uses_termwise_roundoff_bound() -> None:
+    choice = abc.Vituri2024FunctionalReplayChoice()
+    result_scale = 1.0
+    termwise_magnitude = 2.0e8
+    operation_count = 2
+    roundoff, registered_bound = functional._entrywise_bound(
+        choice,
+        result_scale=result_scale,
+        termwise_magnitude=termwise_magnitude,
+        operation_count=operation_count,
+    )
+    old_result_only_bound = (
+        choice.absolute_tolerance
+        + choice.relative_tolerance * result_scale
+        + functional._termwise_roundoff(choice, result_scale, operation_count)
+    )
+    cancellation_residual = 1.0e-7
+    assert old_result_only_bound < cancellation_residual <= registered_bound
+
+    small_roundoff, small_bound = functional._entrywise_bound(
+        choice,
+        result_scale=1.0,
+        termwise_magnitude=2.0,
+        operation_count=1,
+    )
+    evidence = abc.Vituri2024FunctionalReplayAnchorCheck(
+        fock_entrywise_residual=cancellation_residual,
+        fock_entrywise_result_scale=result_scale,
+        fock_entrywise_termwise_magnitude=termwise_magnitude,
+        fock_entrywise_operation_count=operation_count,
+        fock_entrywise_roundoff_contribution=roundoff,
+        fock_entrywise_registered_bound=registered_bound,
+        interaction_entrywise_residual=0.0,
+        interaction_entrywise_result_scale=1.0,
+        interaction_entrywise_termwise_magnitude=2.0,
+        interaction_entrywise_operation_count=1,
+        interaction_entrywise_roundoff_contribution=small_roundoff,
+        interaction_entrywise_registered_bound=small_bound,
+        scalar_energy_residual=0.0,
+        scalar_energy_result_scale=1.0,
+        scalar_energy_termwise_magnitude=2.0,
+        scalar_energy_operation_count=1,
+        scalar_energy_roundoff_contribution=small_roundoff,
+        scalar_energy_registered_bound=small_bound,
+    )
+    assert evidence.fock_entrywise_roundoff_contribution == roundoff
+    assert evidence.fock_entrywise_termwise_magnitude == termwise_magnitude
+
+
+def test_functional_replay_rejects_provider_and_input_mutation() -> None:
+    binding, contract, provider = _functional_case()
+    provider.call_mutation = ("q0_policy_fingerprint", _SHA["9"])
+    with pytest.raises(ValueError, match="metadata mutated"):
+        abc.replay_vituri2024_half_metal_hf_functional(binding, contract)
+
+    binding, contract, provider = _functional_case()
+    provider.mutate_input_method = "evaluate_fock_derivative"
+    with pytest.raises(ValueError, match="mutated an input"):
+        abc.replay_vituri2024_half_metal_hf_functional(binding, contract)
+
+
+def test_functional_replay_rejects_fixed_interaction_and_interaction_only_fock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    binding, contract, provider = _functional_case()
+    assert provider.replay_payload is not None
+    fixed_interaction = provider.replay_payload.interaction_h.copy()
+    original_scalar = provider.evaluate_scalar_energy
+
+    def fixed_interaction_scalar(
+        interaction_h: np.ndarray, h0: np.ndarray, density: np.ndarray
+    ) -> float:
+        return original_scalar(fixed_interaction, h0, density)
+
+    monkeypatch.setattr(provider, "evaluate_scalar_energy", fixed_interaction_scalar)
+    with pytest.raises(ValueError, match="scalar E->F record"):
+        abc.replay_vituri2024_half_metal_hf_functional(binding, contract)
+
+    binding, contract, provider = _functional_case()
+
+    def interaction_only_fock(density: np.ndarray) -> np.ndarray:
+        return np.asarray(_FUNCTIONAL_G * density, dtype=np.complex128)
+
+    monkeypatch.setattr(provider, "evaluate_fock_derivative", interaction_only_fock)
+    with pytest.raises(ValueError, match="anchor"):
+        abc.replay_vituri2024_half_metal_hf_functional(binding, contract)
+
+
+@pytest.mark.parametrize(
+    "fault", ("no_cross_route", "copy_plus", "average", "conjugate_minus")
+)
+def test_functional_replay_rejects_signed_lane_repairs_or_inference(
+    monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    binding, contract, provider = _functional_case()
+    direct = provider.evaluate_displaced_fock
+
+    def faulty_direct(
+        density: np.ndarray,
+        displacement: np.ndarray,
+        **kwargs: object,
+    ) -> abc.Vituri2024DirectDisplacedFockResponse:
+        typed = direct(density, displacement, **kwargs)  # type: ignore[arg-type]
+        result = typed.response.copy()
+        if fault == "no_cross_route":
+            result = np.asarray(_FUNCTIONAL_GQ * displacement)
+        elif fault == "copy_plus":
+            result[1] = result[0]
+        elif fault == "average":
+            average = 0.5 * (result[0] + result[1])
+            result[0] = average
+            result[1] = average
+        else:
+            result[1] = result[0].conj()
+        return abc.Vituri2024DirectDisplacedFockResponse(
+            caller_nonce_sha256=typed.caller_nonce_sha256,
+            response=result,
+            dependency_trace=typed.dependency_trace,
+        )
+
+    monkeypatch.setattr(provider, "evaluate_displaced_fock", faulty_direct)
+    with pytest.raises(
+        ValueError,
+        match="matrix F->dF record|inactive response lane|invalid-edge",
+    ):
+        abc.replay_vituri2024_half_metal_hf_functional(binding, contract)
+
+
+def test_functional_replay_rejects_wrap_invalid_and_best_step_cherry_pick(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    binding, contract, provider = _functional_case()
+    direct = provider.evaluate_displaced_fock
+
+    def wrap_invalid(
+        density: np.ndarray,
+        displacement: np.ndarray,
+        **kwargs: object,
+    ) -> abc.Vituri2024DirectDisplacedFockResponse:
+        typed = direct(density, displacement, **kwargs)  # type: ignore[arg-type]
+        result = typed.response.copy()
+        if np.any(displacement != 0.0):
+            target_maps = kwargs["target_maps"]
+            assert isinstance(target_maps, np.ndarray)
+            invalid_index = int(np.flatnonzero(target_maps[0] < 0)[0])
+            result[0, 0, 0, invalid_index] = 1.0
+        return abc.Vituri2024DirectDisplacedFockResponse(
+            caller_nonce_sha256=typed.caller_nonce_sha256,
+            response=result,
+            dependency_trace=typed.dependency_trace,
+        )
+
+    monkeypatch.setattr(provider, "evaluate_displaced_fock", wrap_invalid)
+    with pytest.raises(ValueError, match="invalid-edge"):
+        abc.replay_vituri2024_half_metal_hf_functional(binding, contract)
+
+    binding, contract, provider = _functional_case()
+    direct = provider.evaluate_displaced_fock
+
+    def one_good_step_only(
+        density: np.ndarray,
+        displacement: np.ndarray,
+        **kwargs: object,
+    ) -> abc.Vituri2024DirectDisplacedFockResponse:
+        typed = direct(density, displacement, **kwargs)  # type: ignore[arg-type]
+        result = typed.response + 0.2 * displacement * np.abs(displacement) ** 2
+        return abc.Vituri2024DirectDisplacedFockResponse(
+            caller_nonce_sha256=typed.caller_nonce_sha256,
+            response=np.asarray(result, dtype=np.complex128),
+            dependency_trace=typed.dependency_trace,
+        )
+
+    monkeypatch.setattr(provider, "evaluate_displaced_fock", one_good_step_only)
+    with pytest.raises(ValueError, match="matrix F->dF record"):
+        abc.replay_vituri2024_half_metal_hf_functional(binding, contract)
+
+
+def test_functional_payload_and_contract_reject_altered_registration() -> None:
+    spec = _complete()
+    payload = _functional_payload(spec)
+    with pytest.raises(ValueError, match="packed-pair Frobenius norm"):
+        changed = _SIGNED_Q_PROBES.copy()
+        changed[2] *= 2.0
+        replace(payload, signed_q_probes=changed)
+
+    bad_targets = _SIGNED_Q_CHARTS[0].target_maps.copy()
+    bad_targets[0, 15] = 0
+    with pytest.raises(ValueError, match="no-wrap/no-carry"):
+        replace(_SIGNED_Q_CHARTS[0], target_maps=bad_targets)
+
+    binding, contract, provider = _functional_case()
+    with pytest.raises(ValueError, match="detached approval manifest"):
+        replace(contract, fock_step_ladder=(1.0e-2, 1.0e-3, 1.0e-4))
+    collision_direct = provider.finite_q_hessian_implementation_fingerprint
+    collision_archive = abc.direct_builder_dependency_archive_fingerprint(
+        source_commit=contract.source_commit,
+        source_artifact_sha256=contract.source_artifact_sha256,
+        direct_displaced_fock_implementation_fingerprint=collision_direct,
+        interaction_builder_implementation_fingerprint=(
+            contract.direct_interaction_builder_implementation_fingerprint
+        ),
+        full_fock_builder_implementation_fingerprint=(
+            contract.direct_full_fock_builder_implementation_fingerprint
+        ),
+    )
+    collision_provider = abc.functional_provider_fingerprint(
+        base_provider_fingerprint=contract.provider_fingerprint,
+        functional_replay_abi_fingerprint=contract.functional_replay_abi_fingerprint,
+        functional_replay_payload_schema_fingerprint=(
+            contract.functional_replay_payload_schema_fingerprint
+        ),
+        functional_probe_loader_implementation_fingerprint=(
+            contract.functional_probe_loader_implementation_fingerprint
+        ),
+        direct_displaced_fock_implementation_fingerprint=collision_direct,
+        direct_builder_dependency_archive_fingerprint=collision_archive,
+    )
+    collision_approval = abc.Vituri2024FunctionalReplayApproval(
+        choice_fingerprint=contract.choice_fingerprint,
+        verifier_implementation_schema_fingerprint=(
+            contract.verifier_implementation_schema_fingerprint
+        ),
+        verifier_module_ast_manifest_sha256=(
+            contract.verifier_module_ast_manifest_sha256
+        ),
+        functional_provider_fingerprint=collision_provider,
+        source_commit=contract.source_commit,
+        source_artifact_sha256=contract.source_artifact_sha256,
+        spec_fingerprint=contract.spec_fingerprint,
+        source_state_sha256=contract.source_state_sha256,
+        expected_array_payload_manifest_sha256=(
+            contract.expected_array_payload_manifest_sha256
+        ),
+        affine_anchor_inventory_sha256=contract.affine_anchor_inventory_sha256,
+        q0_probe_inventory_sha256=contract.q0_probe_inventory_sha256,
+        signed_q_probe_inventory_sha256=contract.signed_q_probe_inventory_sha256,
+        q_probe_inventory_sha256=contract.q_probe_inventory_sha256,
+        fock_step_ladder=contract.fock_step_ladder,
+        hessian_step_ladder=contract.hessian_step_ladder,
+        direct_displaced_fock_implementation_fingerprint=collision_direct,
+        direct_builder_dependency_archive_fingerprint=collision_archive,
+        provenance=contract.detached_approval_provenance,
+    )
+    contract_kwargs = {
+        name: getattr(contract, name)
+        for name in inspect.signature(abc.Vituri2024FunctionalReplayContract).parameters
+    }
+    contract_kwargs.update(
+        functional_provider_fingerprint=collision_provider,
+        direct_displaced_fock_implementation_fingerprint=collision_direct,
+        direct_builder_dependency_archive_fingerprint=collision_archive,
+        detached_approval_manifest_sha256=collision_approval.manifest_sha256,
+    )
+    collision_contract = abc.Vituri2024FunctionalReplayContract(**contract_kwargs)
+    with pytest.raises(ValueError, match="fingerprint equals Hessian"):
+        abc.replay_vituri2024_half_metal_hf_functional(binding, collision_contract)
+    with pytest.raises(ValueError, match="dependency archive"):
+        replace(contract, direct_builder_dependency_archive_fingerprint=_SHA["4"])
+    with pytest.raises(ValueError, match="detached approval manifest"):
+        replace(contract, detached_approval_manifest_sha256=_SHA["4"])
+
+
+def test_functional_replay_rejects_truthful_unchanged_metadata_hessian_delegation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    binding, contract, provider = _functional_case()
+
+    def delegating_direct(
+        density: np.ndarray,
+        displacement: np.ndarray,
+        **kwargs: object,
+    ) -> abc.Vituri2024DirectDisplacedFockResponse:
+        result = provider.evaluate_finite_q_hessian(
+            displacement,
+            q_probe_index=int(kwargs["q_probe_index"]),
+            mesh_displacement=kwargs["mesh_displacement"],  # type: ignore[arg-type]
+            cartesian_q=kwargs["cartesian_q"],  # type: ignore[arg-type]
+            target_maps=kwargs["target_maps"],  # type: ignore[arg-type]
+            reverse_edge_map=kwargs["reverse_edge_map"],  # type: ignore[arg-type]
+        )
+        target_maps = kwargs["target_maps"]
+        reverse_map = kwargs["reverse_edge_map"]
+        assert isinstance(target_maps, np.ndarray)
+        assert isinstance(reverse_map, np.ndarray)
+        trace = abc.Vituri2024DirectBuilderDependencyTrace(
+            caller_nonce_sha256=str(kwargs["caller_nonce"]),
+            q_probe_index=int(kwargs["q_probe_index"]),
+            q_label=_SIGNED_Q_CHARTS[int(kwargs["q_probe_index"])].q_label,
+            interaction_builder_implementation_fingerprint=(
+                provider.direct_interaction_builder_implementation_fingerprint
+            ),
+            full_fock_builder_implementation_fingerprint=(
+                provider.direct_full_fock_builder_implementation_fingerprint
+            ),
+            target_maps_sha256=abc.canonical_array_sha256(target_maps),
+            reverse_edge_map_sha256=abc.canonical_array_sha256(reverse_map),
+            target_map_read_count=target_maps.size,
+            reverse_edge_map_read_count=reverse_map.size,
+            interaction_builder_call_count=0,
+            full_fock_builder_call_count=0,
+            finite_q_hessian_call_count=1,
+        )
+        return abc.Vituri2024DirectDisplacedFockResponse(
+            caller_nonce_sha256=str(kwargs["caller_nonce"]),
+            response=result,
+            dependency_trace=trace,
+        )
+
+    monkeypatch.setattr(provider, "evaluate_displaced_fock", delegating_direct)
+    with pytest.raises(
+        ValueError, match="finite-q-Hessian call count mismatch"
+    ):
+        abc.replay_vituri2024_half_metal_hf_functional(binding, contract)
+    assert provider.hessian_calls == 2  # one registered call plus delegated direct call
+    assert provider.direct_displaced_fock_construction == (
+        abc.DIRECT_DISPLACED_FOCK_CONSTRUCTION
+    )
+
+
+@pytest.mark.parametrize(
+    "attribute",
+    functional.FUNCTIONAL_REPLAY_PROVIDER_METADATA_FIELDS,
+)
+def test_functional_replay_snapshots_every_provider_metadata_field(
+    attribute: str,
+) -> None:
+    binding, contract, provider = _functional_case()
+    provider.functional_loader_mutation = (attribute, "mutated_during_probe_load")
+    with pytest.raises(ValueError, match="metadata mutated during functional probe loader"):
+        abc.replay_vituri2024_half_metal_hf_functional(binding, contract)
+
+
+def test_functional_replay_rejects_altered_probe_payload_and_schema() -> None:
+    binding, contract, provider = _functional_case()
+    assert provider.functional_payload is not None
+    changed_q0 = provider.functional_payload.q0_directions.copy()
+    changed_q0[0] *= -1.0
+    provider.functional_payload = replace(
+        provider.functional_payload, q0_directions=changed_q0
+    )
+    with pytest.raises(ValueError, match="q0 probe inventory mismatch"):
+        abc.replay_vituri2024_half_metal_hf_functional(binding, contract)
+
+    with pytest.raises(ValueError, match="schema fingerprint mismatch"):
+        replace(
+            provider.functional_payload,
+            functional_replay_payload_schema_fingerprint=_SHA["9"],
+        )
+    with pytest.raises(ValueError, match="derived functional provider"):
+        replace(contract, functional_provider_fingerprint=_SHA["9"])
+
+
+def test_synthetic_direct_and_hessian_consume_two_chart_routing_inputs() -> None:
+    _, _, provider = _functional_case()
+    assert provider.replay_payload is not None
+    probe = _SIGNED_Q_PROBES[0]
+    chart = _SIGNED_Q_CHARTS[0]
+    nonce = _SHA["4"]
+    direct = provider.evaluate_displaced_fock(
+        provider.replay_payload.projector,
+        probe,
+        q_probe_index=chart.q_probe_index,
+        mesh_displacement=chart.mesh_displacement,
+        cartesian_q=chart.cartesian_q,
+        target_maps=chart.target_maps,
+        reverse_edge_map=chart.reverse_edge_map,
+        caller_nonce=nonce,
+    )
+    changed_density = provider.replay_payload.projector.copy()
+    changed_density[0, 0, 0] += 0.5
+    changed = provider.evaluate_displaced_fock(
+        changed_density,
+        probe,
+        q_probe_index=chart.q_probe_index,
+        mesh_displacement=chart.mesh_displacement,
+        cartesian_q=chart.cartesian_q,
+        target_maps=chart.target_maps,
+        reverse_edge_map=chart.reverse_edge_map,
+        caller_nonce=_SHA["5"],
+    )
+    assert not np.array_equal(direct.response, changed.response)
+    assert not np.array_equal(direct.response, probe)
+
+    bad_target = chart.target_maps.copy()
+    bad_target[0, 0] = -1
+    bad_reverse = chart.reverse_edge_map.copy()
+    bad_reverse[0, 0] = -1
+    for method in (
+        provider.evaluate_finite_q_hessian,
+        provider.evaluate_displaced_fock,
+    ):
+        common: dict[str, object] = {
+            "q_probe_index": chart.q_probe_index,
+            "mesh_displacement": chart.mesh_displacement,
+            "cartesian_q": chart.cartesian_q,
+            "target_maps": bad_target,
+            "reverse_edge_map": chart.reverse_edge_map,
+        }
+        if method == provider.evaluate_displaced_fock:
+            common["caller_nonce"] = _SHA["6"]
+            arguments = (provider.replay_payload.projector, probe)
+        else:
+            arguments = (probe,)
+        with pytest.raises(ValueError, match="target maps"):
+            method(*arguments, **common)  # type: ignore[arg-type]
+        common["target_maps"] = chart.target_maps
+        common["reverse_edge_map"] = bad_reverse
+        with pytest.raises(ValueError, match="reverse map"):
+            method(*arguments, **common)  # type: ignore[arg-type]
+
+    direct_kwargs = {
+        "q_probe_index": chart.q_probe_index,
+        "mesh_displacement": chart.mesh_displacement,
+        "cartesian_q": chart.cartesian_q,
+        "target_maps": chart.target_maps,
+        "reverse_edge_map": chart.reverse_edge_map,
+        "caller_nonce": _SHA["7"],
+    }
+    for name, altered, message in (
+        ("q_probe_index", 1, "mesh displacement"),
+        ("mesh_displacement", np.asarray((0, 1), dtype=np.int64), "mesh displacement"),
+        ("cartesian_q", chart.cartesian_q + 0.01, "Cartesian q"),
+    ):
+        kwargs = dict(direct_kwargs)
+        kwargs[name] = altered
+        with pytest.raises((ValueError, AssertionError), match=message):
+            provider.evaluate_displaced_fock(
+                provider.replay_payload.projector, probe, **kwargs  # type: ignore[arg-type]
+            )
+
+
+def test_weak_matrix_channel_instability_is_not_hidden_by_global_scale(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    binding, contract, provider = _functional_case()
+    original_hessian = provider.evaluate_finite_q_hessian
+    original_direct = provider.evaluate_displaced_fock
+    weak_scale = 4.0e-10
+
+    def weak_hessian(perturbation: np.ndarray, **kwargs: object) -> np.ndarray:
+        result = original_hessian(perturbation, **kwargs)  # type: ignore[arg-type]
+        if int(kwargs["q_probe_index"]) == 1:
+            result = weak_scale * result
+        return result
+
+    def weak_unstable_direct(
+        density: np.ndarray,
+        displacement: np.ndarray,
+        **kwargs: object,
+    ) -> abc.Vituri2024DirectDisplacedFockResponse:
+        typed = original_direct(density, displacement, **kwargs)  # type: ignore[arg-type]
+        result = typed.response.copy()
+        if int(kwargs["q_probe_index"]) == 1:
+            step_norm = float(np.sqrt(np.sum(np.abs(displacement) ** 2)))
+            result *= weak_scale * (1.0 + 0.5 * step_norm / 1.0e-3)
+        return abc.Vituri2024DirectDisplacedFockResponse(
+            caller_nonce_sha256=typed.caller_nonce_sha256,
+            response=result,
+            dependency_trace=typed.dependency_trace,
+        )
+
+    monkeypatch.setattr(provider, "evaluate_finite_q_hessian", weak_hessian)
+    monkeypatch.setattr(provider, "evaluate_displaced_fock", weak_unstable_direct)
+    with pytest.raises(ValueError, match="local slope stability gate failed"):
+        abc.replay_vituri2024_half_metal_hf_functional(binding, contract)
+
+
+@pytest.mark.parametrize("pairing_fault", ("conjugating_dot", "transpose"))
+def test_functional_replay_rejects_pairing_canaries_in_scalar_records_before_q(
+    monkeypatch: pytest.MonkeyPatch, pairing_fault: str
+) -> None:
+    if pairing_fault == "conjugating_dot":
+        def faulty_pairing(left: np.ndarray, right: np.ndarray, nk: int) -> float:
+            return float(np.real(np.vdot(left, right)) / nk)
+    else:
+        def faulty_pairing(left: np.ndarray, right: np.ndarray, nk: int) -> float:
+            return float(
+                np.real(np.sum(np.swapaxes(left, 0, 1) * right)) / nk
+            )
+
+    monkeypatch.setattr(functional, "_pairing", faulty_pairing)
+    binding, contract, provider = _functional_case()
+    with pytest.raises(ValueError, match="scalar E->F record"):
+        abc.replay_vituri2024_half_metal_hf_functional(binding, contract)
+    assert provider.hessian_calls == 0
+    assert provider.direct_displaced_calls == 0
+
+
+def test_fd_evidence_rejects_crossed_normalizations_and_convention_drift() -> None:
+    geometry, ensemble = _geometry(), _ensemble()
+    shared = _shared(geometry, ensemble)
+    with pytest.raises(ValueError, match="normalization/norm contradicts"):
+        _fd(
+            "fock_first_derivative",
+            shared.scalar_energy.implementation_fingerprint,
+            shared.fock_derivative.implementation_fingerprint,
+            geometry,
+            ensemble,
+            perturbation_normalization=abc.FINITE_Q_HESSIAN_NORMALIZATION,
+        )
+    with pytest.raises(ValueError, match="normalization/norm contradicts"):
+        _fd(
+            "finite_q_hessian",
+            shared.fock_derivative.implementation_fingerprint,
+            shared.finite_q_hessian.implementation_fingerprint,
+            geometry,
+            ensemble,
+            perturbation_normalization=abc.FOCK_FIRST_DERIVATIVE_NORMALIZATION,
+        )
+    with pytest.raises(ValueError, match="shared-functional conventions"):
+        _fd(
+            "fock_first_derivative",
+            shared.scalar_energy.implementation_fingerprint,
+            shared.fock_derivative.implementation_fingerprint,
+            geometry,
+            ensemble,
+            fock_output="interaction_only",
+        )
+
+
+def test_functional_success_objects_are_factory_token_gated() -> None:
+    with pytest.raises(TypeError, match="factory token"):
+        abc.Vituri2024FunctionalReplayStatus(_factory_token=object())
+    receipt = abc.replay_vituri2024_half_metal_hf_functional(*_functional_case()[:2])
+    receipt_kwargs = {
+        name: getattr(receipt, name)
+        for name in inspect.signature(
+            abc.Vituri2024FunctionalReplayReceipt
+        ).parameters
+        if name != "_factory_token"
+    }
+    with pytest.raises(TypeError, match="_factory_token"):
+        abc.Vituri2024FunctionalReplayReceipt(**receipt_kwargs)  # type: ignore[arg-type]
+    annotations = inspect.get_annotations(
+        functional.Vituri2024FunctionalReplayProviderProtocol.evaluate_displaced_fock
+    )
+    assert annotations["density"] == "ComplexArray"
+    assert annotations["signed_q_displacement"] == "ComplexArray"
+    assert annotations["return"] == "Vituri2024DirectDisplacedFockResponse"
+    for name in functional.__all__:
+        assert getattr(abc, name) is getattr(functional, name)

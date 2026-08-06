@@ -30,7 +30,16 @@ VITURI2024_MAIN_TEX_SHA256 = (
     "eb0a142bda1f594686fab818820a2b0ee700dfeef0fa54055718bfd1fe56ee56"
 )
 VITURI2024_HALF_METAL_HF_SCOPE = (
-    "vituri2024_spin_polarized_half_metal_hf_receipt_preflight_v2"
+    "vituri2024_spin_polarized_half_metal_hf_receipt_preflight_v3"
+)
+FOCK_OUTPUT_CONVENTION = "full_fock_h0_plus_interaction"
+STORED_DENSITY_PAIRING = "real_bilinear_sum_abk_no_conjugation_over_nk"
+FIXED_DENSITY_DIRECTION_CONVENTION = "fixed_density_affine_directions"
+FOCK_FIRST_DERIVATIVE_NORMALIZATION = (
+    "unit_frobenius_hermitian_trace_zero_density_direction"
+)
+FINITE_Q_HESSIAN_NORMALIZATION = (
+    "unit_frobenius_complexified_independent_signed_q_block_pair"
 )
 INTERNAL_FLAVOR_ORDER: tuple[tuple[int, int], ...] = (
     (-1, -1),
@@ -975,9 +984,15 @@ class Vituri2024FiniteDifferenceEvidenceReceipt:
     ensemble_receipt_fingerprint: str
     perturbation_inventory_sha256: str
     perturbation_normalization: Literal[
-        "unit_frobenius_norm_hermitian_projector_tangent"
+        "unit_frobenius_hermitian_trace_zero_density_direction",
+        "unit_frobenius_complexified_independent_signed_q_block_pair",
     ]
     matrix_norm: Literal["frobenius"]
+    fock_output: Literal["full_fock_h0_plus_interaction"]
+    stored_density_pairing: Literal[
+        "real_bilinear_sum_abk_no_conjugation_over_nk"
+    ]
+    density_direction_convention: Literal["fixed_density_affine_directions"]
     q_probe_inventory_sha256: str | None
     finite_difference_step_ladder: tuple[float, ...]
     comparison_identity: FiniteDifferenceComparisonIdentity
@@ -999,12 +1014,26 @@ class Vituri2024FiniteDifferenceEvidenceReceipt:
         )
         object.__setattr__(self, "residual", residual)
         object.__setattr__(self, "tolerance", tolerance)
+        expected_normalization = (
+            FINITE_Q_HESSIAN_NORMALIZATION
+            if self.validation_kind == "finite_q_hessian"
+            else FOCK_FIRST_DERIVATIVE_NORMALIZATION
+        )
         if (
-            self.perturbation_normalization
-            != "unit_frobenius_norm_hermitian_projector_tangent"
+            self.perturbation_normalization != expected_normalization
             or self.matrix_norm != "frobenius"
         ):
-            raise ValueError("finite-difference perturbation normalization/norm was changed")
+            raise ValueError(
+                "finite-difference perturbation normalization/norm contradicts "
+                "the validation kind"
+            )
+        if (
+            self.fock_output != FOCK_OUTPUT_CONVENTION
+            or self.stored_density_pairing != STORED_DENSITY_PAIRING
+            or self.density_direction_convention
+            != FIXED_DENSITY_DIRECTION_CONVENTION
+        ):
+            raise ValueError("finite-difference shared-functional conventions changed")
         steps = tuple(
             _positive(value, "finite-difference step")
             for value in self.finite_difference_step_ladder
@@ -1057,6 +1086,9 @@ class Vituri2024FiniteDifferenceEvidenceReceipt:
                 "perturbation_inventory_sha256": self.perturbation_inventory_sha256,
                 "perturbation_normalization": self.perturbation_normalization,
                 "matrix_norm": self.matrix_norm,
+                "fock_output": self.fock_output,
+                "stored_density_pairing": self.stored_density_pairing,
+                "density_direction_convention": self.density_direction_convention,
                 "q_probe_inventory_sha256": self.q_probe_inventory_sha256,
                 "finite_difference_step_ladder": steps,
                 "comparison_identity": self.comparison_identity,
@@ -1096,6 +1128,11 @@ class Vituri2024SharedFunctionalReceipt:
     interaction_receipt_fingerprint: str
     fock_finite_difference: Vituri2024FiniteDifferenceEvidenceReceipt
     hessian_finite_difference: Vituri2024FiniteDifferenceEvidenceReceipt
+    fock_output: Literal["full_fock_h0_plus_interaction"]
+    stored_density_pairing: Literal[
+        "real_bilinear_sum_abk_no_conjugation_over_nk"
+    ]
+    density_direction_convention: Literal["fixed_density_affine_directions"]
     authority_kind: ReceiptAuthority
     provenance: str
     scientific_execution_verified: bool = field(default=False, init=False)
@@ -1113,6 +1150,13 @@ class Vituri2024SharedFunctionalReceipt:
             (self.interaction_receipt_fingerprint, "interaction receipt"),
         ):
             _sha256(value, label)
+        if (
+            self.fock_output != FOCK_OUTPUT_CONVENTION
+            or self.stored_density_pairing != STORED_DENSITY_PAIRING
+            or self.density_direction_convention
+            != FIXED_DENSITY_DIRECTION_CONVENTION
+        ):
+            raise ValueError("shared-functional density/Fock conventions changed")
         expected = (
             (self.scalar_energy, "scalar_energy"),
             (self.fock_derivative, "fock_derivative"),
@@ -1173,6 +1217,15 @@ class Vituri2024SharedFunctionalReceipt:
                 raise ValueError("finite-difference geometry/ensemble context mismatch")
             if evidence.comparison_identity != comparison:
                 raise ValueError("finite-difference comparison identity mismatch")
+            if (
+                evidence.fock_output != self.fock_output
+                or evidence.stored_density_pairing != self.stored_density_pairing
+                or evidence.density_direction_convention
+                != self.density_direction_convention
+            ):
+                raise ValueError(
+                    "finite-difference/shared-functional conventions mismatch"
+                )
             if (
                 evidence.left_implementation_fingerprint != left_implementation
                 or evidence.right_implementation_fingerprint != right_implementation
@@ -2399,6 +2452,11 @@ class Vituri2024HalfMetalHFProviderBinding:
 
 
 __all__ = [
+    "FINITE_Q_HESSIAN_NORMALIZATION",
+    "FIXED_DENSITY_DIRECTION_CONVENTION",
+    "FOCK_FIRST_DERIVATIVE_NORMALIZATION",
+    "FOCK_OUTPUT_CONVENTION",
+    "STORED_DENSITY_PAIRING",
     "VITURI2024_HALF_METAL_HF_SCOPE",
     "VITURI2024_MAIN_TEX_SHA256",
     "Vituri2024AttestedHalfMetalSourceArrays",

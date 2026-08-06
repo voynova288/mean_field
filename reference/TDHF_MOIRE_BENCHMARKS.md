@@ -193,13 +193,64 @@ not author raw numerical arrays.
     state normalization, Fock decomposition, Hermiticity/idempotency,
     `[F,P]`, diagonal occupation/energy closure, Aufbau and chemical-potential
     closure, density/spin/valley counts, and base-mesh pocket connectivity;
-  - this partial replay still leaves SCF trajectory, branch-table evidence,
-    pocket refinement and the shared `E -> F -> dF` functional chain
-    unreplayed. Scientific execution and paper reproduction therefore remain
-    false, with no positive metadata/provider/execution readiness gate exposed.
-    Reciprocal-torus/carry conventions beyond the registered finite-domain
-    choice, scalar-Hessian certification and production TDHF eigensolving
-    remain fail-closed.
+  - `vituri2024_hf_functional_replay.py` adds a detached, versioned local
+    probe gate. Before any provider call, its approval binds the exact choice
+    fingerprint (including all tolerances/conventions), a versioned verifier
+    implementation/schema fingerprint, and a separate independently generated
+    SHA256 of the canonical full-module `ast.dump(..., include_attributes=False)`.
+    The detached approval stores that current AST manifest, the contract binds
+    it, replay recomputes it immediately before its first provider call and
+    rejects stale source, and the final receipt records it. Because the full
+    `ast.Module` is hashed without an embedded self-digest, replay logic, q
+    validation, numerical bounds, the call recorder, and registered constants
+    are covered while formatting and comments may vary. The approval also
+    binds the expected source-array manifest derived from attested source
+    hashes, three affine anchors (source,
+    imaginary off-diagonal coherence, and dense complex Hermitian), five q=0
+    directions, six signed probes, and two distinct typed horizontal/vertical
+    nonzero no-wrap q charts. The later array replay must equal that
+    pre-approved manifest; no prior array-replay receipt is an input to the
+    contract;
+  - every q=0 direction must be informative at one or more registered anchors.
+    The source-anchor Fock, interaction, and energy checks separately record
+    result scale, unsuppressed termwise magnitude, operation count, roundoff
+    contribution, and registered bound; the termwise magnitudes are
+    `max(|F_eval|+|F_saved|)`,
+    `max(|F_eval|+|h0|+|interaction_saved|)`, and
+    `|E_eval|+|E_selected|`. Every `(anchor, q0 probe)` slope and every
+    `(q, signed probe, active response lane)` derivative has its own
+    informativeness, all-step stability, scale, termwise roundoff, and
+    registered bound. Pairing remains
+    `real(sum(F_abk X_abk))/Nk` with no conjugation or transpose. Reciprocity
+    bounds use termwise absolute sums and explicit operation counts rather than
+    a cancellation-suppressed final scalar or global maximum;
+  - each q chart contains a plus-only boundary probe, a minus-only boundary
+    probe, and a mixed interior probe. Replay requires every chart's
+    `mesh_shape` to equal `spec.geometry.mesh_shape`, then checks every valid
+    signed edge directly against the source mesh:
+    `mesh[target]-mesh[source]=+/-cartesian_q` within the preregistered
+    inverse-angstrom coordinate tolerance. Direct and analytic-Hessian
+    synthetic implementations separately consume each chart's q index,
+    Cartesian q, mesh displacement, target map, and reverse-edge map and route
+    the two signs independently, with invalid slots exactly zero and no
+    inferred, conjugated, copied, or averaged output lane;
+  - the direct displaced-Fock implementation and finite-q Hessian must have
+    different fingerprints. Each direct call returns a nonce-bound typed
+    response plus a source-closed dependency trace containing interaction and
+    full-Fock builder fingerprints, exact target/reverse-map hashes and read
+    counts, at least one interaction/full-Fock builder call, and exactly zero
+    Hessian calls. This is an **honest-provider trace**, useful for rejecting
+    truthful delegation and accidental dependency drift; it is not a proof
+    against hostile code that lies in its trace;
+  - successful local probes set only
+    `local_registered_functional_probes_replayed=True`, with exact counts
+    `anchors=3`, `q0_probes=5`, `signed_q_probes=6`, and `q_charts=2`.
+    `global_functional_chain_verified`, SCF trajectory, branch-table evidence,
+    pocket refinement, scientific execution, and paper reproduction remain
+    false. The synthetic tests are contract/formula validation, not a
+    real-source Vituri execution. No provider/metadata readiness label,
+    reciprocal-torus/carry authority, scalar-Hessian production certification,
+    or TDHF eigensolve is implied.
 
 ### Wang et al., *Putting a new spin on the incommensurate Kekule spiral: from spin-valley locking and collective modes to fermiology and implications for superconductivity*
 
