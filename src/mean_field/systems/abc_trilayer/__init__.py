@@ -12,7 +12,11 @@ derived vertex to paper C9.  Its separate signed-q adapter assembles four
 independent local A/B lanes into the core typed generic-q classes without
 repair, but remains diagnostic-only: diagonal-HF stationarity, real
 mesh/area/q0/UV/CDW authority, and production/executable readiness are not
-established.
+established.  The separate half-metal HF preflight validates provider-owned geometry,
+ensemble, SCF, shared-functional, and attested-source receipts.  Its only
+positive aggregate result is ``receipt_set_complete``; provider metadata is
+``provider_metadata_attested`` while scientific execution and independent
+array recomputation remain explicitly false and execution replay unresolved.
 """
 
 from .vituri2024_interaction import (
@@ -69,6 +73,29 @@ from .vituri2024_tdhf import (
     Vituri2024TDHFSignedQAssemblyReceipt,
     Vituri2024TransitionInventory,
     assemble_vituri2024_tdhf_signed_q,
+)
+from .vituri2024_hf_preflight import (
+    VITURI2024_HALF_METAL_HF_SCOPE,
+    VITURI2024_MAIN_TEX_SHA256,
+    Vituri2024AttestedHalfMetalSourceArrays,
+    Vituri2024AttestedHalfMetalSourceReceipt,
+    Vituri2024BranchEnergyReceipt,
+    Vituri2024FiniteDifferenceEvidenceReceipt,
+    Vituri2024FunctionalComponentReceipt,
+    Vituri2024HFEnsembleReceipt,
+    Vituri2024HFGeometryReceipt,
+    Vituri2024HFReceiptSetStatus,
+    Vituri2024HFSCFPolicyReceipt,
+    Vituri2024HalfMetalHFProviderBinding,
+    Vituri2024HalfMetalHFProviderProtocol,
+    Vituri2024HalfMetalHFSpec,
+    Vituri2024HalfMetalPaperTarget,
+    Vituri2024MetallicityEvidenceReceipt,
+    Vituri2024ProviderMetadataAttestedStatus,
+    Vituri2024SCFCallbackReceipt,
+    Vituri2024SCFSeedReceipt,
+    Vituri2024SharedFunctionalReceipt,
+    Vituri2024ValleyPocketEvidenceReceipt,
 )
 from .vituri2024_vertex import (
     ANTISYMMETRIZED_FULL_SUM_HAMILTONIAN_AREA_PREFACTOR,
@@ -167,6 +194,8 @@ __all__ = [
     "VTF",
     "UnresolvedAuthorityItem",
     "UnresolvedVituriAuthorityError",
+    "VITURI2024_HALF_METAL_HF_SCOPE",
+    "VITURI2024_MAIN_TEX_SHA256",
     "VITURI2024_PARAMETERS",
     "VITURI2024_SPEC",
     "VITURI2024_TDHF_ASSEMBLY_AUTHORITY",
@@ -174,26 +203,45 @@ __all__ = [
     "VITURI2024_TDHF_Q_PROVENANCE",
     "VITURI2024_TDHF_RESPONSE_SCOPE",
     "Vituri2024AntisymmetrizedVertexReceipt",
+    "Vituri2024AttestedHalfMetalSourceArrays",
+    "Vituri2024AttestedHalfMetalSourceReceipt",
+    "Vituri2024BranchEnergyReceipt",
     "Vituri2024DensityFormFactorReceipt",
     "Vituri2024DiagonalHFTransitionReceipt",
+    "Vituri2024FiniteDifferenceEvidenceReceipt",
     "Vituri2024FiniteAreaReceipt",
     "Vituri2024Flavor",
     "Vituri2024FourPointKinematicsReceipt",
+    "Vituri2024FunctionalComponentReceipt",
+    "Vituri2024HFEnsembleReceipt",
+    "Vituri2024HFGeometryReceipt",
+    "Vituri2024HFReceiptSetStatus",
+    "Vituri2024HFSCFPolicyReceipt",
+    "Vituri2024HalfMetalHFProviderBinding",
+    "Vituri2024HalfMetalHFProviderProtocol",
+    "Vituri2024HalfMetalHFSpec",
+    "Vituri2024HalfMetalPaperTarget",
     "Vituri2024InteractionBinding",
     "Vituri2024InteractionChoiceReceipt",
     "Vituri2024LocalBandGapInfo",
+    "Vituri2024MetallicityEvidenceReceipt",
     "Vituri2024Orbital",
     "Vituri2024OrderedCoefficientReceipt",
     "Vituri2024Parameters",
+    "Vituri2024ProviderMetadataAttestedStatus",
     "Vituri2024RPAElementReceipt",
     "Vituri2024PauliShortCircuitRecord",
+    "Vituri2024SCFCallbackReceipt",
+    "Vituri2024SCFSeedReceipt",
     "Vituri2024SignedQPair",
     "Vituri2024SignedQTransitionInventoryPair",
     "Vituri2024Spec",
+    "Vituri2024SharedFunctionalReceipt",
     "Vituri2024StateOverlapInvariant",
     "Vituri2024TDHFAssemblyContext",
     "Vituri2024TDHFSignedQAssemblyReceipt",
     "Vituri2024TransitionInventory",
+    "Vituri2024ValleyPocketEvidenceReceipt",
     "assemble_vituri2024_tdhf_signed_q",
     "bind_vituri2024_interaction",
     "c3_basis_operator",

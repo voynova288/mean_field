@@ -181,10 +181,19 @@ not author raw numerical arrays.
     and `B-+` without copying, averaging or Hermitization. It maps the ordered
     inventories to the common typed signed-q core with authority
     `projected_signed_ab`, so static status remains `not_established`;
-  - the diagonal-HF transitions and finite area are still caller-attested,
-    while reciprocal-torus/carry conventions, interaction meshes/quadrature,
-    source stationarity, q=0 background, scalar-Hessian certification and
-    production TDHF eigensolving remain fail-closed.
+  - `vituri2024_hf_preflight.py` now defines a receipt-only source contract
+    for the spin-polarized half metal. It binds a uniform finite-volume k
+    state sum compatible with the generic core ODA, fixed-density canonical
+    reference and q=0 background, exact SCF seeds/exit semantics, the shared
+    `E -> F -> dF` functional chain, equal two-valley hole counts, metallicity,
+    one connected hole pocket per valley, and branch-energy provenance;
+  - even a complete receipt set remains explicitly unresolved at
+    `execution_replay`: provider methods are not called, arrays and residuals
+    are not recomputed, and no positive metadata/provider/execution readiness
+    gate is exposed. Therefore reciprocal-torus/carry
+    conventions beyond the registered finite-domain choice, scientific
+    source stationarity, scalar-Hessian certification and production TDHF
+    eigensolving remain fail-closed.
 
 ### Wang et al., *Putting a new spin on the incommensurate Kekule spiral: from spin-valley locking and collective modes to fermiology and implications for superconductivity*
 
