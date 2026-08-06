@@ -161,8 +161,17 @@ not author raw numerical arrays.
     scalar `V0/VTF` formulas and same-valley third-band density form factor.
     Gate distance and the numerical `e^2` realization require explicit
     non-paper receipts; q=0 can only be rejected or evaluated as the analytic
-    kernel limit, which does not establish a neutralizing/HF background.
-    Interaction meshes, HF and TDHF remain fail-closed.
+    kernel limit, which does not establish a neutralizing/HF background;
+  - arXiv-v1 and published Eq. C3 repeat the direct form-factor product in
+    the exchange term, contradicting the antisymmetry stated immediately
+    afterward. `vituri2024_vertex.py` therefore derives the ordered coefficient
+    from the earlier projected Hamiltonian and constructs `vbar=U-U_swap`,
+    rather than treating literal C3 as executable authority. It requires exact
+    local momentum conservation and records distinct omitted reconstruction
+    prefactors: `1/(2A)` for the full ordered sum and `1/(4A)` for the full
+    antisymmetrized sum;
+  - reciprocal-torus/carry conventions, interaction meshes, occupations,
+    area assembly, HF and TDHF remain fail-closed.
 
 ### Wang et al., *Putting a new spin on the incommensurate Kekule spiral: from spin-valley locking and collective modes to fermiology and implications for superconductivity*
 

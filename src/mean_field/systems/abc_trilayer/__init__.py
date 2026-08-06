@@ -1,4 +1,14 @@
-"""ABC-trilayer system adapters."""
+"""ABC-trilayer system adapters.
+
+The Vituri projected vertex is authority-limited: it is derived from the
+projected Hamiltonian rather than copied from literal Eq. C3, which is
+internally inconsistent with its stated antisymmetry.  The fixed derivation
+source is the pinned arXiv-v1 ``SM.tex``; the separate published-PRB evidence
+is pinned to PDF SHA256
+``2226e17ed95bd867607787b47343fe5fc77f2c30557023e349d86e55159c0765``.
+The package does not claim a paper phase gauge or production/paper numerical
+parity for that layer.
+"""
 
 from .vituri2024_interaction import (
     FORM_FACTOR_GAUGE_LABEL,
@@ -23,6 +33,28 @@ from .vituri2024_interaction import (
     vituri2024_v0,
     vituri2024_vtf,
     vtf,
+)
+from .vituri2024_vertex import (
+    ANTISYMMETRIZED_FULL_SUM_HAMILTONIAN_AREA_PREFACTOR,
+    ANTISYMMETRIZED_VERTEX_EXCLUSIONS,
+    KINEMATICS_AUTHORITY_SCOPE,
+    KINEMATICS_PROVIDER_METADATA_STATUS,
+    ORDERED_COEFFICIENT_EXCLUSIONS,
+    ORDERED_FULL_SUM_HAMILTONIAN_AREA_PREFACTOR,
+    PUBLISHED_PRB_PDF_SHA256,
+    PauliShortCircuitReason,
+    SelectionRule,
+    VERTEX_AUTHORITY,
+    VERTEX_GAUGE_BEHAVIOR,
+    VERTEX_NORMALIZATION_IDENTITY,
+    Vituri2024AntisymmetrizedVertexReceipt,
+    Vituri2024Flavor,
+    Vituri2024FourPointKinematicsReceipt,
+    Vituri2024Orbital,
+    Vituri2024OrderedCoefficientReceipt,
+    Vituri2024PauliShortCircuitRecord,
+    vituri2024_antisymmetrized_projected_vertex,
+    vituri2024_ordered_projected_coefficient,
 )
 from .vituri2024 import (
     ACTIVE_BAND_INDEX_ZERO_BASED,
@@ -53,9 +85,21 @@ from .vituri2024 import (
 
 __all__ = [
     "ACTIVE_BAND_INDEX_ZERO_BASED",
+    "ANTISYMMETRIZED_FULL_SUM_HAMILTONIAN_AREA_PREFACTOR",
+    "ANTISYMMETRIZED_VERTEX_EXCLUSIONS",
     "FORM_FACTOR_GAUGE_LABEL",
     "F_tau",
     "InteractionAuthorityKind",
+    "KINEMATICS_AUTHORITY_SCOPE",
+    "KINEMATICS_PROVIDER_METADATA_STATUS",
+    "ORDERED_COEFFICIENT_EXCLUSIONS",
+    "ORDERED_FULL_SUM_HAMILTONIAN_AREA_PREFACTOR",
+    "PUBLISHED_PRB_PDF_SHA256",
+    "PauliShortCircuitReason",
+    "SelectionRule",
+    "VERTEX_AUTHORITY",
+    "VERTEX_GAUGE_BEHAVIOR",
+    "VERTEX_NORMALIZATION_IDENTITY",
     "ARXIV_IDENTIFIER",
     "ARXIV_PDF_SHA256",
     "ARXIV_SOURCE_SHA256",
@@ -77,11 +121,17 @@ __all__ = [
     "UnresolvedVituriAuthorityError",
     "VITURI2024_PARAMETERS",
     "VITURI2024_SPEC",
+    "Vituri2024AntisymmetrizedVertexReceipt",
     "Vituri2024DensityFormFactorReceipt",
+    "Vituri2024Flavor",
+    "Vituri2024FourPointKinematicsReceipt",
     "Vituri2024InteractionBinding",
     "Vituri2024InteractionChoiceReceipt",
     "Vituri2024LocalBandGapInfo",
+    "Vituri2024Orbital",
+    "Vituri2024OrderedCoefficientReceipt",
     "Vituri2024Parameters",
+    "Vituri2024PauliShortCircuitRecord",
     "Vituri2024Spec",
     "Vituri2024StateOverlapInvariant",
     "bind_vituri2024_interaction",
@@ -95,6 +145,8 @@ __all__ = [
     "third_lowest_active_projector",
     "v0",
     "v_tf",
+    "vituri2024_antisymmetrized_projected_vertex",
+    "vituri2024_ordered_projected_coefficient",
     "vituri2024_v0",
     "vituri2024_vtf",
     "vtf",
