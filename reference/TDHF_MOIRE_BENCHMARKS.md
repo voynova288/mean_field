@@ -176,10 +176,15 @@ not author raw numerical arrays.
     `B=-vbar_(ab;AB)/Area`. The mapping is independently checked against a
     normalized-Slater-chart energy expansion and applies the area division
     exactly once, without post-Hermitization;
+  - `vituri2024_tdhf.py` accepts explicit, source-bound nonzero `+q/-q`
+    transition inventories and independently assembles `A+`, `B+-`, `A-`,
+    and `B-+` without copying, averaging or Hermitization. It maps the ordered
+    inventories to the common typed signed-q core with authority
+    `projected_signed_ab`, so static status remains `not_established`;
   - the diagonal-HF transitions and finite area are still caller-attested,
     while reciprocal-torus/carry conventions, interaction meshes/quadrature,
-    source stationarity, q=0 background, dense signed-q assembly and TDHF
-    eigensolving remain fail-closed.
+    source stationarity, q=0 background, scalar-Hessian certification and
+    production TDHF eigensolving remain fail-closed.
 
 ### Wang et al., *Putting a new spin on the incommensurate Kekule spiral: from spin-valley locking and collective modes to fermiology and implications for superconductivity*
 

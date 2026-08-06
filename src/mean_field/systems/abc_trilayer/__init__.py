@@ -8,8 +8,11 @@ is pinned to PDF SHA256
 ``2226e17ed95bd867607787b47343fe5fc77f2c30557023e349d86e55159c0765``.
 The package does not claim a paper phase gauge or production/paper numerical
 parity for that layer.  The local Vituri scalar-Hessian adapter maps the
-derived vertex to paper C9 without dense RPA assembly; its diagonal-HF and
-finite-area inputs remain caller-attested and non-production.
+derived vertex to paper C9.  Its separate signed-q adapter assembles four
+independent local A/B lanes into the core typed generic-q classes without
+repair, but remains diagnostic-only: diagonal-HF stationarity, real
+mesh/area/q0/UV/CDW authority, and production/executable readiness are not
+established.
 """
 
 from .vituri2024_interaction import (
@@ -53,6 +56,19 @@ from .vituri2024_rpa import (
     Vituri2024RPAElementReceipt,
     vituri2024_rpa_a_element,
     vituri2024_rpa_b_element,
+)
+from .vituri2024_tdhf import (
+    VITURI2024_TDHF_ASSEMBLY_AUTHORITY,
+    VITURI2024_TDHF_NO_GO_LIMITS,
+    VITURI2024_TDHF_Q_PROVENANCE,
+    VITURI2024_TDHF_RESPONSE_SCOPE,
+    SignedLane,
+    Vituri2024SignedQPair,
+    Vituri2024SignedQTransitionInventoryPair,
+    Vituri2024TDHFAssemblyContext,
+    Vituri2024TDHFSignedQAssemblyReceipt,
+    Vituri2024TransitionInventory,
+    assemble_vituri2024_tdhf_signed_q,
 )
 from .vituri2024_vertex import (
     ANTISYMMETRIZED_FULL_SUM_HAMILTONIAN_AREA_PREFACTOR,
@@ -143,6 +159,7 @@ __all__ = [
     "RPAElementKind",
     "SCALAR_HESSIAN_EQUATION",
     "SM_TEX_AUTHORITY_PATH",
+    "SignedLane",
     "SM_TEX_SHA256",
     "SPIN_STIFFNESS_CHECKPOINTS",
     "UNRESOLVED_AUTHORITY",
@@ -152,6 +169,10 @@ __all__ = [
     "UnresolvedVituriAuthorityError",
     "VITURI2024_PARAMETERS",
     "VITURI2024_SPEC",
+    "VITURI2024_TDHF_ASSEMBLY_AUTHORITY",
+    "VITURI2024_TDHF_NO_GO_LIMITS",
+    "VITURI2024_TDHF_Q_PROVENANCE",
+    "VITURI2024_TDHF_RESPONSE_SCOPE",
     "Vituri2024AntisymmetrizedVertexReceipt",
     "Vituri2024DensityFormFactorReceipt",
     "Vituri2024DiagonalHFTransitionReceipt",
@@ -166,8 +187,14 @@ __all__ = [
     "Vituri2024Parameters",
     "Vituri2024RPAElementReceipt",
     "Vituri2024PauliShortCircuitRecord",
+    "Vituri2024SignedQPair",
+    "Vituri2024SignedQTransitionInventoryPair",
     "Vituri2024Spec",
     "Vituri2024StateOverlapInvariant",
+    "Vituri2024TDHFAssemblyContext",
+    "Vituri2024TDHFSignedQAssemblyReceipt",
+    "Vituri2024TransitionInventory",
+    "assemble_vituri2024_tdhf_signed_q",
     "bind_vituri2024_interaction",
     "c3_basis_operator",
     "hamiltonian",
