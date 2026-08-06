@@ -4,24 +4,98 @@ import hashlib
 import inspect
 import json
 from pathlib import Path
+import struct
 
 import numpy as np
 import pytest
 
 import mean_field.systems.abc_trilayer as abc
 import mean_field.systems.abc_trilayer.vituri2024_hf_preflight as preflight
+import mean_field.systems.abc_trilayer.vituri2024_hf_replay as replay
 
 _SHA = {str(index): str(index) * 64 for index in range(10)}
 _COMMIT = "a" * 40
 _SOURCE_ARTIFACT = "b" * 64
 _PROVIDER_FINGERPRINT = _SHA["8"]
-_ARRAY_HASHES = {
-    "orbitals": _SHA["1"],
-    "energies": _SHA["2"],
-    "occupations": _SHA["3"],
-    "projector": _SHA["4"],
-    "fock": _SHA["5"],
-}
+_REPLAY_LOADER_IMPLEMENTATION_FINGERPRINT = _SHA["5"]
+
+def _canonical_replay_arrays() -> dict[str, np.ndarray]:
+    mesh = np.asarray(
+        [(0.01 * row, 0.01 * column) for row in range(4) for column in range(5)],
+        dtype=np.float64,
+    )
+    energies = np.empty((4, 20), dtype=np.float64)
+    for flavor in range(4):
+        energies[flavor] = -0.05 + 0.001 * np.arange(20) + 0.001 * flavor
+    occupations = np.ones((4, 20), dtype=np.int64)
+    for flavor, k_index in ((1, 0), (3, 19)):
+        occupations[flavor, k_index] = 0
+        energies[flavor, k_index] = 0.01
+    fock = np.zeros((4, 4, 20), dtype=np.complex128)
+    projector = np.zeros_like(fock)
+    diagonal = np.arange(4)
+    fock[diagonal, diagonal, :] = energies
+    projector[diagonal, diagonal, :] = occupations
+    interaction_h = np.zeros_like(fock)
+    for flavor in range(4):
+        interaction_h[flavor, flavor, :] = (flavor + 1) / 256.0
+    h0 = fock - interaction_h
+    active_band_states = np.zeros((2, 6, 20), dtype=np.complex128)
+    for valley_index in range(2):
+        for k_index in range(20):
+            first = (k_index + valley_index) % 6
+            second = (first + 1) % 6
+            active_band_states[valley_index, first, k_index] = 0.5 + 0.5j
+            active_band_states[valley_index, second, k_index] = 0.5 - 0.5j
+    return {
+        "mesh": mesh,
+        "active_band_states": active_band_states,
+        "h0": h0,
+        "interaction_h": interaction_h,
+        "fock": fock,
+        "projector": projector,
+        "energies": energies,
+        "occupations": occupations,
+    }
+
+
+def _canonical_hashes(arrays: dict[str, np.ndarray]) -> dict[str, str]:
+    return {
+        "orbitals": abc.canonical_orbital_order_sha256(arrays["mesh"]),
+        "active_band_states": abc.canonical_array_sha256(
+            arrays["active_band_states"]
+        ),
+        "h0": abc.canonical_array_sha256(arrays["h0"]),
+        "interaction_h": abc.canonical_array_sha256(arrays["interaction_h"]),
+        "energies": abc.canonical_array_sha256(arrays["energies"]),
+        "occupations": abc.canonical_array_sha256(arrays["occupations"]),
+        "projector": abc.canonical_array_sha256(arrays["projector"]),
+        "fock": abc.canonical_array_sha256(arrays["fock"]),
+    }
+
+_REPLAY_ARRAYS = _canonical_replay_arrays()
+_ARRAY_HASHES = _canonical_hashes(_REPLAY_ARRAYS)
+_ORDERED_MESH_HASH = abc.canonical_array_sha256(_REPLAY_ARRAYS["mesh"])
+_BASE_FOCK_DECOMPOSITION_RESIDUAL = float(
+    np.max(
+        np.abs(
+            _REPLAY_ARRAYS["fock"]
+            - (_REPLAY_ARRAYS["h0"] + _REPLAY_ARRAYS["interaction_h"])
+        )
+    )
+)
+_BASE_ACTIVE_BAND_STATE_NORM_RESIDUAL = float(
+    np.max(
+        np.abs(
+            np.sum(np.abs(_REPLAY_ARRAYS["active_band_states"]) ** 2, axis=1)
+            - 1.0
+        )
+    )
+)
+_BASE_AUFBAU_GAP = float(
+    np.min(_REPLAY_ARRAYS["energies"][_REPLAY_ARRAYS["occupations"] == 0])
+    - np.max(_REPLAY_ARRAYS["energies"][_REPLAY_ARRAYS["occupations"] == 1])
+)
 
 
 def _fp(payload: object) -> str:
@@ -32,9 +106,11 @@ def _fp(payload: object) -> str:
     ).hexdigest()
 
 
-def _area() -> abc.Vituri2024FiniteAreaReceipt:
+def _area(
+    area_angstrom_squared: float = 20_000.0,
+) -> abc.Vituri2024FiniteAreaReceipt:
     return abc.Vituri2024FiniteAreaReceipt(
-        area_angstrom_squared=20_000.0,
+        area_angstrom_squared=area_angstrom_squared,
         provider_sha256=_SHA["1"],
         source_text="Synthetic finite area; no paper or production authority.",
     )
@@ -64,8 +140,10 @@ def _geometry(**overrides: object) -> abc.Vituri2024HFGeometryReceipt:
         "spin_count": 2,
         "total_active_state_count": 80,
         "selected_spin_state_count": 40,
-        "array_layout": "core_state_k_then_internal_valley_then_spin",
-        "ordered_momentum_mesh_sha256": _SHA["3"],
+        "internal_flavor_order": abc.INTERNAL_FLAVOR_ORDER,
+        "array_layout": abc.REPLAY_ARRAY_LAYOUT,
+        "array_conversion": abc.REPLAY_ARRAY_CONVERSION,
+        "ordered_momentum_mesh_sha256": _ORDERED_MESH_HASH,
         "mesh_order": "row_major_cartesian_k",
         "momentum_units": "inverse_angstrom",
         "quadrature_rule": "uniform_finite_volume_state_sum",
@@ -105,7 +183,9 @@ def _geometry(**overrides: object) -> abc.Vituri2024HFGeometryReceipt:
                 "core_state_nk": values["core_state_nk"],
                 "per_valley_k_count": values["per_valley_k_count"],
                 "valley_representation": values["valley_representation"],
+                "internal_flavor_order": values["internal_flavor_order"],
                 "array_layout": values["array_layout"],
+                "array_conversion": values["array_conversion"],
                 "delta1_mev": values["delta1_mev"],
                 "active_band_index": values["active_band_index"],
                 "valleys": values["valleys"],
@@ -273,17 +353,72 @@ def _component(role: str, symbol: str, digest: str) -> abc.Vituri2024FunctionalC
     )
 
 
-def _source_state_hash(
+def _ordered_orbitals_descriptor_fingerprint(
     geometry: abc.Vituri2024HFGeometryReceipt,
-    ensemble: abc.Vituri2024HFEnsembleReceipt,
+    hashes: dict[str, str],
 ) -> str:
     return _fp(
         {
-            "ordered_orbitals_sha256": _ARRAY_HASHES["orbitals"],
-            "ordered_energies_sha256": _ARRAY_HASHES["energies"],
-            "ordered_occupations_sha256": _ARRAY_HASHES["occupations"],
-            "ordered_projector_sha256": _ARRAY_HASHES["projector"],
-            "ordered_fock_sha256": _ARRAY_HASHES["fock"],
+            "descriptor_label": abc.ORBITAL_INDEX_DESCRIPTOR_LABEL,
+            "schema_label": abc.ORBITAL_INDEX_DESCRIPTOR_SCHEMA_LABEL,
+            "schema_fingerprint": (
+                abc.ORBITAL_INDEX_DESCRIPTOR_SCHEMA_FINGERPRINT
+            ),
+            "ordered_orbitals_sha256": hashes["orbitals"],
+            "ordered_momentum_mesh_sha256": (
+                geometry.ordered_momentum_mesh_sha256
+            ),
+            "internal_flavor_order": abc.INTERNAL_FLAVOR_ORDER,
+            "orbital_order": abc.REPLAY_ORBITAL_ORDER,
+        }
+    )
+
+def _source_state_hash(
+    geometry: abc.Vituri2024HFGeometryReceipt,
+    ensemble: abc.Vituri2024HFEnsembleReceipt,
+    array_hashes: dict[str, str] | None = None,
+) -> str:
+    hashes = _ARRAY_HASHES if array_hashes is None else array_hashes
+    return _fp(
+        {
+            "ordered_orbitals_sha256": hashes["orbitals"],
+            "ordered_orbitals_descriptor_label": (
+                abc.ORBITAL_INDEX_DESCRIPTOR_LABEL
+            ),
+            "ordered_orbitals_schema_label": (
+                abc.ORBITAL_INDEX_DESCRIPTOR_SCHEMA_LABEL
+            ),
+            "ordered_orbitals_schema_fingerprint": (
+                abc.ORBITAL_INDEX_DESCRIPTOR_SCHEMA_FINGERPRINT
+            ),
+            "ordered_orbitals_descriptor_fingerprint": (
+                _ordered_orbitals_descriptor_fingerprint(geometry, hashes)
+            ),
+            "ordered_energies_sha256": hashes["energies"],
+            "ordered_occupations_sha256": hashes["occupations"],
+            "ordered_projector_sha256": hashes["projector"],
+            "ordered_fock_sha256": hashes["fock"],
+            "h0_sha256": hashes["h0"],
+            "interaction_h_sha256": hashes["interaction_h"],
+            "active_band_states_sha256": hashes["active_band_states"],
+            "active_band_states_layout": abc.ACTIVE_BAND_STATES_LAYOUT,
+            "active_band_states_valley_order": (
+                abc.ACTIVE_BAND_STATES_VALLEY_ORDER
+            ),
+            "active_band_states_gauge_scope": (
+                abc.ACTIVE_BAND_STATES_GAUGE_SCOPE
+            ),
+            "replay_loader_implementation_fingerprint": (
+                _REPLAY_LOADER_IMPLEMENTATION_FINGERPRINT
+            ),
+            "replay_payload_schema_fingerprint": (
+                abc.REPLAY_PAYLOAD_SCHEMA_FINGERPRINT
+            ),
+            "canonical_basis_kind": abc.CANONICAL_BASIS_KIND,
+            "residual_norm": abc.REPLAY_RESIDUAL_NORM,
+            "fock_decomposition_convention": (
+                abc.FOCK_DECOMPOSITION_CONVENTION
+            ),
             "geometry_receipt_fingerprint": geometry.fingerprint,
             "ensemble_receipt_fingerprint": ensemble.fingerprint,
             "source_commit": _COMMIT,
@@ -298,6 +433,8 @@ def _fd(
     right_implementation: str,
     geometry: abc.Vituri2024HFGeometryReceipt,
     ensemble: abc.Vituri2024HFEnsembleReceipt,
+    *,
+    array_hashes: dict[str, str] | None = None,
     **overrides: object,
 ) -> abc.Vituri2024FiniteDifferenceEvidenceReceipt:
     comparison_identity = (
@@ -309,7 +446,9 @@ def _fd(
         "validation_kind": kind,
         "residual": 1.0e-10,
         "tolerance": 1.0e-8,
-        "source_state_sha256": _source_state_hash(geometry, ensemble),
+        "source_state_sha256": _source_state_hash(
+            geometry, ensemble, array_hashes
+        ),
         "geometry_receipt_fingerprint": geometry.fingerprint,
         "ensemble_receipt_fingerprint": ensemble.fingerprint,
         "perturbation_inventory_sha256": _SHA["7"],
@@ -370,6 +509,8 @@ def _fd(
 def _shared(
     geometry: abc.Vituri2024HFGeometryReceipt,
     ensemble: abc.Vituri2024HFEnsembleReceipt,
+    *,
+    array_hashes: dict[str, str] | None = None,
     **overrides: object,
 ) -> abc.Vituri2024SharedFunctionalReceipt:
     scalar = _component("scalar_energy", "canonical_energy", _SHA["1"])
@@ -397,6 +538,7 @@ def _shared(
             fock.implementation_fingerprint,
             geometry,
             ensemble,
+            array_hashes=array_hashes,
         ),
         "hessian_finite_difference": _fd(
             "finite_q_hessian",
@@ -404,6 +546,7 @@ def _shared(
             hessian.implementation_fingerprint,
             geometry,
             ensemble,
+            array_hashes=array_hashes,
         ),
         "authority_kind": "independent_provider_explicit",
         "provenance": "Synthetic one-source functional receipt.",
@@ -415,18 +558,25 @@ def _shared(
 def _metallicity(
     geometry: abc.Vituri2024HFGeometryReceipt,
     ensemble: abc.Vituri2024HFEnsembleReceipt,
+    *,
+    array_hashes: dict[str, str] | None = None,
     **overrides: object,
 ) -> abc.Vituri2024MetallicityEvidenceReceipt:
+    hashes = _ARRAY_HASHES if array_hashes is None else array_hashes
     values: dict[str, object] = {
-        "source_state_sha256": _source_state_hash(geometry, ensemble),
+        "source_state_sha256": _source_state_hash(geometry, ensemble, hashes),
         "geometry_receipt_fingerprint": geometry.fingerprint,
         "ordered_momentum_mesh_sha256": geometry.ordered_momentum_mesh_sha256,
-        "ordered_energies_sha256": _ARRAY_HASHES["energies"],
-        "ordered_occupations_sha256": _ARRAY_HASHES["occupations"],
+        "ordered_energies_sha256": hashes["energies"],
+        "ordered_occupations_sha256": hashes["occupations"],
         "selected_spin": 1,
         "chemical_potential_ev": -0.02,
-        "selected_spin_band_min_ev": -0.05,
-        "selected_spin_band_max_ev": 0.01,
+        "selected_spin_band_min_ev": float(
+            np.min(_REPLAY_ARRAYS["energies"][[1, 3], :])
+        ),
+        "selected_spin_band_max_ev": float(
+            np.max(_REPLAY_ARRAYS["energies"][[1, 3], :])
+        ),
         "selected_spin_occupied_state_count": 38,
         "selected_spin_unoccupied_state_count": 2,
         "metallicity_tolerance_ev": 1.0e-4,
@@ -474,14 +624,17 @@ def _pocket(
     valley: int,
     geometry: abc.Vituri2024HFGeometryReceipt,
     ensemble: abc.Vituri2024HFEnsembleReceipt,
+    *,
+    array_hashes: dict[str, str] | None = None,
     **overrides: object,
 ) -> abc.Vituri2024ValleyPocketEvidenceReceipt:
+    hashes = _ARRAY_HASHES if array_hashes is None else array_hashes
     values: dict[str, object] = {
         "valley": valley,
-        "source_state_sha256": _source_state_hash(geometry, ensemble),
+        "source_state_sha256": _source_state_hash(geometry, ensemble, hashes),
         "geometry_receipt_fingerprint": geometry.fingerprint,
         "ordered_momentum_mesh_sha256": geometry.ordered_momentum_mesh_sha256,
-        "ordered_occupations_sha256": _ARRAY_HASHES["occupations"],
+        "ordered_occupations_sha256": hashes["occupations"],
         "selected_spin": 1,
         "hole_component_count": 1,
         "hole_state_count": 1,
@@ -574,19 +727,50 @@ def _source(
     ensemble: abc.Vituri2024HFEnsembleReceipt,
     scf: abc.Vituri2024HFSCFPolicyReceipt,
     shared: abc.Vituri2024SharedFunctionalReceipt,
+    *,
+    array_hashes: dict[str, str] | None = None,
     **overrides: object,
 ) -> abc.Vituri2024AttestedHalfMetalSourceReceipt:
+    hashes = _ARRAY_HASHES if array_hashes is None else array_hashes
     records = _branches(scf.convergence_rule)
     values: dict[str, object] = {
         "source_commit": _COMMIT,
         "source_artifact_sha256": _SOURCE_ARTIFACT,
         "provider_fingerprint": _PROVIDER_FINGERPRINT,
-        "source_state_sha256": _source_state_hash(geometry, ensemble),
-        "ordered_orbitals_sha256": _ARRAY_HASHES["orbitals"],
-        "ordered_energies_sha256": _ARRAY_HASHES["energies"],
-        "ordered_occupations_sha256": _ARRAY_HASHES["occupations"],
-        "ordered_projector_sha256": _ARRAY_HASHES["projector"],
-        "ordered_fock_sha256": _ARRAY_HASHES["fock"],
+        "source_state_sha256": _source_state_hash(geometry, ensemble, hashes),
+        "ordered_orbitals_sha256": hashes["orbitals"],
+        "ordered_orbitals_descriptor_label": (
+            abc.ORBITAL_INDEX_DESCRIPTOR_LABEL
+        ),
+        "ordered_orbitals_schema_label": (
+            abc.ORBITAL_INDEX_DESCRIPTOR_SCHEMA_LABEL
+        ),
+        "ordered_orbitals_schema_fingerprint": (
+            abc.ORBITAL_INDEX_DESCRIPTOR_SCHEMA_FINGERPRINT
+        ),
+        "ordered_orbitals_descriptor_fingerprint": (
+            _ordered_orbitals_descriptor_fingerprint(geometry, hashes)
+        ),
+        "ordered_energies_sha256": hashes["energies"],
+        "ordered_occupations_sha256": hashes["occupations"],
+        "ordered_projector_sha256": hashes["projector"],
+        "ordered_fock_sha256": hashes["fock"],
+        "h0_sha256": hashes["h0"],
+        "interaction_h_sha256": hashes["interaction_h"],
+        "active_band_states_sha256": hashes["active_band_states"],
+        "active_band_states_layout": abc.ACTIVE_BAND_STATES_LAYOUT,
+        "active_band_states_valley_order": (
+            abc.ACTIVE_BAND_STATES_VALLEY_ORDER
+        ),
+        "active_band_states_gauge_scope": (
+            abc.ACTIVE_BAND_STATES_GAUGE_SCOPE
+        ),
+        "replay_loader_implementation_fingerprint": (
+            _REPLAY_LOADER_IMPLEMENTATION_FINGERPRINT
+        ),
+        "replay_payload_schema_fingerprint": (
+            abc.REPLAY_PAYLOAD_SCHEMA_FINGERPRINT
+        ),
         "geometry_receipt_fingerprint": geometry.fingerprint,
         "ensemble_receipt_fingerprint": ensemble.fingerprint,
         "scf_policy_receipt_fingerprint": scf.fingerprint,
@@ -602,26 +786,51 @@ def _source(
         "attested_exit_reason": "converged",
         "final_replay_raw_metric": 1.0e-11,
         "final_replay_raw_precision": 1.0e-9,
-        "fock_projector_commutator_residual_ev": 1.0e-10,
+        "canonical_basis_kind": abc.CANONICAL_BASIS_KIND,
+        "residual_norm": abc.REPLAY_RESIDUAL_NORM,
+        "fock_decomposition_convention": (
+            abc.FOCK_DECOMPOSITION_CONVENTION
+        ),
+        "fock_decomposition_residual_ev": (
+            _BASE_FOCK_DECOMPOSITION_RESIDUAL
+        ),
+        "fock_decomposition_tolerance_ev": 1.0e-12,
+        "h0_hermiticity_residual_ev": 0.0,
+        "h0_hermiticity_tolerance_ev": 1.0e-12,
+        "interaction_h_hermiticity_residual_ev": 0.0,
+        "interaction_h_hermiticity_tolerance_ev": 1.0e-12,
+        "active_band_state_norm_residual": (
+            _BASE_ACTIVE_BAND_STATE_NORM_RESIDUAL
+        ),
+        "active_band_state_norm_tolerance": 1.0e-12,
+        "fock_projector_commutator_residual_ev": 0.0,
         "stationarity_tolerance_ev": 1.0e-8,
-        "projector_idempotency_residual": 1.0e-11,
+        "projector_idempotency_residual": 0.0,
         "projector_idempotency_tolerance": 1.0e-8,
-        "projector_hermiticity_residual": 1.0e-12,
+        "projector_hermiticity_residual": 0.0,
         "projector_hermiticity_tolerance": 1.0e-9,
-        "fock_hermiticity_residual_ev": 1.0e-12,
+        "fock_hermiticity_residual_ev": 0.0,
         "fock_hermiticity_tolerance_ev": 1.0e-9,
-        "aufbau_min_unoccupied_minus_max_occupied_ev": 1.0e-4,
+        "projector_vs_occupation_residual": 0.0,
+        "projector_vs_occupation_tolerance": 1.0e-12,
+        "fock_vs_diagonal_energy_residual_ev": 0.0,
+        "fock_vs_diagonal_energy_tolerance_ev": 1.0e-12,
+        "aufbau_min_unoccupied_minus_max_occupied_ev": _BASE_AUFBAU_GAP,
         "aufbau_occupation_violation_ev": 0.0,
         "aufbau_tolerance_ev": 1.0e-9,
+        "chemical_mu_occupation_residual_ev": 0.0,
+        "chemical_mu_occupation_tolerance_ev": 1.0e-9,
         "selected_spin": 1,
         "valley_plus_hole_count": 1,
         "valley_minus_hole_count": 1,
         "selected_spin_hole_count": 2,
         "opposite_spin_hole_count": 0,
-        "metallicity_evidence": _metallicity(geometry, ensemble),
+        "metallicity_evidence": _metallicity(
+            geometry, ensemble, array_hashes=hashes
+        ),
         "pocket_evidence": (
-            _pocket(-1, geometry, ensemble),
-            _pocket(1, geometry, ensemble),
+            _pocket(-1, geometry, ensemble, array_hashes=hashes),
+            _pocket(1, geometry, ensemble, array_hashes=hashes),
         ),
         "branch_comparison_evidence_sha256": _SHA["6"],
         "branch_energy_table_sha256": _SHA["7"],
@@ -669,8 +878,75 @@ def _complete() -> abc.Vituri2024HalfMetalHFSpec:
     )
 
 
+def _array_copy(**updates: np.ndarray) -> dict[str, np.ndarray]:
+    arrays = {name: value.copy() for name, value in _REPLAY_ARRAYS.items()}
+    arrays.update(updates)
+    return arrays
+
+
+def _spec_for_arrays(
+    arrays: dict[str, np.ndarray],
+    *,
+    geometry_overrides: dict[str, object] | None = None,
+    source_overrides: dict[str, object] | None = None,
+) -> abc.Vituri2024HalfMetalHFSpec:
+    hashes = _canonical_hashes(arrays)
+    geometry_values: dict[str, object] = {
+        "ordered_momentum_mesh_sha256": abc.canonical_array_sha256(arrays["mesh"])
+    }
+    if geometry_overrides:
+        geometry_values.update(geometry_overrides)
+    geometry = _geometry(**geometry_values)
+    ensemble, scf = _ensemble(), _scf()
+    shared = _shared(geometry, ensemble, array_hashes=hashes)
+    source = _source(
+        geometry,
+        ensemble,
+        scf,
+        shared,
+        array_hashes=hashes,
+        **({} if source_overrides is None else source_overrides),
+    )
+    return abc.Vituri2024HalfMetalHFSpec(
+        geometry=geometry,
+        ensemble=ensemble,
+        scf_policy=scf,
+        shared_functional=shared,
+        attested_source=source,
+    )
+
+
+def _payload(
+    spec: abc.Vituri2024HalfMetalHFSpec,
+    arrays: dict[str, np.ndarray] | None = None,
+    **identity_overrides: object,
+) -> abc.Vituri2024HalfMetalHFReplayPayload:
+    assert spec.attested_source
+    source = spec.attested_source
+    values: dict[str, object] = {
+        "provider_fingerprint": source.provider_fingerprint,
+        "source_commit": source.source_commit,
+        "source_artifact_sha256": source.source_artifact_sha256,
+        "spec_fingerprint": spec.fingerprint,
+        "source_state_sha256": source.source_state_sha256,
+        "replay_loader_implementation_fingerprint": (
+            source.replay_loader_implementation_fingerprint
+        ),
+        "replay_payload_schema_fingerprint": (
+            source.replay_payload_schema_fingerprint
+        ),
+        **(_REPLAY_ARRAYS if arrays is None else arrays),
+    }
+    values.update(identity_overrides)
+    return abc.Vituri2024HalfMetalHFReplayPayload(**values)  # type: ignore[arg-type]
+
+
 class _Provider:
-    def __init__(self, spec: abc.Vituri2024HalfMetalHFSpec) -> None:
+    def __init__(
+        self,
+        spec: abc.Vituri2024HalfMetalHFSpec,
+        payload: abc.Vituri2024HalfMetalHFReplayPayload | None = None,
+    ) -> None:
         assert spec.geometry and spec.ensemble and spec.scf_policy
         assert spec.shared_functional and spec.attested_source
         shared = spec.shared_functional
@@ -690,6 +966,13 @@ class _Provider:
         )
         self.q0_policy_fingerprint = spec.ensemble.q0_policy_fingerprint
         self.source_state_sha256 = spec.attested_source.source_state_sha256
+        self.replay_loader_implementation_fingerprint = (
+            spec.attested_source.replay_loader_implementation_fingerprint
+        )
+        self.replay_payload_schema_fingerprint = (
+            spec.attested_source.replay_payload_schema_fingerprint
+        )
+        self.loader_mutation: tuple[str, object] | None = None
         self.scalar_energy_implementation_fingerprint = (
             shared.scalar_energy.implementation_fingerprint
         )
@@ -702,6 +985,8 @@ class _Provider:
         self.interaction_form_factor_implementation_fingerprint = (
             shared.interaction_form_factor.implementation_fingerprint
         )
+        self.replay_payload = payload
+        self.replay_loader_calls: list[str] = []
 
     def evaluate_scalar_energy(
         self,
@@ -725,6 +1010,115 @@ class _Provider:
         self, source_artifact_sha256: str
     ) -> abc.Vituri2024AttestedHalfMetalSourceArrays:
         raise AssertionError("metadata attestation must not execute providers")
+
+    def load_half_metal_replay_payload(
+        self, source_artifact_sha256: str
+    ) -> abc.Vituri2024HalfMetalHFReplayPayload:
+        self.replay_loader_calls.append(source_artifact_sha256)
+        if self.replay_payload is None:
+            raise AssertionError("array replay payload was not configured")
+        if self.loader_mutation is not None:
+            setattr(self, self.loader_mutation[0], self.loader_mutation[1])
+        return self.replay_payload
+
+
+class _BaseBindingSnapshotSubstitutionProvider(_Provider):
+    @staticmethod
+    def snapshot_base_values(
+        spec: abc.Vituri2024HalfMetalHFSpec,
+    ) -> dict[str, str]:
+        assert spec.attested_source is not None
+        values = {
+            name: ("c" * 40 if name == "source_commit" else _SHA["9"])
+            for name in preflight.VITURI2024_BASE_PROVIDER_METADATA_FIELDS
+        }
+        values["source_state_sha256"] = spec.attested_source.source_state_sha256
+        values["replay_loader_implementation_fingerprint"] = (
+            spec.attested_source.replay_loader_implementation_fingerprint
+        )
+        values["replay_payload_schema_fingerprint"] = (
+            spec.attested_source.replay_payload_schema_fingerprint
+        )
+        return values
+
+    def __init__(
+        self,
+        spec: abc.Vituri2024HalfMetalHFSpec,
+        payload: abc.Vituri2024HalfMetalHFReplayPayload,
+    ) -> None:
+        self._snapshot_base_values = type(self).snapshot_base_values(spec)
+        self.snapshot_reads: list[str] = []
+        super().__init__(spec, payload)
+
+    def __getattribute__(self, name: str) -> object:
+        snapshot_values = object.__getattribute__(self, "_snapshot_base_values")
+        if name in snapshot_values:
+            frame = inspect.currentframe()
+            try:
+                while frame is not None:
+                    if (
+                        frame.f_code.co_name == "_provider_metadata_snapshot"
+                        and frame.f_globals.get("__name__") == replay.__name__
+                    ):
+                        object.__getattribute__(self, "snapshot_reads").append(name)
+                        return snapshot_values[name]
+                    frame = frame.f_back
+            finally:
+                del frame
+        return super().__getattribute__(name)
+
+
+class _PostValidationAccessDriftProvider(_Provider):
+    _LATE_IDENTITY_VALUES = {
+        "provider_fingerprint": _SHA["9"],
+        "source_commit": "c" * 40,
+        "source_artifact_sha256": _SHA["7"],
+        "spec_fingerprint": _SHA["6"],
+    }
+
+    def __init__(
+        self,
+        spec: abc.Vituri2024HalfMetalHFSpec,
+        payload: abc.Vituri2024HalfMetalHFReplayPayload,
+    ) -> None:
+        self._post_validation_drift_armed = False
+        self.relevant_reads_after_validation: list[str] = []
+        super().__init__(spec, payload)
+
+    def __getattribute__(self, name: str) -> object:
+        late_values = type(self)._LATE_IDENTITY_VALUES
+        if name in late_values and object.__getattribute__(
+            self, "_post_validation_drift_armed"
+        ):
+            object.__getattribute__(
+                self, "relevant_reads_after_validation"
+            ).append(name)
+            return late_values[name]
+        return super().__getattribute__(name)
+
+    def arm_post_validation_drift(self) -> None:
+        self._post_validation_drift_armed = True
+
+
+def _replay_case(
+    arrays: dict[str, np.ndarray] | None = None,
+    *,
+    geometry_overrides: dict[str, object] | None = None,
+    source_overrides: dict[str, object] | None = None,
+) -> tuple[
+    abc.Vituri2024HalfMetalHFProviderBinding,
+    abc.Vituri2024HalfMetalHFReplayPayload,
+    _Provider,
+]:
+    actual_arrays = _array_copy() if arrays is None else arrays
+    spec = _spec_for_arrays(
+        actual_arrays,
+        geometry_overrides=geometry_overrides,
+        source_overrides=source_overrides,
+    )
+    payload = _payload(spec, actual_arrays)
+    provider = _Provider(spec, payload)
+    return abc.Vituri2024HalfMetalHFProviderBinding(spec, provider), payload, provider
 
 
 def test_paper_facts_are_exact_and_qualified() -> None:
@@ -789,7 +1183,9 @@ def test_geometry_closes_k_mesh_internal_flavors_state_counts_and_no_wrap() -> N
     assert receipt.spin_count == 2
     assert receipt.total_active_state_count == 4 * nk
     assert receipt.selected_spin_state_count == 2 * nk
-    assert receipt.array_layout == "core_state_k_then_internal_valley_then_spin"
+    assert receipt.internal_flavor_order == abc.INTERNAL_FLAVOR_ORDER
+    assert receipt.array_layout == abc.REPLAY_ARRAY_LAYOUT
+    assert receipt.array_conversion == abc.REPLAY_ARRAY_CONVERSION
     assert receipt.state_sum_weight == 1.0
     assert receipt.state_sum_weight_sum == nk
     assert receipt.state_sum_weight_sum_residual == 0.0
@@ -1445,3 +1841,619 @@ def test_synthetic_area_density_hole_identity_is_physically_consistent() -> None
     density_cm2 = -selected_spin_holes / area_angstrom_squared * 1.0e16
     assert density_cm2 == -1.0e12
     assert np.isfinite(density_cm2)
+
+
+def test_array_replay_success_binds_hashes_structure_and_partial_status() -> None:
+    binding, payload, provider = _replay_case()
+    receipt = abc.replay_vituri2024_half_metal_hf_arrays(binding)
+    assert provider.replay_loader_calls == [_SOURCE_ARTIFACT]
+    assert receipt.internal_flavor_order == ((-1, -1), (-1, 1), (1, -1), (1, 1))
+    assert receipt.array_layout == "internal_flavor_internal_flavor_k_final"
+    assert receipt.array_conversion == "identity_no_transpose"
+    assert receipt.orbital_order == "flavor_major_then_k"
+    assert (
+        receipt.ordered_orbitals_descriptor_label
+        == "orbital_index_descriptor"
+    )
+    assert receipt.active_band_states_gauge_scope.endswith("not_paper_gauge")
+    assert receipt.canonical_basis_kind == abc.CANONICAL_BASIS_KIND
+    assert receipt.residual_norm == "entrywise_max_abs"
+    assert receipt.hashes.ordered_momentum_mesh_sha256 == _ORDERED_MESH_HASH
+    assert receipt.hashes.ordered_orbitals_sha256 == _ARRAY_HASHES["orbitals"]
+    assert (
+        receipt.hashes.active_band_states_sha256
+        == _ARRAY_HASHES["active_band_states"]
+    )
+    assert receipt.hashes.h0_sha256 == _ARRAY_HASHES["h0"]
+    assert receipt.hashes.interaction_h_sha256 == _ARRAY_HASHES["interaction_h"]
+    assert (
+        receipt.replay_loader_implementation_fingerprint
+        == _REPLAY_LOADER_IMPLEMENTATION_FINGERPRINT
+    )
+    assert receipt.hashes.reconstructed_source_state_sha256 == payload.source_state_sha256
+    assert len(receipt.fingerprint) == 64
+    assert json.dumps(asdict(receipt), sort_keys=True, allow_nan=False)
+    assert receipt.fingerprint == receipt.fingerprint
+    assert (
+        receipt.residuals.fock_decomposition_max_abs_ev
+        == _BASE_FOCK_DECOMPOSITION_RESIDUAL
+    )
+    assert (
+        receipt.residuals.active_band_state_norm_max_abs
+        == _BASE_ACTIVE_BAND_STATE_NORM_RESIDUAL
+    )
+    assert all(value == 0.0 for value in (
+        receipt.residuals.h0_hermiticity_max_abs_ev,
+        receipt.residuals.interaction_h_hermiticity_max_abs_ev,
+        receipt.residuals.projector_hermiticity_max_abs,
+        receipt.residuals.projector_idempotency_max_abs,
+        receipt.residuals.fock_hermiticity_max_abs_ev,
+        receipt.residuals.fock_projector_commutator_max_abs_ev,
+        receipt.residuals.projector_vs_occupation_max_abs,
+        receipt.residuals.canonical_basis_diagonal_closure_max_abs_ev,
+        receipt.residuals.aufbau_violation_ev,
+        receipt.residuals.chemical_mu_occupation_violation_ev,
+    ))
+    evidence = receipt.occupation_evidence
+    assert (evidence.valley_minus_hole_count, evidence.valley_plus_hole_count) == (1, 1)
+    assert (evidence.selected_spin_occupied_state_count,
+            evidence.selected_spin_unoccupied_state_count) == (38, 2)
+    assert evidence.opposite_spin_hole_count == 0
+    assert evidence.measured_density_cm2 == evidence.target_density_cm2 == -1.0e12
+    assert tuple(item.component_cardinalities for item in receipt.base_pocket_evidence) == (
+        (1,),
+        (1,),
+    )
+    status = receipt.status
+    assert status.arrays_loaded and status.array_hashes_verified
+    assert status.source_structure_verified
+    assert status.provider_methods_executed == ("load_half_metal_replay_payload",)
+    assert status.scf_trajectory_replayed is False
+    assert status.branch_table_replayed is False
+    assert status.pocket_refinement_replayed is False
+    assert status.functional_chain_replayed is False
+    assert status.scientific_execution_verified is False
+    assert status.paper_reproduction_verified is False
+    for absent_status in ("executable_ready", "provider_bound", "metadata_resolved"):
+        assert not hasattr(status, absent_status)
+        assert not hasattr(receipt, absent_status)
+
+
+def test_canonical_hashes_bind_shape_dtype_bytes_and_orbital_order() -> None:
+    array = np.arange(6, dtype=np.float64).reshape(2, 3)
+    golden = "a1762f487b340b78e2ac9770b45e3e09ee79c1fb4b8132320c389538d0e59598"
+    assert abc.canonical_array_sha256(array) == golden
+    independent_header = (
+        b'{"byte_order":"C","dtype":"<f8","schema":'
+        b'"vituri2024_canonical_array_v1","shape":[2,3]}'
+    )
+    independent_digest = hashlib.sha256()
+    independent_digest.update(struct.pack(">Q", len(independent_header)))
+    independent_digest.update(independent_header)
+    independent_digest.update(struct.pack("<6d", *range(6)))
+    assert independent_digest.hexdigest() == golden
+    assert abc.canonical_array_sha256(array) == abc.canonical_array_sha256(array.copy())
+    assert abc.canonical_array_sha256(array) != abc.canonical_array_sha256(array.T)
+    assert abc.canonical_array_sha256(array) != abc.canonical_array_sha256(
+        array.astype(np.complex128)
+    )
+    changed = array.copy()
+    changed[0, 0] = 1.0
+    assert abc.canonical_array_sha256(array) != abc.canonical_array_sha256(changed)
+    changed_mesh = _REPLAY_ARRAYS["mesh"].copy()
+    changed_mesh[0, 0] += 1.0e-12
+    assert abc.canonical_orbital_order_sha256(changed_mesh) != _ARRAY_HASHES["orbitals"]
+
+
+def test_layout_conversion_and_orbital_descriptor_contracts_are_explicit() -> None:
+    geometry = _geometry()
+    assert geometry.internal_flavor_order == abc.INTERNAL_FLAVOR_ORDER
+    assert geometry.array_layout == abc.REPLAY_ARRAY_LAYOUT
+    assert geometry.array_conversion == abc.REPLAY_ARRAY_CONVERSION
+    with pytest.raises(ValueError, match="internal-flavor array layout"):
+        _geometry(array_layout="core_state_k_then_internal_valley_then_spin")
+    with pytest.raises(ValueError, match="internal-flavor array layout"):
+        _geometry(array_conversion="transpose_k_first")
+
+    spec = _complete()
+    assert spec.attested_source
+    source = spec.attested_source
+    assert source.ordered_orbitals_descriptor_label == "orbital_index_descriptor"
+    assert (
+        source.ordered_orbitals_schema_fingerprint
+        == abc.ORBITAL_INDEX_DESCRIPTOR_SCHEMA_FINGERPRINT
+    )
+    with pytest.raises(ValueError, match="descriptor/schema contract"):
+        replace(
+            source,
+            ordered_orbitals_descriptor_label="active_band_state_array",
+        )
+
+
+@pytest.mark.parametrize(
+    ("array_name", "error"),
+    (
+        ("fock", "canonical ordered Fock hash mismatch"),
+        ("h0", "canonical ordered h0 hash mismatch"),
+        ("interaction_h", "canonical ordered interaction_h hash mismatch"),
+        ("active_band_states", "canonical active-band states hash mismatch"),
+    ),
+)
+def test_array_replay_detects_mutation_against_attested_hashes(
+    array_name: str, error: str
+) -> None:
+    spec = _complete()
+    arrays = _array_copy()
+    arrays[array_name].flat[0] += 1.0e-6
+    payload = _payload(spec, arrays)
+    provider = _Provider(spec, payload)
+    binding = abc.Vituri2024HalfMetalHFProviderBinding(spec, provider)
+    with pytest.raises(ValueError, match=error):
+        abc.replay_vituri2024_half_metal_hf_arrays(binding)
+
+
+def test_attested_source_hash_context_binds_h0_interaction_and_active_states() -> None:
+    spec = _complete()
+    assert spec.geometry and spec.ensemble and spec.scf_policy
+    assert spec.shared_functional and spec.attested_source
+    for field_name in ("h0_sha256", "interaction_h_sha256", "active_band_states_sha256"):
+        with pytest.raises(ValueError, match="source-state hash"):
+            replace(spec.attested_source, **{field_name: _SHA["9"]})
+
+
+def test_replay_payload_rejects_nonfinite_shape_dtype_and_occupations() -> None:
+    spec = _complete()
+    bad = _array_copy()
+    bad["mesh"][0, 0] = np.nan
+    with pytest.raises(ValueError, match="finite"):
+        _payload(spec, bad)
+    bad = _array_copy(h0=np.zeros((4, 4, 19), dtype=np.complex128))
+    with pytest.raises(ValueError, match="h0 shape"):
+        _payload(spec, bad)
+    bad = _array_copy(
+        active_band_states=np.zeros((2, 6, 19), dtype=np.complex128)
+    )
+    with pytest.raises(ValueError, match="active_band_states shape"):
+        _payload(spec, bad)
+    bad = _array_copy(energies=_REPLAY_ARRAYS["energies"].astype(np.float32))
+    with pytest.raises(TypeError, match="energies dtype"):
+        _payload(spec, bad)
+    bad = _array_copy(occupations=_REPLAY_ARRAYS["occupations"].astype(np.int32))
+    with pytest.raises(TypeError, match="occupations dtype"):
+        _payload(spec, bad)
+    occupations = _REPLAY_ARRAYS["occupations"].copy()
+    occupations[0, 0] = 2
+    bad = _array_copy(occupations=occupations)
+    with pytest.raises(ValueError, match="integer 0/1"):
+        _payload(spec, bad)
+
+
+def test_replay_payload_arrays_are_immutable_owned_copies() -> None:
+    arrays = _array_copy()
+    spec = _spec_for_arrays(arrays)
+    payload = _payload(spec, arrays)
+    arrays["mesh"][0, 0] = 99.0
+    arrays["fock"][0, 0, 0] = 99.0
+    assert payload.mesh[0, 0] != 99.0
+    assert payload.fock[0, 0, 0] != 99.0
+    for array in (
+        payload.mesh,
+        payload.active_band_states,
+        payload.h0,
+        payload.interaction_h,
+        payload.fock,
+        payload.projector,
+        payload.energies,
+        payload.occupations,
+    ):
+        assert array.flags.writeable is False
+        with pytest.raises(ValueError):
+            array.flat[0] = 0
+        with pytest.raises(ValueError):
+            array.flags.writeable = True
+
+
+def test_array_replay_gates_attested_fock_decomposition() -> None:
+    arrays = _array_copy()
+    arrays["fock"][0, 0, 0] += 5.0e-13
+    binding, _, _ = _replay_case(arrays)
+    with pytest.raises(ValueError, match="Fock decomposition residual"):
+        abc.replay_vituri2024_half_metal_hf_arrays(binding)
+
+
+@pytest.mark.parametrize(
+    ("residual_field", "error"),
+    (
+        ("fock_decomposition_residual_ev", "Fock decomposition residual"),
+        ("h0_hermiticity_residual_ev", "h0 Hermiticity residual"),
+        (
+            "interaction_h_hermiticity_residual_ev",
+            "interaction_h Hermiticity residual",
+        ),
+        ("active_band_state_norm_residual", "active-band state norm residual"),
+        (
+            "projector_vs_occupation_residual",
+            "projector/occupation diagonal closure residual",
+        ),
+        (
+            "fock_vs_diagonal_energy_residual_ev",
+            "canonical-basis diagonal closure residual",
+        ),
+    ),
+)
+def test_array_replay_matches_each_dedicated_attested_residual(
+    residual_field: str, error: str
+) -> None:
+    binding, _, _ = _replay_case(
+        source_overrides={residual_field: 5.0e-13}
+    )
+    with pytest.raises(ValueError, match=error):
+        abc.replay_vituri2024_half_metal_hf_arrays(binding)
+
+
+def test_array_replay_gates_active_band_state_norm() -> None:
+    arrays = _array_copy()
+    arrays["active_band_states"][0, :, 0] *= 1.01
+    binding, _, _ = _replay_case(arrays)
+    with pytest.raises(ValueError, match="active-band state norm"):
+        abc.replay_vituri2024_half_metal_hf_arrays(binding)
+
+
+def test_array_replay_gates_matrix_and_diagonal_eigen_residuals() -> None:
+    cases: list[tuple[str, dict[str, np.ndarray], str]] = []
+
+    arrays = _array_copy()
+    arrays["projector"][0, 1, 0] = 1.0e-4
+    cases.append(("P Hermiticity", arrays, "projector Hermiticity"))
+
+    arrays = _array_copy()
+    arrays["projector"][0, 0, 0] = 0.5
+    cases.append(("P idempotency", arrays, "projector idempotency"))
+
+    arrays = _array_copy()
+    arrays["h0"][0, 1, 1] = 1.0e-4
+    arrays["fock"][0, 1, 1] = 1.0e-4
+    cases.append(("h0 Hermiticity", arrays, "h0 Hermiticity"))
+
+    arrays = _array_copy()
+    arrays["interaction_h"][0, 1, 1] = 1.0e-4
+    arrays["fock"][0, 1, 1] = 1.0e-4
+    cases.append(("interaction_h Hermiticity", arrays, "interaction_h Hermiticity"))
+
+    arrays = _array_copy()
+    arrays["projector"][0:2, 0:2, 0] = np.asarray(
+        [[0.5, 0.5], [0.5, 0.5]], dtype=np.complex128
+    )
+    cases.append(("commutator", arrays, "Fock/projector commutator"))
+
+    arrays = _array_copy()
+    arrays["projector"][0, 0, 0] = 0.0
+    arrays["projector"][1, 1, 0] = 1.0
+    cases.append(("P diagonal", arrays, "projector/occupation diagonal"))
+
+    arrays = _array_copy()
+    arrays["fock"][0, 1, 1] = 1.0e-5
+    arrays["fock"][1, 0, 1] = 1.0e-5
+    arrays["h0"][0, 1, 1] = 1.0e-5
+    arrays["h0"][1, 0, 1] = 1.0e-5
+    cases.append(
+        ("canonical diagonal", arrays, "canonical-basis diagonal closure")
+    )
+
+    for _label, arrays, expected_error in cases:
+        binding, _, _ = _replay_case(arrays)
+        with pytest.raises(ValueError, match=expected_error):
+            abc.replay_vituri2024_half_metal_hf_arrays(binding)
+
+
+def test_array_replay_compares_residual_value_not_only_tolerance() -> None:
+    arrays = _array_copy()
+    arrays["projector"][0, 1, 0] = 1.0e-10
+    binding, _, _ = _replay_case(arrays)
+    with pytest.raises(ValueError, match="does not match the attested receipt"):
+        abc.replay_vituri2024_half_metal_hf_arrays(binding)
+
+
+def test_array_replay_gates_valley_spin_and_chemical_mu_closure() -> None:
+    valley_arrays = _array_copy()
+    valley_arrays["occupations"][1, 2] = 0
+    valley_arrays["projector"][1, 1, 2] = 0.0
+    valley_arrays["energies"][1, 2] = 0.01
+    valley_arrays["fock"][1, 1, 2] = 0.01
+    valley_arrays["h0"][1, 1, 2] = (
+        0.01 - valley_arrays["interaction_h"][1, 1, 2]
+    )
+    valley_arrays["occupations"][3, 19] = 1
+    valley_arrays["projector"][3, 3, 19] = 1.0
+    valley_arrays["energies"][3, 19] = -0.028
+    valley_arrays["fock"][3, 3, 19] = -0.028
+    valley_arrays["h0"][3, 3, 19] = (
+        -0.028 - valley_arrays["interaction_h"][3, 3, 19]
+    )
+    valley_gap = float(
+        np.min(valley_arrays["energies"][valley_arrays["occupations"] == 0])
+        - np.max(valley_arrays["energies"][valley_arrays["occupations"] == 1])
+    )
+    binding, _, _ = _replay_case(
+        valley_arrays,
+        source_overrides={
+            "aufbau_min_unoccupied_minus_max_occupied_ev": valley_gap
+        },
+    )
+    with pytest.raises(ValueError, match="valley -1 hole-count mismatch"):
+        abc.replay_vituri2024_half_metal_hf_arrays(binding)
+
+    spin_arrays = _array_copy()
+    spin_arrays["occupations"][0, 0] = 0
+    spin_arrays["projector"][0, 0, 0] = 0.0
+    spin_arrays["energies"][0, 0] = 0.01
+    spin_arrays["fock"][0, 0, 0] = 0.01
+    spin_arrays["h0"][0, 0, 0] = (
+        0.01 - spin_arrays["interaction_h"][0, 0, 0]
+    )
+    binding, _, _ = _replay_case(spin_arrays)
+    with pytest.raises(ValueError, match="opposite-spin hole-count mismatch"):
+        abc.replay_vituri2024_half_metal_hf_arrays(binding)
+
+    mu_arrays = _array_copy()
+    mu_arrays["energies"][0, 0] = -0.015
+    mu_arrays["fock"][0, 0, 0] = -0.015
+    mu_arrays["h0"][0, 0, 0] = (
+        -0.015 - mu_arrays["interaction_h"][0, 0, 0]
+    )
+    mu_gap = float(
+        np.min(mu_arrays["energies"][mu_arrays["occupations"] == 0])
+        - np.max(mu_arrays["energies"][mu_arrays["occupations"] == 1])
+    )
+    binding, _, _ = _replay_case(
+        mu_arrays,
+        source_overrides={"aufbau_min_unoccupied_minus_max_occupied_ev": mu_gap},
+    )
+    with pytest.raises(ValueError, match="chemical-potential occupation closure"):
+        abc.replay_vituri2024_half_metal_hf_arrays(binding)
+
+
+def test_array_replay_rejects_disconnected_base_pocket_without_refinement_claim() -> None:
+    arrays = _array_copy()
+    for flavor, k_index in ((1, 2), (3, 18)):
+        arrays["occupations"][flavor, k_index] = 0
+        arrays["projector"][flavor, flavor, k_index] = 0.0
+        arrays["energies"][flavor, k_index] = 0.01
+        arrays["fock"][flavor, flavor, k_index] = 0.01
+        arrays["h0"][flavor, flavor, k_index] = (
+            0.01 - arrays["interaction_h"][flavor, flavor, k_index]
+        )
+    hashes = _canonical_hashes(arrays)
+    area = 40_000.0
+    geometry = _geometry(
+        area_angstrom_squared=area,
+        finite_area_receipt_fingerprint=_area(area).fingerprint,
+        ordered_momentum_mesh_sha256=abc.canonical_array_sha256(arrays["mesh"]),
+    )
+    ensemble, scf = _ensemble(), _scf()
+    shared = _shared(geometry, ensemble, array_hashes=hashes)
+    metallicity = _metallicity(
+        geometry,
+        ensemble,
+        array_hashes=hashes,
+        selected_spin_occupied_state_count=36,
+        selected_spin_unoccupied_state_count=4,
+    )
+    pockets = (
+        _pocket(-1, geometry, ensemble, array_hashes=hashes, hole_state_count=2),
+        _pocket(1, geometry, ensemble, array_hashes=hashes, hole_state_count=2),
+    )
+    source = _source(
+        geometry,
+        ensemble,
+        scf,
+        shared,
+        array_hashes=hashes,
+        valley_minus_hole_count=2,
+        valley_plus_hole_count=2,
+        selected_spin_hole_count=4,
+        metallicity_evidence=metallicity,
+        pocket_evidence=pockets,
+    )
+    spec = abc.Vituri2024HalfMetalHFSpec(
+        geometry=geometry,
+        ensemble=ensemble,
+        scf_policy=scf,
+        shared_functional=shared,
+        attested_source=source,
+    )
+    payload = _payload(spec, arrays)
+    provider = _Provider(spec, payload)
+    binding = abc.Vituri2024HalfMetalHFProviderBinding(spec, provider)
+    with pytest.raises(ValueError, match="base-pocket component-count mismatch"):
+        abc.replay_vituri2024_half_metal_hf_arrays(binding)
+    assert provider.replay_loader_calls == [_SOURCE_ARTIFACT]
+
+
+@pytest.mark.parametrize(
+    ("attribute", "replacement", "error"),
+    (
+        ("provider_fingerprint", _SHA["9"], "provider identity fingerprint mismatch"),
+        ("source_commit", "c" * 40, "source artifact\\+commit mismatch"),
+        ("source_artifact_sha256", _SHA["9"], "source artifact\\+commit mismatch"),
+        ("spec_fingerprint", _SHA["9"], "provider/spec fingerprint mismatch"),
+        ("source_state_sha256", _SHA["9"], "provider/source state fingerprint mismatch"),
+        (
+            "replay_loader_implementation_fingerprint",
+            _SHA["9"],
+            "loader implementation fingerprint mismatch",
+        ),
+    ),
+)
+def test_array_replay_rechecks_mutable_provider_identity_before_loading(
+    attribute: str, replacement: str, error: str
+) -> None:
+    binding, _, provider = _replay_case()
+    setattr(provider, attribute, replacement)
+    with pytest.raises(ValueError, match=error):
+        abc.replay_vituri2024_half_metal_hf_arrays(binding)
+    assert provider.replay_loader_calls == []
+
+
+@pytest.mark.parametrize(
+    "attribute",
+    replay._REPLAY_PROVIDER_METADATA_FIELDS,
+)
+def test_preload_snapshot_validator_pins_every_provider_field(
+    attribute: str,
+) -> None:
+    binding, _, provider = _replay_case()
+    snapshot = replay._provider_metadata_snapshot(provider)
+    snapshot[attribute] = "c" * 40 if attribute == "source_commit" else _SHA["9"]
+
+    with pytest.raises(ValueError, match="preload provider snapshot"):
+        replay._validate_preload_provider_snapshot(binding, snapshot)
+
+    assert provider.replay_loader_calls == []
+
+
+def test_array_replay_rejects_snapshot_substitution_after_valid_base_binding() -> None:
+    spec = _complete()
+    snapshot_values = _BaseBindingSnapshotSubstitutionProvider.snapshot_base_values(spec)
+    payload = _payload(
+        spec,
+        provider_fingerprint=snapshot_values["provider_fingerprint"],
+        source_commit=snapshot_values["source_commit"],
+        source_artifact_sha256=snapshot_values["source_artifact_sha256"],
+        spec_fingerprint=snapshot_values["spec_fingerprint"],
+        source_state_sha256=snapshot_values["source_state_sha256"],
+    )
+    provider = _BaseBindingSnapshotSubstitutionProvider(spec, payload)
+    binding = abc.Vituri2024HalfMetalHFProviderBinding(spec, provider)
+
+    with pytest.raises(ValueError, match="preload provider snapshot provider identity mismatch"):
+        abc.replay_vituri2024_half_metal_hf_arrays(binding)
+
+    assert provider.replay_loader_calls == []
+    assert tuple(provider.snapshot_reads) == replay._REPLAY_PROVIDER_METADATA_FIELDS
+
+
+@pytest.mark.parametrize(
+    "attribute",
+    replay._REPLAY_PROVIDER_METADATA_FIELDS,
+)
+def test_array_replay_rejects_provider_metadata_drift_during_loader(
+    attribute: str,
+) -> None:
+    assert replay._REPLAY_PROVIDER_METADATA_FIELDS == (
+        preflight.VITURI2024_BASE_PROVIDER_METADATA_FIELDS
+        + (
+            "replay_loader_implementation_fingerprint",
+            "replay_payload_schema_fingerprint",
+        )
+    )
+    binding, _, provider = _replay_case()
+    provider.loader_mutation = (attribute, "mutated_during_loader")
+    with pytest.raises(ValueError, match="metadata mutated during loader call"):
+        abc.replay_vituri2024_half_metal_hf_arrays(binding)
+    assert provider.replay_loader_calls == [_SOURCE_ARTIFACT]
+
+
+def test_array_replay_receipt_identity_uses_only_preload_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spec = _complete()
+    payload = _payload(spec)
+    provider = _PostValidationAccessDriftProvider(spec, payload)
+    binding = abc.Vituri2024HalfMetalHFProviderBinding(spec, provider)
+    validate_identity = replay._validate_payload_against_provider_snapshot
+
+    def validate_identity_then_arm_drift(
+        checked_payload: abc.Vituri2024HalfMetalHFReplayPayload,
+        provider_snapshot: dict[str, object],
+    ) -> None:
+        validate_identity(checked_payload, provider_snapshot)
+        provider.arm_post_validation_drift()
+
+    monkeypatch.setattr(
+        replay,
+        "_validate_payload_against_provider_snapshot",
+        validate_identity_then_arm_drift,
+    )
+    receipt = abc.replay_vituri2024_half_metal_hf_arrays(binding)
+
+    assert (
+        receipt.provider_fingerprint,
+        receipt.source_commit,
+        receipt.source_artifact_sha256,
+        receipt.spec_fingerprint,
+    ) == (
+        _PROVIDER_FINGERPRINT,
+        _COMMIT,
+        _SOURCE_ARTIFACT,
+        spec.fingerprint,
+    )
+    assert provider.relevant_reads_after_validation == []
+
+
+@pytest.mark.parametrize(
+    ("identity_override", "error"),
+    (
+        ({"provider_fingerprint": _SHA["9"]}, "payload provider fingerprint mismatch"),
+        ({"source_commit": "c" * 40}, "payload source commit mismatch"),
+        ({"source_artifact_sha256": _SHA["9"]}, "payload source artifact mismatch"),
+        ({"spec_fingerprint": _SHA["9"]}, "payload spec fingerprint mismatch"),
+        ({"source_state_sha256": _SHA["9"]}, "payload source-state fingerprint mismatch"),
+        (
+            {"replay_loader_implementation_fingerprint": _SHA["9"]},
+            "payload loader implementation fingerprint mismatch",
+        ),
+    ),
+)
+def test_array_replay_rejects_payload_identity_mismatch(
+    identity_override: dict[str, object], error: str
+) -> None:
+    spec = _complete()
+    payload = _payload(spec, _array_copy(), **identity_override)
+    provider = _Provider(spec, payload)
+    binding = abc.Vituri2024HalfMetalHFProviderBinding(spec, provider)
+    with pytest.raises(ValueError, match=error):
+        abc.replay_vituri2024_half_metal_hf_arrays(binding)
+
+
+def test_replay_evidence_dataclasses_validate_and_success_is_factory_only() -> None:
+    receipt = abc.replay_vituri2024_half_metal_hf_arrays(_replay_case()[0])
+    with pytest.raises(ValueError, match="lowercase SHA256"):
+        replace(receipt.hashes, h0_sha256="bad")
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        replace(receipt.residuals, active_band_state_norm_max_abs=-1.0)
+    with pytest.raises(ValueError, match="valley-hole counts"):
+        replace(receipt.occupation_evidence, selected_spin_hole_count=3)
+    with pytest.raises(ValueError, match="component cardinalities"):
+        replace(receipt.base_pocket_evidence[0], component_cardinalities=(1, 1))
+
+    with pytest.raises(TypeError, match="factory_token"):
+        abc.Vituri2024HalfMetalHFReplayStatus()  # type: ignore[call-arg]
+    receipt_kwargs = {
+        name: getattr(receipt, name)
+        for name in inspect.signature(
+            abc.Vituri2024HalfMetalHFReplayReceipt
+        ).parameters
+        if name != "_factory_token"
+    }
+    with pytest.raises(TypeError, match="factory_token"):
+        abc.Vituri2024HalfMetalHFReplayReceipt(**receipt_kwargs)  # type: ignore[arg-type]
+    serialized = asdict(receipt)
+    assert "_factory_token" not in serialized
+    assert "_factory_token" not in serialized["status"]
+
+
+def test_replay_protocol_exports_and_requires_callable_loader() -> None:
+    for name in replay.__all__:
+        assert getattr(abc, name) is getattr(replay, name)
+    spec = _complete()
+    provider = _Provider(spec)
+    provider.load_half_metal_replay_payload = None  # type: ignore[method-assign]
+    binding = abc.Vituri2024HalfMetalHFProviderBinding(spec, provider)
+    with pytest.raises(TypeError, match="replay loader protocol|must be callable"):
+        abc.replay_vituri2024_half_metal_hf_arrays(binding)
+    source = inspect.getsource(replay)
+    assert "run_hartree_fock_problem(" not in source
+    assert "evaluate_scalar_energy(" not in source
+    assert "evaluate_fock_derivative(" not in source
+    assert "evaluate_finite_q_hessian(" not in source

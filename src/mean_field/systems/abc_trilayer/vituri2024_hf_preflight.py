@@ -32,6 +32,46 @@ VITURI2024_MAIN_TEX_SHA256 = (
 VITURI2024_HALF_METAL_HF_SCOPE = (
     "vituri2024_spin_polarized_half_metal_hf_receipt_preflight_v2"
 )
+INTERNAL_FLAVOR_ORDER: tuple[tuple[int, int], ...] = (
+    (-1, -1),
+    (-1, 1),
+    (1, -1),
+    (1, 1),
+)
+REPLAY_ARRAY_LAYOUT = "internal_flavor_internal_flavor_k_final"
+REPLAY_ARRAY_CONVERSION = "identity_no_transpose"
+REPLAY_ORBITAL_ORDER = "flavor_major_then_k"
+ORBITAL_INDEX_DESCRIPTOR_LABEL = "orbital_index_descriptor"
+ORBITAL_INDEX_DESCRIPTOR_SCHEMA_LABEL = (
+    "vituri2024_orbital_index_descriptor_v1"
+)
+ACTIVE_BAND_STATES_LAYOUT = "valley_six_band_component_k_final"
+ACTIVE_BAND_STATES_VALLEY_ORDER: tuple[int, int] = (-1, 1)
+ACTIVE_BAND_STATES_GAUGE_SCOPE = "gauge_covariant_source_data_not_paper_gauge"
+CANONICAL_BASIS_KIND = "uniform_half_metal_flavor_momentum_diagonal"
+REPLAY_RESIDUAL_NORM = "entrywise_max_abs"
+FOCK_DECOMPOSITION_CONVENTION = "fock_equals_h0_plus_interaction_h"
+REPLAY_PAYLOAD_SCHEMA_LABEL = "vituri2024_half_metal_hf_replay_payload_v2"
+VITURI2024_BASE_PROVIDER_METADATA_FIELDS: tuple[str, ...] = (
+    "provider_fingerprint",
+    "source_commit",
+    "source_artifact_sha256",
+    "spec_fingerprint",
+    "geometry_receipt_fingerprint",
+    "ensemble_receipt_fingerprint",
+    "scf_policy_receipt_fingerprint",
+    "shared_functional_receipt_fingerprint",
+    "attested_source_receipt_fingerprint",
+    "finite_area_receipt_fingerprint",
+    "interaction_receipt_fingerprint",
+    "normal_order_reference_fingerprint",
+    "q0_policy_fingerprint",
+    "source_state_sha256",
+    "scalar_energy_implementation_fingerprint",
+    "fock_derivative_implementation_fingerprint",
+    "finite_q_hessian_implementation_fingerprint",
+    "interaction_form_factor_implementation_fingerprint",
+)
 
 ReceiptAuthority = Literal["reproduction_choice", "independent_provider_explicit"]
 FunctionalRole = Literal[
@@ -155,6 +195,59 @@ def _fingerprint(payload: object) -> str:
         ).encode("utf-8")
     ).hexdigest()
 
+
+ORBITAL_INDEX_DESCRIPTOR_SCHEMA_FINGERPRINT = _fingerprint(
+    {
+        "schema_label": ORBITAL_INDEX_DESCRIPTOR_SCHEMA_LABEL,
+        "descriptor_label": ORBITAL_INDEX_DESCRIPTOR_LABEL,
+        "internal_flavor_order": INTERNAL_FLAVOR_ORDER,
+        "orbital_order": REPLAY_ORBITAL_ORDER,
+        "matrix_array_layout": REPLAY_ARRAY_LAYOUT,
+        "matrix_array_conversion": REPLAY_ARRAY_CONVERSION,
+        "instance_fields": ("nk", "ordered_momentum_mesh_sha256"),
+    }
+)
+REPLAY_PAYLOAD_SCHEMA_FINGERPRINT = _fingerprint(
+    {
+        "schema_label": REPLAY_PAYLOAD_SCHEMA_LABEL,
+        "matrix_array_layout": REPLAY_ARRAY_LAYOUT,
+        "matrix_array_conversion": REPLAY_ARRAY_CONVERSION,
+        "internal_flavor_order": INTERNAL_FLAVOR_ORDER,
+        "active_band_states_layout": ACTIVE_BAND_STATES_LAYOUT,
+        "active_band_states_valley_order": ACTIVE_BAND_STATES_VALLEY_ORDER,
+        "active_band_states_gauge_scope": ACTIVE_BAND_STATES_GAUGE_SCOPE,
+        "arrays": (
+            "mesh",
+            "active_band_states",
+            "h0",
+            "interaction_h",
+            "fock",
+            "projector",
+            "energies",
+            "occupations",
+        ),
+    }
+)
+
+def _orbital_index_descriptor_fingerprint(
+    ordered_orbitals_sha256: object,
+    ordered_momentum_mesh_sha256: object,
+) -> str:
+    return _fingerprint(
+        {
+            "descriptor_label": ORBITAL_INDEX_DESCRIPTOR_LABEL,
+            "schema_label": ORBITAL_INDEX_DESCRIPTOR_SCHEMA_LABEL,
+            "schema_fingerprint": ORBITAL_INDEX_DESCRIPTOR_SCHEMA_FINGERPRINT,
+            "ordered_orbitals_sha256": _sha256(
+                ordered_orbitals_sha256, "ordered orbital-index descriptor"
+            ),
+            "ordered_momentum_mesh_sha256": _sha256(
+                ordered_momentum_mesh_sha256, "ordered momentum mesh"
+            ),
+            "internal_flavor_order": INTERNAL_FLAVOR_ORDER,
+            "orbital_order": REPLAY_ORBITAL_ORDER,
+        }
+    )
 
 def _require_residual(
     residual: object, tolerance: object, label: str
@@ -351,7 +444,9 @@ class Vituri2024HFGeometryReceipt:
     spin_count: int
     total_active_state_count: int
     selected_spin_state_count: int
-    array_layout: Literal["core_state_k_then_internal_valley_then_spin"]
+    internal_flavor_order: tuple[tuple[int, int], ...]
+    array_layout: Literal["internal_flavor_internal_flavor_k_final"]
+    array_conversion: Literal["identity_no_transpose"]
     ordered_momentum_mesh_sha256: str
     mesh_order: Literal["row_major_cartesian_k"]
     momentum_units: Literal["inverse_angstrom"]
@@ -421,7 +516,15 @@ class Vituri2024HFGeometryReceipt:
         if (
             self.mesh_order != "row_major_cartesian_k"
             or self.valley_representation != "internal_flavor_axis"
-            or self.array_layout != "core_state_k_then_internal_valley_then_spin"
+            or type(self.internal_flavor_order) is not tuple
+            or tuple(self.internal_flavor_order) != INTERNAL_FLAVOR_ORDER
+            or any(
+                type(flavor) is not tuple
+                or any(type(value) is not int for value in flavor)
+                for flavor in self.internal_flavor_order
+            )
+            or self.array_layout != REPLAY_ARRAY_LAYOUT
+            or self.array_conversion != REPLAY_ARRAY_CONVERSION
             or self.momentum_units != "inverse_angstrom"
             or self.quadrature_rule != "uniform_finite_volume_state_sum"
             or self.state_sum_weight_units != "dimensionless"
@@ -507,7 +610,9 @@ class Vituri2024HFGeometryReceipt:
                 "core_state_nk": self.core_state_nk,
                 "per_valley_k_count": self.per_valley_k_count,
                 "valley_representation": self.valley_representation,
+                "internal_flavor_order": self.internal_flavor_order,
                 "array_layout": self.array_layout,
+                "array_conversion": self.array_conversion,
                 "delta1_mev": delta1,
                 "active_band_index": active_band,
                 "valleys": valleys,
@@ -1338,10 +1443,26 @@ class Vituri2024AttestedHalfMetalSourceReceipt:
     provider_fingerprint: str
     source_state_sha256: str
     ordered_orbitals_sha256: str
+    ordered_orbitals_descriptor_label: Literal["orbital_index_descriptor"]
+    ordered_orbitals_schema_label: Literal[
+        "vituri2024_orbital_index_descriptor_v1"
+    ]
+    ordered_orbitals_schema_fingerprint: str
+    ordered_orbitals_descriptor_fingerprint: str
     ordered_energies_sha256: str
     ordered_occupations_sha256: str
     ordered_projector_sha256: str
     ordered_fock_sha256: str
+    h0_sha256: str
+    interaction_h_sha256: str
+    active_band_states_sha256: str
+    active_band_states_layout: Literal["valley_six_band_component_k_final"]
+    active_band_states_valley_order: tuple[int, int]
+    active_band_states_gauge_scope: Literal[
+        "gauge_covariant_source_data_not_paper_gauge"
+    ]
+    replay_loader_implementation_fingerprint: str
+    replay_payload_schema_fingerprint: str
     geometry_receipt_fingerprint: str
     ensemble_receipt_fingerprint: str
     scf_policy_receipt_fingerprint: str
@@ -1357,6 +1478,21 @@ class Vituri2024AttestedHalfMetalSourceReceipt:
     attested_exit_reason: SCFExitReason
     final_replay_raw_metric: float
     final_replay_raw_precision: float
+    canonical_basis_kind: Literal[
+        "uniform_half_metal_flavor_momentum_diagonal"
+    ]
+    residual_norm: Literal["entrywise_max_abs"]
+    fock_decomposition_convention: Literal[
+        "fock_equals_h0_plus_interaction_h"
+    ]
+    fock_decomposition_residual_ev: float
+    fock_decomposition_tolerance_ev: float
+    h0_hermiticity_residual_ev: float
+    h0_hermiticity_tolerance_ev: float
+    interaction_h_hermiticity_residual_ev: float
+    interaction_h_hermiticity_tolerance_ev: float
+    active_band_state_norm_residual: float
+    active_band_state_norm_tolerance: float
     fock_projector_commutator_residual_ev: float
     stationarity_tolerance_ev: float
     projector_idempotency_residual: float
@@ -1365,9 +1501,15 @@ class Vituri2024AttestedHalfMetalSourceReceipt:
     projector_hermiticity_tolerance: float
     fock_hermiticity_residual_ev: float
     fock_hermiticity_tolerance_ev: float
+    projector_vs_occupation_residual: float
+    projector_vs_occupation_tolerance: float
+    fock_vs_diagonal_energy_residual_ev: float
+    fock_vs_diagonal_energy_tolerance_ev: float
     aufbau_min_unoccupied_minus_max_occupied_ev: float
     aufbau_occupation_violation_ev: float
     aufbau_tolerance_ev: float
+    chemical_mu_occupation_residual_ev: float
+    chemical_mu_occupation_tolerance_ev: float
     selected_spin: Literal[-1, 1]
     valley_plus_hole_count: int
     valley_minus_hole_count: int
@@ -1399,11 +1541,27 @@ class Vituri2024AttestedHalfMetalSourceReceipt:
             (self.source_artifact_sha256, "attested-source artifact"),
             (self.provider_fingerprint, "attested-source provider"),
             (self.source_state_sha256, "source-state hash"),
-            (self.ordered_orbitals_sha256, "ordered orbitals"),
+            (self.ordered_orbitals_sha256, "ordered orbital-index descriptor"),
+            (
+                self.ordered_orbitals_schema_fingerprint,
+                "ordered-orbitals schema",
+            ),
+            (
+                self.ordered_orbitals_descriptor_fingerprint,
+                "ordered-orbitals descriptor",
+            ),
             (self.ordered_energies_sha256, "ordered energies"),
             (self.ordered_occupations_sha256, "ordered occupations"),
             (self.ordered_projector_sha256, "ordered projector"),
             (self.ordered_fock_sha256, "ordered Fock"),
+            (self.h0_sha256, "ordered h0"),
+            (self.interaction_h_sha256, "ordered interaction_h"),
+            (self.active_band_states_sha256, "ordered active-band states"),
+            (
+                self.replay_loader_implementation_fingerprint,
+                "replay-loader implementation",
+            ),
+            (self.replay_payload_schema_fingerprint, "replay payload schema"),
             (self.geometry_receipt_fingerprint, "geometry receipt"),
             (self.ensemble_receipt_fingerprint, "ensemble receipt"),
             (self.scf_policy_receipt_fingerprint, "SCF-policy receipt"),
@@ -1415,16 +1573,87 @@ class Vituri2024AttestedHalfMetalSourceReceipt:
             (self.branch_energy_functional_fingerprint, "branch energy functional"),
         ):
             _sha256(value, label)
+        if (
+            self.ordered_orbitals_descriptor_label
+            != ORBITAL_INDEX_DESCRIPTOR_LABEL
+            or self.ordered_orbitals_schema_label
+            != ORBITAL_INDEX_DESCRIPTOR_SCHEMA_LABEL
+            or self.ordered_orbitals_schema_fingerprint
+            != ORBITAL_INDEX_DESCRIPTOR_SCHEMA_FINGERPRINT
+        ):
+            raise ValueError("ordered-orbitals descriptor/schema contract mismatch")
+        required_descriptor_fingerprint = _orbital_index_descriptor_fingerprint(
+            self.ordered_orbitals_sha256,
+            self.ordered_momentum_mesh_sha256,
+        )
+        if (
+            self.ordered_orbitals_descriptor_fingerprint
+            != required_descriptor_fingerprint
+        ):
+            raise ValueError("ordered-orbitals descriptor fingerprint mismatch")
+        if self.replay_payload_schema_fingerprint != REPLAY_PAYLOAD_SCHEMA_FINGERPRINT:
+            raise ValueError("replay payload schema fingerprint mismatch")
+        if (
+            self.active_band_states_layout != ACTIVE_BAND_STATES_LAYOUT
+            or type(self.active_band_states_valley_order) is not tuple
+            or tuple(self.active_band_states_valley_order)
+            != ACTIVE_BAND_STATES_VALLEY_ORDER
+            or any(
+                type(value) is not int
+                for value in self.active_band_states_valley_order
+            )
+            or self.active_band_states_gauge_scope
+            != ACTIVE_BAND_STATES_GAUGE_SCOPE
+        ):
+            raise ValueError("active-band state layout/valley/gauge contract mismatch")
+        if (
+            self.canonical_basis_kind != CANONICAL_BASIS_KIND
+            or self.residual_norm != REPLAY_RESIDUAL_NORM
+            or self.fock_decomposition_convention
+            != FOCK_DECOMPOSITION_CONVENTION
+        ):
+            raise ValueError("canonical basis/residual/decomposition contract mismatch")
         area = _positive(self.area_angstrom_squared, "source finite area")
         object.__setattr__(self, "area_angstrom_squared", area)
         _require_context_fingerprint(
             self.source_state_sha256,
             {
                 "ordered_orbitals_sha256": self.ordered_orbitals_sha256,
+                "ordered_orbitals_descriptor_label": (
+                    self.ordered_orbitals_descriptor_label
+                ),
+                "ordered_orbitals_schema_label": self.ordered_orbitals_schema_label,
+                "ordered_orbitals_schema_fingerprint": (
+                    self.ordered_orbitals_schema_fingerprint
+                ),
+                "ordered_orbitals_descriptor_fingerprint": (
+                    self.ordered_orbitals_descriptor_fingerprint
+                ),
                 "ordered_energies_sha256": self.ordered_energies_sha256,
                 "ordered_occupations_sha256": self.ordered_occupations_sha256,
                 "ordered_projector_sha256": self.ordered_projector_sha256,
                 "ordered_fock_sha256": self.ordered_fock_sha256,
+                "h0_sha256": self.h0_sha256,
+                "interaction_h_sha256": self.interaction_h_sha256,
+                "active_band_states_sha256": self.active_band_states_sha256,
+                "active_band_states_layout": self.active_band_states_layout,
+                "active_band_states_valley_order": (
+                    self.active_band_states_valley_order
+                ),
+                "active_band_states_gauge_scope": (
+                    self.active_band_states_gauge_scope
+                ),
+                "replay_loader_implementation_fingerprint": (
+                    self.replay_loader_implementation_fingerprint
+                ),
+                "replay_payload_schema_fingerprint": (
+                    self.replay_payload_schema_fingerprint
+                ),
+                "canonical_basis_kind": self.canonical_basis_kind,
+                "residual_norm": self.residual_norm,
+                "fock_decomposition_convention": (
+                    self.fock_decomposition_convention
+                ),
                 "geometry_receipt_fingerprint": self.geometry_receipt_fingerprint,
                 "ensemble_receipt_fingerprint": self.ensemble_receipt_fingerprint,
                 "source_commit": self.source_commit,
@@ -1467,6 +1696,26 @@ class Vituri2024AttestedHalfMetalSourceReceipt:
         object.__setattr__(self, "final_replay_raw_precision", final_precision)
         residual_pairs = (
             (
+                "fock_decomposition_residual_ev",
+                "fock_decomposition_tolerance_ev",
+                "Fock decomposition",
+            ),
+            (
+                "h0_hermiticity_residual_ev",
+                "h0_hermiticity_tolerance_ev",
+                "h0 Hermiticity",
+            ),
+            (
+                "interaction_h_hermiticity_residual_ev",
+                "interaction_h_hermiticity_tolerance_ev",
+                "interaction_h Hermiticity",
+            ),
+            (
+                "active_band_state_norm_residual",
+                "active_band_state_norm_tolerance",
+                "active-band state norm",
+            ),
+            (
                 "fock_projector_commutator_residual_ev",
                 "stationarity_tolerance_ev",
                 "[F,P] stationarity",
@@ -1487,9 +1736,24 @@ class Vituri2024AttestedHalfMetalSourceReceipt:
                 "Fock Hermiticity",
             ),
             (
+                "projector_vs_occupation_residual",
+                "projector_vs_occupation_tolerance",
+                "projector/occupation diagonal closure",
+            ),
+            (
+                "fock_vs_diagonal_energy_residual_ev",
+                "fock_vs_diagonal_energy_tolerance_ev",
+                "canonical-basis diagonal closure",
+            ),
+            (
                 "aufbau_occupation_violation_ev",
                 "aufbau_tolerance_ev",
                 "Aufbau occupation",
+            ),
+            (
+                "chemical_mu_occupation_residual_ev",
+                "chemical_mu_occupation_tolerance_ev",
+                "chemical-potential occupation closure",
             ),
             (
                 "branch_energy_residual_ev",
@@ -1932,13 +2196,15 @@ class Vituri2024HalfMetalHFSpec:
 
 
 class Vituri2024AttestedHalfMetalSourceArrays(TypedDict):
-    """Typed provider return annotation; the binding never requests these arrays."""
+    """Typed source arrays; ``ordered_orbitals`` is only an index descriptor."""
 
-    orbitals: ComplexArray
+    active_band_states: ComplexArray
+    h0: ComplexArray
+    interaction_h: ComplexArray
+    fock: ComplexArray
+    projector: ComplexArray
     energies: FloatArray
     occupations: IntegerArray
-    projector: ComplexArray
-    fock: ComplexArray
 
 
 @runtime_checkable

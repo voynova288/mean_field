@@ -15,8 +15,11 @@ mesh/area/q0/UV/CDW authority, and production/executable readiness are not
 established.  The separate half-metal HF preflight validates provider-owned geometry,
 ensemble, SCF, shared-functional, and attested-source receipts.  Its only
 positive aggregate result is ``receipt_set_complete``; provider metadata is
-``provider_metadata_attested`` while scientific execution and independent
-array recomputation remain explicitly false and execution replay unresolved.
+``provider_metadata_attested`` while scientific execution remains explicitly
+false.  The separate array-only replay adapter can load and verify canonical
+saved arrays and base-mesh source structure; SCF trajectory, branch-table,
+pocket-refinement, E->F->H functional-chain, and paper-reproduction replay
+remain explicit NO-GO boundaries.
 """
 
 from .vituri2024_interaction import (
@@ -97,6 +100,33 @@ from .vituri2024_hf_preflight import (
     Vituri2024SharedFunctionalReceipt,
     Vituri2024ValleyPocketEvidenceReceipt,
 )
+from .vituri2024_hf_replay import (
+    ACTIVE_BAND_STATES_GAUGE_SCOPE,
+    ACTIVE_BAND_STATES_LAYOUT,
+    ACTIVE_BAND_STATES_VALLEY_ORDER,
+    CANONICAL_BASIS_KIND,
+    FOCK_DECOMPOSITION_CONVENTION,
+    INTERNAL_FLAVOR_ORDER,
+    ORBITAL_INDEX_DESCRIPTOR_LABEL,
+    ORBITAL_INDEX_DESCRIPTOR_SCHEMA_FINGERPRINT,
+    ORBITAL_INDEX_DESCRIPTOR_SCHEMA_LABEL,
+    REPLAY_ARRAY_CONVERSION,
+    REPLAY_ARRAY_LAYOUT,
+    REPLAY_ORBITAL_ORDER,
+    REPLAY_PAYLOAD_SCHEMA_FINGERPRINT,
+    REPLAY_RESIDUAL_NORM,
+    Vituri2024HalfMetalHFBasePocketReplayEvidence,
+    Vituri2024HalfMetalHFReplayHashes,
+    Vituri2024HalfMetalHFReplayOccupationEvidence,
+    Vituri2024HalfMetalHFReplayPayload,
+    Vituri2024HalfMetalHFReplayProviderProtocol,
+    Vituri2024HalfMetalHFReplayReceipt,
+    Vituri2024HalfMetalHFReplayResiduals,
+    Vituri2024HalfMetalHFReplayStatus,
+    canonical_array_sha256,
+    canonical_orbital_order_sha256,
+    replay_vituri2024_half_metal_hf_arrays,
+)
 from .vituri2024_vertex import (
     ANTISYMMETRIZED_FULL_SUM_HAMILTONIAN_AREA_PREFACTOR,
     ANTISYMMETRIZED_VERTEX_EXCLUSIONS,
@@ -148,6 +178,9 @@ from .vituri2024 import (
 
 __all__ = [
     "ACTIVE_BAND_INDEX_ZERO_BASED",
+    "ACTIVE_BAND_STATES_GAUGE_SCOPE",
+    "ACTIVE_BAND_STATES_LAYOUT",
+    "ACTIVE_BAND_STATES_VALLEY_ORDER",
     "ANTISYMMETRIZED_FULL_SUM_HAMILTONIAN_AREA_PREFACTOR",
     "ANTISYMMETRIZED_VERTEX_EXCLUSIONS",
     "DIAGONAL_HF_SOURCE_PROVIDER_STATUS",
@@ -155,10 +188,14 @@ __all__ = [
     "FORM_FACTOR_GAUGE_LABEL",
     "F_tau",
     "InteractionAuthorityKind",
+    "INTERNAL_FLAVOR_ORDER",
     "KINEMATICS_AUTHORITY_SCOPE",
     "KINEMATICS_PROVIDER_METADATA_STATUS",
     "ORDERED_COEFFICIENT_EXCLUSIONS",
     "ORDERED_FULL_SUM_HAMILTONIAN_AREA_PREFACTOR",
+    "ORBITAL_INDEX_DESCRIPTOR_LABEL",
+    "ORBITAL_INDEX_DESCRIPTOR_SCHEMA_FINGERPRINT",
+    "ORBITAL_INDEX_DESCRIPTOR_SCHEMA_LABEL",
     "PUBLISHED_PRB_PDF_SHA256",
     "PauliShortCircuitReason",
     "SelectionRule",
@@ -171,6 +208,8 @@ __all__ = [
     "ActiveBandEigensolution",
     "ApproximatePaperCheckpoint",
     "BASIS",
+    "CANONICAL_BASIS_KIND",
+    "FOCK_DECOMPOSITION_CONVENTION",
     "PAPER_EPSILON",
     "PAPER_Q_TF_INVERSE_ANGSTROM",
     "PAPER_Q_TF_PER_A0",
@@ -184,6 +223,11 @@ __all__ = [
     "RPA_ELEMENT_UNITS",
     "RPA_VERTEX_UNITS",
     "RPAElementKind",
+    "REPLAY_ARRAY_CONVERSION",
+    "REPLAY_ARRAY_LAYOUT",
+    "REPLAY_ORBITAL_ORDER",
+    "REPLAY_PAYLOAD_SCHEMA_FINGERPRINT",
+    "REPLAY_RESIDUAL_NORM",
     "SCALAR_HESSIAN_EQUATION",
     "SM_TEX_AUTHORITY_PATH",
     "SignedLane",
@@ -217,8 +261,16 @@ __all__ = [
     "Vituri2024HFGeometryReceipt",
     "Vituri2024HFReceiptSetStatus",
     "Vituri2024HFSCFPolicyReceipt",
+    "Vituri2024HalfMetalHFBasePocketReplayEvidence",
     "Vituri2024HalfMetalHFProviderBinding",
     "Vituri2024HalfMetalHFProviderProtocol",
+    "Vituri2024HalfMetalHFReplayHashes",
+    "Vituri2024HalfMetalHFReplayOccupationEvidence",
+    "Vituri2024HalfMetalHFReplayPayload",
+    "Vituri2024HalfMetalHFReplayProviderProtocol",
+    "Vituri2024HalfMetalHFReplayReceipt",
+    "Vituri2024HalfMetalHFReplayResiduals",
+    "Vituri2024HalfMetalHFReplayStatus",
     "Vituri2024HalfMetalHFSpec",
     "Vituri2024HalfMetalPaperTarget",
     "Vituri2024InteractionBinding",
@@ -244,6 +296,8 @@ __all__ = [
     "Vituri2024ValleyPocketEvidenceReceipt",
     "assemble_vituri2024_tdhf_signed_q",
     "bind_vituri2024_interaction",
+    "canonical_array_sha256",
+    "canonical_orbital_order_sha256",
     "c3_basis_operator",
     "hamiltonian",
     "six_band_hamiltonian",
@@ -256,6 +310,7 @@ __all__ = [
     "v_tf",
     "vituri2024_antisymmetrized_projected_vertex",
     "vituri2024_ordered_projected_coefficient",
+    "replay_vituri2024_half_metal_hf_arrays",
     "vituri2024_rpa_a_element",
     "vituri2024_rpa_b_element",
     "vituri2024_v0",
