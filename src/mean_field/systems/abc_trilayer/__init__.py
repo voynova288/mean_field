@@ -7,7 +7,9 @@ source is the pinned arXiv-v1 ``SM.tex``; the separate published-PRB evidence
 is pinned to PDF SHA256
 ``2226e17ed95bd867607787b47343fe5fc77f2c30557023e349d86e55159c0765``.
 The package does not claim a paper phase gauge or production/paper numerical
-parity for that layer.
+parity for that layer.  The local Vituri scalar-Hessian adapter maps the
+derived vertex to paper C9 without dense RPA assembly; its diagonal-HF and
+finite-area inputs remain caller-attested and non-production.
 """
 
 from .vituri2024_interaction import (
@@ -33,6 +35,24 @@ from .vituri2024_interaction import (
     vituri2024_v0,
     vituri2024_vtf,
     vtf,
+)
+from .vituri2024_rpa import (
+    DIAGONAL_HF_SOURCE_PROVIDER_STATUS,
+    FINITE_AREA_PROVIDER_STATUS,
+    RPA_AREA_UNITS,
+    RPA_A_ELEMENT_EQUATION,
+    RPA_B_ELEMENT_EQUATION,
+    RPA_ELEMENT_AUTHORITY,
+    RPA_ELEMENT_NO_GO_LIMITS,
+    RPA_ELEMENT_UNITS,
+    RPA_VERTEX_UNITS,
+    SCALAR_HESSIAN_EQUATION,
+    RPAElementKind,
+    Vituri2024DiagonalHFTransitionReceipt,
+    Vituri2024FiniteAreaReceipt,
+    Vituri2024RPAElementReceipt,
+    vituri2024_rpa_a_element,
+    vituri2024_rpa_b_element,
 )
 from .vituri2024_vertex import (
     ANTISYMMETRIZED_FULL_SUM_HAMILTONIAN_AREA_PREFACTOR,
@@ -87,6 +107,8 @@ __all__ = [
     "ACTIVE_BAND_INDEX_ZERO_BASED",
     "ANTISYMMETRIZED_FULL_SUM_HAMILTONIAN_AREA_PREFACTOR",
     "ANTISYMMETRIZED_VERTEX_EXCLUSIONS",
+    "DIAGONAL_HF_SOURCE_PROVIDER_STATUS",
+    "FINITE_AREA_PROVIDER_STATUS",
     "FORM_FACTOR_GAUGE_LABEL",
     "F_tau",
     "InteractionAuthorityKind",
@@ -111,6 +133,15 @@ __all__ = [
     "PAPER_Q_TF_PER_A0",
     "PDF_AUTHORITY_PATH",
     "Q0Evaluation",
+    "RPA_AREA_UNITS",
+    "RPA_A_ELEMENT_EQUATION",
+    "RPA_B_ELEMENT_EQUATION",
+    "RPA_ELEMENT_AUTHORITY",
+    "RPA_ELEMENT_NO_GO_LIMITS",
+    "RPA_ELEMENT_UNITS",
+    "RPA_VERTEX_UNITS",
+    "RPAElementKind",
+    "SCALAR_HESSIAN_EQUATION",
     "SM_TEX_AUTHORITY_PATH",
     "SM_TEX_SHA256",
     "SPIN_STIFFNESS_CHECKPOINTS",
@@ -123,6 +154,8 @@ __all__ = [
     "VITURI2024_SPEC",
     "Vituri2024AntisymmetrizedVertexReceipt",
     "Vituri2024DensityFormFactorReceipt",
+    "Vituri2024DiagonalHFTransitionReceipt",
+    "Vituri2024FiniteAreaReceipt",
     "Vituri2024Flavor",
     "Vituri2024FourPointKinematicsReceipt",
     "Vituri2024InteractionBinding",
@@ -131,6 +164,7 @@ __all__ = [
     "Vituri2024Orbital",
     "Vituri2024OrderedCoefficientReceipt",
     "Vituri2024Parameters",
+    "Vituri2024RPAElementReceipt",
     "Vituri2024PauliShortCircuitRecord",
     "Vituri2024Spec",
     "Vituri2024StateOverlapInvariant",
@@ -147,6 +181,8 @@ __all__ = [
     "v_tf",
     "vituri2024_antisymmetrized_projected_vertex",
     "vituri2024_ordered_projected_coefficient",
+    "vituri2024_rpa_a_element",
+    "vituri2024_rpa_b_element",
     "vituri2024_v0",
     "vituri2024_vtf",
     "vtf",

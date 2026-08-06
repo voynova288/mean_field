@@ -170,8 +170,16 @@ not author raw numerical arrays.
     local momentum conservation and records distinct omitted reconstruction
     prefactors: `1/(2A)` for the full ordered sum and `1/(4A)` for the full
     antisymmetrized sum;
-  - reciprocal-torus/carry conventions, interaction meshes, occupations,
-    area assembly, HF and TDHF remain fail-closed.
+  - `vituri2024_rpa.py` maps the derived vertex to the local C9 scalar-Hessian
+    elements
+    `A=(epsilon_a-epsilon_A)delta-vbar_(aB;Ab)/Area` and
+    `B=-vbar_(ab;AB)/Area`. The mapping is independently checked against a
+    normalized-Slater-chart energy expansion and applies the area division
+    exactly once, without post-Hermitization;
+  - the diagonal-HF transitions and finite area are still caller-attested,
+    while reciprocal-torus/carry conventions, interaction meshes/quadrature,
+    source stationarity, q=0 background, dense signed-q assembly and TDHF
+    eigensolving remain fail-closed.
 
 ### Wang et al., *Putting a new spin on the incommensurate Kekule spiral: from spin-valley locking and collective modes to fermiology and implications for superconductivity*
 
