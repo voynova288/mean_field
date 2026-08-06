@@ -6,6 +6,7 @@ import inspect
 import json
 from pathlib import Path
 import struct
+import subprocess
 
 import numpy as np
 import pytest
@@ -14,6 +15,8 @@ import mean_field.systems.abc_trilayer as abc
 import mean_field.systems.abc_trilayer.vituri2024_hf_preflight as preflight
 import mean_field.systems.abc_trilayer.vituri2024_hf_functional_replay as functional
 import mean_field.systems.abc_trilayer.vituri2024_hf_replay as replay
+import mean_field.systems.abc_trilayer.vituri2024_hf_scf_replay as scf_replay
+from mean_field.core.hf import DensityUpdateResult, HartreeFockKernel, HartreeFockProblem
 
 _SHA = {str(index): str(index) * 64 for index in range(10)}
 _COMMIT = "a" * 40
@@ -49,6 +52,10 @@ def _canonical_replay_arrays() -> dict[str, np.ndarray]:
     # F(D)=h0+gD and the saved interaction is its value gP at the anchor.
     interaction_h = _FUNCTIONAL_G * projector
     h0 = fock - interaction_h
+    # Register the canonical synthetic source after the same final H0+gP
+    # arithmetic performed by HEAD, so exact source hashes are meaningful.
+    fock = h0 + interaction_h
+    energies = np.real(np.diagonal(fock, axis1=0, axis2=1).T).copy()
     active_band_states = np.zeros((2, 6, 20), dtype=np.complex128)
     for valley_index in range(2):
         for k_index in range(20):
@@ -936,6 +943,18 @@ def _branches(
     )
 
 
+def _branch_table_bytes(
+    records: tuple[abc.Vituri2024BranchEnergyReceipt, ...],
+) -> bytes:
+    """Independent canonical source-table serialization used by fixtures."""
+
+    return json.dumps(
+        [asdict(item) for item in records],
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+
 def _source(
     geometry: abc.Vituri2024HFGeometryReceipt,
     ensemble: abc.Vituri2024HFEnsembleReceipt,
@@ -1047,7 +1066,9 @@ def _source(
             _pocket(1, geometry, ensemble, array_hashes=hashes),
         ),
         "branch_comparison_evidence_sha256": _SHA["6"],
-        "branch_energy_table_sha256": _SHA["7"],
+        "branch_energy_table_sha256": hashlib.sha256(
+            _branch_table_bytes(records)
+        ).hexdigest(),
         "branch_records": records,
         "branch_energy_functional_fingerprint": shared.scalar_energy.fingerprint,
         "selected_branch_label": "spin_plus",
@@ -2842,6 +2863,11 @@ def test_array_replay_gates_valley_spin_and_chemical_mu_closure() -> None:
     valley_arrays["h0"][1, 1, 2] = (
         0.01 - valley_arrays["interaction_h"][1, 1, 2]
     )
+    valley_arrays["fock"][1, 1, 2] = (
+        valley_arrays["h0"][1, 1, 2]
+        + valley_arrays["interaction_h"][1, 1, 2]
+    )
+    valley_arrays["energies"][1, 2] = valley_arrays["fock"][1, 1, 2].real
     valley_arrays["occupations"][3, 19] = 1
     valley_arrays["projector"][3, 3, 19] = 1.0
     valley_arrays["energies"][3, 19] = -0.028
@@ -2849,6 +2875,11 @@ def test_array_replay_gates_valley_spin_and_chemical_mu_closure() -> None:
     valley_arrays["h0"][3, 3, 19] = (
         -0.028 - valley_arrays["interaction_h"][3, 3, 19]
     )
+    valley_arrays["fock"][3, 3, 19] = (
+        valley_arrays["h0"][3, 3, 19]
+        + valley_arrays["interaction_h"][3, 3, 19]
+    )
+    valley_arrays["energies"][3, 19] = valley_arrays["fock"][3, 3, 19].real
     valley_gap = float(
         np.min(valley_arrays["energies"][valley_arrays["occupations"] == 0])
         - np.max(valley_arrays["energies"][valley_arrays["occupations"] == 1])
@@ -2870,6 +2901,11 @@ def test_array_replay_gates_valley_spin_and_chemical_mu_closure() -> None:
     spin_arrays["h0"][0, 0, 0] = (
         0.01 - spin_arrays["interaction_h"][0, 0, 0]
     )
+    spin_arrays["fock"][0, 0, 0] = (
+        spin_arrays["h0"][0, 0, 0]
+        + spin_arrays["interaction_h"][0, 0, 0]
+    )
+    spin_arrays["energies"][0, 0] = spin_arrays["fock"][0, 0, 0].real
     binding, _, _ = _replay_case(spin_arrays)
     with pytest.raises(ValueError, match="opposite-spin hole-count mismatch"):
         abc.replay_vituri2024_half_metal_hf_arrays(binding)
@@ -2880,6 +2916,11 @@ def test_array_replay_gates_valley_spin_and_chemical_mu_closure() -> None:
     mu_arrays["h0"][0, 0, 0] = (
         -0.015 - mu_arrays["interaction_h"][0, 0, 0]
     )
+    mu_arrays["fock"][0, 0, 0] = (
+        mu_arrays["h0"][0, 0, 0]
+        + mu_arrays["interaction_h"][0, 0, 0]
+    )
+    mu_arrays["energies"][0, 0] = mu_arrays["fock"][0, 0, 0].real
     mu_gap = float(
         np.min(mu_arrays["energies"][mu_arrays["occupations"] == 0])
         - np.max(mu_arrays["energies"][mu_arrays["occupations"] == 1])
@@ -2902,6 +2943,13 @@ def test_array_replay_rejects_disconnected_base_pocket_without_refinement_claim(
         arrays["h0"][flavor, flavor, k_index] = (
             0.01 - arrays["interaction_h"][flavor, flavor, k_index]
         )
+        arrays["fock"][flavor, flavor, k_index] = (
+            arrays["h0"][flavor, flavor, k_index]
+            + arrays["interaction_h"][flavor, flavor, k_index]
+        )
+        arrays["energies"][flavor, k_index] = arrays["fock"][
+            flavor, flavor, k_index
+        ].real
     hashes = _canonical_hashes(arrays)
     area = 40_000.0
     geometry = _geometry(
@@ -4003,3 +4051,1453 @@ def test_functional_success_objects_are_factory_token_gated() -> None:
     assert annotations["return"] == "Vituri2024DirectDisplacedFockResponse"
     for name in functional.__all__:
         assert getattr(abc, name) is getattr(functional, name)
+
+
+# Uninterrupted SCF replay fixtures.  The trajectory oracle below implements
+# the two affine fixed-point steps directly and never calls core/replay code.
+_SCF_ARCHIVE_LOADER_FP = _fp({"scf": "archive_loader_v1"})
+_SCF_STATE_BUILDER_FP = _fp({"scf": "state_builder_v1"})
+_SCF_PROBLEM_BUILDER_FP = _fp({"scf": "problem_builder_v1"})
+_SCF_ADAPTER_SCHEMA_FP = _fp({"scf": "adapter_schema_v1"})
+_SCF_OBSERVABLES_EMPTY_FP = _fp({})
+_SCF_DIAGNOSTICS_EMPTY_FP = _fp({})
+
+
+class _SyntheticSCFState:
+    def __init__(self, h0: np.ndarray, precision: float, *, copy_arrays: bool = True) -> None:
+        copy = np.array if copy_arrays else np.asarray
+        self.h0 = copy(h0, dtype=np.complex128)
+        self.density = np.zeros_like(self.h0)
+        self.hamiltonian = np.zeros_like(self.h0)
+        self.energies = np.zeros((self.h0.shape[0], self.h0.shape[2]), dtype=np.float64)
+        self.mu = 0.0
+        self.precision = precision
+        self.diagnostics: dict[str, float] = {}
+
+    @property
+    def nk(self) -> int:
+        return int(self.h0.shape[2])
+
+
+def _manual_oda_lambda(
+    density: np.ndarray,
+    h0: np.ndarray,
+    interaction_h: np.ndarray,
+    delta_density: np.ndarray,
+    delta_h: np.ndarray,
+) -> float:
+    nk = density.shape[2]
+    a = float(np.real(np.sum(delta_density * delta_h)) / nk)
+    b = float(
+        np.real(
+            np.sum(delta_density * h0)
+            + 0.5 * np.sum(delta_density * interaction_h)
+            + 0.5 * np.sum(density * delta_h)
+        )
+        / nk
+    )
+    if abs(a) < 1.0e-15:
+        return 1.0 if b < 0.0 else 0.0
+    lambda0 = -b / a
+    if a > 0.0:
+        if lambda0 <= 0.0:
+            return 0.0
+        if lambda0 < 1.0:
+            return float(lambda0)
+        return 1.0
+    if lambda0 <= 0.5:
+        return 1.0
+    return 0.0
+
+
+def _manual_norm(updated: np.ndarray, previous: np.ndarray) -> float:
+    denominator = float(np.linalg.norm(updated))
+    numerator = float(np.linalg.norm(previous - updated))
+    return 0.0 if denominator < 1.0e-15 and numerator < 1.0e-15 else numerator / denominator
+
+
+def _scf_targets() -> dict[str, tuple[np.ndarray, np.ndarray]]:
+    return {
+        seed.seed_label: (
+            np.roll(_REPLAY_ARRAYS["projector"], index, axis=2).copy(),
+            np.roll(_REPLAY_ARRAYS["energies"], index, axis=1).copy(),
+        )
+        for index, seed in enumerate(_seeds())
+    }
+
+
+def _scf_branch_records(
+    energies: tuple[float, float, float] = (-2.0, -1.9, -1.8),
+    *,
+    convergence_rule: str = "raw",
+    second_exit_reason: str = "converged",
+) -> tuple[abc.Vituri2024BranchEnergyReceipt, ...]:
+    return tuple(
+        _branch(
+            seed,
+            energy,
+            convergence_rule=convergence_rule,
+            attested_exit_reason=(
+                second_exit_reason if seed.seed_label == "spin_minus" else "converged"
+            ),
+            iterations=(
+                500
+                if seed.seed_label == "spin_minus" and second_exit_reason == "max_iter"
+                else 2
+            ),
+            terminal_norm_raw=(
+                1.0e-4
+                if seed.seed_label == "spin_minus" and second_exit_reason != "converged"
+                else 0.0
+            ),
+            terminal_norm_mixed=(
+                1.0e-4
+                if seed.seed_label == "spin_minus" and second_exit_reason != "converged"
+                else 0.0
+            ),
+            terminal_norm_selected=(
+                1.0e-4
+                if seed.seed_label == "spin_minus" and second_exit_reason != "converged"
+                else 0.0
+            ),
+            terminal_oda_lambda=(
+                1.0e-3
+                if seed.seed_label == "spin_minus" and second_exit_reason == "max_iter"
+                else 0.0
+            ),
+            final_replay_raw_metric=0.0,
+        )
+        for seed, energy in zip(_seeds(), energies)
+    )
+
+
+def _scf_spec(
+    branch_energies: tuple[float, float, float] = (-2.0, -1.9, -1.8),
+    *,
+    convergence_rule: str = "raw",
+    second_exit_reason: str = "converged",
+) -> abc.Vituri2024HalfMetalHFSpec:
+    geometry, ensemble, policy = (
+        _geometry(),
+        _ensemble(),
+        _scf(convergence_rule=convergence_rule),
+    )
+    shared = _shared(geometry, ensemble)
+    records = _scf_branch_records(
+        branch_energies,
+        convergence_rule=convergence_rule,
+        second_exit_reason=second_exit_reason,
+    )
+    table_bytes = _branch_table_bytes(records)
+    source = _source(
+        geometry,
+        ensemble,
+        policy,
+        shared,
+        branch_records=records,
+        branch_energy_table_sha256=hashlib.sha256(table_bytes).hexdigest(),
+        selected_branch_energy_ev=branch_energies[0],
+        minimum_compared_branch_energy_ev=min(branch_energies),
+        branch_energy_residual_ev=abs(branch_energies[0] - min(branch_energies)),
+        final_replay_raw_metric=0.0,
+    )
+    return abc.Vituri2024HalfMetalHFSpec(
+        geometry=geometry,
+        ensemble=ensemble,
+        scf_policy=policy,
+        shared_functional=shared,
+        attested_source=source,
+    )
+
+
+def _manual_energy(
+    interaction_h: np.ndarray,
+    h0: np.ndarray,
+    density: np.ndarray,
+    offset: float,
+) -> float:
+    return float(
+        offset
+        + np.real(
+            np.sum(h0 * density) + 0.5 * np.sum(interaction_h * density)
+        )
+        / density.shape[2]
+    )
+
+
+def _manual_trajectory(
+    seed: abc.Vituri2024SCFSeedReceipt,
+    target: np.ndarray,
+    energies: np.ndarray,
+    branch_energy: float,
+) -> abc.Vituri2024SCFSeedTrajectoryArchive:
+    h0 = _REPLAY_ARRAYS["h0"].copy()
+    zeros_matrix = np.zeros_like(h0)
+    zeros_energy = np.zeros_like(energies)
+    pre = abc.Vituri2024SCFStateSnapshot(
+        h0=h0,
+        density=zeros_matrix,
+        hamiltonian=zeros_matrix,
+        energies=zeros_energy,
+        mu=0.0,
+        precision=1.0e-9,
+        diagnostics_manifest_sha256=_SCF_DIAGNOSTICS_EMPTY_FP,
+    )
+    density0 = 0.5 * target
+    post = abc.Vituri2024SCFStateSnapshot(
+        h0=h0,
+        density=density0,
+        hamiltonian=zeros_matrix,
+        energies=zeros_energy,
+        mu=0.0,
+        precision=1.0e-9,
+        diagnostics_manifest_sha256=_SCF_DIAGNOSTICS_EMPTY_FP,
+    )
+    final_interaction = _FUNCTIONAL_G * target
+    raw_final_energy = float(
+        np.real(
+            np.sum(h0 * target) + 0.5 * np.sum(final_interaction * target)
+        )
+        / target.shape[2]
+    )
+    offset = branch_energy - raw_final_energy
+
+    interaction1 = _FUNCTIONAL_G * density0
+    delta1 = target - density0
+    delta_h1 = _FUNCTIONAL_G * delta1
+    lambda1 = _manual_oda_lambda(density0, h0, interaction1, delta1, delta_h1)
+    assert lambda1 == 1.0
+    mixed1 = lambda1 * target + (1.0 - lambda1) * density0
+    total1 = h0 + interaction1
+    step1_energy = _manual_energy(interaction1, h0, density0, offset)
+    step1 = abc.Vituri2024SCFStepArchive(
+        iteration=1,
+        previous_density=density0,
+        interaction_h=interaction1,
+        total_hamiltonian=total1,
+        raw_density=target,
+        raw_energies=energies,
+        raw_mu=-0.02,
+        density_update_observables_sha256=_SCF_OBSERVABLES_EMPTY_FP,
+        mixed_density=mixed1,
+        state_density=mixed1,
+        state_hamiltonian=total1,
+        state_energies=energies,
+        state_mu=-0.02,
+        state_diagnostics_manifest_sha256=_fp(
+            {"hf_energy": step1_energy, "oda_parameter": lambda1, "iterations": 1.0}
+        ),
+        delta_interaction_h=delta_h1,
+        oda_lambda=lambda1,
+        norm_raw=_manual_norm(target, density0),
+        norm_mixed=_manual_norm(mixed1, density0),
+        norm_selected=_manual_norm(target, density0),
+        energy=step1_energy,
+        interaction_h_from_cache=False,
+    )
+
+    interaction2 = interaction1 + lambda1 * delta_h1
+    delta2 = target - mixed1
+    delta_h2 = _FUNCTIONAL_G * delta2
+    lambda2 = _manual_oda_lambda(mixed1, h0, interaction2, delta2, delta_h2)
+    assert lambda2 == 0.0
+    mixed2 = lambda2 * target + (1.0 - lambda2) * mixed1
+    total2 = h0 + interaction2
+    step2_energy = _manual_energy(interaction2, h0, mixed1, offset)
+    step2 = abc.Vituri2024SCFStepArchive(
+        iteration=2,
+        previous_density=mixed1,
+        interaction_h=interaction2,
+        total_hamiltonian=total2,
+        raw_density=target,
+        raw_energies=energies,
+        raw_mu=-0.02,
+        density_update_observables_sha256=_SCF_OBSERVABLES_EMPTY_FP,
+        mixed_density=mixed2,
+        state_density=mixed2,
+        state_hamiltonian=total2,
+        state_energies=energies,
+        state_mu=-0.02,
+        state_diagnostics_manifest_sha256=_fp(
+            {"hf_energy": step2_energy, "oda_parameter": lambda2, "iterations": 2.0}
+        ),
+        delta_interaction_h=delta_h2,
+        oda_lambda=lambda2,
+        norm_raw=_manual_norm(target, mixed1),
+        norm_mixed=_manual_norm(mixed2, mixed1),
+        norm_selected=_manual_norm(target, mixed1),
+        energy=step2_energy,
+        interaction_h_from_cache=True,
+    )
+    final_energy = _manual_energy(interaction2, h0, mixed2, offset)
+    final_raw_norm = _manual_norm(target, mixed2)
+    final = abc.Vituri2024SCFFinalRecomputationArchive(
+        h0=h0,
+        state_density=mixed2,
+        effective_interaction_h=interaction2,
+        total_hamiltonian=total2,
+        raw_density=target,
+        energies=energies,
+        mu=-0.02,
+        energy=final_energy,
+        raw_norm=final_raw_norm,
+        density_update_observables_sha256=_SCF_OBSERVABLES_EMPTY_FP,
+        state_diagnostics_manifest_sha256=_fp(
+            {
+                "hf_energy": final_energy,
+                "oda_parameter": lambda2,
+                "iterations": 2.0,
+                "final_raw_norm": final_raw_norm,
+            }
+        ),
+    )
+    transfer = (
+        abc.Vituri2024SCFTransferSourceReceipt(
+            "lower_density",
+            f"{seed.seed_label}_lower",
+            _COMMIT,
+            _fp({"seed": seed.seed_label, "side": "lower", "artifact": True}),
+            _fp({"seed": seed.seed_label, "side": "lower", "state": True}),
+        ),
+        abc.Vituri2024SCFTransferSourceReceipt(
+            "higher_density",
+            f"{seed.seed_label}_higher",
+            _COMMIT,
+            _fp({"seed": seed.seed_label, "side": "higher", "artifact": True}),
+            _fp({"seed": seed.seed_label, "side": "higher", "state": True}),
+        ),
+    )
+    callback_sequence = (
+        "initializer",
+        "interaction_builder",
+        "energy_functional",
+        "density_builder",
+        "oda_delta_interaction_builder",
+        "energy_functional",
+        "density_builder",
+        "oda_delta_interaction_builder",
+        "density_builder",
+        "energy_functional",
+    )
+    return abc.Vituri2024SCFSeedTrajectoryArchive(
+        seed=seed,
+        transfer_source_receipts=transfer,
+        pre_init=pre,
+        post_init=post,
+        steps=(step1, step2),
+        final_recomputation=final,
+        callback_sequence=callback_sequence,
+        exit_reason="converged",
+        converged=True,
+        iterations=2,
+    )
+
+
+def _scf_metadata(spec: abc.Vituri2024HalfMetalHFSpec) -> dict[str, str]:
+    assert spec.shared_functional is not None
+    dependency = abc.scf_dependency_archive_fingerprint(
+        source_commit=_COMMIT,
+        source_artifact_sha256=_SOURCE_ARTIFACT,
+        state_builder_implementation_fingerprint=_SCF_STATE_BUILDER_FP,
+        problem_builder_implementation_fingerprint=_SCF_PROBLEM_BUILDER_FP,
+        scf_adapter_schema_fingerprint=_SCF_ADAPTER_SCHEMA_FP,
+        scf_adapter_abi_fingerprint=abc.SCF_REPLAY_ADAPTER_ABI_FINGERPRINT,
+    )
+    functional_provider = abc.functional_provider_fingerprint(
+        base_provider_fingerprint=_PROVIDER_FINGERPRINT,
+        functional_replay_abi_fingerprint=abc.FUNCTIONAL_REPLAY_ABI_FINGERPRINT,
+        functional_replay_payload_schema_fingerprint=(
+            abc.FUNCTIONAL_REPLAY_PAYLOAD_SCHEMA_FINGERPRINT
+        ),
+        functional_probe_loader_implementation_fingerprint=(
+            _FUNCTIONAL_PROBE_LOADER_IMPLEMENTATION_FINGERPRINT
+        ),
+        direct_displaced_fock_implementation_fingerprint=(
+            _DIRECT_DISPLACED_FOCK_IMPLEMENTATION_FINGERPRINT
+        ),
+        direct_builder_dependency_archive_fingerprint=(
+            _DIRECT_BUILDER_DEPENDENCY_ARCHIVE_FINGERPRINT
+        ),
+    )
+    return {
+        "state_builder_implementation_fingerprint": _SCF_STATE_BUILDER_FP,
+        "problem_builder_implementation_fingerprint": _SCF_PROBLEM_BUILDER_FP,
+        "scf_adapter_schema_fingerprint": _SCF_ADAPTER_SCHEMA_FP,
+        "scf_adapter_abi_fingerprint": abc.SCF_REPLAY_ADAPTER_ABI_FINGERPRINT,
+        "scf_dependency_archive_fingerprint": dependency,
+        "scf_provider_fingerprint": abc.scf_provider_fingerprint(
+            functional_provider_fingerprint=functional_provider,
+            state_builder_implementation_fingerprint=_SCF_STATE_BUILDER_FP,
+            problem_builder_implementation_fingerprint=_SCF_PROBLEM_BUILDER_FP,
+            scf_adapter_schema_fingerprint=_SCF_ADAPTER_SCHEMA_FP,
+            scf_adapter_abi_fingerprint=abc.SCF_REPLAY_ADAPTER_ABI_FINGERPRINT,
+            scf_dependency_archive_fingerprint=dependency,
+        ),
+    }
+
+
+def _manual_scf_archive(
+    spec: abc.Vituri2024HalfMetalHFSpec,
+) -> abc.Vituri2024ImmutableHistoricalSCFArchive:
+    assert spec.attested_source is not None
+    records = spec.attested_source.branch_records
+    targets = _scf_targets()
+    trajectories = tuple(
+        _manual_trajectory(
+            row.seed,
+            targets[row.seed.seed_label][0],
+            targets[row.seed.seed_label][1],
+            row.canonical_energy_ev,
+        )
+        for row in records
+    )
+    selected = abc.Vituri2024SCFSelectedSource(
+        selected_branch_label="spin_plus",
+        source_state_sha256=spec.attested_source.source_state_sha256,
+        h0=_REPLAY_ARRAYS["h0"],
+        effective_interaction_h=_REPLAY_ARRAYS["interaction_h"],
+        fock=_REPLAY_ARRAYS["fock"],
+        projector=_REPLAY_ARRAYS["projector"],
+        energies=_REPLAY_ARRAYS["energies"],
+        mu=-0.02,
+        registered_hashes=(
+            ("h0", _ARRAY_HASHES["h0"]),
+            ("effective_interaction_h", _ARRAY_HASHES["interaction_h"]),
+            ("fock", _ARRAY_HASHES["fock"]),
+            ("projector", _ARRAY_HASHES["projector"]),
+            ("energies", _ARRAY_HASHES["energies"]),
+        ),
+    )
+    table_bytes = _branch_table_bytes(records)
+    archive_authority_fingerprint = abc.scf_archive_authority_fingerprint(
+        source_artifact_sha256=_SOURCE_ARTIFACT,
+        archive_loader_implementation_fingerprint=_SCF_ARCHIVE_LOADER_FP,
+    )
+    return abc.Vituri2024ImmutableHistoricalSCFArchive(
+        archive_authority_fingerprint=archive_authority_fingerprint,
+        source_commit=_COMMIT,
+        source_artifact_sha256=_SOURCE_ARTIFACT,
+        spec_fingerprint=spec.fingerprint,
+        archive_loader_implementation_fingerprint=_SCF_ARCHIVE_LOADER_FP,
+        archive_schema_fingerprint=abc.SCF_REPLAY_ARCHIVE_SCHEMA_FINGERPRINT,
+        generation_phase=abc.SCF_REPLAY_ARCHIVE_GENERATION_PHASE,
+        seed_trajectories=trajectories,
+        branch_records=records,
+        original_branch_table_bytes=table_bytes,
+        original_branch_table_sha256=hashlib.sha256(table_bytes).hexdigest(),
+        selected_branch_label="spin_plus",
+        selected_source=selected,
+    )
+
+
+class _SCFArchiveAuthority:
+    def __init__(self, archive: abc.Vituri2024ImmutableHistoricalSCFArchive) -> None:
+        self.archive_authority_fingerprint = archive.archive_authority_fingerprint
+        self.source_artifact_sha256 = archive.source_artifact_sha256
+        self.archive_loader_implementation_fingerprint = (
+            archive.archive_loader_implementation_fingerprint
+        )
+        self.archive_schema_fingerprint = archive.archive_schema_fingerprint
+        self.archive = archive
+        self.calls: list[str] = []
+        self.metadata_mutation: tuple[str, object] | None = None
+
+    def load_immutable_scf_archive(
+        self, source_artifact_sha256: str
+    ) -> abc.Vituri2024ImmutableHistoricalSCFArchive:
+        self.calls.append("load_archive")
+        assert source_artifact_sha256 == _SOURCE_ARTIFACT
+        if self.metadata_mutation is not None:
+            setattr(self, *self.metadata_mutation)
+        return self.archive
+
+
+class _SCFProvider(_Provider):
+    def __init__(
+        self,
+        spec: abc.Vituri2024HalfMetalHFSpec,
+    ) -> None:
+        super().__init__(spec, _payload(spec, _array_copy()))
+        for name, value in _scf_metadata(spec).items():
+            setattr(self, name, value)
+        self.scf_calls: list[str] = []
+        self.live_interaction_corruption = False
+        self.mutate_diagnostics = False
+        self.non_none_step_callback = False
+        self.non_none_final_callback = False
+        self.uninspectable_callback_role: str | None = None
+        self.share_live_states = False
+        self._first_live_state: _SyntheticSCFState | None = None
+        self._targets = _scf_targets()
+        self._branch_energy = {
+            row.seed.seed_label: row.canonical_energy_ev
+            for row in spec.attested_source.branch_records
+        }
+        assert spec.scf_policy is not None
+        self._convergence_rule = spec.scf_policy.convergence_rule
+
+    def build_fresh_scf_state(
+        self, seed: abc.Vituri2024SCFSeedReceipt
+    ) -> _SyntheticSCFState:
+        self.scf_calls.append(f"build_state:{seed.seed_label}")
+        state = _SyntheticSCFState(_REPLAY_ARRAYS["h0"], 1.0e-9)
+        if self.share_live_states and self._first_live_state is not None:
+            state.h0 = self._first_live_state.h0
+            state.density = self._first_live_state.density
+        if self._first_live_state is None:
+            self._first_live_state = state
+        return state
+
+    def build_scf_problem(
+        self, state: object, seed: abc.Vituri2024SCFSeedReceipt
+    ) -> HartreeFockProblem:
+        self.scf_calls.append(f"build_problem:{seed.seed_label}")
+        target, energies = self._targets[seed.seed_label]
+        branch_energy = self._branch_energy[seed.seed_label]
+        final_interaction = _FUNCTIONAL_G * target
+        raw_final = float(
+            np.real(
+                np.sum(_REPLAY_ARRAYS["h0"] * target)
+                + 0.5 * np.sum(final_interaction * target)
+            )
+            / target.shape[2]
+        )
+        self.energy_offset = branch_energy - raw_final
+
+        def initializer(actual_state: _SyntheticSCFState, *, init_mode: str, seed: int) -> None:
+            assert init_mode == next(item.init_mode for item in _seeds() if item.seed_value == seed)
+            actual_state.density[:, :, :] = 0.5 * target
+
+        def interaction_builder(density: np.ndarray) -> np.ndarray:
+            result = _FUNCTIONAL_G * density
+            if self.live_interaction_corruption:
+                result = result.copy()
+                result[0, 0, 0] += 1.0e-4
+            return np.asarray(result, dtype=np.complex128)
+
+        def density_builder(hamiltonian: np.ndarray) -> DensityUpdateResult:
+            return DensityUpdateResult(
+                density=target.copy(),
+                energies=energies.copy(),
+                mu=-0.02,
+            )
+
+        def energy_functional(
+            interaction_h: np.ndarray, h0: np.ndarray, density: np.ndarray
+        ) -> float:
+            value = self.evaluate_scalar_energy(interaction_h, h0, density)
+            if self.mutate_diagnostics:
+                state.diagnostics["provider_callback_mutation"] = 1.0
+            return value
+
+        def delta_interaction_builder(delta_density: np.ndarray) -> np.ndarray:
+            return np.asarray(_FUNCTIONAL_G * delta_density, dtype=np.complex128)
+
+        callbacks = {
+            "initializer": initializer,
+            "interaction_builder": interaction_builder,
+            "density_builder": density_builder,
+            "energy_functional": energy_functional,
+            "oda_delta_interaction_builder": delta_interaction_builder,
+        }
+        if self.uninspectable_callback_role is not None:
+            callbacks[self.uninspectable_callback_role] = len
+        step_callback = (lambda actual_state, step: None) if self.non_none_step_callback else None
+        final_state_callback = (
+            (lambda actual_state, update: None) if self.non_none_final_callback else None
+        )
+        return HartreeFockProblem(
+            initializer=callbacks["initializer"],  # type: ignore[arg-type]
+            kernel=HartreeFockKernel(
+                interaction_builder=callbacks["interaction_builder"],  # type: ignore[arg-type]
+                density_builder=callbacks["density_builder"],  # type: ignore[arg-type]
+                energy_functional=callbacks["energy_functional"],  # type: ignore[arg-type]
+                oda_delta_interaction_builder=callbacks[
+                    "oda_delta_interaction_builder"
+                ],  # type: ignore[arg-type]
+                step_callback=step_callback,
+                final_state_callback=final_state_callback,
+                convergence_rule=self._convergence_rule,
+            ),
+        )
+
+
+def _scf_case(
+    *,
+    branch_energies: tuple[float, float, float] = (-2.0, -1.9, -1.8),
+    convergence_rule: str = "raw",
+    second_exit_reason: str = "converged",
+    archive_transform: object | None = None,
+) -> tuple[
+    abc.Vituri2024HalfMetalHFProviderBinding,
+    _SCFArchiveAuthority,
+    abc.Vituri2024SCFReplayApproval,
+    _SCFProvider,
+    abc.Vituri2024ImmutableHistoricalSCFArchive,
+]:
+    spec = _scf_spec(
+        branch_energies,
+        convergence_rule=convergence_rule,
+        second_exit_reason=second_exit_reason,
+    )
+    archive = _manual_scf_archive(spec)
+    if archive_transform is not None:
+        archive = archive_transform(archive)  # type: ignore[operator]
+    review_provider = _SCFProvider(spec)
+    review_seed = spec.scf_policy.seed_records[0]
+    review_state = review_provider.build_fresh_scf_state(review_seed)
+    reviewed_callback_manifests = abc.vituri2024_scf_problem_callback_manifests(
+        review_provider.build_scf_problem(review_state, review_seed)
+    )
+    provider = _SCFProvider(spec)
+    authority = _SCFArchiveAuthority(archive)
+    binding = abc.Vituri2024HalfMetalHFProviderBinding(spec, provider)
+    approval = abc.make_vituri2024_scf_replay_approval(
+        binding,
+        authority,
+        expected_archive_manifest_sha256=abc.scf_archive_manifest_sha256(archive),
+        expected_branch_table_sha256=archive.original_branch_table_sha256,
+        problem_callback_manifests=reviewed_callback_manifests,
+        provenance="Detached synthetic manual-oracle approval; not real Vituri execution.",
+    )
+    assert authority.calls == []
+    assert provider.scf_calls == []
+    return binding, authority, approval, provider, archive
+
+
+def _replace_first_step(
+    archive: abc.Vituri2024ImmutableHistoricalSCFArchive,
+    field_name: str,
+) -> abc.Vituri2024ImmutableHistoricalSCFArchive:
+    trajectory = archive.seed_trajectories[0]
+    step = trajectory.steps[0]
+    value = getattr(step, field_name)
+    if isinstance(value, np.ndarray):
+        changed = value.copy()
+        changed.flat[0] += 1.0e-5
+    elif field_name == "interaction_h_from_cache":
+        changed = not value
+    elif field_name == "density_update_observables_sha256":
+        changed = _SHA["9"]
+    else:
+        changed = float(value) + 1.0e-5
+    changed_step = replace(step, **{field_name: changed})
+    changed_trajectory = replace(
+        trajectory,
+        steps=(changed_step, *trajectory.steps[1:]),
+    )
+    return replace(
+        archive,
+        seed_trajectories=(changed_trajectory, *archive.seed_trajectories[1:]),
+    )
+
+
+def test_scf_replay_runs_all_three_seeds_through_actual_core_and_closes_status() -> None:
+    binding, authority, approval, provider, archive = _scf_case()
+
+    receipt = abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+
+    assert receipt.seed_order == ("spin_plus", "spin_minus", "random_broken")
+    assert receipt.replayed_branch_energies_ev == pytest.approx((-2.0, -1.9, -1.8))
+    assert receipt.tolerance_degenerate_minimum_labels == ("spin_plus",)
+    assert receipt.selected_branch_residual_ev <= 1.0e-12
+    assert receipt.archive_manifest_sha256 == abc.scf_archive_manifest_sha256(archive)
+    assert receipt.core_provenance_mode == approval.core_provenance_mode
+    assert (
+        receipt.core_baseline_commit_authority
+        == approval.core_baseline_commit_authority
+        == scf_replay._CORE_BASELINE_COMMIT_AUTHORITY
+    )
+    assert receipt.archive_authority_outer_call_sequence == ("load_immutable_scf_archive",)
+    assert receipt.effective_tolerances == abc.default_vituri2024_scf_replay_tolerances()
+    assert authority.calls == ["load_archive"]
+    assert provider.scf_calls == [
+        "build_state:spin_plus",
+        "build_problem:spin_plus",
+        "build_state:spin_minus",
+        "build_problem:spin_minus",
+        "build_state:random_broken",
+        "build_problem:random_broken",
+    ]
+    assert all(item.steps[1].interaction_h_from_cache for item in archive.seed_trajectories)
+    archived_array = archive.seed_trajectories[0].steps[0].previous_density
+    assert not archived_array.flags.writeable
+    with pytest.raises(ValueError, match="read-only"):
+        archived_array[0, 0, 0] = 1.0
+    status = receipt.status
+    assert (
+        receipt.evidence_model
+        == status.evidence_model
+        == "trusted_live_provider_distinct_archive_object"
+    )
+    assert not any(
+        (
+            receipt.archive_data_independence_verified,
+            receipt.hostile_provider_resistance_verified,
+            receipt.live_builder_dependency_state_independently_pinned,
+            status.archive_data_independence_verified,
+            status.hostile_provider_resistance_verified,
+            status.live_builder_dependency_state_independently_pinned,
+        )
+    )
+    assert status.uninterrupted_registered_seed_trajectories_replayed
+    assert status.all_attested_seed_branches_replayed
+    assert status.branch_table_replayed
+    assert status.selected_final_source_reproduced
+    assert not any(
+        (
+            status.global_ground_state_verified,
+            status.transfer_learning_physics_verified,
+            status.checkpoint_snapshot_hash_verified,
+            status.atomic_checkpoint_publication_verified,
+            status.exact_restart_verified,
+            status.interrupted_vs_uninterrupted_trajectory_equivalent,
+            status.scientific_execution_verified,
+            status.paper_reproduction_verified,
+        )
+    )
+    audit = receipt.restart_capability_audit
+    assert not audit.public_continuation_api_available
+    assert not audit.cached_interaction_h_publicly_exposed
+    assert not audit.rng_state_captured
+    assert not audit.callback_state_captured
+    assert not audit.exact_restart_verified
+    assert "cached_interaction_h" in audit.blocker
+    receipt_kwargs = {
+        name: getattr(receipt, name)
+        for name in inspect.signature(abc.Vituri2024SCFReplayReceipt).parameters
+        if name != "_factory_token"
+    }
+    with pytest.raises((TypeError, ValueError), match="factory|_factory_token"):
+        abc.Vituri2024SCFReplayReceipt(**receipt_kwargs)  # type: ignore[arg-type]
+    assert provider.scalar_energy_calls == 9
+
+
+def test_scf_replay_rejects_alias_and_same_fingerprint_authorities() -> None:
+    binding, authority, approval, provider, _ = _scf_case()
+    with pytest.raises(TypeError, match="distinct objects"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, provider, approval)  # type: ignore[arg-type]
+    assert authority.calls == []
+    assert provider.scf_calls == []
+
+    authority.archive_authority_fingerprint = provider.scf_provider_fingerprint
+    with pytest.raises(ValueError, match="same authority fingerprint"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+    assert authority.calls == []
+    assert provider.scf_calls == []
+
+def test_scf_replay_same_class_same_code_archive_copy_canary_stays_limited() -> None:
+    binding, authority, approval, provider, archive = _scf_case()
+    assert type(provider) is _SCFProvider
+
+    # This approved same-class/same-code provider receives detached archive
+    # copies through unmanifested instance state.  The trusted-provider replay
+    # can pass and must report the limitation rather than claim rejection.
+    provider._targets = {
+        item.seed.seed_label: (
+            np.array(item.final_recomputation.raw_density, copy=True),
+            np.array(item.final_recomputation.energies, copy=True),
+        )
+        for item in archive.seed_trajectories
+    }
+    assert all(
+        not np.shares_memory(target, item.final_recomputation.raw_density)
+        and not np.shares_memory(energies, item.final_recomputation.energies)
+        for (target, energies), item in zip(
+            provider._targets.values(), archive.seed_trajectories
+        )
+    )
+    assert (
+        abc.vituri2024_scf_callable_manifest(
+            "build_fresh_scf_state", provider.build_fresh_scf_state
+        ),
+        abc.vituri2024_scf_callable_manifest(
+            "build_scf_problem", provider.build_scf_problem
+        ),
+    ) == approval.live_builder_manifests
+
+    receipt = abc.replay_vituri2024_half_metal_hf_scf(
+        binding, authority, approval
+    )
+
+    assert receipt.status.uninterrupted_registered_seed_trajectories_replayed
+    assert receipt.status.selected_final_source_reproduced
+    assert (
+        receipt.evidence_model
+        == receipt.status.evidence_model
+        == "trusted_live_provider_distinct_archive_object"
+    )
+    assert not any(
+        (
+            receipt.archive_data_independence_verified,
+            receipt.hostile_provider_resistance_verified,
+            receipt.live_builder_dependency_state_independently_pinned,
+            receipt.status.archive_data_independence_verified,
+            receipt.status.hostile_provider_resistance_verified,
+            receipt.status.live_builder_dependency_state_independently_pinned,
+            receipt.status.exact_restart_verified,
+            receipt.status.scientific_execution_verified,
+            receipt.status.paper_reproduction_verified,
+        )
+    )
+
+def test_scf_replay_uses_registered_mixed_convergence_rule() -> None:
+    binding, authority, approval, _, archive = _scf_case(convergence_rule="mixed")
+    receipt = abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+    assert receipt.seed_order == tuple(
+        item.seed.seed_label for item in archive.seed_trajectories
+    )
+    assert all(item.steps[-1].norm_mixed == 0.0 for item in archive.seed_trajectories)
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    (
+        "previous_density",
+        "interaction_h",
+        "total_hamiltonian",
+        "raw_density",
+        "raw_energies",
+        "raw_mu",
+        "density_update_observables_sha256",
+        "mixed_density",
+        "state_density",
+        "state_hamiltonian",
+        "state_energies",
+        "state_mu",
+        "delta_interaction_h",
+        "oda_lambda",
+        "norm_raw",
+        "norm_mixed",
+        "norm_selected",
+        "energy",
+        "interaction_h_from_cache",
+    ),
+)
+def test_scf_replay_rejects_every_archived_step_field_corruption(
+    field_name: str,
+) -> None:
+    binding, authority, approval, provider, _ = _scf_case(
+        archive_transform=lambda archive: _replace_first_step(archive, field_name)
+    )
+    with pytest.raises(ValueError, match="SCF|step|cache|observables|tolerance"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+    assert authority.calls == ["load_archive"]
+    assert provider.scf_calls[:2] == [
+        "build_state:spin_plus",
+        "build_problem:spin_plus",
+    ]
+
+
+def test_scf_replay_rejects_step_iteration_none_delta_and_callback_sequence() -> None:
+    archive = _manual_scf_archive(_scf_spec())
+    trajectory = archive.seed_trajectories[0]
+    with pytest.raises(ValueError, match="consecutive"):
+        replace(
+            trajectory,
+            steps=(replace(trajectory.steps[0], iteration=2), *trajectory.steps[1:]),
+        )
+
+    def none_delta(
+        source: abc.Vituri2024ImmutableHistoricalSCFArchive,
+    ) -> abc.Vituri2024ImmutableHistoricalSCFArchive:
+        first = source.seed_trajectories[0]
+        changed_step = replace(first.steps[0], delta_interaction_h=None)
+        return replace(
+            source,
+            seed_trajectories=(
+                replace(first, steps=(changed_step, *first.steps[1:])),
+                *source.seed_trajectories[1:],
+            ),
+        )
+
+    binding, authority, approval, _, _ = _scf_case(archive_transform=none_delta)
+    with pytest.raises(ValueError, match="None/present"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+
+    def callback_drift(
+        source: abc.Vituri2024ImmutableHistoricalSCFArchive,
+    ) -> abc.Vituri2024ImmutableHistoricalSCFArchive:
+        first = source.seed_trajectories[0]
+        return replace(
+            source,
+            seed_trajectories=(
+                replace(first, callback_sequence=first.callback_sequence + ("step_callback",)),
+                *source.seed_trajectories[1:],
+            ),
+        )
+
+    binding, authority, approval, _, _ = _scf_case(archive_transform=callback_drift)
+    with pytest.raises(ValueError, match="callback sequence"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+
+
+def test_scf_replay_rejects_pre_and_post_initializer_snapshot_corruption() -> None:
+    for snapshot_name in ("pre_init", "post_init"):
+        def corrupt(
+            source: abc.Vituri2024ImmutableHistoricalSCFArchive,
+            name: str = snapshot_name,
+        ) -> abc.Vituri2024ImmutableHistoricalSCFArchive:
+            first = source.seed_trajectories[0]
+            snapshot = getattr(first, name)
+            density = snapshot.density.copy()
+            density[0, 0, 0] += 1.0e-5
+            return replace(
+                source,
+                seed_trajectories=(
+                    replace(first, **{name: replace(snapshot, density=density)}),
+                    *source.seed_trajectories[1:],
+                ),
+            )
+
+        binding, authority, approval, _, _ = _scf_case(archive_transform=corrupt)
+        with pytest.raises(ValueError, match=rf"{snapshot_name}\.density"):
+            abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+
+
+def test_scf_replay_distinguishes_final_recomputation_from_last_step() -> None:
+    def corrupt_final(
+        archive: abc.Vituri2024ImmutableHistoricalSCFArchive,
+    ) -> abc.Vituri2024ImmutableHistoricalSCFArchive:
+        trajectory = archive.seed_trajectories[0]
+        changed = trajectory.final_recomputation.raw_density.copy()
+        changed[0, 0, 0] += 1.0e-5
+        return replace(
+            archive,
+            seed_trajectories=(
+                replace(
+                    trajectory,
+                    final_recomputation=replace(
+                        trajectory.final_recomputation,
+                        raw_density=changed,
+                    ),
+                ),
+                *archive.seed_trajectories[1:],
+            ),
+        )
+
+    binding, authority, approval, _, _ = _scf_case(archive_transform=corrupt_final)
+    with pytest.raises(ValueError, match="final.raw_density"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+
+
+def test_scf_replay_rejects_seed_reorder_missing_transfer_and_nonconverged_drift() -> None:
+    def reorder(
+        archive: abc.Vituri2024ImmutableHistoricalSCFArchive,
+    ) -> abc.Vituri2024ImmutableHistoricalSCFArchive:
+        order = (1, 0, 2)
+        return replace(
+            archive,
+            seed_trajectories=tuple(archive.seed_trajectories[index] for index in order),
+            branch_records=tuple(archive.branch_records[index] for index in order),
+        )
+
+    binding, authority, approval, provider, _ = _scf_case(archive_transform=reorder)
+    with pytest.raises(ValueError, match="seed order"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+    assert authority.calls == ["load_archive"]
+    assert provider.scf_calls == []
+
+    def missing(
+        archive: abc.Vituri2024ImmutableHistoricalSCFArchive,
+    ) -> abc.Vituri2024ImmutableHistoricalSCFArchive:
+        return replace(
+            archive,
+            seed_trajectories=archive.seed_trajectories[:-1],
+            branch_records=archive.branch_records[:-1],
+        )
+
+    binding, authority, approval, provider, _ = _scf_case(archive_transform=missing)
+    with pytest.raises(ValueError, match="seed order|inventory|branch rows"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+    assert authority.calls == ["load_archive"]
+    assert provider.scf_calls == []
+
+    trajectory = _manual_scf_archive(_scf_spec()).seed_trajectories[0]
+    with pytest.raises((TypeError, ValueError), match="two typed|two-sided"):
+        replace(trajectory, transfer_source_receipts=trajectory.transfer_source_receipts[:1])
+
+    def false_nonconverged(
+        archive: abc.Vituri2024ImmutableHistoricalSCFArchive,
+    ) -> abc.Vituri2024ImmutableHistoricalSCFArchive:
+        first = replace(
+            archive.seed_trajectories[0], exit_reason="max_iter", converged=False
+        )
+        return replace(
+            archive,
+            seed_trajectories=(first, *archive.seed_trajectories[1:]),
+        )
+
+    binding, authority, approval, _, _ = _scf_case(archive_transform=false_nonconverged)
+    with pytest.raises(ValueError, match="iteration/exit/converged"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+
+
+def test_scf_replay_rejects_callback_provider_input_storage_and_generation_drift() -> None:
+    binding, authority, approval, provider, _ = _scf_case()
+    authority.metadata_mutation = ("archive_authority_fingerprint", _SHA["9"])
+    with pytest.raises(ValueError, match="archive-authority metadata mutated"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+    assert authority.calls == ["load_archive"]
+    assert provider.scf_calls == []
+
+    binding, authority, approval, provider, _ = _scf_case()
+    provider.uninspectable_callback_role = "energy_functional"
+    with pytest.raises(RuntimeError, match="not inspectable"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+
+    binding, authority, approval, provider, _ = _scf_case()
+    provider.call_mutation = ("provider_fingerprint", _SHA["9"])
+    with pytest.raises(ValueError, match="metadata mutated"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+
+    binding, authority, approval, provider, _ = _scf_case()
+    provider.mutate_input_method = "evaluate_scalar_energy"
+    with pytest.raises(ValueError, match="mutated verifier input"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+
+    binding, authority, approval, provider, _ = _scf_case()
+    provider.share_live_states = True
+    with pytest.raises(ValueError, match="live SCF states share storage"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+
+    def share_archive_seed_storage(
+        archive: abc.Vituri2024ImmutableHistoricalSCFArchive,
+    ) -> abc.Vituri2024ImmutableHistoricalSCFArchive:
+        shared = archive.seed_trajectories[0].steps[0].previous_density
+        object.__setattr__(
+            archive.seed_trajectories[1].steps[0], "previous_density", shared
+        )
+        return archive
+
+    binding, authority, approval, provider, _ = _scf_case(
+        archive_transform=share_archive_seed_storage
+    )
+    with pytest.raises(ValueError, match="shared array storage"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+    assert authority.calls == ["load_archive"]
+    assert provider.scf_calls == []
+
+    binding, authority, approval, provider, archive = _scf_case()
+    object.__setattr__(archive, "generation_phase", "generated_after_builders")
+    approval = replace(
+        approval,
+        expected_archive_manifest_sha256=abc.scf_archive_manifest_sha256(archive),
+    )
+    with pytest.raises(ValueError, match="generated after"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+
+
+def test_scf_replay_rejects_live_vs_archive_and_selected_source_corruption() -> None:
+    binding, authority, approval, provider, _ = _scf_case()
+    provider.live_interaction_corruption = True
+    with pytest.raises(ValueError, match=r"step.interaction_h|tolerance|state\.diagnostics"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+
+    def corrupt_selected(
+        archive: abc.Vituri2024ImmutableHistoricalSCFArchive,
+    ) -> abc.Vituri2024ImmutableHistoricalSCFArchive:
+        selected = archive.selected_source
+        changed = selected.h0.copy()
+        changed[0, 0, 0] += 1.0e-5
+        changed_hashes = list(selected.registered_hashes)
+        changed_hashes[0] = ("h0", abc.canonical_array_sha256(changed))
+        return replace(
+            archive,
+            selected_source=replace(
+                selected,
+                h0=changed,
+                registered_hashes=tuple(changed_hashes),
+            ),
+        )
+
+    binding, authority, approval, provider, _ = _scf_case(archive_transform=corrupt_selected)
+    with pytest.raises(ValueError, match="selected-source hashes"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+    assert authority.calls == ["load_archive"]
+    assert provider.scf_calls == []
+
+
+def test_scf_replay_reports_tolerance_ties_without_unique_ground_state_claim() -> None:
+    binding, authority, approval, _, _ = _scf_case(branch_energies=(-2.0, -2.0 + 1.0e-9, -1.8))
+    receipt = abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+    assert receipt.tolerance_degenerate_minimum_labels == ("spin_plus", "spin_minus")
+    assert not receipt.unique_ground_state_claimed
+    assert not receipt.status.global_ground_state_verified
+
+
+def test_scf_replay_locked_tolerances_and_selected_hash_flags_are_not_weakenable() -> None:
+    assert tuple(inspect.signature(abc.default_vituri2024_scf_replay_tolerances).parameters) == ()
+    with pytest.raises(TypeError):
+        abc.default_vituri2024_scf_replay_tolerances(absolute=1.0)  # type: ignore[call-arg]
+    assert "tolerances" not in inspect.signature(
+        abc.make_vituri2024_scf_replay_approval
+    ).parameters
+
+    _, _, approval, _, _ = _scf_case()
+    huge = list(approval.tolerances)
+    huge[0] = replace(huge[0], absolute=1.0e100, relative=1.0e100)
+    with pytest.raises(ValueError, match="locked v1 tolerance"):
+        replace(approval, tolerances=tuple(huge))
+
+    disabled = list(approval.tolerances)
+    selected_index = next(
+        index
+        for index, item in enumerate(disabled)
+        if item.field_name == "selected.h0"
+    )
+    disabled[selected_index] = replace(
+        disabled[selected_index], require_canonical_hash=False
+    )
+    with pytest.raises(ValueError, match="locked v1 tolerance"):
+        replace(approval, tolerances=tuple(disabled))
+
+def test_scf_replay_rejects_provider_step_final_callbacks_and_diagnostics_mutation() -> None:
+    for flag in ("non_none_step_callback", "non_none_final_callback"):
+        binding, authority, approval, provider, _ = _scf_case()
+        setattr(provider, flag, True)
+        with pytest.raises(ValueError, match="callback changed from None|requires provider"):
+            abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+
+    binding, authority, approval, provider, _ = _scf_case()
+    provider.mutate_diagnostics = True
+    with pytest.raises(ValueError, match=r"state\.diagnostics manifest"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+
+def test_scf_branch_row_exit_mismatch_is_rejected_in_both_directions() -> None:
+    # Row says converged while detached trajectory says nonconverged.
+    def trajectory_nonconverged(
+        archive: abc.Vituri2024ImmutableHistoricalSCFArchive,
+    ) -> abc.Vituri2024ImmutableHistoricalSCFArchive:
+        first = replace(
+            archive.seed_trajectories[0], exit_reason="max_iter", converged=False
+        )
+        return replace(archive, seed_trajectories=(first, *archive.seed_trajectories[1:]))
+
+    binding, authority, approval, _, _ = _scf_case(
+        archive_transform=trajectory_nonconverged
+    )
+    with pytest.raises(ValueError, match="iteration/exit/converged"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+
+    # Row says nonconverged while detached trajectory and actual run converge.
+    binding, authority, approval, _, _ = _scf_case(second_exit_reason="max_iter")
+    with pytest.raises(ValueError, match="branch exit reason"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+
+def _write_scf_core_source_export(export_root: Path) -> None:
+    repository_root = scf_replay._repository_root()
+    for relative_path in scf_replay._CORE_SOURCE_EXPECTATIONS:
+        destination = export_root / relative_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes((repository_root / relative_path).read_bytes())
+
+
+def test_scf_no_git_source_export_accepts_only_pinned_core_and_binds_mode(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "immutable-source-export"
+    _write_scf_core_source_export(export_root)
+    monkeypatch.setattr(scf_replay, "_repository_root", lambda: export_root)
+
+    def unexpected_git(*args: object, **kwargs: object) -> object:
+        raise AssertionError("no-git source-export mode must not invoke git")
+
+    monkeypatch.setattr(subprocess, "run", unexpected_git)
+    provenance = scf_replay.verified_vituri2024_core_provenance()
+
+    assert provenance.provenance_mode == "pinned_hash_verified_source_export"
+    assert provenance.baseline_commit == scf_replay.VITURI2024_SCF_BASELINE_COMMIT
+    assert (
+        provenance.baseline_commit_authority
+        == scf_replay._CORE_BASELINE_COMMIT_AUTHORITY
+    )
+    assert not any(
+        (
+            provenance.repository_checks_available,
+            provenance.repository_ancestry_verified,
+            provenance.repository_head_core_verified,
+            provenance.repository_index_core_verified,
+            provenance.repository_worktree_core_verified,
+        )
+    )
+    assert {
+        item.relative_path: (
+            item.source_bytes_sha256,
+            item.canonical_ast_sha256,
+        )
+        for item in provenance.source_manifests
+    } == dict(scf_replay._CORE_SOURCE_EXPECTATIONS)
+    assert {
+        item.symbol: (
+            item.module,
+            item.qualname,
+            item.signature,
+            item.canonical_function_ast_sha256,
+        )
+        for item in provenance.callable_identities
+    } == dict(scf_replay._CORE_CALLABLE_EXPECTATIONS)
+    assert (
+        provenance.package_version,
+        provenance.python_version,
+        provenance.python_implementation,
+        provenance.numpy_version,
+    ) == (
+        scf_replay._package_version(),
+        scf_replay.platform.python_version(),
+        scf_replay.platform.python_implementation(),
+        np.__version__,
+    )
+
+    binding, authority, approval, _, _ = _scf_case()
+    receipt = abc.replay_vituri2024_half_metal_hf_scf(
+        binding, authority, approval
+    )
+    assert (
+        approval.core_provenance_mode
+        == receipt.core_provenance_mode
+        == "pinned_hash_verified_source_export"
+    )
+    assert (
+        approval.core_baseline_commit_authority
+        == receipt.core_baseline_commit_authority
+        == scf_replay._CORE_BASELINE_COMMIT_AUTHORITY
+    )
+    assert approval.core_provenance_fingerprint == receipt.core_provenance_fingerprint
+
+    with pytest.raises(ValueError, match="core provenance mode"):
+        abc.replay_vituri2024_half_metal_hf_scf(
+            binding,
+            authority,
+            replace(
+                approval,
+                core_provenance_mode="git_ancestor_head_index_worktree_verified",
+            ),
+        )
+    with pytest.raises(ValueError, match="package/Python/NumPy runtime drift"):
+        abc.replay_vituri2024_half_metal_hf_scf(
+            binding,
+            authority,
+            replace(approval, package_version=approval.package_version + "+drift"),
+        )
+
+
+def test_scf_no_git_source_export_rejects_altered_bound_core(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "altered-source-export"
+    _write_scf_core_source_export(export_root)
+    target_path = export_root / "src/mean_field/core/hf/engine.py"
+    target_path.write_bytes(
+        target_path.read_bytes()
+        + b"\n\ndef _unauthorized_exported_core_change():\n    return True\n"
+    )
+    monkeypatch.setattr(scf_replay, "_repository_root", lambda: export_root)
+
+    with pytest.raises(RuntimeError, match="source-export core source manifest mismatch"):
+        scf_replay.verified_vituri2024_core_provenance()
+
+
+def _install_scf_descendant_git_probe(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    changed_location: str | None = None,
+    ancestor: bool = True,
+) -> tuple[str, list[tuple[str, ...]]]:
+    root = scf_replay._repository_root()
+    descendant_head = "f" * 40
+    assert descendant_head != scf_replay.VITURI2024_SCF_BASELINE_COMMIT
+    sources = {
+        relative_path: (root / relative_path).read_bytes()
+        for relative_path in scf_replay._CORE_SOURCE_EXPECTATIONS
+    }
+    target_path = next(iter(sources))
+    changed_source = sources[target_path] + b"\ndef _descendant_core_drift():\n    return 1\n"
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(
+        command: list[str],
+        *,
+        cwd: Path,
+        check: bool,
+        capture_output: bool,
+        text: bool = False,
+    ) -> subprocess.CompletedProcess[object]:
+        assert cwd == root
+        assert capture_output
+        args = tuple(command[1:])
+        calls.append(args)
+        if args == ("rev-parse", "--verify", "HEAD^{commit}"):
+            return subprocess.CompletedProcess(
+                command, 0, stdout=descendant_head + "\n", stderr=""
+            )
+        if args == (
+            "merge-base",
+            "--is-ancestor",
+            scf_replay.VITURI2024_SCF_BASELINE_COMMIT,
+            descendant_head,
+        ):
+            return subprocess.CompletedProcess(
+                command, 0 if ancestor else 1, stdout="", stderr=""
+            )
+        if len(args) == 2 and args[0] == "show":
+            revision, relative_path = args[1].split(":", 1)
+            if revision == scf_replay.VITURI2024_SCF_BASELINE_COMMIT:
+                location = "baseline"
+            elif revision == descendant_head:
+                location = "HEAD"
+            elif revision == "":
+                location = "index"
+            else:  # pragma: no cover - assertion aid for command drift
+                raise AssertionError(f"unexpected git object: {args[1]}")
+            raw = sources[relative_path]
+            if location == changed_location and relative_path == target_path:
+                raw = changed_source
+            return subprocess.CompletedProcess(command, 0, stdout=raw, stderr=b"")
+        raise AssertionError(f"unexpected git command: {command}")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    if changed_location == "working-tree":
+        original_read_bytes = Path.read_bytes
+
+        def changed_worktree(path: Path) -> bytes:
+            if path == root / target_path:
+                return changed_source
+            return original_read_bytes(path)
+
+        monkeypatch.setattr(Path, "read_bytes", changed_worktree)
+    return descendant_head, calls
+
+
+def test_scf_git_core_baseline_allows_descendant_head_with_unchanged_core(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    descendant_head, calls = _install_scf_descendant_git_probe(monkeypatch)
+
+    scf_replay._verify_git_core_baseline(scf_replay._repository_root())
+
+    assert (
+        "merge-base",
+        "--is-ancestor",
+        scf_replay.VITURI2024_SCF_BASELINE_COMMIT,
+        descendant_head,
+    ) in calls
+    for relative_path in scf_replay._CORE_SOURCE_EXPECTATIONS:
+        assert (
+            "show",
+            f"{scf_replay.VITURI2024_SCF_BASELINE_COMMIT}:{relative_path}",
+        ) in calls
+        assert ("show", f"{descendant_head}:{relative_path}") in calls
+        assert ("show", f":{relative_path}") in calls
+
+
+def test_scf_git_core_baseline_requires_baseline_ancestor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_scf_descendant_git_probe(monkeypatch, ancestor=False)
+    with pytest.raises(RuntimeError, match="baseline commit is not an ancestor"):
+        scf_replay._verify_git_core_baseline(scf_replay._repository_root())
+
+
+@pytest.mark.parametrize("changed_location", ("HEAD", "index", "working-tree"))
+def test_scf_git_core_baseline_rejects_core_change_at_every_layer(
+    monkeypatch: pytest.MonkeyPatch,
+    changed_location: str,
+) -> None:
+    _install_scf_descendant_git_probe(
+        monkeypatch,
+        changed_location=changed_location,
+    )
+    with pytest.raises(
+        RuntimeError,
+        match=rf"{changed_location} core source manifest mismatch",
+    ):
+        scf_replay._verify_git_core_baseline(scf_replay._repository_root())
+
+
+def test_scf_replay_core_and_verifier_provenance_fail_before_provider_calls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    binding, authority, approval, provider, _ = _scf_case()
+    original = Path.read_bytes
+
+    def semantically_dirty_core(path: Path) -> bytes:
+        raw = original(path)
+        if path.name == "engine.py" and path.parent.name == "hf":
+            return raw.replace(b"exit_reason = \"max_iter\"", b"exit_reason = \"oda_stall\"", 1)
+        return raw
+
+    monkeypatch.setattr(Path, "read_bytes", semantically_dirty_core)
+    with pytest.raises(RuntimeError, match="core source manifest mismatch"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+    assert provider.scf_calls == []
+    monkeypatch.undo()
+
+    binding, authority, approval, provider, _ = _scf_case()
+    monkeypatch.setattr(
+        scf_replay._hf_problem,
+        "run_hartree_fock_problem",
+        lambda *args, **kwargs: None,
+    )
+    with pytest.raises(RuntimeError, match="runtime callable identity drift"):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+    assert provider.scf_calls == []
+
+
+def test_scf_replay_problem_iteration_alias_fails_before_authority_or_provider_calls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    binding, authority, approval, provider, _ = _scf_case()
+    assert (
+        scf_replay._hf_problem.run_hartree_fock_iterations
+        is scf_replay._hf_engine.run_hartree_fock_iterations
+    )
+    monkeypatch.setattr(
+        scf_replay._hf_problem,
+        "run_hartree_fock_iterations",
+        lambda *args, **kwargs: None,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="problem-module SCF iteration alias runtime identity",
+    ):
+        abc.replay_vituri2024_half_metal_hf_scf(binding, authority, approval)
+
+    assert authority.calls == []
+    assert provider.scf_calls == []
+
+
+def test_scf_replay_ast_archive_schema_exports_and_success_factory_guards() -> None:
+    source = Path(scf_replay.__file__).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    target = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_validate_archive_against_source"
+    )
+    target.body.insert(0, ast.Pass())
+    ast.fix_missing_locations(tree)
+    mutated = ast.unparse(tree)
+    assert (
+        abc.scf_replay_module_ast_manifest_sha256(mutated)
+        != abc.scf_replay_module_ast_manifest_sha256(source)
+    )
+    assert "current_replay_receipt" not in {
+        item.name
+        for item in inspect.signature(
+            abc.Vituri2024ImmutableHistoricalSCFArchive
+        ).parameters.values()
+    }
+    assert "transcript" not in inspect.signature(
+        abc.Vituri2024ImmutableHistoricalSCFArchive
+    ).parameters
+    with pytest.raises((TypeError, ValueError), match="factory"):
+        abc.Vituri2024SCFReplayStatus(_factory_token=object())
+    with pytest.raises(TypeError):
+        abc.Vituri2024RestartCapabilityAudit(exact_restart_verified=True)  # type: ignore[call-arg]
+    for name in scf_replay.__all__:
+        assert getattr(abc, name) is getattr(scf_replay, name)

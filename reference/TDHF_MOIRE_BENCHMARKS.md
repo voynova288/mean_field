@@ -250,7 +250,66 @@ not author raw numerical arrays.
     false. The synthetic tests are contract/formula validation, not a
     real-source Vituri execution. No provider/metadata readiness label,
     reciprocal-torus/carry authority, scalar-Hessian production certification,
-    or TDHF eigensolve is implied.
+    or TDHF eigensolve is implied;
+  - `vituri2024_hf_scf_replay.py` is the separate uninterrupted multi-seed
+    trajectory gate. It hard-binds clean baseline commit
+    `0f7d9b9190001d2bdb6f6ec8f6e36a16864667dc`, source-byte/canonical-AST and
+    runtime-callable identities for `core/hf/problem.py`, `engine.py`, and
+    `occupations.py`, plus package/Python/NumPy versions. A detached approval
+    and contract bind the full verifier AST, exact policy/seed order, a complete
+    ordered snapshot of all inherited-functional plus SCF live-provider
+    metadata, and source/AST/code manifests for both live builders and every
+    returned problem callback. A distinct archive-authority object separately
+    binds its authority fingerprint, source artifact, loader implementation,
+    schema, expected immutable historical-archive manifest, and original
+    branch-table bytes hash. The archive is loaded and validated before either
+    live builder runs; same-object identity and shared authority fingerprints
+    are rejected. These controls prevent accidental same-object coupling only,
+    not archive/live computation dependence: a trusted same-class/same-code
+    provider can still read or copy archive data into unmanifested instance,
+    closure, default, global, or input-dependency state;
+  - each historical seed trajectory stores two transfer-source receipts,
+    pre/post-initializer states, every core-visible step field (including ODA,
+    raw/mixed/selected norms, optional delta interaction and cache provenance),
+    deterministic `state.diagnostics` manifests, a distinct final
+    recomputation, callback sequence and exact exit. Replay calls the actual
+    generic `run_hartree_fock_problem` once per seed, in policy order, while
+    wrappers call each allowed provider callback exactly once per core call.
+    Provider step/final callbacks are forbidden in v1 and replaced only by
+    verifier observers. For every branch row, exit, iteration count, terminal
+    raw/mixed/selected norms, terminal ODA lambda, final raw metric, and energy
+    must close separately to the archive and actual run before the converged
+    set is derived. It then recomputes tolerance-degenerate minima
+    and closes selected H0/effective interaction/Fock/projector/energies/mu to
+    the canonical source using locked v1 tolerances; selected canonical hashes
+    are mandatory and neither tolerance values nor hash flags are caller
+    configurable. The receipt records the exact effective tolerance/hash
+    inventory;
+  - the immutable status and receipt declare
+    `evidence_model='trusted_live_provider_distinct_archive_object'`,
+    `archive_data_independence_verified=False`,
+    `hostile_provider_resistance_verified=False`, and
+    `live_builder_dependency_state_independently_pinned=False`. The positive
+    SCF-replay fields `uninterrupted_registered_seed_trajectories_replayed`,
+    `all_attested_seed_branches_replayed`, `branch_table_replayed`, and
+    `selected_final_source_reproduced` mean deterministic parity only under
+    that trusted-provider model; they do not establish archive/live dependency
+    separation. The same-class/same-code archive-copy injection canary intentionally
+    passes while all limitation flags remain false. This does **not** establish
+    a global or unique ground state, transfer-learning physics, checkpoint
+    publication, scientific execution, or paper reproduction. The tracked
+    provider is a local synthetic generic-core fixture with nonzero `gD`, fixed
+    branch-specific projectors, and a manually constructed two-step oracle; it
+    is not real Vituri numerical evidence. A real provider and real source
+    replay remain Slurm-only;
+  - exact restart remains blocked on current HEAD. `HartreeFockProblem` and
+    `run_hartree_fock_problem` expose no public continuation/restart input,
+    while `run_hartree_fock_iterations` keeps `cached_interaction_h` local and
+    does not expose complete RNG or callback continuation state. Consequently
+    `checkpoint_snapshot_hash_verified`, `atomic_checkpoint_publication_verified`,
+    `exact_restart_verified`, and
+    `interrupted_vs_uninterrupted_trajectory_equivalent` remain false even when
+    an uninterrupted trajectory replay succeeds.
 
 ### Wang et al., *Putting a new spin on the incommensurate Kekule spiral: from spin-valley locking and collective modes to fermiology and implications for superconductivity*
 
