@@ -12,7 +12,13 @@ derived vertex to paper C9.  Its separate signed-q adapter assembles four
 independent local A/B lanes into the core typed generic-q classes without
 repair, but remains diagnostic-only: diagonal-HF stationarity, real
 mesh/area/q0/UV/CDW authority, and production/executable readiness are not
-established.  The separate half-metal HF preflight validates provider-owned geometry,
+established.  The restricted finite-orbital scalar oracle independently
+constructs the exact local-conserving vertex tensor on
+``assembly.orbital_id_map``, a Wick scalar, and a fixed-Ne bitstring
+Hamiltonian.  It compares all four actual C9 lanes and uses the generic
+``core/hf`` scalar certificate, but permanently retains
+``restricted_finite_orbital_algebra_oracle_only`` authority and never mutates
+the original sector authority.  The separate half-metal HF preflight validates provider-owned geometry,
 ensemble, SCF, shared-functional, and attested-source receipts.  Its only
 positive aggregate result is ``receipt_set_complete``; provider metadata is
 ``provider_metadata_attested`` while scientific execution remains explicitly
@@ -110,6 +116,22 @@ from .vituri2024_tdhf_scalar import (
     Vituri2024TDHFTransitionSourceBinding,
     build_vituri2024_tdhf_scalar_factory_readiness,
     build_vituri2024_tdhf_scalar_readiness,
+)
+from .vituri2024_tdhf_restricted_scalar import (
+    VITURI2024_RESTRICTED_SCALAR_ALGEBRA_ABSOLUTE_TOLERANCE,
+    VITURI2024_RESTRICTED_SCALAR_ALGEBRA_RELATIVE_TOLERANCE,
+    VITURI2024_RESTRICTED_SCALAR_AUTHORITY,
+    VITURI2024_RESTRICTED_SCALAR_MAX_ORBITALS,
+    VITURI2024_RESTRICTED_SCALAR_WICK_ABSOLUTE_TOLERANCE,
+    VITURI2024_RESTRICTED_SCALAR_WICK_RELATIVE_TOLERANCE,
+    Vituri2024RestrictedScalarDFColumnEvidence,
+    Vituri2024RestrictedScalarOrbitalCrosswalk,
+    Vituri2024RestrictedScalarResiduals,
+    Vituri2024RestrictedScalarVertexBinding,
+    Vituri2024TDHFRestrictedScalarApproval,
+    Vituri2024TDHFRestrictedScalarReceipt,
+    certify_vituri2024_tdhf_restricted_scalar,
+    make_vituri2024_tdhf_restricted_scalar_approval,
 )
 from .vituri2024_hf_preflight import (
     FINITE_Q_HESSIAN_NORMALIZATION,
@@ -458,6 +480,12 @@ __all__ = [
     "VITURI2024_SCALAR_READINESS_AUTHORITY",
     "VITURI2024_SCALAR_READINESS_LOCKED_STRUCTURE_THRESHOLD",
     "VITURI2024_SCALAR_STATIC_HESSIAN_AUTHORITY",
+    "VITURI2024_RESTRICTED_SCALAR_ALGEBRA_ABSOLUTE_TOLERANCE",
+    "VITURI2024_RESTRICTED_SCALAR_ALGEBRA_RELATIVE_TOLERANCE",
+    "VITURI2024_RESTRICTED_SCALAR_AUTHORITY",
+    "VITURI2024_RESTRICTED_SCALAR_MAX_ORBITALS",
+    "VITURI2024_RESTRICTED_SCALAR_WICK_ABSOLUTE_TOLERANCE",
+    "VITURI2024_RESTRICTED_SCALAR_WICK_RELATIVE_TOLERANCE",
     "Vituri2024AntisymmetrizedVertexReceipt",
     "Vituri2024AttestedHalfMetalSourceArrays",
     "Vituri2024AttestedHalfMetalSourceReceipt",
@@ -515,6 +543,10 @@ __all__ = [
     "Vituri2024ProviderMetadataAttestedStatus",
     "Vituri2024RPAElementReceipt",
     "Vituri2024PauliShortCircuitRecord",
+    "Vituri2024RestrictedScalarDFColumnEvidence",
+    "Vituri2024RestrictedScalarOrbitalCrosswalk",
+    "Vituri2024RestrictedScalarResiduals",
+    "Vituri2024RestrictedScalarVertexBinding",
     "Vituri2024RestartCapabilityAudit",
     "Vituri2024SCFArchiveAuthorityProtocol",
     "Vituri2024SCFCallableManifest",
@@ -544,6 +576,8 @@ __all__ = [
     "Vituri2024TDHFAssemblyReceipt",
     "Vituri2024TDHFScalarReadinessReceipt",
     "Vituri2024TDHFTransitionSourceBinding",
+    "Vituri2024TDHFRestrictedScalarApproval",
+    "Vituri2024TDHFRestrictedScalarReceipt",
     "Vituri2024TransitionInventory",
     "Vituri2024ValleyPocketEvidenceReceipt",
     "affine_anchor_inventory_sha256",
@@ -553,6 +587,7 @@ __all__ = [
     "bind_vituri2024_interaction",
     "canonical_array_sha256",
     "canonical_orbital_order_sha256",
+    "certify_vituri2024_tdhf_restricted_scalar",
     "c3_basis_operator",
     "default_vituri2024_scf_replay_tolerances",
     "direct_builder_dependency_archive_fingerprint",
@@ -561,6 +596,7 @@ __all__ = [
     "functional_replay_module_ast_manifest_sha256",
     "hamiltonian",
     "make_vituri2024_scf_replay_approval",
+    "make_vituri2024_tdhf_restricted_scalar_approval",
     "six_band_hamiltonian",
     "state_overlap_invariant",
     "state_projector",

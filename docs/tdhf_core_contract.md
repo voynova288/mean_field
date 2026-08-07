@@ -332,17 +332,60 @@ code, not a sandbox: closure cells, default arguments, global state, semantic
 normalization, and hostile-provider behavior are not proved.  Every certificate
 continues to set `static_hessian_authority_promoted=False`.
 
-The Vituri-2024 system adapter currently exposes readiness only.  It requires
-the exact `Vituri2024HalfMetalHFReplayPayload` bound to the factory array
-receipt, re-derives every ordered transition's exact mesh and flavor indices,
-energies, occupations `(particle=0,hole=1)`, source artifact/state/branch, and
+The Vituri-2024 readiness adapter requires the exact
+`Vituri2024HalfMetalHFReplayPayload` bound to the factory array receipt,
+re-derives every ordered transition's exact mesh and flavor indices, energies,
+occupations `(particle=0,hole=1)`, source artifact/state/branch, and
 pair-to-tangent readiness, and binds exact area, `Delta1`, interaction, and
 caller-attested kinematics context.  Readiness rejects an assembly whose own
 `structure_tolerance` exceeds the locked `1e-10` threshold, then independently
 rebuilds the signed matrices with `structure_tolerance=1e-10` and
 `raise_on_structure_error=True`.  Its factory receipt records both that locked
 threshold and the maximum independently recomputed structure residual, and
-validates `max_structure_residual <= locked_structure_threshold`.  Its
-authority remains `projected_signed_ab` / `not_established`.  There is no
-synthetic scalar bridge or positive scalar-certificate claim without a real
-scalar provider.
+validates `max_structure_residual <= locked_structure_threshold`.  Readiness
+authority remains `projected_signed_ab` / `not_established`; there is no
+synthetic scalar bridge.
+
+The separate Vituri actual-code-path restricted oracle lives at
+`src/mean_field/systems/abc_trilayer/vituri2024_tdhf_restricted_scalar.py`.
+It is capped at eight ordered orbitals before any rank-four or fixed-particle
+Fock allocation and uses exactly `assembly.orbital_id_map`.  For each quartet
+it calls `vituri2024_antisymmetrized_projected_vertex` only when the local
+momentum residual is exactly `(0.0,0.0)` and divides by the area exactly once;
+all other tensor entries are exact zero.  The independently evaluated raw
+tensor must pass both index-pair antisymmetries and pair Hermiticity.  Failure
+aborts: entries are never copied, symmetrized, Hermitized, or repaired.
+
+With `P_ij=<c_j^dagger c_i>`, this adapter fixes
+
+```text
+Sigma[P]_ij = sum_bg wbar[i,b,g,j] P[g,b]
+h = F0 - Sigma[P0]
+E[P] = Tr(hP) + 1/2 sum_abgd wbar[abgd] P[da] P[gb]
+A[aA,bB] = gap*delta - wbar[a,B,A,b]
+B[aA,bB] = -wbar[a,b,A,B].
+```
+
+It compares those formulas entrywise to all four actual C9 lanes.  A second,
+independent fixed-`Ne` bitstring Hamiltonian uses
+`1/4*wbar_ab;gd*c_a^dagger*c_b^dagger*c_g*c_d` with literal action order
+`d,g,create b,create a`; its Slater expectation is compared to the Wick scalar
+at `P0` and every registered generic-certificate stencil projector, and its
+four exact double-commutator blocks are compared to C9 without using a
+production A/B builder.  The existing `core/hf` approval/certificate then
+checks all canonical `2d` stationarity directions and `d^2` curvatures with
+raw target `E''=2 v^dagger H+ v`, including the lower-lane `v=(x,y*)`
+imaginary convention.
+
+Evidence is the focused test
+`tests/test_abc_trilayer_vituri2024_tdhf_restricted_scalar.py`. It consumes the
+synthetic, hash-bound predecessor `_chain()` fixture from
+`tests/test_abc_trilayer_vituri2024_tdhf_scalar.py`, then constructs a
+task-local six-orbital 2x2 inventory through the actual Vituri vertex and C9
+code paths. It is not a real source/provider artifact. Even when every check
+passes, the permanent authority is
+`restricted_finite_orbital_algebra_oracle_only`: actual vertex/C9 algebra is
+compared, but real-full-provider, source-scalar, global authority, promotion,
+production, and paper-parity claims remain false.  The original sector stays
+`projected_signed_ab`.  The unresolved boundary is therefore physical source
+and full-space authority, not this finite-orbital algebra identity.
