@@ -40,7 +40,7 @@ def _canonical_replay_arrays() -> dict[str, np.ndarray]:
     for flavor in range(4):
         energies[flavor] = -0.05 + 0.001 * np.arange(20) + 0.001 * flavor
     occupations = np.ones((4, 20), dtype=np.int64)
-    for flavor, k_index in ((1, 0), (3, 19)):
+    for flavor, k_index in ((1, 7), (3, 12)):
         occupations[flavor, k_index] = 0
         energies[flavor, k_index] = 0.01
     fock = np.zeros((4, 4, 20), dtype=np.complex128)
@@ -841,6 +841,74 @@ def _metallicity(
     return abc.Vituri2024MetallicityEvidenceReceipt(**values)  # type: ignore[arg-type]
 
 
+def _synthetic_refinement_inputs(
+    geometry: abc.Vituri2024HFGeometryReceipt,
+    ensemble: abc.Vituri2024HFEnsembleReceipt,
+    hashes: dict[str, str],
+    valley: int,
+) -> tuple[
+    abc.Vituri2024NestedNoWrapRefinementMesh,
+    abc.Vituri2024ArchivedPocketRefinementFields,
+    abc.Vituri2024PocketBaseHashes,
+    str,
+    float,
+]:
+    base = _REPLAY_ARRAYS["mesh"]
+    refined = np.asarray(
+        [(0.005 * row, 0.005 * column) for row in range(7) for column in range(9)],
+        dtype=np.float64,
+    )
+    mesh = abc.Vituri2024NestedNoWrapRefinementMesh(
+        base_shape=(4, 5),
+        subdivision_factors=(2, 2),
+        base_mesh=base,
+        refined_mesh=refined,
+    )
+    energies = np.full((4, 63), -0.04, dtype=np.float64)
+    for flavor, center in ((1, (2, 4)), (3, (4, 4))):
+        row, column = center
+        for (dr, dc), energy in zip(
+            ((0, 0), (0, -1), (0, 1), (-1, 0), (1, 0)),
+            (0.01, -0.019, 0.006, 0.005, 0.004),
+        ):
+            energies[flavor, (row + dr) * 9 + column + dc] = energy
+    energies[:, mesh.base_embedding_indices] = _REPLAY_ARRAYS["energies"]
+    interaction = np.zeros((4, 4, 63), dtype=np.complex128)
+    diagonal = np.arange(4)
+    interaction[diagonal, diagonal, :] = 0.05
+    interaction[:, :, mesh.base_embedding_indices] = _REPLAY_ARRAYS["interaction_h"]
+    fock = np.zeros_like(interaction)
+    fock[diagonal, diagonal, :] = energies
+    fock[:, :, mesh.base_embedding_indices] = _REPLAY_ARRAYS["fock"]
+    h0 = fock - interaction
+    h0[:, :, mesh.base_embedding_indices] = _REPLAY_ARRAYS["h0"]
+    fields = abc.Vituri2024ArchivedPocketRefinementFields(h0, interaction, fock)
+    base_hashes = abc.Vituri2024PocketBaseHashes(
+        ordered_momentum_mesh_sha256=geometry.ordered_momentum_mesh_sha256,
+        h0_sha256=hashes["h0"],
+        interaction_h_sha256=hashes["interaction_h"],
+        fock_sha256=hashes["fock"],
+        energies_sha256=hashes["energies"],
+        occupations_sha256=hashes["occupations"],
+        projector_sha256=hashes["projector"],
+    )
+    evidence, _, _, lifshitz, _, _ = abc.vituri2024_refinement_evidence_sha256(
+        valley=valley,
+        selected_spin=1,
+        source_commit=_COMMIT,
+        source_artifact_sha256=_SOURCE_ARTIFACT,
+        source_state_sha256=_source_state_hash(geometry, ensemble, hashes),
+        selected_branch_label="spin_plus",
+        base_hashes=base_hashes,
+        mesh=mesh,
+        archive_fields=fields,
+        live_fields=fields,
+        chemical_potential_ev=-0.02,
+        locked_threshold_uncertainty_ev=1.0e-4,
+    )
+    return mesh, fields, base_hashes, evidence, lifshitz.archive.raw_margin_ev
+
+
 def _pocket(
     valley: int,
     geometry: abc.Vituri2024HFGeometryReceipt,
@@ -850,6 +918,9 @@ def _pocket(
     **overrides: object,
 ) -> abc.Vituri2024ValleyPocketEvidenceReceipt:
     hashes = _ARRAY_HASHES if array_hashes is None else array_hashes
+    mesh, _, _, evidence, raw_margin = _synthetic_refinement_inputs(
+        geometry, ensemble, hashes, valley
+    )
     values: dict[str, object] = {
         "valley": valley,
         "source_state_sha256": _source_state_hash(geometry, ensemble, hashes),
@@ -862,10 +933,10 @@ def _pocket(
         "adjacency_convention": "four_neighbor_finite_domain_no_wrap",
         "base_mesh_point_count": geometry.mesh_point_count,
         "component_evidence_sha256": _SHA["7"],
-        "refinement_mesh_sha256": _SHA["8"],
-        "refinement_point_count": 80,
-        "refinement_evidence_sha256": _SHA["9"],
-        "lifshitz_margin_ev": 2.0e-3,
+        "refinement_mesh_sha256": abc.canonical_array_sha256(mesh.refined_mesh),
+        "refinement_point_count": 63,
+        "refinement_evidence_sha256": evidence,
+        "lifshitz_margin_ev": raw_margin,
         "lifshitz_tolerance_ev": 1.0e-4,
         "source_commit": _COMMIT,
         "source_artifact_sha256": _SOURCE_ARTIFACT,
@@ -2108,6 +2179,26 @@ def test_attested_source_closes_density_state_counts_pockets_and_selected_exit()
         item.lifshitz_margin_ev > item.lifshitz_tolerance_ev
         for item in source.pocket_evidence
     )
+    refinement_mesh, _, _, _, _ = _synthetic_refinement_inputs(
+        spec.geometry, spec.ensemble, _ARRAY_HASHES, -1
+    )
+    assert tuple(item.refinement_point_count for item in source.pocket_evidence) == (
+        63,
+        63,
+    )
+    assert all(
+        item.refinement_mesh_sha256
+        == abc.canonical_array_sha256(refinement_mesh.refined_mesh)
+        for item in source.pocket_evidence
+    )
+    assert tuple(item.lifshitz_margin_ev for item in source.pocket_evidence) == (
+        pytest.approx(1.0e-2),
+        pytest.approx(8.0e-3),
+    )
+    assert all(
+        item.refinement_evidence_sha256 != _SHA["9"]
+        for item in source.pocket_evidence
+    )
     assert metallicity.selected_spin_band_min_ev < source.chemical_potential_ev
     assert metallicity.selected_spin_band_max_ev > source.chemical_potential_ev
     assert tuple(item.seed for item in source.branch_records) == spec.scf_policy.seed_records
@@ -2868,18 +2959,18 @@ def test_array_replay_gates_valley_spin_and_chemical_mu_closure() -> None:
         + valley_arrays["interaction_h"][1, 1, 2]
     )
     valley_arrays["energies"][1, 2] = valley_arrays["fock"][1, 1, 2].real
-    valley_arrays["occupations"][3, 19] = 1
-    valley_arrays["projector"][3, 3, 19] = 1.0
-    valley_arrays["energies"][3, 19] = -0.028
-    valley_arrays["fock"][3, 3, 19] = -0.028
-    valley_arrays["h0"][3, 3, 19] = (
-        -0.028 - valley_arrays["interaction_h"][3, 3, 19]
+    valley_arrays["occupations"][3, 12] = 1
+    valley_arrays["projector"][3, 3, 12] = 1.0
+    valley_arrays["energies"][3, 12] = -0.035
+    valley_arrays["fock"][3, 3, 12] = -0.035
+    valley_arrays["h0"][3, 3, 12] = (
+        -0.035 - valley_arrays["interaction_h"][3, 3, 12]
     )
-    valley_arrays["fock"][3, 3, 19] = (
-        valley_arrays["h0"][3, 3, 19]
-        + valley_arrays["interaction_h"][3, 3, 19]
+    valley_arrays["fock"][3, 3, 12] = (
+        valley_arrays["h0"][3, 3, 12]
+        + valley_arrays["interaction_h"][3, 3, 12]
     )
-    valley_arrays["energies"][3, 19] = valley_arrays["fock"][3, 3, 19].real
+    valley_arrays["energies"][3, 12] = valley_arrays["fock"][3, 3, 12].real
     valley_gap = float(
         np.min(valley_arrays["energies"][valley_arrays["occupations"] == 0])
         - np.max(valley_arrays["energies"][valley_arrays["occupations"] == 1])

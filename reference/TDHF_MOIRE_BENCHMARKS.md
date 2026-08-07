@@ -311,6 +311,50 @@ not author raw numerical arrays.
     `interrupted_vs_uninterrupted_trajectory_equivalent` remain false even when
     an uninterrupted trajectory replay succeeds.
 
+#### Frozen-source pocket-refinement replay boundary
+
+- `vituri2024_hf_pocket_replay.py` adds a separate factory-only gate requiring
+  `Vituri2024HalfMetalHFReplayReceipt`, exact `Vituri2024SCFReplayApproval`, and
+  its `Vituri2024SCFReplayReceipt`. The receipt must bind that approval exactly,
+  and SCF provider/source/spec/state plus contract/archive/core identities are
+  rebound to the current source;
+- replay ingress reconstructs every derivable pocket-approval field before any
+  delegated call, including selected spin, receipt fingerprints, base hashes,
+  preflight mesh/count/evidence/margins/tolerances, and callable/metadata
+  manifests. Only the expected archive manifest and non-scientific provenance
+  note are detached; the manifest closes immediately on the loaded archive;
+- live evaluator/archive-loader implementation fingerprints are derived from
+  callable manifests, schemas are locked, provider/authority fingerprints are
+  recomputed with their helpers, source/spec/state identities are current, and
+  these semantic checks are repeated after delegated calls;
+- v1 accepts only row-major affine same-domain nested rectangular meshes with
+  strict integer subdivisions and exact embedding. The synthetic fixture is
+  `4x5 -> 7x9` (20 -> 63 points), with both preflight pockets updated to the
+  actual refined mesh/evidence hashes, counts, raw margins, and uncertainties;
+- the archive is loaded before one trusted live frozen-source call. That call
+  returns only complex128 H0/interaction/Fock arrays shaped `(4,4,Nref)`.
+  Energies, strict occupations, projectors, topology, and margins are verifier
+  outputs. Embedded-base and archive/live field parity use locked v1 bounds;
+- selected-spin holes use four-neighbor finite-domain no-wrap connectivity;
+  non-annularity counts enclosed eight-neighbor complement components. Each
+  valley in order `(-1,+1)` must have one nonempty interior non-annular pocket,
+  while opposite-spin holes are forbidden;
+- the discrete Lifshitz value is the minimum distance from `mu` to the lower
+  and upper critical grouped energy levels bounding the maximal consecutive
+  accepted open-threshold intervals. It is not `min|E-mu|`, a continuum saddle,
+  or a convergence certificate. The certified value subtracts registered
+  threshold uncertainty and the maximum archive/live energy residual;
+- evidence model
+  `trusted_live_selected_source_evaluator_distinct_refinement_archive_object`
+  records distinct objects/fingerprints, metadata/callable/full-module AST
+  manifests, archive-first call order, immutable disjoint storage, and an
+  archive-free request. Same-code hidden archive copying is still not excluded,
+  so independence/hostile/hidden-dependency flags remain false;
+- detailed contract: `docs/methods/vituri2024_pocket_refinement_replay.md`.
+  Current evidence is synthetic only. No real Vituri refinement artifact,
+  refined SCF/fixed-density solve, continuum/refinement stability, ground
+  state, scientific/paper reproduction, or TDHF readiness is established.
+
 ### Wang et al., *Putting a new spin on the incommensurate Kekule spiral: from spin-valley locking and collective modes to fermiology and implications for superconductivity*
 
 - Local PDF: `reference/2509.12320v1.pdf`
