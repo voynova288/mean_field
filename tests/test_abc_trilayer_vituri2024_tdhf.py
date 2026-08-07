@@ -33,6 +33,7 @@ from mean_field.systems.abc_trilayer import (
     bind_vituri2024_interaction,
     vituri2024_rpa_a_element,
     vituri2024_rpa_b_element,
+    vituri2024_tdhf_interaction_fingerprint,
 )
 
 _Q = (1.0 / 128.0, 2.0 / 128.0)
@@ -305,7 +306,15 @@ def test_vituri_signed_q_structure_pair_order_labels_and_diagnostic_scope() -> N
         "context_fingerprint",
         "assembly_context_fingerprint",
     )
-    assert len(result.interaction_fingerprint) == 64
+    assert result.interaction_fingerprint == vituri2024_tdhf_interaction_fingerprint(
+        result.signed_pair.plus_context
+    )
+    assert result.interaction_fingerprint == (
+        abc_module.vituri2024_tdhf_interaction_fingerprint(
+            result.signed_pair.plus_context
+        )
+    )
+    assert "vituri2024_tdhf_interaction_fingerprint" in tdhf_module.__all__
     bound = assemble_vituri2024_tdhf_signed_q(
         _signed_pair(bound_interaction=True)
     )

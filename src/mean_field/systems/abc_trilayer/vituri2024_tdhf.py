@@ -449,6 +449,54 @@ class Vituri2024TDHFAssemblyContext:
         return self.assembly_context_fingerprint
 
 
+def vituri2024_tdhf_interaction_fingerprint(
+    context: Vituri2024TDHFAssemblyContext,
+) -> str:
+    """Canonically bind the complete local interaction/assembly context."""
+
+    if type(context) is not Vituri2024TDHFAssemblyContext:
+        raise TypeError("Vituri TDHF interaction fingerprint requires the exact context type")
+    context._validate_live_state()
+    area = _validated_area(context.area)
+    delta1 = _finite_real(context.Delta1, label="Delta1")
+    _, interaction_receipt_fingerprint, interaction_binding_fingerprint = (
+        _validated_interaction(context.interaction)
+    )
+    local_context_fingerprint = _fingerprint(
+        {
+            "delta1_ev": delta1,
+            "interaction_receipt_fingerprint": interaction_receipt_fingerprint,
+            "interaction_binding_fingerprint": interaction_binding_fingerprint,
+            "area_fingerprint": area.fingerprint,
+        }
+    )
+    local_assembly_context_fingerprint = _fingerprint(
+        {
+            "local_element_context_fingerprint": local_context_fingerprint,
+            "kinematics_provider_sha256": _sha256(
+                context.kinematics_provider_sha256,
+                label="kinematics_provider_sha256",
+            ),
+            "kinematics_source_text": _nonempty_text(
+                context.kinematics_source_text,
+                label="kinematics_source_text",
+            ),
+        }
+    )
+    return _fingerprint(
+        {
+            "delta1_ev": delta1,
+            "interaction_receipt_fingerprint": interaction_receipt_fingerprint,
+            "interaction_binding_fingerprint": interaction_binding_fingerprint,
+            "area_fingerprint": area.fingerprint,
+            "local_element_context_fingerprint": local_context_fingerprint,
+            "local_assembly_context_fingerprint": (
+                local_assembly_context_fingerprint
+            ),
+        }
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class Vituri2024SignedQTransitionInventoryPair:
     """Independent ``+q``/``-q`` inventories with independently typed contexts."""
@@ -1113,18 +1161,7 @@ def assemble_vituri2024_tdhf_signed_q(
     if type(q_kind) is not TDHFGenericSignedQ:
         raise ValueError("nonzero local continuum q unexpectedly classified self-conjugate")
     context = signed_pair.plus_context
-    interaction_fingerprint = _fingerprint(
-        {
-            "delta1_ev": context.delta1_ev,
-            "interaction_receipt_fingerprint": context.interaction_receipt_fingerprint,
-            "interaction_binding_fingerprint": context.interaction_binding_fingerprint,
-            "area_fingerprint": context.area_fingerprint,
-            "local_element_context_fingerprint": context.context_fingerprint,
-            "local_assembly_context_fingerprint": (
-                context.assembly_context_fingerprint
-            ),
-        }
-    )
+    interaction_fingerprint = vituri2024_tdhf_interaction_fingerprint(context)
     sector = TDHFGenericSignedQSector(
         q=q_kind,
         blocks=blocks,
@@ -1178,4 +1215,5 @@ __all__ = [
     "Vituri2024TDHFSignedQAssemblyReceipt",
     "Vituri2024TransitionInventory",
     "assemble_vituri2024_tdhf_signed_q",
+    "vituri2024_tdhf_interaction_fingerprint",
 ]

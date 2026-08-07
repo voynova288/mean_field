@@ -32,8 +32,10 @@ _FUNCTIONAL_GQ = 0.375 + 0.125j
 _DIRECT_DENSITY_SENSITIVITY = 0.03125
 
 def _canonical_replay_arrays() -> dict[str, np.ndarray]:
+    # Binary-exact 1/128 coordinates make the source-bound +q/-q neighbor
+    # transitions at indices (7,6) and (12,13) exact arithmetic opposites.
     mesh = np.asarray(
-        [(0.01 * row, 0.01 * column) for row in range(4) for column in range(5)],
+        [(row / 128.0, column / 128.0) for row in range(4) for column in range(5)],
         dtype=np.float64,
     )
     energies = np.empty((4, 20), dtype=np.float64)
@@ -226,8 +228,8 @@ def _functional_probe_arrays() -> tuple[
     anchors[2] = 0.2 * q0[4]
 
     charts = (
-        _q_chart(0, abc.Q_CHART_LABELS[0], (1, 0), (0.01, 0.0)),
-        _q_chart(1, abc.Q_CHART_LABELS[1], (0, 1), (0.0, 0.01)),
+        _q_chart(0, abc.Q_CHART_LABELS[0], (1, 0), (1.0 / 128.0, 0.0)),
+        _q_chart(1, abc.Q_CHART_LABELS[1], (0, 1), (0.0, 1.0 / 128.0)),
     )
     signed = np.zeros((6, 2, 4, 4, nk), dtype=np.complex128)
     for q_index, chart in enumerate(charts):
@@ -855,7 +857,7 @@ def _synthetic_refinement_inputs(
 ]:
     base = _REPLAY_ARRAYS["mesh"]
     refined = np.asarray(
-        [(0.005 * row, 0.005 * column) for row in range(7) for column in range(9)],
+        [(row / 256.0, column / 256.0) for row in range(7) for column in range(9)],
         dtype=np.float64,
     )
     mesh = abc.Vituri2024NestedNoWrapRefinementMesh(
@@ -3469,7 +3471,7 @@ def test_functional_probe_and_q_inventory_hashes_have_independent_goldens() -> N
         "9f0a754ecdc30716be23bd58b5e16a18a81e7ee8b7a67c03c97bf2490ffb8a74"
     )
     assert _Q_CHART_INVENTORY_SHA256 == (
-        "49326562e251ae128b5315ce17255f5687d5a2ab733d037f6097b89d48376891"
+        "d928cb2eb71e96b3c0780fb0b299ceb0816bb02fb53698f4e184f43ef3b0750d"
     )
     assert tuple(chart.q_probe_index for chart in _SIGNED_Q_CHARTS) == (0, 1)
     assert tuple(chart.q_label for chart in _SIGNED_Q_CHARTS) == abc.Q_CHART_LABELS

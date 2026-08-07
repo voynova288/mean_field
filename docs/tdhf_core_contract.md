@@ -222,3 +222,127 @@ Not yet implemented:
 - iterative block/matvec eigensolver for large 12x12 R5G/hBN sectors beyond dense channel pilots;
 - MA-TBG system adapter and Goldstone-counting workflow;
 - Slurm-scale Checkpoint A/B/C reproductions.
+
+## Exact signed-q scalar-Hessian certificate
+
+`core.hf.tdhf_scalar_curvature` compares an independent scalar-energy callback
+with the typed generic signed-q Hessian without changing sector authority.  For
+independent lane amplitudes,
+
+\[
+ Z(x,y)=\sum_i x_iT_i^{(+)}+\sum_j y_jT_j^{(-)},\qquad
+ K=Z-Z^\dagger,\qquad P(t)=e^{tK}P_0e^{-tK},
+\]
+
+where `T=(1-P0)TP0`, the combined tangent basis is Hilbert--Schmidt
+orthonormal, and `||x||^2+||y||^2=1` is an ordinary positive norm.  In the
+signed-Hessian coordinate `v=(x,y*)`, the raw identity is
+
+\[
+ Q=\operatorname{Re}(v^\dagger H_+v),\qquad E''_{\rm raw}(0)=2Q.
+\]
+
+This factor-of-two identity is never normalized inside the mathematical gate.
+A registered reporting convention separately gives
+`E''_reported=E''_raw/D`; `D=1` for total energy.  Per-k/per-area denominators,
+units, and sources remain caller-attested and do not certify normalization
+physics.
+
+Every callback execution requires a detached `TDHFScalarCurvatureApproval`
+created first.  The approval binds exact sector/source/interaction, projector,
+ordered pair and tangent-basis fingerprints, `H+`, a
+`TDHFScalarFunctionalManifest`, callback source/code snapshot, energy
+convention, separate stationarity and curvature direction inventories, step
+ladder, and tolerances.  Certification re-derives all bindings before the
+first callback call.  Every tunable tolerance is bounded by a locked v1
+maximum; tighter approvals are allowed, but huge vacuous tolerances are
+rejected.  The roundoff multiplier is not tunable: v1 requires the exact fixed
+value `roundoff_multiplier=256.0`, and rejects zero, smaller, or any other
+value.  Private factory tokens prevent accidental
+public construction only: they are an honest-caller API mechanism, not a
+security boundary.  The detached approval is the scientific authority
+boundary.
+
+Stationarity uses a separate canonical real-tangent inventory for complex
+dimension `d=n_plus+n_minus`.  It has exactly `2d` directions, ordered as
+`e_i`, `i e_i` for each `i=0,...,d-1`.  The helper maps both inventories through
+`v=(x,y*)`; in particular a lower-lane `i e_i` has `y_i=-i`, not `+i`.
+Detached approval always binds this exact stationarity-complete inventory.
+Certification evaluates the five-point first derivative at every registered
+step along every one of these `2d` directions.  This gate is independent of
+the curvature inventory: real stationarity of a complex functional must not be
+inferred from the span used to reconstruct a quadratic form.  In particular,
+a Hermitian source `i(T0-T0†)` can have zero gradient on every canonical
+curvature direction below while retaining a nonzero `i e_0` gradient.
+
+The canonical informationally complete **curvature** inventory has exactly
+`d^2` directions in this order:
+
+1. `diag[i]`: `e_i`, for `i=0,...,d-1`;
+2. for lexicographic `i<j`, adjacent `real[i,j]` and `imag[i,j]` directions
+   `(e_i+e_j)/sqrt(2)` and `(e_i+i e_j)/sqrt(2)`.
+
+The helper maps the lower coordinate back as `y=conj(v_lower)`.  From the
+measured raw quadratic `q=E''_raw/2`, reconstruction uses
+
+\[
+ H_{ii}=q_i,\quad
+ \operatorname{Re}H_{ij}=q^{R}_{ij}-\frac{q_i+q_j}{2},\quad
+ \operatorname{Im}H_{ij}=\frac{q_i+q_j}{2}-q^{I}_{ij}.
+\]
+
+The last sign follows from the stated `+i e_j` direction.  A full Hermitian
+matrix is reconstructed and compared entrywise to `H+` at every registered
+step under the locked matrix tolerance.  The certificate stores the matrices,
+hashes, residuals, and bounds.  Whole-Hessian authority requires both
+independent gates: stationarity-complete all-pass evidence for every one of the
+`2d` real tangent directions at every step, and successful `d^2` curvature
+reconstruction of `H+` at every step.
+Only then is `mathematical_scalar_hessian_match=True`.  An arbitrary or
+incomplete curvature inventory may set only
+`registered_direction_curvatures_match=True`; its whole-Hessian flags remain
+false and it carries no reconstructed-matrix claim even though the mandatory
+stationarity inventory still runs.
+
+For every decreasing registered step `h`, both inventories evaluate
+`E(-2h), E(-h), E(0), E(h), E(2h)`.  The stationarity factory evidence stores
+the five raw energies, five-point first derivative, local second-derivative
+scale probe, roundoff/nonvacuity terms, projector residuals, and pass bound for
+every `2d` direction and every `h`.  Curvature evidence uses the five-point
+second derivative and reconstructs the Hessian when the `d^2` inventory is
+complete.  `E(P0)` is evaluated in every stencil, so an omitted or fitted `A0`
+cannot pass silently.  Stationarity and raw curvature must pass scale-aware
+plus roundoff bounds at all steps; selecting one favorable step is forbidden.
+
+The v1 non-vacuity policy treats `h` as the dimensionless unitary angle and
+accepts only registered steps in the closed range `1e-4 <= h <= 5e-2`.  At
+each executed stencil it records the derived raw roundoff terms
+`r1=M*eps*max(1,|E|)/h` and `r2=M*eps*max(1,|E|)/h^2` with the locked
+`M=256.0`, separately from the absolute/relative terms.  Certification aborts, rather than widening its gate,
+when `r1 > 1e-8` or `r2 > 1e-7` in the callback's raw energy/radian and
+energy/radian-squared units.  Thus a tiny step or a large additive energy zero
+cannot make constant-energy/cancellation data pass, even for an incomplete
+direction inventory that has no whole-Hessian reconstruction gate.
+
+`TDHFScalarFunctionalManifest` records the source-functional fingerprint,
+immutable callback-input fingerprint, implementation fingerprint, and explicit
+provenance.  The approval and certificate bind it, and callback file/source/code
+snapshots must agree before and after execution.  This is trusted scientific
+code, not a sandbox: closure cells, default arguments, global state, semantic
+normalization, and hostile-provider behavior are not proved.  Every certificate
+continues to set `static_hessian_authority_promoted=False`.
+
+The Vituri-2024 system adapter currently exposes readiness only.  It requires
+the exact `Vituri2024HalfMetalHFReplayPayload` bound to the factory array
+receipt, re-derives every ordered transition's exact mesh and flavor indices,
+energies, occupations `(particle=0,hole=1)`, source artifact/state/branch, and
+pair-to-tangent readiness, and binds exact area, `Delta1`, interaction, and
+caller-attested kinematics context.  Readiness rejects an assembly whose own
+`structure_tolerance` exceeds the locked `1e-10` threshold, then independently
+rebuilds the signed matrices with `structure_tolerance=1e-10` and
+`raise_on_structure_error=True`.  Its factory receipt records both that locked
+threshold and the maximum independently recomputed structure residual, and
+validates `max_structure_residual <= locked_structure_threshold`.  Its
+authority remains `projected_signed_ab` / `not_established`.  There is no
+synthetic scalar bridge or positive scalar-certificate claim without a real
+scalar provider.
