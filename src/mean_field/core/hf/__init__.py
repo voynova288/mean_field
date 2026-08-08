@@ -538,3 +538,10 @@ __all__ += [
     "make_tdhf_scalar_functional_manifest",
     "snapshot_tdhf_scalar_callback",
 ]
+
+# Public dense full-projector E/F/dF qualification ABI.  The module remains
+# system-agnostic; system-specific physical bindings live under systems/.
+from . import tdhf_scalar_functional as _tdhf_scalar_functional
+from .tdhf_scalar_functional import *  # noqa: F401,F403
+
+__all__ += list(_tdhf_scalar_functional.__all__)

@@ -135,6 +135,45 @@ The command surface should stay small.  Use `scripts/mean_field_tools.py`, `scri
 
 Before adding a new tracked script or devtool, try to extend an existing command with an option, subcommand, or config input.  Per-run `.sbatch` files, timestamped launchers, narrow plotting scripts, and temporary parameter sweeps should normally stay in ignored scratch space.  See `script_surface_policy.md` for the detailed policy and cleanup target.
 
+## Full-projector scalar-functional qualification boundary
+
+The reusable public ABI is `mean_field.core.hf.tdhf_scalar_functional`.  It uses
+conventional dense `complex128` matrices
+`P_ij = <c_j^dagger c_i>` and raw, unweighted identities
+`dE[P+tD]/dt = Tr(F[P]D)` and `dF[P+tD]/dt = dF[P,D]`.  Every registered
+Hermitian direction is normalized internally to unit Frobenius norm and must
+clear the locked pre-normalization signal floor.  A receipt distinguishes:
+
+- `registered_probe_functional_consistency`: all preregistered E/F/dF probes
+  passed;
+- `full_projector_functional_consistency`: additionally, the registered
+  inventory is exactly the internally generated normalized `N^2` Hermitian
+  basis for a supported small dimension.
+
+An incomplete production inventory must never report full-projector
+consistency.  Optional generic dF informativeness becomes mandatory in the
+Vituri adapter.  Exact-unitary support is not an asserted Boolean: the plan
+contains explicit same-trace idempotent projector values, and the receipt
+records actual finite, nonmutating E and F execution for each value.  These
+gates do not compare or promote TDHF A/B or H+ authority.
+
+`mean_field.systems.abc_trilayer.vituri2024_tdhf_full_scalar` owns the Vituri
+storage adapter and evidence chain.  Native replay arrays store
+`rho_ab=<c_a^dagger c_b>`, so a k block maps as `P_ab=rho_ba`; Fock and h0
+operator blocks are not transposed.  Consequently
+`Tr(F_full P_full)=sum_abk F_abk rho_abk`.  The existing native replay pairing
+is per-k, so conversion to the ABI raw total multiplies by exactly `Nk`; it
+never silently divides by area.  The static status remains
+`candidate_bound_not_executed`, synthetic evidence is never Slurm eligible,
+and the repository currently provides no concrete immutable artifact
+authority.
+
+Callback, dependency, source-byte, input-manifest, and verifier snapshots are
+a trusted-provider drift boundary only.  Python tracing and hashes are not a
+sandbox, hostile-code proof, or global completeness proof.  No full-space
+functional receipt by itself establishes A/B scalar-Hessian equality,
+production readiness, or paper reproduction.
+
 ## Performance strategy
 
 The right performance target is not "Python everywhere"; it is "Python orchestration with optimized kernels where needed".

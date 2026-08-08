@@ -679,3 +679,9 @@ __all__ = [
     "vituri2024_pocket_topology_signature",
     "vituri2024_refinement_evidence_sha256",
 ]
+
+# Public authority-limited Vituri full-projector candidate adapter.
+from . import vituri2024_tdhf_full_scalar as _vituri2024_tdhf_full_scalar
+from .vituri2024_tdhf_full_scalar import *  # noqa: F401,F403
+
+__all__ += list(_vituri2024_tdhf_full_scalar.__all__)
