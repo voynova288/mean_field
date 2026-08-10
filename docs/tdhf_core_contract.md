@@ -389,3 +389,35 @@ compared, but real-full-provider, source-scalar, global authority, promotion,
 production, and paper-parity claims remain false.  The original sector stays
 `projected_signed_ab`.  The unresolved boundary is therefore physical source
 and full-space authority, not this finite-orbital algebra identity.
+
+The system-local factorized full-space algebra kernel now lives at
+`src/mean_field/systems/abc_trilayer/vituri2024_tdhf_full_functional.py`.
+It acts on the complete `4*Nk` active-band space and fixes
+
+```text
+Q = P - R
+Sigma[X]_ij = sum_bg wbar[i,b,g,j] X[g,b]
+E[P] = Tr(h0 P) + 1/2 Tr(Q Sigma[Q])
+F[P] = h0 + Sigma[Q]
+dF[P;D] = Sigma[D].
+```
+
+The direct/exchange contractions consume explicit source-gauge active-band
+spinors, a literal local
+`k_alpha+k_beta-k_gamma-k_delta == (0,0)` mask, one explicit normal-reference
+matrix `R`, and the area-normalized Vituri interaction.  They allocate an
+`Nk^4` Boolean mask but no `(4Nk)^4` complex tensor.  Dimension-8 tests compare
+the factorized action entrywise to the actual `vituri2024_vertex` rank-four
+oracle; separate tests cover E/F/dF finite differences, self-adjoint pairing,
+source-gauge covariance, nonzero `R`, exact-local rejection, immutable live
+state, and a dimension-80 execution path.
+
+This kernel is not a real-source provider.  The current replay chain supplies
+a normal-reference fingerprint but not the actual `R` matrix or subtraction
+semantics.  An analytic `VTF(0)` value does not establish the HF q=0
+background, and no immutable artifact yet proves that replay spinors, h0,
+interaction arrays, reference, and saved Fock belong to one gauge/functional.
+The available comparison is therefore only
+`caller_supplied_array_consistency_only`: it establishes neither source
+closure/stationarity nor full-projector qualification, TDHF H-plus parity,
+scalar-Hessian authority, production readiness, or paper reproduction.

@@ -685,3 +685,9 @@ from . import vituri2024_tdhf_full_scalar as _vituri2024_tdhf_full_scalar
 from .vituri2024_tdhf_full_scalar import *  # noqa: F401,F403
 
 __all__ += list(_vituri2024_tdhf_full_scalar.__all__)
+
+# Public authority-limited factorized Vituri full-projector functional kernel.
+from . import vituri2024_tdhf_full_functional as _vituri2024_tdhf_full_functional
+from .vituri2024_tdhf_full_functional import *  # noqa: F401,F403
+
+__all__ += list(_vituri2024_tdhf_full_functional.__all__)
