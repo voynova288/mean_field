@@ -702,3 +702,9 @@ from . import vituri2024_tdhf_full_provider_bridge as _vituri2024_tdhf_full_prov
 from .vituri2024_tdhf_full_provider_bridge import *  # noqa: F401,F403
 
 __all__ += list(_vituri2024_tdhf_full_provider_bridge.__all__)
+
+# Paper-direct active-band projected-Hamiltonian R=0 representative.
+from . import vituri2024_projected_hamiltonian_reference as _vituri2024_projected_hamiltonian_reference
+from .vituri2024_projected_hamiltonian_reference import *  # noqa: F401,F403
+
+__all__ += list(_vituri2024_projected_hamiltonian_reference.__all__)

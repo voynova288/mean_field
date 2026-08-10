@@ -412,15 +412,28 @@ oracle; separate tests cover E/F/dF finite differences, self-adjoint pairing,
 source-gauge covariance, nonzero `R`, exact-local rejection, immutable live
 state, and a dimension-80 execution path.
 
-This kernel is not a real-source provider.  The current replay chain supplies
-a normal-reference fingerprint but not the actual `R` matrix or subtraction
-semantics.  An analytic `VTF(0)` value does not establish the HF q=0
-background, and no immutable artifact yet proves that replay spinors, h0,
-interaction arrays, reference, and saved Fock belong to one gauge/functional.
-The available comparison is therefore only
-`caller_supplied_array_consistency_only`: it establishes neither source
-closure/stationarity nor full-projector qualification, TDHF H-plus parity,
-scalar-Hessian authority, production readiness, or paper reproduction.
+This kernel is not a real-source provider.  The pinned supplementary material
+displays the active `n=3` projected Hamiltonian as an explicit quartic
+`c-dagger c-dagger c c` term plus `Delta mu * N`, with the latter absorbed into
+the chemical potential.  The separate
+`vituri2024_projected_hamiltonian_reference.py` adapter therefore supplies the
+canonical empty-active-electron Fock-vacuum representative `R=0` as an explicit
+bytes-backed matrix.  `R=0` is explicitly not labeled as the physical neutral
+reference; the CNP active-band density lies outside this narrow receipt.  This
+paper-direct statement does not fix the unresolved global one-body
+identity/chemical-potential gauge, select the provider's HF subtraction or q=0
+background, or prove that replay arrays use this representative.
+
+An analytic `VTF(0)` value still does not establish the HF q=0 background, and
+no immutable artifact yet proves that replay spinors, h0, interaction arrays,
+reference, and saved Fock belong to one gauge/functional.  The general bridge
+comparison therefore remains `caller_supplied_array_consistency_only`; the
+opt-in paper-reference bridge adds only projected-Hamiltonian `R=0` operator
+semantics plus absolute saved-array parity in the selected `R=0`/identity-gauge
+representative.  Neither establishes source
+closure/stationarity, absolute Fock-zero authority, full-projector
+qualification, TDHF H-plus parity, scalar-Hessian authority, production
+readiness, or paper reproduction.
 
 The additive provider adapter is split between
 `vituri2024_tdhf_full_provider_callbacks.py` and
@@ -439,7 +452,8 @@ assembled actual rank-four Vituri vertex with nonzero `P0-R`.  A separate
 `Nk=1`, dimension-4 fixture executes the generic ABI on the exact 16-direction
 Hermitian basis and may report complete **reduced callback-functional**
 consistency.  Neither result upgrades the bridge: the actual replay schema
-still lacks the authoritative `R` matrix and an executable HF q=0-background
-action, so source closure, N=80 full consistency, TDHF H-plus parity,
-scalar-Hessian authority, Slurm eligibility, production, and paper status all
-remain false.
+still lacks a lineage-bound proof that its source uses the paper `R=0`
+representative, an absolute `Delta mu`/Fock-zero convention, and an executable
+HF q=0-background action.  Source closure, N=80 full consistency, TDHF H-plus
+parity, scalar-Hessian authority, Slurm eligibility, production, and paper
+status therefore all remain false.

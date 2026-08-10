@@ -30,7 +30,10 @@ from mean_field.systems.abc_trilayer import (
     Vituri2024Orbital,
     VITURI2024_FULL_PROVIDER_BRIDGE_AUTHORITY,
     VITURI2024_FULL_PROVIDER_INPUT_NAMES,
+    VITURI2024_PROJECTED_HAMILTONIAN_REFERENCE_AUTHORITY,
+    VITURI2024_PROJECTED_HAMILTONIAN_REFERENCE_TEXT_SHA256,
     build_vituri2024_full_functional_replay_bridge,
+    build_vituri2024_full_functional_replay_bridge_from_projected_hamiltonian_reference,
     vituri2024_antisymmetrized_projected_vertex,
     vituri2024_full_operator_to_payload_k_diagonal,
     vituri2024_full_projected_interaction_action,
@@ -41,6 +44,7 @@ from mean_field.systems.abc_trilayer import (
     vituri2024_payload_density_to_full_projector,
     vituri2024_payload_operator_to_full_dense,
     vituri2024_tdhf_full_scalar_source_from_payload,
+    make_vituri2024_projected_hamiltonian_zero_reference,
 )
 import mean_field.systems.abc_trilayer.vituri2024_tdhf_full_provider_bridge as provider_bridge_module
 from mean_field.systems.abc_trilayer.vituri2024 import (
@@ -284,6 +288,11 @@ def test_provider_modules_import_in_fresh_process_orders() -> None:
     orders = (
         ("vituri2024_tdhf_full_provider_callbacks", "vituri2024_tdhf_full_provider_bridge"),
         ("vituri2024_tdhf_full_provider_bridge", "vituri2024_tdhf_full_provider_callbacks"),
+        (
+            "vituri2024_projected_hamiltonian_reference",
+            "vituri2024_tdhf_full_provider_callbacks",
+            "vituri2024_tdhf_full_provider_bridge",
+        ),
     )
     for order in orders:
         imports = ";".join(
@@ -333,6 +342,160 @@ def test_payload_density_transpose_and_operator_orientation_are_nonvacuous() -> 
         full_operator[np.ix_(first_block, first_block)], stored[:2, :2, 0]
     )
     assert not np.array_equal(full_density, full_operator)
+
+
+def test_paper_projected_hamiltonian_reference_is_exact_R0_and_narrow() -> None:
+    receipt = make_vituri2024_projected_hamiltonian_zero_reference(nk=2)
+    repeated = make_vituri2024_projected_hamiltonian_zero_reference(nk=2)
+    assert repeated.fingerprint == receipt.fingerprint
+    assert receipt.dimension == 8
+    assert receipt.normal_order_reference_full.dtype == np.dtype(np.complex128)
+    assert receipt.normal_order_reference_full.shape == (8, 8)
+    assert np.array_equal(receipt.normal_order_reference_full, np.zeros((8, 8)))
+    assert receipt.normal_order_reference_full.flags.writeable is False
+    assert receipt.normal_order_reference_full.flags.owndata is False
+    assert receipt.authority == VITURI2024_PROJECTED_HAMILTONIAN_REFERENCE_AUTHORITY
+    assert (
+        receipt.canonical_equation_text_sha256
+        == VITURI2024_PROJECTED_HAMILTONIAN_REFERENCE_TEXT_SHA256
+    )
+    assert receipt.paper_active_quartic_R0_semantics_established is True
+    assert receipt.canonical_empty_active_electron_reference is True
+    assert receipt.r0_is_physical_neutral_reference is False
+    assert receipt.physical_neutral_density_identified is False
+    assert receipt.normal_order_authority_established is False
+    assert receipt.absolute_identity_shift_authority_established is False
+    assert receipt.fixed_N_ensemble_authority_established is False
+    assert receipt.q0_background_authority_established is False
+    assert receipt.replay_source_authority_established is False
+    assert receipt.source_closure_established is False
+    assert receipt.absolute_fock_zero_authority_established is False
+    assert receipt.production_ready is False
+    with pytest.raises(TypeError, match="factory-only"):
+        type(receipt)(
+            _factory_token=object(),
+            nk=receipt.nk,
+            dimension=receipt.dimension,
+            normal_order_reference_full=receipt.normal_order_reference_full,
+            normal_order_reference_array_sha256=(
+                receipt.normal_order_reference_array_sha256
+            ),
+            canonical_equation_text_sha256=(
+                receipt.canonical_equation_text_sha256
+            ),
+        )
+    object.__setattr__(receipt, "production_ready", True)
+    with pytest.raises(ValueError, match="authority was inflated"):
+        _ = receipt.fingerprint
+
+
+def test_paper_R0_opt_in_bridge_matches_R0_and_rejects_nonidentity_reference_arrays(
+    small_generic_case: _Case,
+) -> None:
+    source = vituri2024_tdhf_full_scalar_source_from_payload(
+        small_generic_case.payload
+    )
+    reference = make_vituri2024_projected_hamiltonian_zero_reference(
+        nk=source.nk
+    )
+    sigma0 = small_generic_case.bridge.kernel.interaction_action(
+        source.source_projector
+    )
+    fock0 = source.source_h0 + sigma0
+    payload0 = replace(
+        small_generic_case.payload,
+        interaction_h=vituri2024_full_operator_to_payload_k_diagonal(sigma0),
+        fock=vituri2024_full_operator_to_payload_k_diagonal(fock0),
+        energies=np.real(np.diag(fock0)).reshape(len(INTERNAL_FLAVOR_ORDER), 1),
+        source_state_sha256=_digest("provider-bridge-small-R0-source-state"),
+    )
+    composite = (
+        build_vituri2024_full_functional_replay_bridge_from_projected_hamiltonian_reference(
+            source_payload=payload0,
+            reference=reference,
+            area_angstrom_squared=small_generic_case.area,
+            interaction=small_generic_case.interaction,
+            q0_policy_fingerprint=_digest("provider-bridge-small-R0-q0-policy"),
+            q0_background_evidence_sha256=_digest(
+                "provider-bridge-small-R0-q0-background-absent"
+            ),
+            provenance=(
+                "Synthetic R0 saved-array parity for the paper projected-Hamiltonian "
+                "reference adapter; no source or q0 authority."
+            ),
+        )
+    )
+    assert composite.reference.fingerprint == reference.fingerprint
+    assert composite.replay_bridge.array_consistency.passed is True
+    assert composite.paper_active_quartic_R0_semantics_established is True
+    assert (
+        composite.selected_R0_identity_gauge_saved_array_parity_passed is True
+    )
+    assert composite.absolute_identity_shift_authority_established is False
+    assert composite.replay_source_authority_established is False
+    assert composite.absolute_fock_zero_authority_established is False
+    assert composite.q0_background_authority_established is False
+    assert composite.source_closure_established is False
+    assert composite.production_ready is False
+
+    nonidentity_reference = np.diag([0.05, 0.15, 0.25, 0.35]).astype(
+        np.complex128
+    )
+    reference_action = small_generic_case.bridge.kernel.interaction_action(
+        nonidentity_reference
+    )
+    identity_part = np.trace(reference_action) / reference_action.shape[0]
+    assert np.max(
+        np.abs(reference_action - identity_part * np.eye(reference_action.shape[0]))
+    ) > 1.0e-8
+    sigma_nonidentity = small_generic_case.bridge.kernel.interaction_action(
+        source.source_projector - nonidentity_reference
+    )
+    fock_nonidentity = source.source_h0 + sigma_nonidentity
+    payload_nonidentity = replace(
+        small_generic_case.payload,
+        interaction_h=vituri2024_full_operator_to_payload_k_diagonal(
+            sigma_nonidentity
+        ),
+        fock=vituri2024_full_operator_to_payload_k_diagonal(fock_nonidentity),
+        energies=np.real(np.diag(fock_nonidentity)).reshape(
+            len(INTERNAL_FLAVOR_ORDER), 1
+        ),
+        source_state_sha256=_digest(
+            "provider-bridge-small-nonidentity-R-source-state"
+        ),
+    )
+    with pytest.raises(ValueError, match="supplied-array consistency failed"):
+        build_vituri2024_full_functional_replay_bridge_from_projected_hamiltonian_reference(
+            source_payload=payload_nonidentity,
+            reference=reference,
+            area_angstrom_squared=small_generic_case.area,
+            interaction=small_generic_case.interaction,
+            q0_policy_fingerprint=_digest("provider-bridge-small-R0-q0-policy"),
+            q0_background_evidence_sha256=_digest(
+                "provider-bridge-small-R0-q0-background-absent"
+            ),
+            provenance=(
+                "Arrays generated with a nonidentity reference action must fail "
+                "selected-R0 representative parity."
+            ),
+        )
+    object.__setattr__(composite, "production_ready", True)
+    with pytest.raises(ValueError, match="authority inflated"):
+        _ = composite.fingerprint
+
+
+def test_existing_caller_supplied_reference_bridge_signature_remains_required() -> None:
+    parameters = inspect.signature(
+        build_vituri2024_full_functional_replay_bridge
+    ).parameters
+    for name in (
+        "normal_order_reference_full",
+        "normal_order_reference_fingerprint",
+        "reference_policy_evidence_sha256",
+    ):
+        assert name in parameters
+        assert parameters[name].default is inspect.Parameter.empty
 
 
 def test_replay_bridge_matches_independent_rank4_targets_and_keeps_authority_false(
