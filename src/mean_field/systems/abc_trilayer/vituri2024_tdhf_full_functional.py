@@ -501,6 +501,121 @@ def _exact_local_mask(mesh: Array) -> Array:
     return _bytes_backed(result, dtype=np.dtype(np.bool_))
 
 
+def vituri2024_full_projected_interaction_action(
+    density: Array,
+    *,
+    form_factors_by_flavor: Array,
+    interaction_kernel_by_mesh_pair: Array,
+    exact_local_mask: Array,
+    area_angstrom_squared: float,
+) -> Array:
+    """Apply the factorized direct/exchange vertex to a conventional density."""
+
+    if not isinstance(form_factors_by_flavor, np.ndarray) or (
+        form_factors_by_flavor.dtype != np.dtype(np.complex128)
+        or form_factors_by_flavor.ndim != 3
+        or form_factors_by_flavor.shape[0] != len(INTERNAL_FLAVOR_ORDER)
+        or form_factors_by_flavor.shape[1] != form_factors_by_flavor.shape[2]
+        or form_factors_by_flavor.shape[1] < 1
+        or not np.all(np.isfinite(form_factors_by_flavor))
+    ):
+        raise ValueError(
+            "factorized form factors must have finite complex128 shape (4,Nk,Nk)"
+        )
+    nk = int(form_factors_by_flavor.shape[1])
+    dimension = len(INTERNAL_FLAVOR_ORDER) * nk
+    clean = _readonly_hermitian(
+        density,
+        label="full conventional density action input",
+        dimension=dimension,
+    )
+    if not isinstance(interaction_kernel_by_mesh_pair, np.ndarray) or (
+        interaction_kernel_by_mesh_pair.dtype != np.dtype(np.float64)
+        or interaction_kernel_by_mesh_pair.shape != (nk, nk)
+        or not np.all(np.isfinite(interaction_kernel_by_mesh_pair))
+        or np.any(interaction_kernel_by_mesh_pair <= 0.0)
+    ):
+        raise ValueError(
+            "factorized interaction kernel must be finite positive float64 (Nk,Nk)"
+        )
+    if not isinstance(exact_local_mask, np.ndarray) or (
+        exact_local_mask.dtype != np.dtype(np.bool_)
+        or exact_local_mask.shape != (nk, nk, nk, nk)
+    ):
+        raise ValueError(
+            "factorized exact-local mask must have bool shape (Nk,Nk,Nk,Nk)"
+        )
+    if isinstance(area_angstrom_squared, (bool, np.bool_)):
+        raise TypeError("factorized finite area must be a strict real scalar")
+    area = float(area_angstrom_squared)
+    if not math.isfinite(area) or area <= 0.0:
+        raise ValueError("factorized finite area must be positive")
+    if _max_abs(
+        form_factors_by_flavor
+        - form_factors_by_flavor.swapaxes(1, 2).conj()
+    ) > 5.0e-12:
+        raise ValueError("factorized form factors violate pair conjugation")
+    if _max_abs(
+        interaction_kernel_by_mesh_pair - interaction_kernel_by_mesh_pair.T
+    ) > 64.0 * np.finfo(np.float64).eps * max(
+        1.0, _max_abs(interaction_kernel_by_mesh_pair)
+    ):
+        raise ValueError("factorized interaction kernel is not symmetric")
+    if (
+        not np.array_equal(exact_local_mask, exact_local_mask.swapaxes(0, 1))
+        or not np.array_equal(exact_local_mask, exact_local_mask.swapaxes(2, 3))
+        or not np.array_equal(
+            exact_local_mask, exact_local_mask.transpose(3, 2, 1, 0)
+        )
+    ):
+        raise ValueError("factorized exact-local mask symmetry closure failed")
+
+    flavors = len(INTERNAL_FLAVOR_ORDER)
+    x = clean.reshape(flavors, nk, flavors, nk)
+    charge = np.zeros((nk, nk), dtype=np.complex128)
+    for flavor in range(flavors):
+        charge += (
+            form_factors_by_flavor[flavor]
+            * x[flavor, :, flavor, :].T
+        )
+    potential = np.einsum(
+        "mprn,pr,pr->mn",
+        exact_local_mask,
+        interaction_kernel_by_mesh_pair,
+        charge,
+        optimize=True,
+    )
+    result = np.zeros_like(x)
+    for flavor in range(flavors):
+        result[flavor, :, flavor, :] = (
+            form_factors_by_flavor[flavor] * potential
+        )
+    for left_flavor in range(flavors):
+        left_form_factor = form_factors_by_flavor[left_flavor]
+        for right_flavor in range(flavors):
+            right_form_factor = form_factors_by_flavor[right_flavor]
+            density_block = x[left_flavor, :, right_flavor, :]
+            result[left_flavor, :, right_flavor, :] -= np.einsum(
+                "mprn,pn,mr,pn,rp->mn",
+                exact_local_mask,
+                interaction_kernel_by_mesh_pair,
+                left_form_factor,
+                right_form_factor,
+                density_block,
+                optimize=True,
+            )
+    result = result.reshape(dimension, dimension)
+    result /= area
+    residual = _max_abs(result - result.conj().T)
+    scale = max(1.0, _max_abs(result))
+    if residual > _locked_structure_tolerance() * scale:
+        raise ValueError(
+            "factorized Vituri interaction action is not Hermitian; "
+            "mask/form-factor/source-gauge repair is prohibited"
+        )
+    return _readonly_result(result)
+
+
 @dataclass(frozen=True, slots=True)
 class Vituri2024FullProjectedFunctionalKernel:
     """Factorized ``Sigma`` and conventional full-projector ``E/F/dF``.
@@ -830,52 +945,13 @@ class Vituri2024FullProjectedFunctionalKernel:
         """Return ``Sigma[density]`` without post-Hermitization."""
 
         self.validate_live_state()
-        clean = self._validate_density(density, "full conventional density action input")
-        flavors = len(INTERNAL_FLAVOR_ORDER)
-        nk = self.nk
-        x = clean.reshape(flavors, nk, flavors, nk)
-        form_factors = self.form_factors_by_flavor
-        kernel = self.kernel_by_mesh_pair
-        mask = self.exact_local_mask
-
-        # Direct/Hartree: only flavor-diagonal output, with all four flavor
-        # densities entering the charge form-factor contraction.
-        charge = np.zeros((nk, nk), dtype=np.complex128)
-        for flavor in range(flavors):
-            charge += form_factors[flavor] * x[flavor, :, flavor, :].T
-        potential = np.einsum(
-            "mprn,pr,pr->mn", mask, kernel, charge, optimize=True
+        return vituri2024_full_projected_interaction_action(
+            density,
+            form_factors_by_flavor=self.form_factors_by_flavor,
+            interaction_kernel_by_mesh_pair=self.kernel_by_mesh_pair,
+            exact_local_mask=self.exact_local_mask,
+            area_angstrom_squared=self.area_angstrom_squared,
         )
-        result = np.zeros_like(x)
-        for flavor in range(flavors):
-            result[flavor, :, flavor, :] = form_factors[flavor] * potential
-
-        # Exchange: the flavor deltas lock the internal density block to the
-        # same ordered (left_flavor,right_flavor) as the output block.
-        for left_flavor in range(flavors):
-            left_form_factor = form_factors[left_flavor]
-            for right_flavor in range(flavors):
-                right_form_factor = form_factors[right_flavor]
-                density_block = x[left_flavor, :, right_flavor, :]
-                result[left_flavor, :, right_flavor, :] -= np.einsum(
-                    "mprn,pn,mr,pn,rp->mn",
-                    mask,
-                    kernel,
-                    left_form_factor,
-                    right_form_factor,
-                    density_block,
-                    optimize=True,
-                )
-        result = result.reshape(self.dimension, self.dimension)
-        result /= self.area_angstrom_squared
-        residual = _max_abs(result - result.conj().T)
-        scale = max(1.0, _max_abs(result))
-        if residual > _locked_structure_tolerance() * scale:
-            raise ValueError(
-                "factorized Vituri interaction action is not Hermitian; "
-                "mask/form-factor/source-gauge repair is prohibited"
-            )
-        return _readonly_result(result)
 
     def energy(self, projector: Array) -> float:
         clean = self._validate_density(projector, "full conventional P")
@@ -1066,4 +1142,5 @@ __all__ = [
     "Vituri2024FullProjectedFunctionalKernel",
     "Vituri2024FullProjectedSuppliedArrayConsistencyReceipt",
     "validate_vituri2024_full_projected_supplied_arrays",
+    "vituri2024_full_projected_interaction_action",
 ]

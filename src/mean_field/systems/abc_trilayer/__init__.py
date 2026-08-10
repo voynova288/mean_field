@@ -691,3 +691,14 @@ from . import vituri2024_tdhf_full_functional as _vituri2024_tdhf_full_functiona
 from .vituri2024_tdhf_full_functional import *  # noqa: F401,F403
 
 __all__ += list(_vituri2024_tdhf_full_functional.__all__)
+
+# Public generic-ABI callbacks and replay bridge for the factorized functional.
+from . import vituri2024_tdhf_full_provider_callbacks as _vituri2024_tdhf_full_provider_callbacks
+from .vituri2024_tdhf_full_provider_callbacks import *  # noqa: F401,F403
+
+__all__ += list(_vituri2024_tdhf_full_provider_callbacks.__all__)
+
+from . import vituri2024_tdhf_full_provider_bridge as _vituri2024_tdhf_full_provider_bridge
+from .vituri2024_tdhf_full_provider_bridge import *  # noqa: F401,F403
+
+__all__ += list(_vituri2024_tdhf_full_provider_bridge.__all__)

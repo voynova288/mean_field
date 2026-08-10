@@ -421,3 +421,25 @@ The available comparison is therefore only
 `caller_supplied_array_consistency_only`: it establishes neither source
 closure/stationarity nor full-projector qualification, TDHF H-plus parity,
 scalar-Hessian authority, production readiness, or paper reproduction.
+
+The additive provider adapter is split between
+`vituri2024_tdhf_full_provider_callbacks.py` and
+`vituri2024_tdhf_full_provider_bridge.py`.  Three distinct closure-free plain
+callbacks consume explicit immutable `h0`, `R`, source-gauge form factors,
+mesh-pair interaction values, exact-local mask, and area arrays; they do not
+receive replay `interaction_h`, Fock, A/B, or Hessian targets.  The factory-only
+replay bridge separately compares `Sigma[P0-R]` and `F[P0]` with the saved
+operator arrays and binds all source-input, reference-policy, q0-policy, and
+interaction identities.  The complete replay fingerprint remains on the
+bridge, while callback source fingerprints exclude saved target arrays.
+
+Reduced evidence has two distinct scopes.  An `Nk=2`, dimension-8 fixture
+compares generic complex/off-k factorized actions against an independently
+assembled actual rank-four Vituri vertex with nonzero `P0-R`.  A separate
+`Nk=1`, dimension-4 fixture executes the generic ABI on the exact 16-direction
+Hermitian basis and may report complete **reduced callback-functional**
+consistency.  Neither result upgrades the bridge: the actual replay schema
+still lacks the authoritative `R` matrix and an executable HF q=0-background
+action, so source closure, N=80 full consistency, TDHF H-plus parity,
+scalar-Hessian authority, Slurm eligibility, production, and paper status all
+remain false.
