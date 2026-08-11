@@ -18,6 +18,7 @@ from mean_field.core.hf import (
     TDHFFullProjectorValidationTolerances,
     bind_tdhf_scalar_kernel,
     deterministic_complete_hermitian_basis,
+    execute_tdhf_full_projector_fock_once,
     make_tdhf_full_projector_functional_approval,
     make_tdhf_full_projector_unitary_probe,
     make_tdhf_scalar_functional_inputs_manifest,
@@ -135,6 +136,19 @@ def _forbidden_entrypoint(inputs, D):
 def _forbidden_df(inputs, P, D):
     del P
     return _forbidden_entrypoint(inputs, D)
+
+
+_SINGLE_FOCK_CALLS = {"counting": 0, "recursive": 0}
+
+
+def _counting_fock(inputs, P):
+    _SINGLE_FOCK_CALLS["counting"] += 1
+    return _quadratic_fock(inputs, P)
+
+
+def _recursive_fock(inputs, P):
+    _SINGLE_FOCK_CALLS["recursive"] += 1
+    return _recursive_fock(inputs, P)
 
 
 class _Case:
@@ -293,6 +307,47 @@ def test_public_full_projector_quadratic_certificate_checks_every_equation() -> 
     assert any(
         np.max(np.abs(item.matrix[:2, 2:])) > 0.0 for item in case.directions
     )
+
+
+def test_guarded_single_fock_execution_counts_frames_and_validates_before_call() -> None:
+    case = _Case()
+    _SINGLE_FOCK_CALLS["counting"] = 0
+    counting = _binding(fock=_counting_fock)
+    with pytest.raises(ValueError, match="provenance"):
+        execute_tdhf_full_projector_fock_once(
+            space=case.space,
+            inputs=case.inputs,
+            binding=counting,
+            projector=case.plan.source_projector,
+            provenance="",
+        )
+    assert _SINGLE_FOCK_CALLS["counting"] == 0
+    receipt = execute_tdhf_full_projector_fock_once(
+        space=case.space,
+        inputs=case.inputs,
+        binding=counting,
+        projector=case.plan.source_projector,
+        provenance="Guarded public single-Fock execution canary.",
+    )
+    assert _SINGLE_FOCK_CALLS["counting"] == 1
+    assert receipt.invocation_counts == (
+        ("energy", 0),
+        ("fock", 1),
+        ("fock_derivative", 0),
+    )
+    assert receipt.callback_trace_verified
+    assert receipt.fock_fingerprint
+    _SINGLE_FOCK_CALLS["recursive"] = 0
+    recursive = _binding(fock=_recursive_fock)
+    with pytest.raises(RuntimeError, match="selected callback re-entry"):
+        execute_tdhf_full_projector_fock_once(
+            space=case.space,
+            inputs=case.inputs,
+            binding=recursive,
+            projector=case.plan.source_projector,
+            provenance="Recursive callback must be rejected by frame tracing.",
+        )
+    assert _SINGLE_FOCK_CALLS["recursive"] == 1
 
 
 @pytest.mark.parametrize(

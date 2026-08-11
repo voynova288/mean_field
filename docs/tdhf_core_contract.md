@@ -457,3 +457,26 @@ representative, an absolute `Delta mu`/Fock-zero convention, and an executable
 HF q=0-background action.  Source closure, N=80 full consistency, TDHF H-plus
 parity, scalar-Hessian authority, Slurm eligibility, production, and paper
 status therefore all remain false.
+
+A second opt-in path treats the unresolved `Delta mu * N` only as a quotient
+by one common real global identity.  Its target-free candidate builds the
+paper-`R=0` callbacks from mesh, source-gauge states, `h0`, `P0`, interaction,
+area, and policy inputs without reading replay `interaction_h`, Fock, energies,
+or `source_state_sha256`.  A separate target-bearing receipt executes F exactly
+once through the generic guarded executor, which enforces callback tracing,
+argument immutability, output non-aliasing, and source/dependency stability.  It
+then requires, with one shared fitted scalar `lambda_fit_ev`,
+
+```text
+interaction_h_saved - Sigma_R0[P0]       = lambda_fit * I
+F_saved - (h0 + Sigma_R0[P0])            = lambda_fit * I
+energies_saved - diag(F_R0[P0])          = lambda_fit
+F_saved - h0 - interaction_h_saved       = 0
+```
+
+entrywise within the locked absolute tolerance.  Separate flavor-, k-, block-,
+interaction-, Fock-, or energy-dependent shifts are rejected.  Passing this
+receipt establishes only selected-`R=0` fixed-rank operator parity modulo a
+single identity.  It does not identify physical `Delta mu`, prove absolute
+energy/Fock parity, compare different-rank sectors, establish q=0/source/dF or
+functional qualification, or promote TDHF, production, or paper authority.

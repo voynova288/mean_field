@@ -30,10 +30,12 @@ from mean_field.systems.abc_trilayer import (
     Vituri2024Orbital,
     VITURI2024_FULL_PROVIDER_BRIDGE_AUTHORITY,
     VITURI2024_FULL_PROVIDER_INPUT_NAMES,
+    VITURI2024_PROJECTED_HAMILTONIAN_IDENTITY_GAUGE_AUTHORITY,
     VITURI2024_PROJECTED_HAMILTONIAN_REFERENCE_AUTHORITY,
     VITURI2024_PROJECTED_HAMILTONIAN_REFERENCE_TEXT_SHA256,
     build_vituri2024_full_functional_replay_bridge,
     build_vituri2024_full_functional_replay_bridge_from_projected_hamiltonian_reference,
+    build_vituri2024_projected_hamiltonian_identity_gauge_candidate,
     vituri2024_antisymmetrized_projected_vertex,
     vituri2024_full_operator_to_payload_k_diagonal,
     vituri2024_full_projected_interaction_action,
@@ -45,6 +47,7 @@ from mean_field.systems.abc_trilayer import (
     vituri2024_payload_operator_to_full_dense,
     vituri2024_tdhf_full_scalar_source_from_payload,
     make_vituri2024_projected_hamiltonian_zero_reference,
+    validate_vituri2024_projected_hamiltonian_identity_gauge_parity,
 )
 import mean_field.systems.abc_trilayer.vituri2024_tdhf_full_provider_bridge as provider_bridge_module
 from mean_field.systems.abc_trilayer.vituri2024 import (
@@ -483,6 +486,315 @@ def test_paper_R0_opt_in_bridge_matches_R0_and_rejects_nonidentity_reference_arr
     object.__setattr__(composite, "production_ready", True)
     with pytest.raises(ValueError, match="authority inflated"):
         _ = composite.fingerprint
+
+
+def _identity_gauge_candidate(case: _Case, payload):
+    reference = make_vituri2024_projected_hamiltonian_zero_reference(
+        nk=payload.mesh.shape[0]
+    )
+    return build_vituri2024_projected_hamiltonian_identity_gauge_candidate(
+        source_payload=payload,
+        reference=reference,
+        area_angstrom_squared=case.area,
+        interaction=case.interaction,
+        q0_policy_fingerprint=_digest("provider-bridge-identity-gauge-q0-policy"),
+        q0_background_evidence_sha256=_digest(
+            "provider-bridge-identity-gauge-q0-background-absent"
+        ),
+        provenance=(
+            "Synthetic target-free selected-R0 identity-gauge candidate; "
+            "no source, q0, TDHF, production, or paper authority."
+        ),
+    )
+
+
+def test_identity_gauge_candidate_accepts_one_common_real_global_shift(
+    small_generic_case: _Case,
+) -> None:
+    payload = small_generic_case.payload
+    candidate = _identity_gauge_candidate(small_generic_case, payload)
+    receipt = validate_vituri2024_projected_hamiltonian_identity_gauge_parity(
+        candidate=candidate,
+        source_payload=payload,
+    )
+    assert candidate.authority == VITURI2024_PROJECTED_HAMILTONIAN_IDENTITY_GAUGE_AUTHORITY
+    assert candidate.identity_gauge_parity_executed is False
+    assert candidate.source_closure_established is False
+    assert receipt.guarded_fock_execution.invocation_counts == (
+        ("energy", 0),
+        ("fock", 1),
+        ("fock_derivative", 0),
+    )
+    assert receipt.guarded_fock_execution.callback_trace_verified is True
+    assert receipt.guarded_fock_execution.argument_mutation_rejected is True
+    assert receipt.guarded_fock_execution.output_alias_rejected is True
+    assert receipt.guarded_fock_execution.fock_fingerprint == (
+        receipt.computed_fock_full_sha256
+    )
+    assert receipt.single_real_global_identity_fit_passed is True
+    assert (
+        receipt.selected_R0_fixed_rank_operator_parity_mod_global_identity_passed
+        is True
+    )
+    reference_action = small_generic_case.bridge.kernel.interaction_action(
+        small_generic_case.reference
+    )
+    expected_alpha = float(np.real(np.trace(reference_action)) / 4.0)
+    assert np.max(
+        np.abs(reference_action - expected_alpha * np.eye(4, dtype=np.complex128))
+    ) < 2.0e-12
+    assert receipt.lambda_fit_ev == pytest.approx(-expected_alpha, abs=2.0e-12)
+    assert abs(receipt.lambda_fit_ev) > 1.0e-8
+    assert receipt.maximum_interaction_identity_quotient_residual_ev < 2.0e-12
+    assert receipt.maximum_fock_identity_quotient_residual_ev < 2.0e-12
+    assert receipt.maximum_energy_identity_quotient_residual_ev < 2.0e-12
+    assert receipt.physical_delta_mu_identified is False
+    assert receipt.absolute_fock_parity_established is False
+    assert receipt.absolute_energy_or_cross_rank_authority_established is False
+    assert receipt.replay_normal_order_source_authority_established is False
+    assert receipt.q0_background_authority_established is False
+    assert receipt.source_closure_established is False
+    assert receipt.generic_functional_qualification_executed is False
+    assert receipt.tdhf_hessian_match is False
+    assert receipt.production_ready is False
+
+    delta = 0.017
+    identity_native = np.eye(4, dtype=np.complex128)[:, :, None]
+    shifted = replace(
+        payload,
+        interaction_h=payload.interaction_h + delta * identity_native,
+        fock=payload.fock + delta * identity_native,
+        energies=payload.energies + delta,
+        source_state_sha256=_digest("identity-gauge-common-shift-target-state"),
+    )
+    shifted_candidate = _identity_gauge_candidate(small_generic_case, shifted)
+    shifted_receipt = (
+        validate_vituri2024_projected_hamiltonian_identity_gauge_parity(
+            candidate=shifted_candidate,
+            source_payload=shifted,
+        )
+    )
+    assert shifted_candidate.fingerprint == candidate.fingerprint
+    assert shifted_candidate.inputs.fingerprint == candidate.inputs.fingerprint
+    assert shifted_candidate.binding.fingerprint == candidate.binding.fingerprint
+    assert shifted_receipt.source_payload_fingerprint != receipt.source_payload_fingerprint
+    assert shifted_receipt.lambda_fit_ev == pytest.approx(
+        receipt.lambda_fit_ev + delta, abs=2.0e-12
+    )
+    p0 = candidate.inputs.array("source_projector_full")
+    f0 = receipt.computed_fock_full
+    identity_full = np.eye(f0.shape[0], dtype=np.complex128)
+    assert np.max(
+        np.abs((f0 + shifted_receipt.lambda_fit_ev * identity_full) @ p0
+               - p0 @ (f0 + shifted_receipt.lambda_fit_ev * identity_full)
+               - (f0 @ p0 - p0 @ f0))
+    ) < 2.0e-12
+    direction = np.asarray(
+        [[0.0, 0.2j, 0.0, 0.0], [-0.2j, 0.0, 0.0, 0.0],
+         [0.0, 0.0, 0.0, 0.1], [0.0, 0.0, 0.1, 0.0]],
+        dtype=np.complex128,
+    )
+    dF_original = vituri2024_full_provider_fock_derivative(
+        candidate.inputs, p0, direction
+    )
+    dF_shifted = vituri2024_full_provider_fock_derivative(
+        shifted_candidate.inputs, p0, direction
+    )
+    assert np.array_equal(dF_original, dF_shifted)
+    angle = 0.21
+    unitary = np.eye(4, dtype=np.complex128)
+    unitary[np.ix_([0, 2], [0, 2])] = np.asarray(
+        [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]],
+        dtype=np.complex128,
+    )
+    rotated = unitary @ p0 @ unitary.conj().T
+    assert np.trace(rotated) == pytest.approx(np.trace(p0), abs=2.0e-12)
+    assert shifted_receipt.lambda_fit_ev * np.trace(rotated) == pytest.approx(
+        shifted_receipt.lambda_fit_ev * np.trace(p0), abs=2.0e-12
+    )
+
+
+def test_identity_gauge_Nk2_uses_full_dimension_and_accepts_signed_common_shifts(
+    actual_case: _Case,
+) -> None:
+    source = vituri2024_tdhf_full_scalar_source_from_payload(actual_case.payload)
+    sigma0 = actual_case.bridge.kernel.interaction_action(source.source_projector)
+    fock0 = source.source_h0 + sigma0
+    payload0 = replace(
+        actual_case.payload,
+        interaction_h=vituri2024_full_operator_to_payload_k_diagonal(sigma0),
+        fock=vituri2024_full_operator_to_payload_k_diagonal(fock0),
+        energies=np.real(np.diag(fock0)).reshape(4, 2),
+        source_state_sha256=_digest("identity-gauge-Nk2-R0-state"),
+    )
+    candidate0 = _identity_gauge_candidate(actual_case, payload0)
+    receipt0 = validate_vituri2024_projected_hamiltonian_identity_gauge_parity(
+        candidate=candidate0, source_payload=payload0
+    )
+    assert candidate0.space.dimension == 8
+    assert receipt0.lambda_fit_ev == pytest.approx(0.0, abs=2.0e-12)
+    identity_native = np.repeat(
+        np.eye(4, dtype=np.complex128)[:, :, None], 2, axis=2
+    )
+    for label, delta in (("positive", 0.023), ("negative", -0.019)):
+        shifted = replace(
+            payload0,
+            interaction_h=payload0.interaction_h + delta * identity_native,
+            fock=payload0.fock + delta * identity_native,
+            energies=payload0.energies + delta,
+            source_state_sha256=_digest(f"identity-gauge-Nk2-{label}-state"),
+        )
+        candidate = _identity_gauge_candidate(actual_case, shifted)
+        receipt = validate_vituri2024_projected_hamiltonian_identity_gauge_parity(
+            candidate=candidate, source_payload=shifted
+        )
+        assert candidate.fingerprint == candidate0.fingerprint
+        assert receipt.lambda_fit_ev == pytest.approx(delta, abs=2.0e-12)
+        difference = receipt.supplied_fock_full - receipt.computed_fock_full
+        assert float(np.real(np.trace(difference)) / 8.0) == pytest.approx(
+            delta, abs=2.0e-12
+        )
+        rank = int(round(float(np.real(np.trace(source.source_projector)))))
+        assert rank != 8
+        assert float(np.real(np.trace(difference)) / rank) != pytest.approx(
+            delta, abs=1.0e-6
+        )
+    per_k = np.zeros_like(payload0.fock)
+    per_k[:, :, 0] = 3.0e-6 * np.eye(4, dtype=np.complex128)
+    per_k[:, :, 1] = -3.0e-6 * np.eye(4, dtype=np.complex128)
+    per_k_payload = replace(
+        payload0,
+        interaction_h=payload0.interaction_h + per_k,
+        fock=payload0.fock + per_k,
+        energies=payload0.energies + np.asarray([[3.0e-6, -3.0e-6]] * 4),
+        source_state_sha256=_digest("identity-gauge-Nk2-per-k-state"),
+    )
+    with pytest.raises(ValueError, match="identity-gauge parity failed"):
+        validate_vituri2024_projected_hamiltonian_identity_gauge_parity(
+            candidate=candidate0, source_payload=per_k_payload
+        )
+
+
+def test_identity_gauge_parity_rejects_nonidentity_and_inconsistent_target_defects(
+    small_generic_case: _Case,
+) -> None:
+    payload = small_generic_case.payload
+    candidate = _identity_gauge_candidate(small_generic_case, payload)
+    identity_native = np.eye(4, dtype=np.complex128)[:, :, None]
+    traceless = np.diag([1.0, -1.0, 0.0, 0.0]).astype(np.complex128)[:, :, None]
+    defect = 2.0e-6
+    traceless_payload = replace(
+        payload,
+        interaction_h=payload.interaction_h + defect * traceless,
+        fock=payload.fock + defect * traceless,
+        energies=payload.energies + defect * np.asarray([[1.0], [-1.0], [0.0], [0.0]]),
+        source_state_sha256=_digest("identity-gauge-traceless-target-state"),
+    )
+    with pytest.raises(ValueError, match="identity-gauge parity failed"):
+        validate_vituri2024_projected_hamiltonian_identity_gauge_parity(
+            candidate=candidate,
+            source_payload=traceless_payload,
+        )
+    fock_only = replace(
+        payload,
+        fock=payload.fock + defect * identity_native,
+        energies=payload.energies + defect,
+        source_state_sha256=_digest("identity-gauge-fock-only-target-state"),
+    )
+    with pytest.raises(ValueError, match="identity-gauge parity failed"):
+        validate_vituri2024_projected_hamiltonian_identity_gauge_parity(
+            candidate=candidate,
+            source_payload=fock_only,
+        )
+    interaction_only = replace(
+        payload,
+        interaction_h=payload.interaction_h + defect * identity_native,
+        source_state_sha256=_digest("identity-gauge-interaction-only-target-state"),
+    )
+    with pytest.raises(ValueError, match="identity-gauge parity failed"):
+        validate_vituri2024_projected_hamiltonian_identity_gauge_parity(
+            candidate=candidate,
+            source_payload=interaction_only,
+        )
+    energy_only = replace(
+        payload,
+        energies=payload.energies + defect,
+        source_state_sha256=_digest("identity-gauge-energy-only-target-state"),
+    )
+    with pytest.raises(ValueError, match="identity-gauge parity failed"):
+        validate_vituri2024_projected_hamiltonian_identity_gauge_parity(
+            candidate=candidate,
+            source_payload=energy_only,
+        )
+    large_shift_with_defect = replace(
+        payload,
+        interaction_h=(
+            payload.interaction_h + 100.0 * identity_native + defect * traceless
+        ),
+        fock=payload.fock + 100.0 * identity_native + defect * traceless,
+        energies=(
+            payload.energies
+            + 100.0
+            + defect * np.asarray([[1.0], [-1.0], [0.0], [0.0]])
+        ),
+        source_state_sha256=_digest("identity-gauge-large-shift-defect-state"),
+    )
+    with pytest.raises(ValueError, match="identity-gauge parity failed"):
+        validate_vituri2024_projected_hamiltonian_identity_gauge_parity(
+            candidate=candidate,
+            source_payload=large_shift_with_defect,
+        )
+    complex_defect = np.zeros_like(payload.fock)
+    complex_defect[0, 1, 0] = 1j * defect
+    complex_defect[1, 0, 0] = -1j * defect
+    offdiagonal = replace(
+        payload,
+        interaction_h=payload.interaction_h + complex_defect,
+        fock=payload.fock + complex_defect,
+        source_state_sha256=_digest("identity-gauge-complex-target-state"),
+    )
+    with pytest.raises(ValueError, match="identity-gauge parity failed"):
+        validate_vituri2024_projected_hamiltonian_identity_gauge_parity(
+            candidate=candidate,
+            source_payload=offdiagonal,
+        )
+    nonhermitian = payload.fock.copy()
+    nonhermitian[0, 1, 0] += 1j * defect
+    nonhermitian_payload = replace(
+        payload,
+        fock=nonhermitian,
+        source_state_sha256=_digest("identity-gauge-nonhermitian-target-state"),
+    )
+    with pytest.raises(ValueError, match="must be Hermitian"):
+        validate_vituri2024_projected_hamiltonian_identity_gauge_parity(
+            candidate=candidate,
+            source_payload=nonhermitian_payload,
+        )
+    passed = validate_vituri2024_projected_hamiltonian_identity_gauge_parity(
+        candidate=candidate,
+        source_payload=payload,
+    )
+    object.__setattr__(passed, "lambda_fit_ev", passed.lambda_fit_ev + 1.0e-4)
+    with pytest.raises(ValueError, match="metric lambda_fit_ev drifted"):
+        _ = passed.fingerprint
+    hash_tampered = validate_vituri2024_projected_hamiltonian_identity_gauge_parity(
+        candidate=candidate,
+        source_payload=payload,
+    )
+    changed_energies = hash_tampered.supplied_energies.copy()
+    changed_energies[0, 0] += 1.0e-5
+    object.__setattr__(hash_tampered, "supplied_energies", changed_energies)
+    with pytest.raises(ValueError, match="array supplied_energies drifted"):
+        _ = hash_tampered.fingerprint
+    authority_tampered = (
+        validate_vituri2024_projected_hamiltonian_identity_gauge_parity(
+            candidate=candidate,
+            source_payload=payload,
+        )
+    )
+    object.__setattr__(authority_tampered, "production_ready", True)
+    with pytest.raises(ValueError, match="authority inflated"):
+        _ = authority_tampered.fingerprint
 
 
 def test_existing_caller_supplied_reference_bridge_signature_remains_required() -> None:

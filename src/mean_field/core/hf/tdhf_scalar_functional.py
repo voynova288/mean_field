@@ -70,6 +70,7 @@ TDHF_FULL_PROJECTOR_DF_RESPONSE_MINIMUM: Final[float] = 1.0e-10
 
 _APPROVAL_TOKEN = object()
 _RECEIPT_TOKEN = object()
+_SINGLE_FOCK_EXECUTION_TOKEN = object()
 
 
 def _array_sha256(value: object) -> str:
@@ -1060,21 +1061,35 @@ def make_tdhf_full_projector_functional_approval(
 
 
 @contextmanager
-def _reject_traced_calls(forbidden: Mapping[object, str]):
+def _reject_traced_calls(
+    forbidden: Mapping[object, str],
+    *,
+    selected_callback_code: object,
+    selected_callback_label: str,
+):
     previous = sys.gettrace()
+    selected_calls = {"count": 0}
 
     def tracer(frame: Any, event: str, arg: object) -> Any:
         del arg
-        if event == "call" and frame.f_code in forbidden:
-            raise RuntimeError(
-                "trusted-provider trace rejected direct peer/forbidden callback delegation: "
-                + forbidden[frame.f_code]
-            )
+        if event == "call":
+            if frame.f_code in forbidden:
+                raise RuntimeError(
+                    "trusted-provider trace rejected direct peer/forbidden callback delegation: "
+                    + forbidden[frame.f_code]
+                )
+            if frame.f_code is selected_callback_code:
+                selected_calls["count"] += 1
+                if selected_calls["count"] != 1:
+                    raise RuntimeError(
+                        "trusted-provider trace rejected selected callback re-entry: "
+                        + selected_callback_label
+                    )
         return tracer
 
     sys.settrace(tracer)
     try:
-        yield
+        yield selected_calls
     finally:
         sys.settrace(previous)
 
@@ -1127,12 +1142,20 @@ class _Executor:
                 for item in self.binding.forbidden_entrypoints
             }
         )
-        with _reject_traced_calls(forbidden):
+        with _reject_traced_calls(
+            forbidden,
+            selected_callback_code=kernel.callback.__code__,
+            selected_callback_label=(
+                f"{kernel.callback.__module__}.{kernel.callback.__qualname__}"
+            ),
+        ) as trace_counts:
             if role == "fock_derivative":
                 assert d is not None
                 result = kernel.callback(self.inputs, p, d)
             else:
                 result = kernel.callback(self.inputs, p)
+        if trace_counts["count"] != 1:
+            raise RuntimeError("trusted-provider trace did not observe exactly one callback frame")
         self.invocation_counts[role] += 1
         if p.flags.writeable or _array_sha256(p) != p_before:
             raise ValueError(f"{role} callback made P writable or mutated it")
@@ -1171,6 +1194,135 @@ class _Executor:
             shape=(self.dimension, self.dimension),
             hermitian=True,
         )
+
+
+
+@dataclass(frozen=True, slots=True)
+class TDHFFullProjectorSingleFockExecutionReceipt:
+    """One guarded, hash-bound execution of a registered Fock callback."""
+
+    _factory_token: InitVar[object]
+    fock: Array
+    space_fingerprint: str
+    inputs_fingerprint: str
+    binding_fingerprint: str
+    projector_fingerprint: str
+    fock_fingerprint: str
+    invocation_counts: tuple[tuple[str, int], ...]
+    provenance: str
+    construction_fingerprint: str = field(init=False)
+    callback_trace_verified: bool = field(default=True, init=False)
+    argument_mutation_rejected: bool = field(default=True, init=False)
+    output_alias_rejected: bool = field(default=True, init=False)
+    callback_source_dependency_stable: bool = field(default=True, init=False)
+
+    def __post_init__(self, _factory_token: object) -> None:
+        if _factory_token is not _SINGLE_FOCK_EXECUTION_TOKEN:
+            raise TypeError("single-Fock execution receipt is factory-only")
+        self._validate_fields(check_construction=False)
+        object.__setattr__(self, "construction_fingerprint", self._current_fingerprint())
+
+    def _current_fingerprint(self) -> str:
+        return _fingerprint(
+            {
+                item.name: (
+                    self.fock_fingerprint if item.name == "fock" else getattr(self, item.name)
+                )
+                for item in fields(self)
+                if item.name != "construction_fingerprint"
+            }
+        )
+
+    def _validate_fields(self, *, check_construction: bool) -> None:
+        if (
+            not isinstance(self.fock, np.ndarray)
+            or self.fock.dtype != np.dtype(np.complex128)
+            or self.fock.ndim != 2
+            or self.fock.shape[0] != self.fock.shape[1]
+            or self.fock.flags.writeable
+            or self.fock.flags.owndata
+            or not np.all(np.isfinite(self.fock))
+            or _array_sha256(self.fock) != self.fock_fingerprint
+        ):
+            raise ValueError("single-Fock execution output/hash drifted")
+        for name in (
+            "space_fingerprint",
+            "inputs_fingerprint",
+            "binding_fingerprint",
+            "projector_fingerprint",
+            "fock_fingerprint",
+        ):
+            _sha256(getattr(self, name), f"single-Fock execution {name}")
+        expected_counts = (
+            ("energy", 0),
+            ("fock", 1),
+            ("fock_derivative", 0),
+        )
+        if self.invocation_counts != expected_counts:
+            raise ValueError("single-Fock execution must invoke exactly one F callback")
+        _text(self.provenance, "single-Fock execution provenance")
+        if not all(
+            (
+                self.callback_trace_verified,
+                self.argument_mutation_rejected,
+                self.output_alias_rejected,
+                self.callback_source_dependency_stable,
+            )
+        ):
+            raise ValueError("single-Fock guarded execution evidence was weakened")
+        if check_construction and self._current_fingerprint() != self.construction_fingerprint:
+            raise ValueError("single-Fock execution construction drifted")
+
+    def validate_live_state(self) -> None:
+        self._validate_fields(check_construction=True)
+
+    @property
+    def fingerprint(self) -> str:
+        self.validate_live_state()
+        return self.construction_fingerprint
+
+
+def execute_tdhf_full_projector_fock_once(
+    *,
+    space: TDHFFullProjectorSpace,
+    inputs: TDHFScalarFunctionalInputsManifest,
+    binding: TDHFFullProjectorFunctionalBinding,
+    projector: Array,
+    provenance: str,
+) -> TDHFFullProjectorSingleFockExecutionReceipt:
+    """Execute exactly one Fock callback through the guarded generic executor."""
+
+    _text(provenance, "single-Fock execution provenance")
+    if type(space) is not TDHFFullProjectorSpace:
+        raise TypeError("single-Fock execution requires exact full-projector space")
+    if type(inputs) is not TDHFScalarFunctionalInputsManifest:
+        raise TypeError("single-Fock execution requires exact functional inputs")
+    if type(binding) is not TDHFFullProjectorFunctionalBinding:
+        raise TypeError("single-Fock execution requires exact functional binding")
+    inputs.validate_live_state()
+    binding.validate_live_state()
+    clean_projector = _readonly_exact_complex(
+        projector,
+        label="single-Fock execution projector",
+        shape=(space.dimension, space.dimension),
+        hermitian=True,
+    )
+    executor = _Executor(inputs=inputs, binding=binding, dimension=space.dimension)
+    fock = executor.matrix("fock", clean_projector)
+    counts = tuple((name, executor.invocation_counts[name]) for name in (
+        "energy", "fock", "fock_derivative"
+    ))
+    return TDHFFullProjectorSingleFockExecutionReceipt(
+        _factory_token=_SINGLE_FOCK_EXECUTION_TOKEN,
+        fock=fock,
+        space_fingerprint=space.fingerprint,
+        inputs_fingerprint=inputs.fingerprint,
+        binding_fingerprint=binding.fingerprint,
+        projector_fingerprint=_array_sha256(clean_projector),
+        fock_fingerprint=_array_sha256(fock),
+        invocation_counts=counts,
+        provenance=provenance,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1813,6 +1965,7 @@ __all__ = [
     "TDHFFullProjectorFunctionalBinding",
     "TDHFFullProjectorFunctionalEvidenceReceipt",
     "TDHFFullProjectorPairingEvidence",
+    "TDHFFullProjectorSingleFockExecutionReceipt",
     "TDHFFullProjectorSpace",
     "TDHFFullProjectorStepEvidence",
     "TDHFFullProjectorUnitaryProbe",
@@ -1828,6 +1981,7 @@ __all__ = [
     "bind_tdhf_scalar_kernel",
     "complete_hermitian_basis_inventory_fingerprint",
     "deterministic_complete_hermitian_basis",
+    "execute_tdhf_full_projector_fock_once",
     "make_tdhf_full_projector_functional_approval",
     "make_tdhf_full_projector_unitary_probe",
     "make_tdhf_scalar_functional_inputs_manifest",
