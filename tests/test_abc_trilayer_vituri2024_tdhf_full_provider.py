@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from hashlib import sha256
 import inspect
+import json
+import os
 from itertools import product
 from pathlib import Path
 import subprocess
@@ -24,16 +26,20 @@ from mean_field.core.hf import (
 from mean_field.systems.abc_trilayer import (
     REPLAY_PAYLOAD_SCHEMA_FINGERPRINT,
     Vituri2024Flavor,
+    Vituri2024FullProviderArtifactExpectation,
     Vituri2024FourPointKinematicsReceipt,
     Vituri2024HalfMetalHFReplayPayload,
     Vituri2024InteractionChoiceReceipt,
+    Vituri2024LoadedFullProviderArtifact,
     Vituri2024Orbital,
+    VITURI2024_FULL_PROVIDER_ARTIFACT_AUTHORITY,
     VITURI2024_FULL_PROVIDER_BRIDGE_AUTHORITY,
     VITURI2024_FULL_PROVIDER_INPUT_NAMES,
     VITURI2024_PROJECTED_HAMILTONIAN_IDENTITY_GAUGE_AUTHORITY,
     VITURI2024_PROJECTED_HAMILTONIAN_REFERENCE_AUTHORITY,
     VITURI2024_PROJECTED_HAMILTONIAN_REFERENCE_TEXT_SHA256,
     build_vituri2024_full_functional_replay_bridge,
+    load_vituri2024_full_provider_artifact,
     build_vituri2024_full_functional_replay_bridge_from_projected_hamiltonian_reference,
     build_vituri2024_projected_hamiltonian_identity_gauge_candidate,
     vituri2024_antisymmetrized_projected_vertex,
@@ -47,7 +53,11 @@ from mean_field.systems.abc_trilayer import (
     vituri2024_payload_operator_to_full_dense,
     vituri2024_tdhf_full_scalar_source_from_payload,
     make_vituri2024_projected_hamiltonian_zero_reference,
+    serialize_vituri2024_full_provider_artifact_candidate,
     validate_vituri2024_projected_hamiltonian_identity_gauge_parity,
+    vituri2024_full_provider_artifact_source_state_fingerprint,
+    vituri2024_full_provider_saved_target_excluding_source_input_fingerprint,
+    vituri2024_full_provider_target_free_identity_fingerprint,
 )
 import mean_field.systems.abc_trilayer.vituri2024_tdhf_full_provider_bridge as provider_bridge_module
 from mean_field.systems.abc_trilayer.vituri2024 import (
@@ -795,6 +805,379 @@ def test_identity_gauge_parity_rejects_nonidentity_and_inconsistent_target_defec
     object.__setattr__(authority_tampered, "production_ready", True)
     with pytest.raises(ValueError, match="authority inflated"):
         _ = authority_tampered.fingerprint
+
+
+def _artifact_payload(case: _Case) -> Vituri2024HalfMetalHFReplayPayload:
+    provider = vituri2024_full_provider_target_free_identity_fingerprint()
+    payload = replace(case.payload, provider_fingerprint=provider)
+    state = vituri2024_full_provider_artifact_source_state_fingerprint(
+        payload=payload,
+        geometry_receipt_fingerprint=_digest("artifact-geometry-receipt"),
+        ensemble_receipt_fingerprint=_digest("artifact-ensemble-receipt"),
+    )
+    return replace(payload, source_state_sha256=state)
+
+
+def _serialized_artifact(case: _Case):
+    return serialize_vituri2024_full_provider_artifact_candidate(
+        source_payload=_artifact_payload(case),
+        normal_order_reference_full=case.reference,
+        area_angstrom_squared=case.area,
+        interaction=case.interaction,
+        provider_name="synthetic-reduced-vituri-provider",
+        provider_implementation_bytes=b"synthetic-reduced-vituri-provider-code-v1",
+        geometry_receipt_fingerprint=_digest("artifact-geometry-receipt"),
+        ensemble_receipt_fingerprint=_digest("artifact-ensemble-receipt"),
+        selected_branch_label="synthetic_half_metal_branch_not_source_closed",
+        selected_spin=1,
+        branch_table_sha256=_digest("artifact-declared-branch-table"),
+        normal_reference_kind="provider_supplied_explicit_R_unqualified",
+        normal_reference_evidence_text=(
+            "Synthetic explicit conventional R bytes for artifact-loader tests; "
+            "not source normal-order authority."
+        ),
+        area_evidence_text=(
+            "Synthetic reduced-cell area for artifact-loader tests; not source "
+            "geometry authority."
+        ),
+        q0_background_status="absent",
+        q0_background_evidence_text=(
+            "No executable HF q0-background evidence is present in this fixture."
+        ),
+        provenance=(
+            "Synthetic immutable Vituri full-provider artifact fixture; bytes/schema "
+            "and absolute candidate parity only."
+        ),
+        artifact_kind="synthetic_fixture",
+    )
+
+
+def _write_serialized_artifact(tmp_path: Path, serialized) -> tuple[Path, Path]:
+    manifest = tmp_path / serialized.expectation.manifest_file_name
+    arrays = tmp_path / serialized.expectation.arrays_file_name
+    manifest.write_bytes(serialized.manifest_bytes)
+    arrays.write_bytes(serialized.arrays_bytes)
+    return manifest, arrays
+
+
+def _detached_expectation(manifest: bytes, arrays: bytes):
+    return Vituri2024FullProviderArtifactExpectation(
+        manifest_file_name="vituri2024_full_provider_manifest.json",
+        arrays_file_name="vituri2024_full_provider_arrays.npz",
+        manifest_sha256=sha256(manifest).hexdigest(),
+        manifest_size_bytes=len(manifest),
+        arrays_sha256=sha256(arrays).hexdigest(),
+        arrays_size_bytes=len(arrays),
+    )
+
+
+def _canonical_manifest(document: dict[str, object]) -> bytes:
+    return (
+        json.dumps(document, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        + "\n"
+    ).encode()
+
+
+def test_immutable_full_provider_artifact_roundtrip_is_deterministic_and_narrow(
+    small_generic_case: _Case, tmp_path: Path,
+) -> None:
+    first = _serialized_artifact(small_generic_case)
+    second = _serialized_artifact(small_generic_case)
+    assert first.manifest_bytes == second.manifest_bytes
+    assert first.arrays_bytes == second.arrays_bytes
+    assert first.expectation.fingerprint == second.expectation.fingerprint
+    manifest, arrays = _write_serialized_artifact(tmp_path, first)
+    loaded = load_vituri2024_full_provider_artifact(
+        manifest_path=manifest.resolve(),
+        arrays_path=arrays.resolve(),
+        expected=first.expectation,
+    )
+    assert loaded.authority == VITURI2024_FULL_PROVIDER_ARTIFACT_AUTHORITY
+    assert loaded.artifact_bytes_and_schema_verified is True
+    assert loaded.payload_reconstructed is True
+    assert loaded.normal_reference_bytes_bound is True
+    assert loaded.bridge.fingerprint == first.bridge_fingerprint
+    assert loaded.bridge.source_input_fingerprint == first.source_input_fingerprint
+    assert loaded.bridge.array_consistency.passed is True
+    assert loaded.diagnostics.passed is True
+    assert loaded.source_lineage_declared_and_content_bound_not_source_closed is True
+    assert loaded.provider_candidate is False
+    assert loaded.source_closure_established is False
+    assert loaded.source_generation_functional_established is False
+    assert loaded.source_stationarity_established is False
+    assert loaded.normal_order_authority_established is False
+    assert loaded.q0_background_authority_established is False
+    assert loaded.tdhf_hessian_match is False
+    assert loaded.eligible_for_slurm_qualification is False
+    assert loaded.production_ready is False
+    assert loaded.paper_reproduction_verified is False
+    assert loaded.normal_order_reference_full.flags.writeable is False
+    original_fingerprint = loaded.fingerprint
+    arrays.write_bytes(b"replaced after immutable snapshot")
+    assert loaded.fingerprint == original_fingerprint
+    payload_drift = replace(
+        loaded.source_payload,
+        source_state_sha256=_digest("loaded-payload-live-drift"),
+    )
+    object.__setattr__(loaded, "source_payload", payload_drift)
+    with pytest.raises(ValueError, match="live payload/bridge binding drifted"):
+        _ = loaded.fingerprint
+    object.__setattr__(loaded, "source_payload", _artifact_payload(small_generic_case))
+    object.__setattr__(loaded, "production_ready", True)
+    with pytest.raises(ValueError, match="authority was inflated"):
+        _ = loaded.fingerprint
+
+
+def test_immutable_full_provider_artifact_rejects_file_and_manifest_tamper(
+    small_generic_case: _Case, tmp_path: Path,
+) -> None:
+    serialized = _serialized_artifact(small_generic_case)
+    manifest, arrays = _write_serialized_artifact(tmp_path, serialized)
+    tampered = bytearray(serialized.arrays_bytes)
+    tampered[len(tampered) // 2] ^= 1
+    arrays.write_bytes(bytes(tampered))
+    with pytest.raises(ValueError, match="arrays differ from detached expectation"):
+        load_vituri2024_full_provider_artifact(
+            manifest_path=manifest.resolve(),
+            arrays_path=arrays.resolve(),
+            expected=serialized.expectation,
+        )
+    arrays.write_bytes(serialized.arrays_bytes)
+    document = json.loads(serialized.manifest_bytes)
+    document["area"]["value"] *= 2.0
+    altered_manifest = _canonical_manifest(document)
+    altered_expectation = _detached_expectation(
+        altered_manifest, serialized.arrays_bytes
+    )
+    manifest.write_bytes(altered_manifest)
+    with pytest.raises(ValueError, match="runtime fingerprint|supplied-array consistency"):
+        load_vituri2024_full_provider_artifact(
+            manifest_path=manifest.resolve(),
+            arrays_path=arrays.resolve(),
+            expected=altered_expectation,
+        )
+    document = json.loads(serialized.manifest_bytes)
+    document["q0"]["background_status"] = (
+        "declared_evidence_bound_not_executable"
+    )
+    altered_manifest = _canonical_manifest(document)
+    altered_expectation = _detached_expectation(
+        altered_manifest, serialized.arrays_bytes
+    )
+    manifest.write_bytes(altered_manifest)
+    with pytest.raises(ValueError, match="q0 evidence/policy"):
+        load_vituri2024_full_provider_artifact(
+            manifest_path=manifest.resolve(),
+            arrays_path=arrays.resolve(),
+            expected=altered_expectation,
+        )
+    document = json.loads(serialized.manifest_bytes)
+    document["diagnostics"]["tolerance"] = 0
+    typed_manifest = _canonical_manifest(document)
+    typed_expectation = _detached_expectation(
+        typed_manifest, serialized.arrays_bytes
+    )
+    manifest.write_bytes(typed_manifest)
+    with pytest.raises(ValueError, match="JSON type drifted|diagnostic tolerance"):
+        load_vituri2024_full_provider_artifact(
+            manifest_path=manifest.resolve(),
+            arrays_path=arrays.resolve(),
+            expected=typed_expectation,
+        )
+    duplicate = serialized.manifest_bytes.replace(
+        b'{"area":', b'{"schema":"duplicate","area":', 1
+    )
+    duplicate_expectation = _detached_expectation(
+        duplicate, serialized.arrays_bytes
+    )
+    manifest.write_bytes(duplicate)
+    with pytest.raises(ValueError, match="duplicate JSON key"):
+        load_vituri2024_full_provider_artifact(
+            manifest_path=manifest.resolve(),
+            arrays_path=arrays.resolve(),
+            expected=duplicate_expectation,
+        )
+    noncanonical = serialized.manifest_bytes.replace(b'":', b'": ', 1)
+    noncanonical_expectation = _detached_expectation(
+        noncanonical, serialized.arrays_bytes
+    )
+    manifest.write_bytes(noncanonical)
+    with pytest.raises(ValueError, match="not canonical JSON"):
+        load_vituri2024_full_provider_artifact(
+            manifest_path=manifest.resolve(),
+            arrays_path=arrays.resolve(),
+            expected=noncanonical_expectation,
+        )
+
+
+def test_immutable_full_provider_artifact_rejects_symlinks_and_wrong_reference(
+    small_generic_case: _Case, tmp_path: Path,
+) -> None:
+    serialized = _serialized_artifact(small_generic_case)
+    target = tmp_path / "target"
+    target.mkdir()
+    manifest, arrays = _write_serialized_artifact(target, serialized)
+    symlink_dir = tmp_path / "symlink-dir"
+    symlink_dir.mkdir()
+    manifest_link = symlink_dir / serialized.expectation.manifest_file_name
+    arrays_link = symlink_dir / serialized.expectation.arrays_file_name
+    manifest_link.symlink_to(manifest)
+    arrays_link.symlink_to(arrays)
+    with pytest.raises((OSError, ValueError)):
+        load_vituri2024_full_provider_artifact(
+            manifest_path=manifest_link.absolute(),
+            arrays_path=arrays_link.absolute(),
+            expected=serialized.expectation,
+        )
+    parent_link = tmp_path / "parent-link"
+    parent_link.symlink_to(target, target_is_directory=True)
+    with pytest.raises((OSError, ValueError)):
+        load_vituri2024_full_provider_artifact(
+            manifest_path=(parent_link / manifest.name).absolute(),
+            arrays_path=(parent_link / arrays.name).absolute(),
+            expected=serialized.expectation,
+        )
+    document = json.loads(serialized.manifest_bytes)
+    document["normal_reference"]["kind"] = (
+        "paper_projected_R0_representative_only"
+    )
+    altered_manifest = _canonical_manifest(document)
+    altered_expectation = _detached_expectation(
+        altered_manifest, serialized.arrays_bytes
+    )
+    manifest.write_bytes(altered_manifest)
+    with pytest.raises(ValueError, match="paper R0 kind contains nonzero R"):
+        load_vituri2024_full_provider_artifact(
+            manifest_path=manifest.resolve(),
+            arrays_path=arrays.resolve(),
+            expected=altered_expectation,
+        )
+
+
+def test_artifact_callback_identity_excludes_target_state_and_saved_targets(
+    small_generic_case: _Case,
+) -> None:
+    payload = _artifact_payload(small_generic_case)
+    first = _serialized_artifact(small_generic_case)
+    mutated = replace(
+        payload,
+        interaction_h=payload.interaction_h + 0.003,
+        fock=payload.fock + 0.003,
+        energies=payload.energies + 0.003,
+        source_state_sha256=_digest("target-bearing-source-state-mutation"),
+    )
+    provider = vituri2024_full_provider_target_free_identity_fingerprint()
+    assert provider == payload.provider_fingerprint
+    assert provider == mutated.provider_fingerprint
+    original_source_input = (
+        vituri2024_full_provider_saved_target_excluding_source_input_fingerprint(
+            payload
+        )
+    )
+    mutated_source_input = (
+        vituri2024_full_provider_saved_target_excluding_source_input_fingerprint(
+            mutated
+        )
+    )
+    assert first.source_input_fingerprint == original_source_input
+    assert mutated_source_input == original_source_input
+    assert _artifact_payload(small_generic_case).provider_fingerprint == provider
+    altered_lineage = replace(
+        mutated,
+        replay_loader_implementation_fingerprint=_digest(
+            "changed-loader-lineage-can-be-target-transitive"
+        ),
+    )
+    assert altered_lineage.provider_fingerprint == provider
+    assert altered_lineage.replay_loader_implementation_fingerprint != (
+        payload.replay_loader_implementation_fingerprint
+    )
+    assert (
+        vituri2024_full_provider_saved_target_excluding_source_input_fingerprint(
+            altered_lineage
+        )
+        != original_source_input
+    )
+
+
+def test_artifact_expectation_live_root_and_nested_provider_name_fail_closed(
+    small_generic_case: _Case, tmp_path: Path,
+) -> None:
+    serialized = _serialized_artifact(small_generic_case)
+    object.__setattr__(
+        serialized.expectation, "manifest_sha256", _digest("mutated-detached-root")
+    )
+    with pytest.raises(ValueError, match="trust root drifted"):
+        _ = serialized.expectation.fingerprint
+    missing_manifest = tmp_path / serialized.expectation.manifest_file_name
+    missing_arrays = tmp_path / serialized.expectation.arrays_file_name
+    with pytest.raises(ValueError, match="trust root drifted"):
+        load_vituri2024_full_provider_artifact(
+            manifest_path=missing_manifest.resolve(),
+            arrays_path=missing_arrays.resolve(),
+            expected=serialized.expectation,
+        )
+    serialized = _serialized_artifact(small_generic_case)
+    manifest, arrays = _write_serialized_artifact(tmp_path, serialized)
+    document = json.loads(serialized.manifest_bytes)
+    document["provider_identity"]["provider_name"] = False
+    malformed = _canonical_manifest(document)
+    expected = _detached_expectation(malformed, serialized.arrays_bytes)
+    manifest.write_bytes(malformed)
+    with pytest.raises(ValueError, match="provider name"):
+        load_vituri2024_full_provider_artifact(
+            manifest_path=manifest.resolve(), arrays_path=arrays.resolve(),
+            expected=expected,
+        )
+    valid_manifest, valid_arrays = _write_serialized_artifact(
+        tmp_path, serialized
+    )
+    loaded = load_vituri2024_full_provider_artifact(
+        manifest_path=valid_manifest.resolve(),
+        arrays_path=valid_arrays.resolve(),
+        expected=serialized.expectation,
+    )
+    with pytest.raises(TypeError, match="loader-factory-only"):
+        Vituri2024LoadedFullProviderArtifact(
+            _factory_token=object(),
+            expectation=loaded.expectation,
+            source_payload=loaded.source_payload,
+            normal_order_reference_full=loaded.normal_order_reference_full,
+            interaction=loaded.interaction,
+            bridge=loaded.bridge,
+            diagnostics=loaded.diagnostics,
+            manifest_sha256=loaded.manifest_sha256,
+            arrays_sha256=loaded.arrays_sha256,
+            artifact_kind=loaded.artifact_kind,
+            selected_branch_label=loaded.selected_branch_label,
+            selected_spin=loaded.selected_spin,
+        )
+
+
+def test_immutable_artifact_serializer_rejects_target_transitive_provider_identity(
+    small_generic_case: _Case,
+) -> None:
+    with pytest.raises(ValueError, match="not target-free"):
+        serialize_vituri2024_full_provider_artifact_candidate(
+            source_payload=small_generic_case.payload,
+            normal_order_reference_full=small_generic_case.reference,
+            area_angstrom_squared=small_generic_case.area,
+            interaction=small_generic_case.interaction,
+            provider_name="synthetic-reduced-vituri-provider",
+            provider_implementation_bytes=b"synthetic-reduced-vituri-provider-code-v1",
+            geometry_receipt_fingerprint=_digest("artifact-geometry-receipt"),
+            ensemble_receipt_fingerprint=_digest("artifact-ensemble-receipt"),
+            selected_branch_label="unqualified",
+            selected_spin=1,
+            branch_table_sha256=_digest("artifact-declared-branch-table"),
+            normal_reference_kind="provider_supplied_explicit_R_unqualified",
+            normal_reference_evidence_text="Explicit R only.",
+            area_evidence_text="Explicit area only.",
+            q0_background_status="absent",
+            q0_background_evidence_text="No q0 background evidence.",
+            provenance="Target-transitive provider identity rejection canary.",
+            artifact_kind="synthetic_fixture",
+        )
 
 
 def test_existing_caller_supplied_reference_bridge_signature_remains_required() -> None:

@@ -708,3 +708,9 @@ from . import vituri2024_projected_hamiltonian_reference as _vituri2024_projecte
 from .vituri2024_projected_hamiltonian_reference import *  # noqa: F401,F403
 
 __all__ += list(_vituri2024_projected_hamiltonian_reference.__all__)
+
+# Immutable candidate-artifact envelope for full-provider replay arrays.
+from . import vituri2024_full_provider_artifact as _vituri2024_full_provider_artifact
+from .vituri2024_full_provider_artifact import *  # noqa: F401,F403
+
+__all__ += list(_vituri2024_full_provider_artifact.__all__)

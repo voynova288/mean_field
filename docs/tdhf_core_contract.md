@@ -480,3 +480,26 @@ receipt establishes only selected-`R=0` fixed-rank operator parity modulo a
 single identity.  It does not identify physical `Delta mu`, prove absolute
 energy/Fock parity, compare different-rank sectors, establish q=0/source/dF or
 functional qualification, or promote TDHF, production, or paper authority.
+
+`vituri2024_full_provider_artifact.py` adds a candidate-only immutable envelope
+for the replay arrays, explicit conventional `R`, area, complete typed
+interaction receipt, reference/q0 evidence content, and declared branch/source
+lineage.  A detached expectation pins canonical duplicate-free JSON and a
+byte-deterministic uncompressed NPZ.  Loading rejects symlink path components,
+non-regular files, noncanonical ZIP/NPY metadata, inventory/dtype/shape/hash
+changes, nonfinite values, nested JSON type drift, unreconstructible
+source-state context, and runtime fingerprint drift.  It reconstructs the typed
+payload and interaction, reruns payload algebra diagnostics, and calls the
+existing absolute replay bridge.
+
+The artifact proves direct exclusion of saved `interaction_h`, Fock, and
+energies from callback inputs.  The existing bridge source-input fingerprint
+still retains `source_commit` and replay-loader lineage, so this is not claimed
+to be strict transitive target independence; the exact scope is machine-bound
+in the manifest.  Provider implementation bytes and source artifact/state stay
+on the target-bearing artifact/bridge side.  A
+loaded synthetic fixture is explicitly not a provider candidate.  Even a
+`provider_candidate` artifact establishes only bytes/schema integrity and
+candidate saved-array parity: source generation/closure/stationarity,
+normal-order and q0-background authority, TDHF/Hessian parity, Slurm
+eligibility, production readiness, and paper reproduction remain false.
