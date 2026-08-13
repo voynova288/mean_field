@@ -701,17 +701,12 @@ class Vituri2024TranslationalHFFunctional:
         nk = int(mesh.shape[0])
         if len({(float(k[0]), float(k[1])) for k in mesh}) != nk:
             raise ValueError("translational mesh contains duplicate exact coordinates")
-        for m in range(nk):
-            for r in range(nk):
-                residual = (
-                    float(mesh[m, 0] + mesh[r, 0] - mesh[r, 0] - mesh[m, 0]),
-                    float(mesh[m, 1] + mesh[r, 1] - mesh[r, 1] - mesh[m, 1]),
-                )
-                if residual != (0.0, 0.0):
-                    raise ValueError(
-                        "translational mesh fails literal quartet conservation in "
-                        "the full-oracle arithmetic order"
-                    )
+        # Translation-preserving densities identify bra/ket momentum by the
+        # same discrete index.  The surviving quartet is algebraically
+        # ``(m,r,r,m)`` and therefore conserves momentum exactly by index.
+        # Re-evaluating ``k_m+k_r-k_r-k_m`` in float64 would spuriously reject
+        # physical non-dyadic spacings fixed by density/area.  Literal-float
+        # quartet masks remain confined to the full rank-four reduced oracle.
         if (
             not isinstance(self.active_band_states, np.ndarray)
             or self.active_band_states.dtype != np.dtype(np.complex128)

@@ -753,7 +753,7 @@ def test_translational_two_dimensional_mesh_permutation_covariance() -> None:
     assert np.max(np.abs(action - permuted_action[:, :, inverse])) < 2.0e-12
 
 
-def test_translational_constructor_rejects_duplicate_and_literal_quartet_roundoff_meshes() -> None:
+def test_translational_constructor_rejects_duplicate_but_accepts_nondyadic_uniform_mesh() -> None:
     duplicate = np.asarray([[0.0, 0.0], [0.0, 0.0]], dtype=np.float64)
     states = _states(duplicate, 0.028)
     zeros = np.zeros((4, 4, 2), dtype=np.complex128)
@@ -775,28 +775,30 @@ def test_translational_constructor_rejects_duplicate_and_literal_quartet_roundof
             ),
             provenance="Duplicate-mesh rejection canary.",
         )
-    catastrophic = np.asarray(
-        [[1.0e16, 0.0], [1.0, 0.0]], dtype=np.float64
+    spacing = np.float64(2.0 * np.pi / np.sqrt(100000.0))
+    nondyadic = np.asarray(
+        [[-spacing, 0.0], [0.0, 0.0], [spacing, 0.0]], dtype=np.float64
     )
-    states = _states(catastrophic, 0.028)
-    with pytest.raises(ValueError, match="literal quartet conservation"):
-        Vituri2024TranslationalHFFunctional(
-            ordered_mesh=catastrophic,
-            active_band_states=states,
-            h0_native=zeros,
-            normal_order_reference_native=zeros,
-            mesh_receipt=make_vituri2024_finite_domain_mesh_receipt(
-                ordered_mesh=catastrophic,
-                area_angstrom_squared=7300.0,
-                provenance="Catastrophic-roundoff mesh rejection choice.",
-            ),
-            interaction=_interaction(),
-            normal_order_reference_fingerprint=_digest("roundoff-R0"),
-            q0_choice=make_vituri2024_translational_q0_reproduction_choice(
-                evidence="Catastrophic-roundoff q0 choice."
-            ),
-            provenance="Literal-quartet roundoff rejection canary.",
-        )
+    states = _states(nondyadic, 0.028)
+    three_zeros = np.zeros((4, 4, 3), dtype=np.complex128)
+    candidate = Vituri2024TranslationalHFFunctional(
+        ordered_mesh=nondyadic,
+        active_band_states=states,
+        h0_native=three_zeros,
+        normal_order_reference_native=three_zeros,
+        mesh_receipt=make_vituri2024_finite_domain_mesh_receipt(
+            ordered_mesh=nondyadic,
+            area_angstrom_squared=100000.0,
+            provenance="Physical non-dyadic finite-volume mesh canary.",
+        ),
+        interaction=_interaction(),
+        normal_order_reference_fingerprint=_digest("nondyadic-R0"),
+        q0_choice=make_vituri2024_translational_q0_reproduction_choice(
+            evidence="Nondyadic-grid q0 choice."
+        ),
+        provenance="Index-conserving translational nondyadic-grid canary.",
+    )
+    assert candidate.nk == 3
 
 
 def test_full_functional_rejects_missing_q0_kernel_policy() -> None:
