@@ -714,3 +714,9 @@ from . import vituri2024_full_provider_artifact as _vituri2024_full_provider_art
 from .vituri2024_full_provider_artifact import *  # noqa: F401,F403
 
 __all__ += list(_vituri2024_full_provider_artifact.__all__)
+
+# Scalable translational algebra candidate; physical q=0 HF remains unqualified.
+from . import vituri2024_hf as _vituri2024_hf
+from .vituri2024_hf import *  # noqa: F401,F403
+
+__all__ += list(_vituri2024_hf.__all__)

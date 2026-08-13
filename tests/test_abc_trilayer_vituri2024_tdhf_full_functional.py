@@ -22,10 +22,23 @@ from mean_field.systems.abc_trilayer.vituri2024_hf_preflight import (
     INTERNAL_FLAVOR_ORDER,
 )
 from mean_field.systems.abc_trilayer.vituri2024_interaction import (
+    Vituri2024InteractionBinding,
     Vituri2024InteractionChoiceReceipt,
 )
 import mean_field.systems.abc_trilayer as abc
 import mean_field.systems.abc_trilayer.vituri2024_tdhf_full_functional as full_functional
+import mean_field.systems.abc_trilayer.vituri2024_hf as translational_hf
+from mean_field.systems.abc_trilayer.vituri2024_hf import (
+    Vituri2024TranslationalHFFunctional,
+    make_vituri2024_finite_domain_mesh_receipt,
+    make_vituri2024_translational_q0_reproduction_choice,
+    vituri2024_conventional_k_diagonal_to_native_density,
+)
+from mean_field.systems.abc_trilayer.vituri2024_tdhf_full_scalar import (
+    vituri2024_full_operator_to_payload_k_diagonal,
+    vituri2024_payload_density_to_full_projector,
+    vituri2024_payload_operator_to_full_dense,
+)
 from mean_field.systems.abc_trilayer.vituri2024_tdhf_full_functional import (
     VITURI2024_FULL_FUNCTIONAL_AUTHORITY,
     VITURI2024_FULL_FUNCTIONAL_SUPPLIED_ARRAY_AUTHORITY,
@@ -459,6 +472,32 @@ def test_implementation_fingerprint_is_reproducible_across_fresh_processes() -> 
     assert first == second
 
 
+def test_translational_implementation_fingerprint_is_reproducible_across_fresh_processes() -> None:
+    source_root = Path(__file__).resolve().parents[1] / "src"
+    script = (
+        "import sys;"
+        f"sys.path.insert(0,{str(source_root)!r});"
+        "import mean_field.systems.abc_trilayer.vituri2024_hf as m;"
+        "print(m._implementation_fingerprint())"
+    )
+    command = [sys.executable, "-I", "-B", "-c", script]
+    environment = {
+        "PATH": "/usr/bin:/bin",
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "PYTHONNOUSERSITE": "1",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMEXPR_NUM_THREADS": "1",
+    }
+    first = subprocess.check_output(command, env=environment, text=True).strip()
+    second = subprocess.check_output(command, env=environment, text=True).strip()
+    assert len(first) == 64
+    assert first == second
+
+
 def test_dimension80_factorized_path_avoids_dense_rank4_orbital_tensor() -> None:
     nk = 20
     mesh = np.asarray(
@@ -498,6 +537,266 @@ def test_dimension80_factorized_path_avoids_dense_rank4_orbital_tensor() -> None
     assert action.shape == (80, 80)
     assert np.all(np.isfinite(action))
     assert np.max(np.abs(action - action.conj().T)) < 1.0e-11
+
+
+def test_translational_specialization_matches_full_oracle_for_k_diagonal_E_F_dF() -> None:
+    mesh = np.asarray([[-0.013, 0.0], [0.0, 0.0], [0.013, 0.0]], dtype=np.float64)
+    states = _states(mesh, 0.028)
+    nk = mesh.shape[0]
+    rng = np.random.default_rng(731)
+    h0_raw = rng.normal(size=(4, 4, nk)) + 1j * rng.normal(size=(4, 4, nk))
+    h0_native = np.asarray(
+        0.01 * (h0_raw + h0_raw.swapaxes(0, 1).conj()) / 2.0,
+        dtype=np.complex128,
+    )
+    reference_native = np.zeros_like(h0_native)
+    reference_native[0, 0, :] = 0.20
+    reference_native[1, 1, :] = 0.35
+    reference_native[0, 1, :] = 0.04 + 0.03j
+    reference_native[1, 0, :] = 0.04 - 0.03j
+    full_h0 = vituri2024_payload_operator_to_full_dense(h0_native)
+    full_reference = vituri2024_payload_density_to_full_projector(reference_native)
+    full = Vituri2024FullProjectedFunctionalKernel(
+        ordered_mesh=mesh,
+        active_band_states=states,
+        h0_full=full_h0,
+        normal_order_reference=full_reference,
+        area_angstrom_squared=7300.0,
+        interaction=_interaction(),
+        normal_order_reference_fingerprint=_digest("translation-R0"),
+        q0_policy_fingerprint=_digest("translation-q0"),
+        source_artifact_sha256=_digest("translation-source"),
+        provenance="Reduced translational/full oracle comparison only.",
+    )
+    translational = Vituri2024TranslationalHFFunctional(
+        ordered_mesh=mesh,
+        active_band_states=states,
+        h0_native=h0_native,
+        normal_order_reference_native=reference_native,
+        mesh_receipt=make_vituri2024_finite_domain_mesh_receipt(
+            ordered_mesh=mesh,
+            area_angstrom_squared=7300.0,
+            provenance="Reduced explicit finite-domain mesh choice.",
+        ),
+        interaction=_interaction(),
+        normal_order_reference_fingerprint=_digest("translation-R0"),
+        q0_choice=make_vituri2024_translational_q0_reproduction_choice(
+            evidence=(
+                "Retain finite dual-gate q0 direct/exchange at fixed rank; "
+                "independent reproduction choice, not paper authority."
+            )
+        ),
+        provenance="Reduced translational/full oracle comparison only.",
+    )
+    raw = rng.normal(size=(4, 4, nk)) + 1j * rng.normal(size=(4, 4, nk))
+    conventional = np.asarray(0.5 * (raw + raw.swapaxes(0, 1).conj()), dtype=np.complex128)
+    native = vituri2024_conventional_k_diagonal_to_native_density(conventional)
+    raw_d = rng.normal(size=(4, 4, nk)) + 1j * rng.normal(size=(4, 4, nk))
+    conventional_d = np.asarray(
+        0.5 * (raw_d + raw_d.swapaxes(0, 1).conj()), dtype=np.complex128
+    )
+    native_d = vituri2024_conventional_k_diagonal_to_native_density(conventional_d)
+    full_p = vituri2024_payload_density_to_full_projector(native)
+    full_d = vituri2024_payload_density_to_full_projector(native_d)
+    full_action = vituri2024_full_operator_to_payload_k_diagonal(
+        full.interaction_action(full_p)
+    )
+    translated_action = translational.interaction_action_conventional(conventional)
+    assert np.max(np.abs(full_action - translated_action)) < 2.0e-12
+    assert translational.energy(native) == pytest.approx(full.energy(full_p), abs=2.0e-12)
+    native_pairing = np.einsum("abk,abk->", h0_native, native, optimize=False)
+    full_pairing = np.einsum("ij,ji->", full_h0, full_p, optimize=False)
+    assert native_pairing == pytest.approx(full_pairing, abs=2.0e-12)
+    assert native[0, 1, 0] == conventional[1, 0, 0]
+    assert full_p[0, nk,] == native[1, 0, 0]
+    translated_fock = translational.fock(native)
+    full_fock = vituri2024_full_operator_to_payload_k_diagonal(full.fock(full_p))
+    assert np.max(np.abs(translated_fock - full_fock)) < 2.0e-12
+    translated_df = translational.fock_derivative(native, native_d)
+    full_df = vituri2024_full_operator_to_payload_k_diagonal(
+        full.fock_derivative(full_p, full_d)
+    )
+    assert np.max(np.abs(translated_df - full_df)) < 2.0e-12
+    step = 2.0e-5
+    finite_energy = (
+        translational.energy(native + step * native_d)
+        - translational.energy(native - step * native_d)
+    ) / (2.0 * step)
+    fock_pairing = np.einsum(
+        "abk,abk->", translated_fock, native_d, optimize=False
+    )
+    assert finite_energy == pytest.approx(float(np.real(fock_pairing)), abs=2.0e-8)
+    finite_df = (
+        translational.fock(native + step * native_d)
+        - translational.fock(native - step * native_d)
+    ) / (2.0 * step)
+    assert np.max(np.abs(finite_df - translated_df)) < 2.0e-9
+    anchor_df = translational.fock_derivative(native + 0.2 * native_d, native_d)
+    assert np.array_equal(anchor_df, translated_df)
+    reverse_pairing = np.einsum(
+        "abk,abk->",
+        translational.fock_derivative(native, native),
+        native_d,
+        optimize=False,
+    )
+    forward_pairing = np.einsum(
+        "abk,abk->", translated_df, native, optimize=False
+    )
+    assert reverse_pairing == pytest.approx(forward_pairing, abs=2.0e-12)
+    assert translational.source_stationarity_established is False
+    assert translational.q0_background_authority_established is False
+    assert translational.production_ready is False
+    wrong_nk = np.zeros((4, 4, 1), dtype=np.complex128)
+    for method in (
+        translational.interaction_action_conventional,
+        translational.energy,
+        translational.fock,
+    ):
+        with pytest.raises(ValueError, match="Nk mismatch"):
+            method(wrong_nk)
+    with pytest.raises(ValueError, match="Nk mismatch"):
+        translational.fock_derivative(native, wrong_nk)
+    object.__setattr__(
+        translational.mesh_receipt,
+        "uniform_weight_inverse_angstrom_squared",
+        2.0 / translational.mesh_receipt.area_angstrom_squared,
+    )
+    with pytest.raises(ValueError, match="mesh receipt live state drifted"):
+        translational.validate_live_state()
+    object.__setattr__(
+        translational.mesh_receipt,
+        "uniform_weight_inverse_angstrom_squared",
+        1.0 / translational.mesh_receipt.area_angstrom_squared,
+    )
+    object.__setattr__(
+        translational.q0_choice,
+        "establishes_paper_or_source_q0_background",
+        True,
+    )
+    with pytest.raises(ValueError, match="q0 authority was inflated"):
+        translational.validate_live_state()
+    object.__setattr__(
+        translational.q0_choice,
+        "establishes_paper_or_source_q0_background",
+        False,
+    )
+    inflated_binding = Vituri2024InteractionBinding(receipt=_interaction())
+    object.__setattr__(inflated_binding, "establishes_hf_q0_background", True)
+    object.__setattr__(translational, "interaction", inflated_binding)
+    with pytest.raises(ValueError, match="stale or inflated"):
+        translational.validate_live_state()
+    original_interaction = _interaction()
+    object.__setattr__(translational, "interaction", original_interaction)
+    original_vtf = translational_hf.vituri2024_vtf
+    try:
+        translational_hf.vituri2024_vtf = lambda q, interaction: original_vtf(
+            q, interaction
+        )
+        with pytest.raises(ValueError, match="implementation drifted"):
+            translational.validate_live_state()
+    finally:
+        translational_hf.vituri2024_vtf = original_vtf
+    object.__setattr__(translational, "interaction", _interaction(q0="reject"))
+    with pytest.raises(ValueError, match="finite analytic q=0 kernel"):
+        translational.validate_live_state()
+
+
+def test_translational_two_dimensional_mesh_permutation_covariance() -> None:
+    mesh = np.asarray(
+        [[-0.015625, -0.03125], [0.0, 0.0], [0.03125, -0.015625], [0.015625, 0.03125]],
+        dtype=np.float64,
+    )
+    states = _states(mesh, 0.028)
+    rng = np.random.default_rng(904)
+    raw = rng.normal(size=(4, 4, 4)) + 1j * rng.normal(size=(4, 4, 4))
+    conventional = np.asarray(
+        0.5 * (raw + raw.swapaxes(0, 1).conj()), dtype=np.complex128
+    )
+    native = vituri2024_conventional_k_diagonal_to_native_density(conventional)
+    zeros = np.zeros((4, 4, 4), dtype=np.complex128)
+    choice = make_vituri2024_translational_q0_reproduction_choice(
+        evidence="2D permutation covariance q0 reproduction choice."
+    )
+    original = Vituri2024TranslationalHFFunctional(
+        ordered_mesh=mesh,
+        active_band_states=states,
+        h0_native=zeros,
+        normal_order_reference_native=zeros,
+        mesh_receipt=make_vituri2024_finite_domain_mesh_receipt(
+            ordered_mesh=mesh, area_angstrom_squared=7300.0,
+            provenance="2D irregular finite-domain algebra mesh.",
+        ),
+        interaction=_interaction(),
+        normal_order_reference_fingerprint=_digest("2d-R0"),
+        q0_choice=choice,
+        provenance="2D translational permutation oracle.",
+    )
+    permutation = np.asarray([2, 0, 3, 1])
+    permuted_mesh = mesh[permutation]
+    permuted = Vituri2024TranslationalHFFunctional(
+        ordered_mesh=permuted_mesh,
+        active_band_states=states[:, :, permutation],
+        h0_native=zeros[:, :, permutation],
+        normal_order_reference_native=zeros[:, :, permutation],
+        mesh_receipt=make_vituri2024_finite_domain_mesh_receipt(
+            ordered_mesh=permuted_mesh, area_angstrom_squared=7300.0,
+            provenance="Permuted 2D irregular finite-domain algebra mesh.",
+        ),
+        interaction=_interaction(),
+        normal_order_reference_fingerprint=_digest("2d-R0"),
+        q0_choice=choice,
+        provenance="2D translational permutation oracle.",
+    )
+    action = original.interaction_action(native)
+    permuted_action = permuted.interaction_action(native[:, :, permutation])
+    inverse = np.argsort(permutation)
+    assert np.max(np.abs(action - permuted_action[:, :, inverse])) < 2.0e-12
+
+
+def test_translational_constructor_rejects_duplicate_and_literal_quartet_roundoff_meshes() -> None:
+    duplicate = np.asarray([[0.0, 0.0], [0.0, 0.0]], dtype=np.float64)
+    states = _states(duplicate, 0.028)
+    zeros = np.zeros((4, 4, 2), dtype=np.complex128)
+    with pytest.raises(ValueError, match="duplicate exact coordinates"):
+        Vituri2024TranslationalHFFunctional(
+            ordered_mesh=duplicate,
+            active_band_states=states,
+            h0_native=zeros,
+            normal_order_reference_native=zeros,
+            mesh_receipt=make_vituri2024_finite_domain_mesh_receipt(
+                ordered_mesh=duplicate,
+                area_angstrom_squared=7300.0,
+                provenance="Duplicate-mesh rejection choice.",
+            ),
+            interaction=_interaction(),
+            normal_order_reference_fingerprint=_digest("duplicate-R0"),
+            q0_choice=make_vituri2024_translational_q0_reproduction_choice(
+                evidence="Duplicate-mesh q0 choice."
+            ),
+            provenance="Duplicate-mesh rejection canary.",
+        )
+    catastrophic = np.asarray(
+        [[1.0e16, 0.0], [1.0, 0.0]], dtype=np.float64
+    )
+    states = _states(catastrophic, 0.028)
+    with pytest.raises(ValueError, match="literal quartet conservation"):
+        Vituri2024TranslationalHFFunctional(
+            ordered_mesh=catastrophic,
+            active_band_states=states,
+            h0_native=zeros,
+            normal_order_reference_native=zeros,
+            mesh_receipt=make_vituri2024_finite_domain_mesh_receipt(
+                ordered_mesh=catastrophic,
+                area_angstrom_squared=7300.0,
+                provenance="Catastrophic-roundoff mesh rejection choice.",
+            ),
+            interaction=_interaction(),
+            normal_order_reference_fingerprint=_digest("roundoff-R0"),
+            q0_choice=make_vituri2024_translational_q0_reproduction_choice(
+                evidence="Catastrophic-roundoff q0 choice."
+            ),
+            provenance="Literal-quartet roundoff rejection canary.",
+        )
 
 
 def test_full_functional_rejects_missing_q0_kernel_policy() -> None:
