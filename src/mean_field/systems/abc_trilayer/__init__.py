@@ -720,3 +720,9 @@ from . import vituri2024_hf as _vituri2024_hf
 from .vituri2024_hf import *  # noqa: F401,F403
 
 __all__ += list(_vituri2024_hf.__all__)
+
+# Independent homogeneous half-metal SCF adapter on the generic HF engine.
+from . import vituri2024_hf_scf as _vituri2024_hf_scf
+from .vituri2024_hf_scf import *  # noqa: F401,F403
+
+__all__ += list(_vituri2024_hf_scf.__all__)

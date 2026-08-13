@@ -1,0 +1,1127 @@
+"""Independent homogeneous half-metal HF source for Vituri-2024 ABC trilayer.
+
+This module turns the validated translational ``E/F/dF`` algebra into a
+fixed-density SCF problem through the reusable :mod:`mean_field.core.hf`
+engine.  It deliberately implements only a translation-preserving one-active-
+band ansatz.  In particular, it cannot find the incommensurate IVC crystal.
+
+Independent reproduction choices
+--------------------------------
+For a total hole density ``n_h`` and an integer number ``H_v`` of holes in each
+valley, the finite area and reciprocal spacing are
+
+``A = 2 H_v / n_h`` and ``Delta k = 2 pi / sqrt(A)``.
+
+The odd Cartesian mesh is a finite subset of this reciprocal lattice with one
+state per area ``A`` and equal weight ``1/A``.  There is no momentum wrap,
+reciprocal carry, or off-grid interpolation.  The default gate distance and
+UV-domain size are explicit reproduction choices and require sensitivity and
+mesh convergence before a production claim.
+
+The stored density is ``rho_ab(k)=<c_a^dagger c_b>``.  The Hamiltonian remains
+an operator and is never transposed.  At zero temperature, all ``4*Nk``
+one-particle levels are diagonalized and exactly ``4*Nk-2*H_v`` are occupied
+by one deterministic global Aufbau operation.  The same functional supplies
+SCF energy, Fock action, and ODA derivative action.
+
+This establishes neither author-exact source data nor paper/production TDHF.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field, replace
+from hashlib import sha256
+import json
+import math
+from numbers import Real
+from typing import Final, Literal
+
+import numpy as np
+
+from mean_field.core.hf import (
+    DensityUpdateResult,
+    HartreeFockKernel,
+    HartreeFockProblem,
+    HartreeFockRun,
+    run_hartree_fock_problem,
+)
+
+from .vituri2024 import (
+    SM_TEX_SHA256,
+    VITURI2024_PARAMETERS,
+    third_lowest_active_band,
+)
+from .vituri2024_hf import (
+    Vituri2024TranslationalHFFunctional,
+    make_vituri2024_finite_domain_mesh_receipt,
+    make_vituri2024_translational_q0_reproduction_choice,
+    vituri2024_native_density_to_conventional_k_diagonal,
+)
+from .vituri2024_hf_preflight import (
+    ACTIVE_BAND_STATES_VALLEY_ORDER,
+    INTERNAL_FLAVOR_ORDER,
+)
+from .vituri2024_interaction import Vituri2024InteractionChoiceReceipt
+
+Array = np.ndarray
+SeedMode = Literal[
+    "half_metal_sz_plus",
+    "half_metal_sz_minus",
+    "half_metal_sx",
+    "half_metal_sy",
+    "valley_minus",
+    "valley_plus",
+    "ivc_x",
+    "ivc_y",
+    "random_projector",
+]
+
+VITURI2024_HF_SCF_API_VERSION: Final[str] = "vituri2024_homogeneous_hf_scf.v1"
+VITURI2024_HF_SCF_AUTHORITY: Final[str] = (
+    "independent_homogeneous_reproduction_choice_not_author_source_"
+    "incommensurate_phase_production_tdhf_or_paper_reproduction"
+)
+VITURI2024_TOTAL_HOLE_DENSITY_CM2: Final[float] = 1.2e12
+VITURI2024_DELTA1_EV: Final[float] = 0.028
+VITURI2024_GATE_DISTANCE_ANGSTROM: Final[float] = 250.0
+VITURI2024_COULOMB_E2_EV_ANGSTROM: Final[float] = 14.3996454784255
+VITURI2024_CM2_TO_ANGSTROM2: Final[float] = 1.0e-16
+VITURI2024_DEFAULT_PRECISION: Final[float] = 1.0e-9
+VITURI2024_DEFAULT_AUFBAU_GAP_TOLERANCE_EV: Final[float] = 1.0e-12
+VITURI2024_FIXED_DENSITY_SCF_POLICY: Final[str] = (
+    "R0_fixed_integer_rank_retain_finite_dual_gate_q0_direct_and_exchange_"
+    "uniform_direct_is_constant_energy_plus_identity_fock_no_term_dropped_"
+    "absolute_paper_energy_not_authorized"
+)
+
+
+def _strict_int(value: object, label: str) -> int:
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)):
+        raise TypeError(f"{label} must be an integer")
+    return int(value)
+
+
+def _finite_real(value: object, label: str, *, positive: bool = False) -> float:
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, Real):
+        raise TypeError(f"{label} must be a strict real scalar")
+    result = float(value)
+    if not math.isfinite(result) or (positive and result <= 0.0):
+        qualifier = "positive finite" if positive else "finite"
+        raise ValueError(f"{label} must be {qualifier}")
+    return result
+
+
+def _array_sha256(value: Array) -> str:
+    array = np.ascontiguousarray(value)
+    payload = (
+        str(array.dtype).encode()
+        + b"\0"
+        + json.dumps(array.shape).encode()
+        + b"\0"
+        + array.view(np.uint8).tobytes()
+    )
+    return sha256(payload).hexdigest()
+
+
+def _readonly(value: Array, dtype: np.dtype | None = None) -> Array:
+    array = np.ascontiguousarray(value, dtype=dtype)
+    result = np.frombuffer(array.tobytes(order="C"), dtype=array.dtype).reshape(
+        array.shape
+    )
+    result.setflags(write=False)
+    return result
+
+
+def _max_abs(value: object) -> float:
+    array = np.asarray(value)
+    return float(np.max(np.abs(array))) if array.size else 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class Vituri2024CartesianHFSpec:
+    """Typed independent finite-volume/quadrature and SCF choices."""
+
+    mesh_size: int
+    holes_per_valley: int
+    total_hole_density_cm2: float = VITURI2024_TOTAL_HOLE_DENSITY_CM2
+    delta1_ev: float = VITURI2024_DELTA1_EV
+    gate_distance_angstrom: float = VITURI2024_GATE_DISTANCE_ANGSTROM
+    coulomb_e2_ev_angstrom: float = VITURI2024_COULOMB_E2_EV_ANGSTROM
+    precision: float = VITURI2024_DEFAULT_PRECISION
+    area_angstrom_squared: float = field(init=False)
+    side_length_angstrom: float = field(init=False)
+    delta_k_inverse_angstrom: float = field(init=False)
+    k_cutoff_a0: float = field(init=False)
+    total_holes: int = field(init=False)
+    total_electrons: int = field(init=False)
+    axial_k_cutoff_a0: float = field(init=False)
+    corner_k_cutoff_a0: float = field(init=False)
+    fingerprint: str = field(init=False)
+    authority: str = field(default=VITURI2024_HF_SCF_AUTHORITY, init=False)
+    production_ready: bool = field(default=False, init=False)
+    paper_reproduction_verified: bool = field(default=False, init=False)
+
+    def __post_init__(self) -> None:
+        size = _strict_int(self.mesh_size, "mesh_size")
+        holes_per_valley = _strict_int(self.holes_per_valley, "holes_per_valley")
+        if size < 3 or size % 2 != 1:
+            raise ValueError("mesh_size must be an odd integer >=3")
+        nk = size * size
+        if holes_per_valley < 1 or 2 * holes_per_valley > nk:
+            raise ValueError(
+                "holes_per_valley is incompatible with all registered rank-one "
+                "half-metal/IVC seed capacities (requires 2*H_v<=Nk)"
+            )
+        density_cm2 = _finite_real(
+            self.total_hole_density_cm2, "total_hole_density_cm2", positive=True
+        )
+        delta1 = _finite_real(self.delta1_ev, "delta1_ev")
+        gate = _finite_real(
+            self.gate_distance_angstrom, "gate_distance_angstrom", positive=True
+        )
+        e2 = _finite_real(
+            self.coulomb_e2_ev_angstrom,
+            "coulomb_e2_ev_angstrom",
+            positive=True,
+        )
+        precision = _finite_real(self.precision, "precision", positive=True)
+        density_a2 = density_cm2 * VITURI2024_CM2_TO_ANGSTROM2
+        total_holes = 2 * holes_per_valley
+        area = total_holes / density_a2
+        side = math.sqrt(area)
+        delta_k = 2.0 * math.pi / side
+        axial_k_cutoff_a0 = (size // 2) * delta_k * VITURI2024_PARAMETERS.a0
+        corner_k_cutoff_a0 = math.sqrt(2.0) * axial_k_cutoff_a0
+        total_electrons = 4 * nk - total_holes
+        object.__setattr__(self, "mesh_size", size)
+        object.__setattr__(self, "holes_per_valley", holes_per_valley)
+        object.__setattr__(self, "total_hole_density_cm2", density_cm2)
+        object.__setattr__(self, "delta1_ev", delta1)
+        object.__setattr__(self, "gate_distance_angstrom", gate)
+        object.__setattr__(self, "coulomb_e2_ev_angstrom", e2)
+        object.__setattr__(self, "precision", precision)
+        object.__setattr__(self, "area_angstrom_squared", area)
+        object.__setattr__(self, "side_length_angstrom", side)
+        object.__setattr__(self, "delta_k_inverse_angstrom", delta_k)
+        object.__setattr__(self, "k_cutoff_a0", axial_k_cutoff_a0)
+        object.__setattr__(self, "axial_k_cutoff_a0", axial_k_cutoff_a0)
+        object.__setattr__(self, "corner_k_cutoff_a0", corner_k_cutoff_a0)
+        object.__setattr__(self, "total_holes", total_holes)
+        object.__setattr__(self, "total_electrons", total_electrons)
+        object.__setattr__(self, "fingerprint", self._current_fingerprint())
+
+    def _current_fingerprint(self) -> str:
+        payload = {
+            "api_version": VITURI2024_HF_SCF_API_VERSION,
+            "mesh_size": self.mesh_size,
+            "holes_per_valley": self.holes_per_valley,
+            "total_hole_density_cm2": self.total_hole_density_cm2,
+            "delta1_ev": self.delta1_ev,
+            "gate_distance_angstrom": self.gate_distance_angstrom,
+            "coulomb_e2_ev_angstrom": self.coulomb_e2_ev_angstrom,
+            "precision": self.precision,
+            "area_angstrom_squared": self.area_angstrom_squared,
+            "side_length_angstrom": self.side_length_angstrom,
+            "delta_k_inverse_angstrom": self.delta_k_inverse_angstrom,
+            "axial_k_cutoff_a0": self.axial_k_cutoff_a0,
+            "corner_k_cutoff_a0": self.corner_k_cutoff_a0,
+            "total_holes": self.total_holes,
+            "total_electrons": self.total_electrons,
+            "authority": self.authority,
+            "production_ready": self.production_ready,
+            "paper_reproduction_verified": self.paper_reproduction_verified,
+        }
+        return sha256(
+            json.dumps(
+                payload, sort_keys=True, separators=(",", ":"), allow_nan=False
+            ).encode()
+        ).hexdigest()
+
+    def validate_live_state(self) -> None:
+        density_a2 = self.total_hole_density_cm2 * VITURI2024_CM2_TO_ANGSTROM2
+        expected_area = self.total_holes / density_a2
+        expected_side = math.sqrt(expected_area)
+        expected_delta_k = 2.0 * math.pi / expected_side
+        expected_axial = (
+            (self.mesh_size // 2) * expected_delta_k * VITURI2024_PARAMETERS.a0
+        )
+        locked = (
+            type(self.mesh_size) is int,
+            self.mesh_size >= 3,
+            self.mesh_size % 2 == 1,
+            type(self.holes_per_valley) is int,
+            self.holes_per_valley >= 1,
+            2 * self.holes_per_valley <= self.mesh_size * self.mesh_size,
+            self.total_holes == 2 * self.holes_per_valley,
+            self.total_electrons
+            == 4 * self.mesh_size * self.mesh_size - self.total_holes,
+            self.area_angstrom_squared == expected_area,
+            self.side_length_angstrom == expected_side,
+            self.delta_k_inverse_angstrom == expected_delta_k,
+            self.axial_k_cutoff_a0 == expected_axial,
+            self.k_cutoff_a0 == expected_axial,
+            self.corner_k_cutoff_a0 == math.sqrt(2.0) * expected_axial,
+            self.authority == VITURI2024_HF_SCF_AUTHORITY,
+            self.production_ready is False,
+            self.paper_reproduction_verified is False,
+        )
+        if not all(locked) or self._current_fingerprint() != self.fingerprint:
+            raise ValueError("Vituri Cartesian HF spec live state drifted")
+
+    @property
+    def nk(self) -> int:
+        return self.mesh_size * self.mesh_size
+
+    @property
+    def actual_total_hole_density_cm2(self) -> float:
+        return self.total_holes / self.area_angstrom_squared / VITURI2024_CM2_TO_ANGSTROM2
+
+
+@dataclass(frozen=True, slots=True)
+class Vituri2024PreparedHomogeneousHF:
+    spec: Vituri2024CartesianHFSpec
+    ordered_mesh: Array
+    integer_mesh_labels: Array
+    active_band_states: Array
+    active_band_energies_by_valley: Array
+    h0_native: Array
+    functional: Vituri2024TranslationalHFFunctional
+    fixed_density_scf_choice: "Vituri2024FixedDensitySCFChoice"
+    minimum_lower_gap_ev: float
+    minimum_upper_gap_ev: float
+    fingerprint: str
+    authority: str = field(default=VITURI2024_HF_SCF_AUTHORITY, init=False)
+    source_closure_established: bool = field(default=False, init=False)
+    source_stationarity_established: bool = field(default=False, init=False)
+    production_ready: bool = field(default=False, init=False)
+    paper_reproduction_verified: bool = field(default=False, init=False)
+
+    def __post_init__(self) -> None:
+        self.spec.validate_live_state()
+        self.fixed_density_scf_choice.validate_live_state()
+        nk = self.spec.nk
+        arrays = (
+            (self.ordered_mesh, np.dtype(np.float64), (nk, 2), "ordered_mesh"),
+            (self.integer_mesh_labels, np.dtype(np.int64), (nk, 2), "integer_mesh_labels"),
+            (
+                self.active_band_states,
+                np.dtype(np.complex128),
+                (2, 6, nk),
+                "active_band_states",
+            ),
+            (
+                self.active_band_energies_by_valley,
+                np.dtype(np.float64),
+                (2, nk),
+                "active_band_energies_by_valley",
+            ),
+            (self.h0_native, np.dtype(np.complex128), (4, 4, nk), "h0_native"),
+        )
+        for value, dtype, shape, label in arrays:
+            if (
+                not isinstance(value, np.ndarray)
+                or value.dtype != dtype
+                or value.shape != shape
+                or value.flags.writeable
+                or not np.all(np.isfinite(value))
+            ):
+                raise ValueError(f"prepared {label} drifted")
+        if (
+            self.functional.nk != nk
+            or not np.array_equal(self.functional.ordered_mesh, self.ordered_mesh)
+            or not np.array_equal(
+                self.functional.active_band_states, self.active_band_states
+            )
+            or not np.array_equal(self.functional.h0_native, self.h0_native)
+        ):
+            raise ValueError("prepared functional bundle binding mismatch")
+        if type(self.fixed_density_scf_choice) is not Vituri2024FixedDensitySCFChoice:
+            raise TypeError("prepared HF requires an exact fixed-density SCF choice")
+        if not math.isfinite(self.minimum_lower_gap_ev) or self.minimum_lower_gap_ev <= 0.0:
+            raise ValueError("prepared minimum lower active-band gap must be positive")
+        if not math.isfinite(self.minimum_upper_gap_ev) or self.minimum_upper_gap_ev <= 0.0:
+            raise ValueError("prepared minimum upper active-band gap must be positive")
+        expected_mesh, expected_labels = build_vituri2024_cartesian_mesh(self.spec)
+        regenerated_states = np.empty_like(self.active_band_states)
+        regenerated_energies = np.empty_like(self.active_band_energies_by_valley)
+        regenerated_lower_gaps = np.empty((2, nk), dtype=np.float64)
+        regenerated_upper_gaps = np.empty((2, nk), dtype=np.float64)
+        for valley_index, valley in enumerate(ACTIVE_BAND_STATES_VALLEY_ORDER):
+            for momentum_index, momentum in enumerate(self.ordered_mesh):
+                solution = third_lowest_active_band(
+                    momentum, valley, self.spec.delta1_ev
+                )
+                regenerated_states[valley_index, :, momentum_index] = (
+                    _largest_component_positive_gauge(solution.eigenvector)
+                )
+                regenerated_energies[valley_index, momentum_index] = solution.energy
+                regenerated_lower_gaps[valley_index, momentum_index] = solution.lower_gap
+                regenerated_upper_gaps[valley_index, momentum_index] = solution.upper_gap
+        expected_h0 = np.zeros_like(self.h0_native)
+        regenerated_valley_index = {
+            valley: index
+            for index, valley in enumerate(ACTIVE_BAND_STATES_VALLEY_ORDER)
+        }
+        for flavor, (valley, _spin) in enumerate(INTERNAL_FLAVOR_ORDER):
+            expected_h0[flavor, flavor, :] = regenerated_energies[
+                regenerated_valley_index[valley], :
+            ]
+        if (
+            not np.array_equal(self.ordered_mesh, expected_mesh)
+            or not np.array_equal(self.integer_mesh_labels, expected_labels)
+            or not np.array_equal(
+                self.active_band_energies_by_valley, regenerated_energies
+            )
+            or not np.array_equal(self.active_band_states, regenerated_states)
+            or not np.array_equal(self.h0_native, expected_h0)
+            or self.minimum_lower_gap_ev != float(np.min(regenerated_lower_gaps))
+            or self.minimum_upper_gap_ev != float(np.min(regenerated_upper_gaps))
+            or self.functional.mesh_receipt.area_angstrom_squared
+            != self.spec.area_angstrom_squared
+            or self.functional.interaction_receipt.gate_distance_angstrom
+            != self.spec.gate_distance_angstrom
+            or self.functional.interaction_receipt.coulomb_e2_ev_angstrom
+            != self.spec.coulomb_e2_ev_angstrom
+        ):
+            raise ValueError("prepared homogeneous HF semantic binding mismatch")
+        expected_fingerprint = _prepared_fingerprint(
+            spec=self.spec,
+            mesh=self.ordered_mesh,
+            labels=self.integer_mesh_labels,
+            states=self.active_band_states,
+            energies=self.active_band_energies_by_valley,
+            h0=self.h0_native,
+            functional=self.functional,
+            fixed_density_choice=self.fixed_density_scf_choice,
+            minimum_lower_gap_ev=self.minimum_lower_gap_ev,
+            minimum_upper_gap_ev=self.minimum_upper_gap_ev,
+        )
+        if self.fingerprint != expected_fingerprint:
+            raise ValueError("prepared homogeneous HF fingerprint mismatch")
+        if self.authority != VITURI2024_HF_SCF_AUTHORITY or any(
+            (
+                self.source_closure_established,
+                self.source_stationarity_established,
+                self.production_ready,
+                self.paper_reproduction_verified,
+            )
+        ):
+            raise ValueError("prepared homogeneous HF authority was inflated")
+
+    def validate_live_state(self) -> None:
+        """Re-run complete source, bundle, fingerprint, and authority gates."""
+
+        self.__post_init__()
+
+
+@dataclass(slots=True)
+class Vituri2024HFState:
+    h0: Array
+    density: Array
+    hamiltonian: Array
+    energies: Array
+    mu: float
+    precision: float
+    diagnostics: dict[str, float]
+
+    @property
+    def nk(self) -> int:
+        return int(self.h0.shape[2])
+
+
+@dataclass(frozen=True, slots=True)
+class Vituri2024FixedDensitySCFChoice:
+    policy: str = VITURI2024_FIXED_DENSITY_SCF_POLICY
+    normal_order_reference: str = "R=0_empty_active_electron_vacuum_representative"
+    rank_is_exactly_fixed_each_aufbau_step: bool = True
+    q0_direct_and_exchange_retained: bool = True
+    q0_direct_dropped_or_fitted: bool = False
+    absolute_paper_energy_authorized: bool = False
+    paper_background_authority_established: bool = False
+    fingerprint: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        self._validate_fields()
+        object.__setattr__(self, "fingerprint", self._current_fingerprint())
+
+    def _validate_fields(self) -> None:
+        locked = (
+            self.policy == VITURI2024_FIXED_DENSITY_SCF_POLICY,
+            self.normal_order_reference
+            == "R=0_empty_active_electron_vacuum_representative",
+            self.rank_is_exactly_fixed_each_aufbau_step is True,
+            self.q0_direct_and_exchange_retained is True,
+            self.q0_direct_dropped_or_fitted is False,
+            self.absolute_paper_energy_authorized is False,
+            self.paper_background_authority_established is False,
+        )
+        if not all(locked):
+            raise ValueError("fixed-density SCF choice authority was inflated")
+
+    def _current_fingerprint(self) -> str:
+        return sha256(
+            json.dumps(
+                {
+                    "policy": self.policy,
+                    "normal_order_reference": self.normal_order_reference,
+                    "rank_is_exactly_fixed_each_aufbau_step": (
+                        self.rank_is_exactly_fixed_each_aufbau_step
+                    ),
+                    "q0_direct_and_exchange_retained": (
+                        self.q0_direct_and_exchange_retained
+                    ),
+                    "q0_direct_dropped_or_fitted": self.q0_direct_dropped_or_fitted,
+                    "absolute_paper_energy_authorized": (
+                        self.absolute_paper_energy_authorized
+                    ),
+                    "paper_background_authority_established": (
+                        self.paper_background_authority_established
+                    ),
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode()
+        ).hexdigest()
+
+    def validate_live_state(self) -> None:
+        self._validate_fields()
+        if self._current_fingerprint() != self.fingerprint:
+            raise ValueError("fixed-density SCF choice fingerprint drifted")
+
+
+@dataclass(frozen=True, slots=True)
+class Vituri2024HalfMetalDiagnostics:
+    electron_count: float
+    total_holes: float
+    holes_by_flavor: tuple[float, float, float, float]
+    holes_by_valley: tuple[float, float]
+    spin_hole_eigenvalues: tuple[float, float]
+    spin_polarization_norm: float
+    per_valley_spin_purity_residuals: tuple[float, float]
+    common_spin_axis_residual: float
+    intervalley_coherence_frobenius: float
+    intervalley_coherence_max_per_k: float
+    valley_balance_residual: float
+    projector_idempotency_residual: float
+    commutator_residual_ev: float
+    final_raw_norm: float
+    finite_size_fermi_gap_ev: float
+    fully_spin_polarized: bool
+    common_axis_spin_polarized: bool
+    intervalley_incoherent: bool
+    valley_balanced: bool
+    stationary: bool
+    valid_homogeneous_half_metal_candidate: bool
+    production_ready: bool = field(default=False, init=False)
+    paper_reproduction_verified: bool = field(default=False, init=False)
+
+
+@dataclass(frozen=True, slots=True)
+class Vituri2024HFSeedRun:
+    seed_mode: SeedMode
+    seed: int
+    run: HartreeFockRun
+    diagnostics: Vituri2024HalfMetalDiagnostics
+    final_independent_model_energy_ev: float
+    authority: str = field(default=VITURI2024_HF_SCF_AUTHORITY, init=False)
+    production_ready: bool = field(default=False, init=False)
+    paper_reproduction_verified: bool = field(default=False, init=False)
+
+    @property
+    def final_energy_ev(self) -> float:
+        """Compatibility alias; this is not an absolute paper energy."""
+
+        return self.final_independent_model_energy_ev
+
+
+def build_vituri2024_cartesian_mesh(spec: Vituri2024CartesianHFSpec) -> tuple[Array, Array]:
+    if type(spec) is not Vituri2024CartesianHFSpec:
+        raise TypeError("spec must be Vituri2024CartesianHFSpec")
+    half = spec.mesh_size // 2
+    labels = np.asarray(
+        [(ix, iy) for iy in range(-half, half + 1) for ix in range(-half, half + 1)],
+        dtype=np.int64,
+    )
+    mesh = np.asarray(labels, dtype=np.float64) * spec.delta_k_inverse_angstrom
+    return _readonly(mesh, np.dtype(np.float64)), _readonly(labels, np.dtype(np.int64))
+
+
+def _largest_component_positive_gauge(vector: Array) -> Array:
+    state = np.asarray(vector, dtype=np.complex128).copy()
+    index = int(np.argmax(np.abs(state)))
+    amplitude = state[index]
+    if amplitude == 0.0:
+        raise ValueError("active-band state has no nonzero component")
+    state *= np.exp(-1j * np.angle(amplitude))
+    if state[index].real < 0.0:
+        state *= -1.0
+    state[index] = complex(abs(state[index]), 0.0)
+    return state
+
+
+def _interaction_choice(spec: Vituri2024CartesianHFSpec) -> Vituri2024InteractionChoiceReceipt:
+    provider_payload = {
+        "api_version": VITURI2024_HF_SCF_API_VERSION,
+        "gate_distance_angstrom": spec.gate_distance_angstrom,
+        "coulomb_e2_ev_angstrom": spec.coulomb_e2_ev_angstrom,
+        "q0_evaluation": "analytic_kernel_limit_only",
+        "scope": "independent_homogeneous_HF_reproduction_choice",
+    }
+    provider_sha = sha256(
+        json.dumps(
+            provider_payload, sort_keys=True, separators=(",", ":"), allow_nan=False
+        ).encode()
+    ).hexdigest()
+    return Vituri2024InteractionChoiceReceipt(
+        gate_distance_angstrom=spec.gate_distance_angstrom,
+        coulomb_e2_ev_angstrom=spec.coulomb_e2_ev_angstrom,
+        q0_evaluation="analytic_kernel_limit_only",
+        provider_sha256=provider_sha,
+        source_sha256=SM_TEX_SHA256,
+        authority_kind="reproduction_choice",
+        source_text=(
+            "Paper-direct epsilon=8 and qTF=0.04/a0; gate distance, analytic q0 "
+            "kernel evaluation, and finite-domain background handling are explicit "
+            "independent reproduction choices."
+        ),
+    )
+
+
+def _prepared_fingerprint(
+    *,
+    spec: Vituri2024CartesianHFSpec,
+    mesh: Array,
+    labels: Array,
+    states: Array,
+    energies: Array,
+    h0: Array,
+    functional: Vituri2024TranslationalHFFunctional,
+    fixed_density_choice: Vituri2024FixedDensitySCFChoice,
+    minimum_lower_gap_ev: float,
+    minimum_upper_gap_ev: float,
+) -> str:
+    return sha256(
+        json.dumps(
+            {
+                "spec": spec.fingerprint,
+                "mesh": _array_sha256(mesh),
+                "labels": _array_sha256(labels),
+                "states": _array_sha256(states),
+                "energies": _array_sha256(energies),
+                "h0": _array_sha256(h0),
+                "functional": functional.fingerprint,
+                "fixed_density_scf_choice": fixed_density_choice.fingerprint,
+                "minimum_lower_gap_ev": minimum_lower_gap_ev,
+                "minimum_upper_gap_ev": minimum_upper_gap_ev,
+                "authority": VITURI2024_HF_SCF_AUTHORITY,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode()
+    ).hexdigest()
+
+
+def prepare_vituri2024_homogeneous_hf(
+    spec: Vituri2024CartesianHFSpec,
+) -> Vituri2024PreparedHomogeneousHF:
+    """Build mesh, source-gauge active states, h0, and shared functional."""
+
+    if type(spec) is not Vituri2024CartesianHFSpec:
+        raise TypeError("spec must be Vituri2024CartesianHFSpec")
+    mesh, labels = build_vituri2024_cartesian_mesh(spec)
+    states = np.empty((2, 6, spec.nk), dtype=np.complex128)
+    energies = np.empty((2, spec.nk), dtype=np.float64)
+    lower_gaps = np.empty((2, spec.nk), dtype=np.float64)
+    upper_gaps = np.empty((2, spec.nk), dtype=np.float64)
+    for valley_index, valley in enumerate(ACTIVE_BAND_STATES_VALLEY_ORDER):
+        for momentum_index, momentum in enumerate(mesh):
+            solution = third_lowest_active_band(momentum, valley, spec.delta1_ev)
+            states[valley_index, :, momentum_index] = _largest_component_positive_gauge(
+                solution.eigenvector
+            )
+            energies[valley_index, momentum_index] = solution.energy
+            lower_gaps[valley_index, momentum_index] = solution.lower_gap
+            upper_gaps[valley_index, momentum_index] = solution.upper_gap
+    h0 = np.zeros((4, 4, spec.nk), dtype=np.complex128)
+    valley_index = {
+        valley: index
+        for index, valley in enumerate(ACTIVE_BAND_STATES_VALLEY_ORDER)
+    }
+    for flavor, (valley, _spin) in enumerate(INTERNAL_FLAVOR_ORDER):
+        h0[flavor, flavor, :] = energies[valley_index[valley], :]
+    reference = np.zeros_like(h0)
+    mesh_receipt = make_vituri2024_finite_domain_mesh_receipt(
+        ordered_mesh=mesh,
+        area_angstrom_squared=spec.area_angstrom_squared,
+        provenance=(
+            "Square finite-volume reciprocal spacing Delta k=2pi/sqrt(A), odd "
+            "Cartesian UV subset, one equal-weight momentum state per A; "
+            "independent reproduction choice requiring cutoff convergence."
+        ),
+    )
+    q0_choice = make_vituri2024_translational_q0_reproduction_choice(
+        evidence=(
+            "Retain the finite dual-gate analytic q=0 direct and exchange terms "
+            "explicitly; no identity quotient and no paper/source background claim."
+        )
+    )
+    functional = Vituri2024TranslationalHFFunctional(
+        ordered_mesh=mesh,
+        active_band_states=np.asarray(states, dtype=np.complex128),
+        h0_native=h0,
+        normal_order_reference_native=reference,
+        mesh_receipt=mesh_receipt,
+        interaction=_interaction_choice(spec),
+        normal_order_reference_fingerprint=_array_sha256(reference),
+        q0_choice=q0_choice,
+        provenance=(
+            "Independent homogeneous Vituri HF functional at Delta1=28 meV; "
+            "not author source, incommensurate ansatz, or production TDHF."
+        ),
+    )
+    fixed_density_choice = Vituri2024FixedDensitySCFChoice()
+    readonly_states = _readonly(states, np.dtype(np.complex128))
+    readonly_energies = _readonly(energies, np.dtype(np.float64))
+    readonly_h0 = _readonly(h0, np.dtype(np.complex128))
+    fingerprint = _prepared_fingerprint(
+        spec=spec,
+        mesh=mesh,
+        labels=labels,
+        states=readonly_states,
+        energies=readonly_energies,
+        h0=readonly_h0,
+        functional=functional,
+        fixed_density_choice=fixed_density_choice,
+        minimum_lower_gap_ev=float(np.min(lower_gaps)),
+        minimum_upper_gap_ev=float(np.min(upper_gaps)),
+    )
+    return Vituri2024PreparedHomogeneousHF(
+        spec=spec,
+        ordered_mesh=mesh,
+        integer_mesh_labels=labels,
+        active_band_states=readonly_states,
+        active_band_energies_by_valley=readonly_energies,
+        h0_native=readonly_h0,
+        functional=functional,
+        fixed_density_scf_choice=fixed_density_choice,
+        minimum_lower_gap_ev=float(np.min(lower_gaps)),
+        minimum_upper_gap_ev=float(np.min(upper_gaps)),
+        fingerprint=fingerprint,
+    )
+
+
+def _hole_momenta_by_valley(
+    prepared: Vituri2024PreparedHomogeneousHF,
+) -> dict[int, Array]:
+    result: dict[int, Array] = {}
+    for valley_index, valley in enumerate(ACTIVE_BAND_STATES_VALLEY_ORDER):
+        order = np.argsort(
+            -prepared.active_band_energies_by_valley[valley_index], kind="stable"
+        )
+        result[valley] = np.asarray(
+            order[: prepared.spec.holes_per_valley], dtype=np.int64
+        )
+    return result
+
+
+def _native_density_from_seed(
+    prepared: Vituri2024PreparedHomogeneousHF,
+    seed_mode: SeedMode,
+    seed: int,
+) -> Array:
+    spec = prepared.spec
+    conventional = np.repeat(np.eye(4, dtype=np.complex128)[:, :, None], spec.nk, axis=2)
+    holes = _hole_momenta_by_valley(prepared)
+    flavor_index = {
+        flavor: index for index, flavor in enumerate(INTERNAL_FLAVOR_ORDER)
+    }
+    spinors = {
+        "half_metal_sz_plus": np.asarray([0.0, 1.0], dtype=np.complex128),
+        "half_metal_sz_minus": np.asarray([1.0, 0.0], dtype=np.complex128),
+        "half_metal_sx": np.asarray([1.0, 1.0], dtype=np.complex128) / math.sqrt(2.0),
+        "half_metal_sy": np.asarray([1.0, 1.0j], dtype=np.complex128) / math.sqrt(2.0),
+    }
+    if seed_mode in spinors:
+        spinor = spinors[seed_mode]
+        hole_projector = np.outer(spinor, spinor.conj())
+        for valley in ACTIVE_BAND_STATES_VALLEY_ORDER:
+            indices = np.asarray(
+                [flavor_index[(valley, -1)], flavor_index[(valley, 1)]],
+                dtype=np.int64,
+            )
+            for momentum in holes[valley]:
+                conventional[np.ix_(indices, indices, [int(momentum)])] -= (
+                    hole_projector[:, :, None]
+                )
+    elif seed_mode in ("valley_minus", "valley_plus"):
+        valley = -1 if seed_mode == "valley_minus" else 1
+        indices = [flavor_index[(valley, -1)], flavor_index[(valley, 1)]]
+        selected = holes[valley]
+        if selected.size != spec.holes_per_valley:
+            raise ValueError("valley seed cannot realize the requested hole rank")
+        # Remove two spin states at the highest H_v/2 momenta only when the
+        # requested total hole rank is even.  This seed is otherwise undefined.
+        if spec.total_holes % 2 != 0:
+            raise ValueError("valley-polarized seed requires an even total hole rank")
+        number_of_momenta = spec.total_holes // 2
+        valley_order = np.argsort(
+            -prepared.active_band_energies_by_valley[
+                ACTIVE_BAND_STATES_VALLEY_ORDER.index(valley)
+            ],
+            kind="stable",
+        )[:number_of_momenta]
+        for momentum in valley_order:
+            for flavor in indices:
+                conventional[flavor, flavor, int(momentum)] = 0.0
+    elif seed_mode in ("ivc_x", "ivc_y"):
+        phase = 1.0 if seed_mode == "ivc_x" else 1.0j
+        valley_spinor = np.asarray([1.0, phase], dtype=np.complex128) / math.sqrt(2.0)
+        combined_energy = 0.5 * np.sum(
+            prepared.active_band_energies_by_valley, axis=0
+        )
+        momenta = np.argsort(-combined_energy, kind="stable")[: spec.total_holes]
+        if momenta.size != spec.total_holes:
+            raise ValueError("IVC seed cannot realize the requested hole rank")
+        indices = np.asarray(
+            [flavor_index[(-1, 1)], flavor_index[(1, 1)]], dtype=np.int64
+        )
+        hole_projector = np.outer(valley_spinor, valley_spinor.conj())
+        for momentum in momenta:
+            conventional[np.ix_(indices, indices, [int(momentum)])] -= (
+                hole_projector[:, :, None]
+            )
+    elif seed_mode == "random_projector":
+        base = _native_density_from_seed(prepared, "half_metal_sz_plus", seed)
+        conventional = vituri2024_native_density_to_conventional_k_diagonal(base).copy()
+        rng = np.random.default_rng(_strict_int(seed, "seed"))
+        for momentum in range(spec.nk):
+            raw = rng.normal(size=(4, 4)) + 1j * rng.normal(size=(4, 4))
+            hermitian = raw + raw.conj().T
+            _values, unitary = np.linalg.eigh(hermitian)
+            conventional[:, :, momentum] = (
+                unitary @ conventional[:, :, momentum] @ unitary.conj().T
+            )
+    else:
+        raise ValueError(f"unsupported Vituri seed_mode={seed_mode!r}")
+    realized_electrons = float(
+        sum(np.trace(conventional[:, :, momentum]).real for momentum in range(spec.nk))
+    )
+    if abs(realized_electrons - spec.total_electrons) > 1.0e-9:
+        raise ValueError(
+            "seed projector does not realize the exact fixed particle rank: "
+            f"{realized_electrons} != {spec.total_electrons}"
+        )
+    native = conventional.swapaxes(0, 1)
+    return np.asarray(native, dtype=np.complex128)
+
+
+def _density_update_builder(
+    prepared: Vituri2024PreparedHomogeneousHF,
+):
+    total_occupied = prepared.spec.total_electrons
+
+    def build(hamiltonian: Array) -> DensityUpdateResult:
+        matrix = np.asarray(hamiltonian, dtype=np.complex128)
+        if matrix.shape != (4, 4, prepared.spec.nk):
+            raise ValueError("Vituri Aufbau Hamiltonian shape mismatch")
+        energies = np.empty((4, prepared.spec.nk), dtype=np.float64)
+        eigenvectors = np.empty((4, 4, prepared.spec.nk), dtype=np.complex128)
+        for momentum in range(prepared.spec.nk):
+            values, vectors = np.linalg.eigh(matrix[:, :, momentum])
+            energies[:, momentum] = values
+            eigenvectors[:, :, momentum] = vectors
+        # Explicit flavor-major-then-k flattening: flat=flavor*Nk+k.
+        flat_energies = energies.reshape(-1, order="C")
+        order = np.argsort(flat_energies, kind="stable")
+        occupied_flat = np.zeros(flat_energies.size, dtype=np.bool_)
+        occupied_flat[order[:total_occupied]] = True
+        occupied = occupied_flat.reshape(energies.shape, order="C")
+        conventional = np.zeros_like(matrix)
+        for momentum in range(prepared.spec.nk):
+            weights = occupied[:, momentum].astype(np.float64)
+            vectors = eigenvectors[:, :, momentum]
+            conventional[:, :, momentum] = (vectors * weights) @ vectors.conj().T
+        native = np.asarray(conventional.swapaxes(0, 1), dtype=np.complex128)
+        sorted_energies = flat_energies[order]
+        if total_occupied == 0:
+            mu = float(sorted_energies[0] - 1.0)
+            gap = float("nan")
+        elif total_occupied == sorted_energies.size:
+            mu = float(sorted_energies[-1] + 1.0)
+            gap = float("nan")
+        else:
+            lower = float(sorted_energies[total_occupied - 1])
+            upper = float(sorted_energies[total_occupied])
+            mu = 0.5 * (lower + upper)
+            gap = upper - lower
+        if math.isfinite(gap) and gap <= VITURI2024_DEFAULT_AUFBAU_GAP_TOLERANCE_EV:
+            raise ValueError(
+                "Vituri global Aufbau boundary is degenerate within the locked "
+                "finite-volume tolerance; no partial-subspace occupation policy exists"
+            )
+        return DensityUpdateResult(
+            density=native,
+            energies=energies,
+            mu=mu,
+            observables={
+                "finite_size_fermi_gap_ev": gap,
+                "occupied_count": float(np.count_nonzero(occupied)),
+            },
+        )
+
+    return build
+
+
+def _energy_from_engine_inputs(
+    interaction_h: Array, h0: Array, native_density: Array
+) -> float:
+    one_body = np.einsum("abk,abk->", h0, native_density, optimize=False)
+    interaction = 0.5 * np.einsum(
+        "abk,abk->", interaction_h, native_density, optimize=False
+    )
+    total = complex(one_body + interaction)
+    if abs(total.imag) > 5.0e-11 * max(1.0, abs(total), abs(one_body), abs(interaction)):
+        raise ValueError("Vituri engine scalar energy is materially complex")
+    return float(total.real)
+
+
+def make_vituri2024_hf_problem(
+    prepared: Vituri2024PreparedHomogeneousHF,
+) -> HartreeFockProblem:
+    if type(prepared) is not Vituri2024PreparedHomogeneousHF:
+        raise TypeError("prepared must be Vituri2024PreparedHomogeneousHF")
+    prepared.validate_live_state()
+
+    def initializer(state: Vituri2024HFState, *, init_mode: str, seed: int) -> None:
+        state.density[:, :, :] = _native_density_from_seed(
+            prepared, init_mode, seed  # type: ignore[arg-type]
+        )
+        state.hamiltonian[:, :, :] = state.h0
+        state.energies[:, :] = np.nan
+        state.mu = float("nan")
+        state.diagnostics.clear()
+
+    interaction_action = prepared.functional.make_validated_interaction_action()
+    return HartreeFockProblem(
+        initializer=initializer,
+        kernel=HartreeFockKernel(
+            interaction_builder=interaction_action,
+            density_builder=_density_update_builder(prepared),
+            energy_functional=_energy_from_engine_inputs,
+            oda_delta_interaction_builder=interaction_action,
+            convergence_rule="raw",
+        ),
+    )
+
+
+def make_vituri2024_hf_state(
+    prepared: Vituri2024PreparedHomogeneousHF,
+) -> Vituri2024HFState:
+    h0 = np.asarray(prepared.h0_native, dtype=np.complex128).copy()
+    return Vituri2024HFState(
+        h0=h0,
+        density=np.zeros_like(h0),
+        hamiltonian=h0.copy(),
+        energies=np.full((4, prepared.spec.nk), np.nan, dtype=np.float64),
+        mu=float("nan"),
+        precision=prepared.spec.precision,
+        diagnostics={},
+    )
+
+
+def diagnose_vituri2024_half_metal(
+    prepared: Vituri2024PreparedHomogeneousHF,
+    run: HartreeFockRun,
+) -> Vituri2024HalfMetalDiagnostics:
+    state = run.state
+    conventional = vituri2024_native_density_to_conventional_k_diagonal(
+        np.asarray(state.density, dtype=np.complex128)
+    )
+    identity = np.eye(4, dtype=np.complex128)[:, :, None]
+    hole = identity - conventional
+    integrated_hole = np.sum(hole, axis=2)
+    holes_by_flavor = tuple(
+        float(integrated_hole[index, index].real) for index in range(4)
+    )
+    valley_blocks = (
+        integrated_hole[0:2, 0:2],
+        integrated_hole[2:4, 2:4],
+    )
+    holes_by_valley = tuple(float(np.trace(block).real) for block in valley_blocks)
+    spin_hole = valley_blocks[0] + valley_blocks[1]
+    spin_eigenvalues = np.linalg.eigvalsh(spin_hole)
+    valley_spin_eigenvalues = tuple(np.linalg.eigvalsh(block) for block in valley_blocks)
+    total_holes = float(np.trace(integrated_hole).real)
+    pauli = (
+        np.asarray([[0.0, 1.0], [1.0, 0.0]], dtype=np.complex128),
+        np.asarray([[0.0, -1.0j], [1.0j, 0.0]], dtype=np.complex128),
+        np.asarray([[1.0, 0.0], [0.0, -1.0]], dtype=np.complex128),
+    )
+    valley_spin_vectors = tuple(
+        np.asarray([float(np.trace(block @ matrix).real) for matrix in pauli])
+        for block in valley_blocks
+    )
+    spin_vector = valley_spin_vectors[0] + valley_spin_vectors[1]
+    spin_polarization = float(np.linalg.norm(spin_vector) / max(total_holes, 1.0e-30))
+    per_valley_spin_purity = tuple(
+        float(max(0.0, eigenvalues[0]) / max(np.sum(eigenvalues), 1.0e-30))
+        for eigenvalues in valley_spin_eigenvalues
+    )
+    normalized_valley_axes = tuple(
+        vector / max(float(np.linalg.norm(vector)), 1.0e-30)
+        for vector in valley_spin_vectors
+    )
+    common_axis_residual = float(
+        np.linalg.norm(normalized_valley_axes[0] - normalized_valley_axes[1])
+    )
+    intervalley_norms = np.asarray(
+        [
+            np.linalg.norm(hole[0:2, 2:4, momentum])
+            for momentum in range(prepared.spec.nk)
+        ],
+        dtype=np.float64,
+    )
+    intervalley_coherence = float(np.linalg.norm(intervalley_norms))
+    intervalley_coherence_max = float(np.max(intervalley_norms, initial=0.0))
+    valley_balance = float(abs(holes_by_valley[0] - holes_by_valley[1]))
+    projector_residual = 0.0
+    commutator_residual = 0.0
+    for momentum in range(prepared.spec.nk):
+        projector = conventional[:, :, momentum]
+        fock = np.asarray(state.hamiltonian[:, :, momentum], dtype=np.complex128)
+        projector_residual = max(
+            projector_residual, _max_abs(projector @ projector - projector)
+        )
+        commutator_residual = max(
+            commutator_residual, _max_abs(fock @ projector - projector @ fock)
+        )
+    electron_count = float(
+        sum(np.trace(conventional[:, :, momentum]).real for momentum in range(prepared.spec.nk))
+    )
+    finite_gap = float("nan")
+    if prepared.spec.total_electrons not in (0, 4 * prepared.spec.nk):
+        flat = np.sort(np.asarray(state.energies, dtype=float).ravel(order="C"))
+        finite_gap = float(
+            flat[prepared.spec.total_electrons] - flat[prepared.spec.total_electrons - 1]
+        )
+    final_raw_norm = float(state.diagnostics.get("final_raw_norm", float("inf")))
+    fully_spin_polarized = all(value <= 1.0e-7 for value in per_valley_spin_purity)
+    common_axis_spin_polarized = (
+        abs(total_holes - prepared.spec.total_holes) <= 1.0e-7
+        and fully_spin_polarized
+        and spin_polarization >= 1.0 - 1.0e-7
+        and common_axis_residual <= 1.0e-7
+        and float(spin_eigenvalues[0]) >= -1.0e-8
+        and float(spin_eigenvalues[0]) <= 1.0e-7
+    )
+    intervalley_incoherent = intervalley_coherence_max <= 1.0e-7
+    valley_balanced = valley_balance <= 1.0e-7
+    stationary = (
+        run.converged
+        and final_raw_norm <= prepared.spec.precision
+        and commutator_residual <= 1.0e-8
+        and projector_residual <= 1.0e-8
+    )
+    valid = (
+        common_axis_spin_polarized
+        and intervalley_incoherent
+        and valley_balanced
+        and stationary
+        and math.isfinite(finite_gap)
+        and finite_gap > VITURI2024_DEFAULT_AUFBAU_GAP_TOLERANCE_EV
+    )
+    return Vituri2024HalfMetalDiagnostics(
+        electron_count=electron_count,
+        total_holes=total_holes,
+        holes_by_flavor=holes_by_flavor,  # type: ignore[arg-type]
+        holes_by_valley=holes_by_valley,  # type: ignore[arg-type]
+        spin_hole_eigenvalues=(
+            float(spin_eigenvalues[0]),
+            float(spin_eigenvalues[1]),
+        ),
+        spin_polarization_norm=spin_polarization,
+        per_valley_spin_purity_residuals=per_valley_spin_purity,  # type: ignore[arg-type]
+        common_spin_axis_residual=common_axis_residual,
+        intervalley_coherence_frobenius=intervalley_coherence,
+        intervalley_coherence_max_per_k=intervalley_coherence_max,
+        valley_balance_residual=valley_balance,
+        projector_idempotency_residual=projector_residual,
+        commutator_residual_ev=commutator_residual,
+        final_raw_norm=final_raw_norm,
+        finite_size_fermi_gap_ev=finite_gap,
+        fully_spin_polarized=fully_spin_polarized,
+        common_axis_spin_polarized=common_axis_spin_polarized,
+        intervalley_incoherent=intervalley_incoherent,
+        valley_balanced=valley_balanced,
+        stationary=stationary,
+        valid_homogeneous_half_metal_candidate=valid,
+    )
+
+
+def run_vituri2024_hf_seed(
+    prepared: Vituri2024PreparedHomogeneousHF,
+    *,
+    seed_mode: SeedMode,
+    seed: int,
+    max_iter: int = 500,
+    oda_stall_threshold: float = 1.0e-6,
+    max_oda_lambda: float = 1.0,
+) -> Vituri2024HFSeedRun:
+    """Run one homogeneous seed through the reusable generic ODA engine."""
+
+    state = make_vituri2024_hf_state(prepared)
+    problem = make_vituri2024_hf_problem(prepared)
+    run = run_hartree_fock_problem(
+        state,
+        problem,
+        init_mode=seed_mode,
+        seed=_strict_int(seed, "seed"),
+        max_iter=_strict_int(max_iter, "max_iter"),
+        oda_stall_threshold=_finite_real(
+            oda_stall_threshold, "oda_stall_threshold", positive=True
+        ),
+        max_oda_lambda=_finite_real(
+            max_oda_lambda, "max_oda_lambda", positive=True
+        ),
+    )
+    prepared.validate_live_state()
+    diagnostics = diagnose_vituri2024_half_metal(prepared, run)
+    if run.converged and not diagnostics.stationary:
+        run = replace(run, converged=False, exit_reason="final_map_not_converged")
+        diagnostics = diagnose_vituri2024_half_metal(prepared, run)
+    final_energy = prepared.functional.energy(np.asarray(run.state.density))
+    engine_energy = float(run.state.diagnostics["hf_energy"])
+    if abs(final_energy - engine_energy) > 1.0e-10 * max(
+        1.0, abs(final_energy), abs(engine_energy)
+    ):
+        raise ValueError("Vituri final engine/scalar energy mismatch")
+    return Vituri2024HFSeedRun(
+        seed_mode=seed_mode,
+        seed=int(seed),
+        run=run,
+        diagnostics=diagnostics,
+        final_independent_model_energy_ev=final_energy,
+    )
+
+
+__all__ = [
+    "VITURI2024_DELTA1_EV",
+    "VITURI2024_GATE_DISTANCE_ANGSTROM",
+    "VITURI2024_HF_SCF_API_VERSION",
+    "VITURI2024_HF_SCF_AUTHORITY",
+    "VITURI2024_TOTAL_HOLE_DENSITY_CM2",
+    "Vituri2024CartesianHFSpec",
+    "Vituri2024FixedDensitySCFChoice",
+    "Vituri2024HalfMetalDiagnostics",
+    "Vituri2024HFSeedRun",
+    "Vituri2024HFState",
+    "Vituri2024PreparedHomogeneousHF",
+    "build_vituri2024_cartesian_mesh",
+    "diagnose_vituri2024_half_metal",
+    "make_vituri2024_hf_problem",
+    "make_vituri2024_hf_state",
+    "prepare_vituri2024_homogeneous_hf",
+    "run_vituri2024_hf_seed",
+]

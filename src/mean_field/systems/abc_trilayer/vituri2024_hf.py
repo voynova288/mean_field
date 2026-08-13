@@ -158,6 +158,13 @@ def _canonical_live_value(value: object) -> object:
             "function_qualname": value.__qualname__,
             "code": _stable_code_record(value.__code__),
         }
+    if callable(value) and type(value).__module__.startswith("numpy"):
+        return {
+            "callable_type_module": type(value).__module__,
+            "callable_type_qualname": type(value).__qualname__,
+            "callable_module": getattr(value, "__module__", ""),
+            "callable_name": getattr(value, "__name__", ""),
+        }
     if isinstance(value, type):
         return {"type_module": value.__module__, "type_qualname": value.__qualname__}
     state = getattr(value, "__dict__", None)
@@ -597,6 +604,60 @@ def vituri2024_native_operator_to_conventional_k_diagonal(operator: Array) -> Ar
     return _readonly(operator, dtype=np.dtype(np.complex128))
 
 
+def vituri2024_translational_interaction_action_conventional(
+    density: Array,
+    *,
+    form_factors_by_flavor: Array,
+    kernel_by_mesh_pair: Array,
+    area_angstrom_squared: float,
+    _density_validator=vituri2024_native_operator_to_conventional_k_diagonal,
+    _zeros_like=np.zeros_like,
+    _diagonal=np.diagonal,
+    _sum=np.sum,
+    _einsum=np.einsum,
+    _max_abs_function=_max_abs,
+    _readonly_function=_readonly,
+    _structure_tolerance: float = VITURI2024_TRANSLATIONAL_HF_STRUCTURE_TOLERANCE,
+) -> Array:
+    """Apply the validated translational direct/exchange action in O(Nk^2)."""
+
+    nk = int(form_factors_by_flavor.shape[1])
+    clean = _density_validator(density)
+    if clean.shape != (4, 4, nk):
+        raise ValueError("translational action density Nk mismatch")
+    flavors = len(INTERNAL_FLAVOR_ORDER)
+    result = _zeros_like(clean)
+    direct_scalar = 0.0 + 0.0j
+    for flavor in range(flavors):
+        direct_scalar += _sum(
+            _diagonal(form_factors_by_flavor[flavor])
+            * clean[flavor, flavor, :]
+        )
+    direct_scalar *= kernel_by_mesh_pair[0, 0]
+    for flavor in range(flavors):
+        result[flavor, flavor, :] += (
+            _diagonal(form_factors_by_flavor[flavor]) * direct_scalar
+        )
+    for left_flavor in range(flavors):
+        left_form_factor = form_factors_by_flavor[left_flavor]
+        for right_flavor in range(flavors):
+            result[left_flavor, right_flavor, :] -= _einsum(
+                "mr,mr,rm,r->m",
+                kernel_by_mesh_pair,
+                left_form_factor,
+                form_factors_by_flavor[right_flavor],
+                clean[left_flavor, right_flavor, :],
+                optimize=True,
+            )
+    result *= 1.0 / area_angstrom_squared
+    residual = _max_abs_function(result - result.swapaxes(0, 1).conj())
+    if residual > _structure_tolerance * max(
+        1.0, _max_abs_function(result)
+    ):
+        raise ValueError("translational interaction action is not Hermitian")
+    return _readonly_function(result, dtype=np.dtype(np.complex128))
+
+
 @dataclass(frozen=True, slots=True)
 class Vituri2024TranslationalHFFunctional:
     """Scalable translation-preserving E/F/dF specialization."""
@@ -858,58 +919,50 @@ class Vituri2024TranslationalHFFunctional:
         self.validate_live_state()
         return self.construction_fingerprint
 
+    def _interaction_action_conventional_validated(self, density: Array) -> Array:
+        """Hot-loop action after one explicit trusted boundary validation."""
+
+        return vituri2024_translational_interaction_action_conventional(
+            density,
+            form_factors_by_flavor=self.form_factors_by_flavor,
+            kernel_by_mesh_pair=self.kernel_by_mesh_pair,
+            area_angstrom_squared=self.mesh_receipt.area_angstrom_squared,
+        )
+
     def interaction_action_conventional(self, density: Array) -> Array:
         """Return k-diagonal conventional ``Sigma[density]`` in O(Nk^2)."""
 
         self.validate_live_state()
-        clean = vituri2024_native_operator_to_conventional_k_diagonal(density)
-        if clean.shape != (4, 4, self.nk):
-            raise ValueError("translational action density Nk mismatch")
-        flavors = len(INTERNAL_FLAVOR_ORDER)
-        result = np.zeros_like(clean)
-        # Direct term. Momentum conservation with a k-diagonal density forces
-        # zero transfer, so the Hartree potential is diagonal in external k.
-        direct_scalar = 0.0 + 0.0j
-        for flavor in range(flavors):
-            direct_scalar += np.sum(
-                np.diagonal(self.form_factors_by_flavor[flavor])
-                * clean[flavor, flavor, :]
-            )
-        direct_scalar *= self.kernel_by_mesh_pair[0, 0]
-        for flavor in range(flavors):
-            result[flavor, flavor, :] += (
-                np.diagonal(self.form_factors_by_flavor[flavor]) * direct_scalar
-            )
-        # Exchange term for arbitrary flavor coherence.  For output momentum m
-        # and internal momentum r, exact conservation selects p=r+n-m.  A
-        # k-diagonal density enforces equality of the two output momenta; the
-        # independent internal momentum r remains summed.  The surviving
-        # contraction is the pair kernel/form-factor action below.
-        for left_flavor in range(flavors):
-            for right_flavor in range(flavors):
-                for m in range(self.nk):
-                    value = 0.0 + 0.0j
-                    for r in range(self.nk):
-                        value += (
-                            self.kernel_by_mesh_pair[m, r]
-                            * self.form_factors_by_flavor[left_flavor, m, r]
-                            * self.form_factors_by_flavor[right_flavor, r, m]
-                            * clean[left_flavor, right_flavor, r]
-                        )
-                    result[left_flavor, right_flavor, m] -= value
-        result *= 1.0 / self.mesh_receipt.area_angstrom_squared
-        residual = _max_abs(result - result.swapaxes(0, 1).conj())
-        if residual > VITURI2024_TRANSLATIONAL_HF_STRUCTURE_TOLERANCE * max(
-            1.0, _max_abs(result)
-        ):
-            raise ValueError("translational interaction action is not Hermitian")
-        return _readonly(result, dtype=np.dtype(np.complex128))
+        return self._interaction_action_conventional_validated(density)
 
     def interaction_action(self, native_density: Array) -> Array:
+        self.validate_live_state()
         conventional = vituri2024_native_density_to_conventional_k_diagonal(
             native_density
         )
-        return self.interaction_action_conventional(conventional)
+        return self._interaction_action_conventional_validated(conventional)
+
+    def make_validated_interaction_action(self):
+        """Validate once and return the SCF hot-loop linear action closure."""
+
+        self.validate_live_state()
+
+        action_implementation = vituri2024_translational_interaction_action_conventional
+        density_converter = vituri2024_native_density_to_conventional_k_diagonal
+        form_factors = self.form_factors_by_flavor
+        kernel = self.kernel_by_mesh_pair
+        area = self.mesh_receipt.area_angstrom_squared
+
+        def action(native_density: Array) -> Array:
+            conventional = density_converter(native_density)
+            return action_implementation(
+                conventional,
+                form_factors_by_flavor=form_factors,
+                kernel_by_mesh_pair=kernel,
+                area_angstrom_squared=area,
+            )
+
+        return action
 
     def energy(self, native_density: Array) -> float:
         conventional = vituri2024_native_density_to_conventional_k_diagonal(
@@ -918,7 +971,8 @@ class Vituri2024TranslationalHFFunctional:
         if conventional.shape != (4, 4, self.nk):
             raise ValueError("translational energy density Nk mismatch")
         difference = conventional - self.normal_order_reference_conventional
-        interaction = self.interaction_action_conventional(difference)
+        self.validate_live_state()
+        interaction = self._interaction_action_conventional_validated(difference)
         one_body = np.einsum(
             "abk,bak->", self.h0_native, conventional, optimize=False
         )
@@ -938,7 +992,8 @@ class Vituri2024TranslationalHFFunctional:
         )
         if conventional.shape != (4, 4, self.nk):
             raise ValueError("translational Fock density Nk mismatch")
-        interaction = self.interaction_action_conventional(
+        self.validate_live_state()
+        interaction = self._interaction_action_conventional_validated(
             conventional - self.normal_order_reference_conventional
         )
         result = self.h0_native + interaction
@@ -953,7 +1008,8 @@ class Vituri2024TranslationalHFFunctional:
             4, 4, self.nk
         ):
             raise ValueError("translational dF anchor/direction Nk mismatch")
-        return self.interaction_action_conventional(conventional_direction)
+        self.validate_live_state()
+        return self._interaction_action_conventional_validated(conventional_direction)
 
 
 __all__ = [
@@ -970,4 +1026,5 @@ __all__ = [
     "vituri2024_conventional_k_diagonal_to_native_density",
     "vituri2024_native_density_to_conventional_k_diagonal",
     "vituri2024_native_operator_to_conventional_k_diagonal",
+    "vituri2024_translational_interaction_action_conventional",
 ]
