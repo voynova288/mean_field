@@ -200,6 +200,35 @@ def test_initial_fock_boundary_scan_is_branch_conditioned_and_fail_closed() -> N
 
 
 def test_initial_fock_boundary_scan_rejects_live_drift_and_no_candidate() -> None:
+    target_spec = Vituri2024CartesianHFSpec(mesh_size=3, holes_per_valley=2)
+    continuous_cutoff = target_spec.axial_k_cutoff_a0 * np.sqrt(2.0 / 2.4)
+    nearest_choice = Vituri2024InitialFockBoundaryScanChoice(
+        mesh_size=3,
+        target_holes_per_valley=2,
+        scan_min_holes_per_valley=1,
+        scan_max_holes_per_valley=4,
+        target_holes_policy="nearest_physical_cutoff",
+        target_axial_cutoff_a0=continuous_cutoff,
+    )
+    assert nearest_choice.target_axial_cutoff_a0 == continuous_cutoff
+    assert nearest_choice.target_axial_cutoff_a0 != target_spec.axial_k_cutoff_a0
+    with pytest.raises(ValueError, match="not the nearest integer"):
+        Vituri2024InitialFockBoundaryScanChoice(
+            mesh_size=3,
+            target_holes_per_valley=3,
+            scan_min_holes_per_valley=1,
+            scan_max_holes_per_valley=4,
+            target_holes_policy="nearest_physical_cutoff",
+            target_axial_cutoff_a0=continuous_cutoff,
+        )
+    with pytest.raises(ValueError, match="derives target cutoff"):
+        Vituri2024InitialFockBoundaryScanChoice(
+            mesh_size=3,
+            target_holes_per_valley=2,
+            scan_min_holes_per_valley=1,
+            scan_max_holes_per_valley=4,
+            target_axial_cutoff_a0=0.2,
+        )
     with pytest.raises(ValueError, match=">=1"):
         Vituri2024InitialFockBoundaryScanChoice(
             mesh_size=3,

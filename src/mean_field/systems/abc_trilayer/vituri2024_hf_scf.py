@@ -76,7 +76,7 @@ SeedMode = Literal[
     "random_projector",
 ]
 
-VITURI2024_HF_SCF_API_VERSION: Final[str] = "vituri2024_homogeneous_hf_scf.v2"
+VITURI2024_HF_SCF_API_VERSION: Final[str] = "vituri2024_homogeneous_hf_scf.v3"
 VITURI2024_HF_SCF_AUTHORITY: Final[str] = (
     "independent_homogeneous_reproduction_choice_not_author_source_"
     "incommensurate_phase_production_tdhf_or_paper_reproduction"
@@ -553,7 +553,10 @@ class Vituri2024InitialFockBoundaryScanChoice:
     degeneracy_tolerance_ev: float = VITURI2024_DEFAULT_AUFBAU_GAP_TOLERANCE_EV
     minimum_gap_to_eigensolver_residual_ratio: float = 1.0e6
     allow_fallback: bool = False
-    target_axial_cutoff_a0: float = field(init=False)
+    target_holes_policy: Literal[
+        "fixed_regulator", "nearest_physical_cutoff"
+    ] = "fixed_regulator"
+    target_axial_cutoff_a0: float | None = None
     initial_branch_mode: Literal["half_metal_sz_plus"] = field(
         default="half_metal_sz_plus", init=False
     )
@@ -584,6 +587,11 @@ class Vituri2024InitialFockBoundaryScanChoice:
             raise ValueError("boundary scan exceeds the declared branch capacity")
         if type(self.allow_fallback) is not bool:
             raise TypeError("allow_fallback must be native bool")
+        if self.target_holes_policy not in (
+            "fixed_regulator",
+            "nearest_physical_cutoff",
+        ):
+            raise ValueError("unsupported target_holes_policy")
         object.__setattr__(self, "mesh_size", mesh_size)
         object.__setattr__(self, "target_holes_per_valley", target)
         object.__setattr__(self, "scan_min_holes_per_valley", minimum)
@@ -615,9 +623,36 @@ class Vituri2024InitialFockBoundaryScanChoice:
             coulomb_e2_ev_angstrom=self.coulomb_e2_ev_angstrom,
             precision=self.precision,
         )
-        object.__setattr__(
-            self, "target_axial_cutoff_a0", target_spec.axial_k_cutoff_a0
-        )
+        if self.target_holes_policy == "fixed_regulator":
+            if self.target_axial_cutoff_a0 is not None:
+                raise ValueError(
+                    "fixed_regulator derives target cutoff from the fixed target Hv"
+                )
+            target_cutoff = target_spec.axial_k_cutoff_a0
+        else:
+            target_cutoff = _finite_real(
+                self.target_axial_cutoff_a0,
+                "target_axial_cutoff_a0",
+                positive=True,
+            )
+            density_a2 = (
+                self.total_hole_density_cm2 * VITURI2024_CM2_TO_ANGSTROM2
+            )
+            half = mesh_size // 2
+            continuous_target_holes = 0.5 * density_a2 * (
+                2.0
+                * math.pi
+                * VITURI2024_PARAMETERS.a0
+                * half
+                / target_cutoff
+            ) ** 2
+            nearest_target_holes = int(math.floor(continuous_target_holes + 0.5))
+            if target != nearest_target_holes:
+                raise ValueError(
+                    "target_holes_per_valley is not the nearest integer realization "
+                    "of target_axial_cutoff_a0"
+                )
+        object.__setattr__(self, "target_axial_cutoff_a0", target_cutoff)
         object.__setattr__(self, "fingerprint", self._current_fingerprint())
 
     def _current_fingerprint(self) -> str:
@@ -638,6 +673,7 @@ class Vituri2024InitialFockBoundaryScanChoice:
                 self.minimum_gap_to_eigensolver_residual_ratio
             ),
             "allow_fallback": self.allow_fallback,
+            "target_holes_policy": self.target_holes_policy,
             "initial_branch_mode": self.initial_branch_mode,
             "initial_branch_rng_used": self.initial_branch_rng_used,
             "authority": self.authority,
