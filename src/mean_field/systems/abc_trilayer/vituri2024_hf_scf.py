@@ -29,7 +29,7 @@ This establishes neither author-exact source data nor paper/production TDHF.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 from hashlib import sha256
 import json
 import math
@@ -76,7 +76,7 @@ SeedMode = Literal[
     "random_projector",
 ]
 
-VITURI2024_HF_SCF_API_VERSION: Final[str] = "vituri2024_homogeneous_hf_scf.v1"
+VITURI2024_HF_SCF_API_VERSION: Final[str] = "vituri2024_homogeneous_hf_scf.v2"
 VITURI2024_HF_SCF_AUTHORITY: Final[str] = (
     "independent_homogeneous_reproduction_choice_not_author_source_"
     "incommensurate_phase_production_tdhf_or_paper_reproduction"
@@ -167,11 +167,8 @@ class Vituri2024CartesianHFSpec:
         if size < 3 or size % 2 != 1:
             raise ValueError("mesh_size must be an odd integer >=3")
         nk = size * size
-        if holes_per_valley < 1 or 2 * holes_per_valley > nk:
-            raise ValueError(
-                "holes_per_valley is incompatible with all registered rank-one "
-                "half-metal/IVC seed capacities (requires 2*H_v<=Nk)"
-            )
+        if holes_per_valley < 1 or holes_per_valley > nk:
+            raise ValueError("holes_per_valley must satisfy 1<=H_v<=Nk")
         density_cm2 = _finite_real(
             self.total_hole_density_cm2, "total_hole_density_cm2", positive=True
         )
@@ -251,7 +248,7 @@ class Vituri2024CartesianHFSpec:
             self.mesh_size % 2 == 1,
             type(self.holes_per_valley) is int,
             self.holes_per_valley >= 1,
-            2 * self.holes_per_valley <= self.mesh_size * self.mesh_size,
+            self.holes_per_valley <= self.mesh_size * self.mesh_size,
             self.total_holes == 2 * self.holes_per_valley,
             self.total_electrons
             == 4 * self.mesh_size * self.mesh_size - self.total_holes,
@@ -534,6 +531,541 @@ class Vituri2024HFSeedRun:
 
         return self.final_independent_model_energy_ev
 
+
+@dataclass(frozen=True, slots=True)
+class Vituri2024InitialFockBoundaryScanChoice:
+    """Branch-conditioned finite-volume Aufbau-boundary scan choices.
+
+    This is deliberately restricted to the deterministic ``sz+`` branch used
+    by the independent homogeneous candidate. A closed boundary here is not a
+    geometric shell and has no model-independent or paper-source authority.
+    """
+
+    mesh_size: int
+    target_holes_per_valley: int
+    scan_min_holes_per_valley: int
+    scan_max_holes_per_valley: int
+    total_hole_density_cm2: float = VITURI2024_TOTAL_HOLE_DENSITY_CM2
+    delta1_ev: float = VITURI2024_DELTA1_EV
+    gate_distance_angstrom: float = VITURI2024_GATE_DISTANCE_ANGSTROM
+    coulomb_e2_ev_angstrom: float = VITURI2024_COULOMB_E2_EV_ANGSTROM
+    precision: float = VITURI2024_DEFAULT_PRECISION
+    degeneracy_tolerance_ev: float = VITURI2024_DEFAULT_AUFBAU_GAP_TOLERANCE_EV
+    minimum_gap_to_eigensolver_residual_ratio: float = 1.0e6
+    allow_fallback: bool = False
+    target_axial_cutoff_a0: float = field(init=False)
+    initial_branch_mode: Literal["half_metal_sz_plus"] = field(
+        default="half_metal_sz_plus", init=False
+    )
+    initial_branch_rng_used: bool = field(default=False, init=False)
+    fingerprint: str = field(init=False)
+    authority: str = field(default=VITURI2024_HF_SCF_AUTHORITY, init=False)
+    finite_domain_cutoff_converged: bool = field(default=False, init=False)
+    global_ground_state_proved: bool = field(default=False, init=False)
+    production_ready: bool = field(default=False, init=False)
+    paper_reproduction_verified: bool = field(default=False, init=False)
+
+    def __post_init__(self) -> None:
+        mesh_size = _strict_int(self.mesh_size, "mesh_size")
+        target = _strict_int(
+            self.target_holes_per_valley, "target_holes_per_valley"
+        )
+        minimum = _strict_int(
+            self.scan_min_holes_per_valley, "scan_min_holes_per_valley"
+        )
+        maximum = _strict_int(
+            self.scan_max_holes_per_valley, "scan_max_holes_per_valley"
+        )
+        if mesh_size < 3 or mesh_size % 2 != 1:
+            raise ValueError("mesh_size must be an odd integer >=3")
+        if minimum < 1 or minimum > target or target > maximum:
+            raise ValueError("boundary scan must satisfy 1<=min<=target<=max")
+        if maximum > mesh_size * mesh_size:
+            raise ValueError("boundary scan exceeds the declared branch capacity")
+        if type(self.allow_fallback) is not bool:
+            raise TypeError("allow_fallback must be native bool")
+        object.__setattr__(self, "mesh_size", mesh_size)
+        object.__setattr__(self, "target_holes_per_valley", target)
+        object.__setattr__(self, "scan_min_holes_per_valley", minimum)
+        object.__setattr__(self, "scan_max_holes_per_valley", maximum)
+        for name in (
+            "total_hole_density_cm2",
+            "gate_distance_angstrom",
+            "coulomb_e2_ev_angstrom",
+            "precision",
+            "degeneracy_tolerance_ev",
+            "minimum_gap_to_eigensolver_residual_ratio",
+        ):
+            object.__setattr__(
+                self, name, _finite_real(getattr(self, name), name, positive=True)
+            )
+        object.__setattr__(
+            self, "delta1_ev", _finite_real(self.delta1_ev, "delta1_ev")
+        )
+        if self.minimum_gap_to_eigensolver_residual_ratio < 1.0:
+            raise ValueError(
+                "minimum_gap_to_eigensolver_residual_ratio must be >=1"
+            )
+        target_spec = Vituri2024CartesianHFSpec(
+            mesh_size=mesh_size,
+            holes_per_valley=target,
+            total_hole_density_cm2=self.total_hole_density_cm2,
+            delta1_ev=self.delta1_ev,
+            gate_distance_angstrom=self.gate_distance_angstrom,
+            coulomb_e2_ev_angstrom=self.coulomb_e2_ev_angstrom,
+            precision=self.precision,
+        )
+        object.__setattr__(
+            self, "target_axial_cutoff_a0", target_spec.axial_k_cutoff_a0
+        )
+        object.__setattr__(self, "fingerprint", self._current_fingerprint())
+
+    def _current_fingerprint(self) -> str:
+        payload = {
+            "api_version": VITURI2024_HF_SCF_API_VERSION,
+            "mesh_size": self.mesh_size,
+            "target_holes_per_valley": self.target_holes_per_valley,
+            "scan_min_holes_per_valley": self.scan_min_holes_per_valley,
+            "scan_max_holes_per_valley": self.scan_max_holes_per_valley,
+            "target_axial_cutoff_a0": self.target_axial_cutoff_a0,
+            "total_hole_density_cm2": self.total_hole_density_cm2,
+            "delta1_ev": self.delta1_ev,
+            "gate_distance_angstrom": self.gate_distance_angstrom,
+            "coulomb_e2_ev_angstrom": self.coulomb_e2_ev_angstrom,
+            "precision": self.precision,
+            "degeneracy_tolerance_ev": self.degeneracy_tolerance_ev,
+            "minimum_gap_to_eigensolver_residual_ratio": (
+                self.minimum_gap_to_eigensolver_residual_ratio
+            ),
+            "allow_fallback": self.allow_fallback,
+            "initial_branch_mode": self.initial_branch_mode,
+            "initial_branch_rng_used": self.initial_branch_rng_used,
+            "authority": self.authority,
+        }
+        return sha256(
+            json.dumps(
+                payload, sort_keys=True, separators=(",", ":"), allow_nan=False
+            ).encode()
+        ).hexdigest()
+
+    def validate_live_state(self) -> None:
+        if (
+            self.authority != VITURI2024_HF_SCF_AUTHORITY
+            or self.initial_branch_mode != "half_metal_sz_plus"
+            or self.initial_branch_rng_used is not False
+            or self._current_fingerprint() != self.fingerprint
+            or any(
+                (
+                    self.finite_domain_cutoff_converged,
+                    self.global_ground_state_proved,
+                    self.production_ready,
+                    self.paper_reproduction_verified,
+                )
+            )
+        ):
+            raise ValueError("initial-Fock boundary scan choice drifted")
+
+@dataclass(frozen=True, slots=True)
+class Vituri2024GlobalAufbauBoundaryAnalysis:
+    fock_shape: tuple[int, int, int]
+    total_occupied: int
+    boundary_gap_ev: float
+    fock_energy_scale_ev: float
+    fock_hermiticity_residual_ev: float
+    maximum_eigensolver_residual_ev: float
+    effective_eigensolver_residual_floor_ev: float
+    gap_to_effective_eigensolver_residual_ratio: float
+    shell_multiplicity: int
+    occupied_in_boundary_shell: int
+    degeneracy_tolerance_ev: float
+    minimum_gap_to_eigensolver_residual_ratio: float
+    closed_global_aufbau_boundary: bool
+
+    def __post_init__(self) -> None:
+        shape = tuple(_strict_int(value, "fock_shape") for value in self.fock_shape)
+        occupied = _strict_int(self.total_occupied, "total_occupied")
+        multiplicity = _strict_int(self.shell_multiplicity, "shell_multiplicity")
+        occupied_in_shell = _strict_int(
+            self.occupied_in_boundary_shell, "occupied_in_boundary_shell"
+        )
+        if (
+            len(shape) != 3
+            or shape[0] != shape[1]
+            or shape[0] < 1
+            or shape[2] < 1
+            or not 1 <= occupied < shape[0] * shape[2]
+        ):
+            raise ValueError("invalid global Aufbau analysis shape/rank")
+        if multiplicity < 1 or not 1 <= occupied_in_shell <= multiplicity:
+            raise ValueError("invalid global Aufbau boundary-shell counts")
+        if type(self.closed_global_aufbau_boundary) is not bool:
+            raise TypeError("closed global Aufbau boundary flag must be native bool")
+        object.__setattr__(self, "fock_shape", shape)
+        object.__setattr__(self, "total_occupied", occupied)
+        object.__setattr__(self, "shell_multiplicity", multiplicity)
+        object.__setattr__(self, "occupied_in_boundary_shell", occupied_in_shell)
+        nonnegative = (
+            "boundary_gap_ev",
+            "fock_hermiticity_residual_ev",
+            "maximum_eigensolver_residual_ev",
+            "gap_to_effective_eigensolver_residual_ratio",
+        )
+        for name in nonnegative:
+            value = _finite_real(getattr(self, name), name)
+            if value < 0.0:
+                raise ValueError(f"{name} must be nonnegative")
+            object.__setattr__(self, name, value)
+        for name in (
+            "fock_energy_scale_ev",
+            "effective_eigensolver_residual_floor_ev",
+            "degeneracy_tolerance_ev",
+            "minimum_gap_to_eigensolver_residual_ratio",
+        ):
+            object.__setattr__(
+                self, name, _finite_real(getattr(self, name), name, positive=True)
+            )
+        if self.minimum_gap_to_eigensolver_residual_ratio < 1.0:
+            raise ValueError(
+                "minimum_gap_to_eigensolver_residual_ratio must be >=1"
+            )
+        expected_floor = max(
+            self.maximum_eigensolver_residual_ev,
+            float(np.finfo(np.float64).eps) * self.fock_energy_scale_ev,
+        )
+        expected_ratio = self.boundary_gap_ev / expected_floor
+        expected_closed = bool(
+            self.boundary_gap_ev > self.degeneracy_tolerance_ev
+            and self.boundary_gap_ev
+            > self.minimum_gap_to_eigensolver_residual_ratio * expected_floor
+            and self.occupied_in_boundary_shell == self.shell_multiplicity
+        )
+        if (
+            self.fock_energy_scale_ev < 1.0
+            or self.effective_eigensolver_residual_floor_ev != expected_floor
+            or self.gap_to_effective_eigensolver_residual_ratio != expected_ratio
+            or self.closed_global_aufbau_boundary is not expected_closed
+        ):
+            raise ValueError("global Aufbau boundary analysis drifted")
+
+
+def analyze_vituri2024_global_aufbau_boundary(
+    fock: Array,
+    *,
+    total_occupied: int,
+    degeneracy_tolerance_ev: float = VITURI2024_DEFAULT_AUFBAU_GAP_TOLERANCE_EV,
+    minimum_gap_to_eigensolver_residual_ratio: float = 1.0e6,
+) -> Vituri2024GlobalAufbauBoundaryAnalysis:
+    """Analyze one global occupied/unoccupied boundary from block Fock matrices."""
+
+    matrix = np.asarray(fock, dtype=np.complex128)
+    if matrix.ndim != 3 or matrix.shape[0] != matrix.shape[1]:
+        raise ValueError("Fock input must have shape (n,n,Nk)")
+    occupied = _strict_int(total_occupied, "total_occupied")
+    if not 1 <= occupied < matrix.shape[0] * matrix.shape[2]:
+        raise ValueError("total_occupied must leave nonempty occupied/unoccupied sets")
+    tolerance = _finite_real(
+        degeneracy_tolerance_ev, "degeneracy_tolerance_ev", positive=True
+    )
+    minimum_ratio = _finite_real(
+        minimum_gap_to_eigensolver_residual_ratio,
+        "minimum_gap_to_eigensolver_residual_ratio",
+        positive=True,
+    )
+    if minimum_ratio < 1.0:
+        raise ValueError("minimum_gap_to_eigensolver_residual_ratio must be >=1")
+    if not np.all(np.isfinite(matrix)):
+        raise ValueError("Fock input must be finite")
+    fock_scale = max(1.0, _max_abs(matrix))
+    hermiticity = _max_abs(matrix - matrix.swapaxes(0, 1).conj())
+    if hermiticity > 1.0e-12 * fock_scale:
+        raise ValueError("Fock input is materially non-Hermitian")
+    eigenvalues = np.empty((matrix.shape[0], matrix.shape[2]), dtype=np.float64)
+    maximum_residual = 0.0
+    for momentum in range(matrix.shape[2]):
+        values, vectors = np.linalg.eigh(matrix[:, :, momentum])
+        eigenvalues[:, momentum] = values
+        residual_vectors = matrix[:, :, momentum] @ vectors - vectors * values
+        maximum_residual = max(
+            maximum_residual,
+            float(np.max(np.linalg.norm(residual_vectors, axis=0))),
+        )
+    sorted_energies = np.sort(eigenvalues.reshape(-1, order="C"))
+    lower = float(sorted_energies[occupied - 1])
+    upper = float(sorted_energies[occupied])
+    gap = upper - lower
+    shell_multiplicity = int(
+        np.count_nonzero(np.abs(sorted_energies - lower) <= tolerance)
+    )
+    strictly_below = int(np.count_nonzero(sorted_energies < lower - tolerance))
+    occupied_in_shell = occupied - strictly_below
+    effective_floor = max(
+        maximum_residual,
+        float(np.finfo(np.float64).eps) * fock_scale,
+    )
+    ratio = gap / effective_floor
+    closed = bool(
+        gap > tolerance
+        and gap > minimum_ratio * effective_floor
+        and occupied_in_shell == shell_multiplicity
+    )
+    return Vituri2024GlobalAufbauBoundaryAnalysis(
+        fock_shape=matrix.shape,
+        total_occupied=occupied,
+        boundary_gap_ev=gap,
+        fock_energy_scale_ev=fock_scale,
+        fock_hermiticity_residual_ev=hermiticity,
+        maximum_eigensolver_residual_ev=maximum_residual,
+        effective_eigensolver_residual_floor_ev=effective_floor,
+        gap_to_effective_eigensolver_residual_ratio=ratio,
+        shell_multiplicity=shell_multiplicity,
+        occupied_in_boundary_shell=occupied_in_shell,
+        degeneracy_tolerance_ev=tolerance,
+        minimum_gap_to_eigensolver_residual_ratio=minimum_ratio,
+        closed_global_aufbau_boundary=closed,
+    )
+
+@dataclass(frozen=True, slots=True)
+class Vituri2024InitialFockBoundaryRecord:
+    holes_per_valley: int
+    analysis: Vituri2024GlobalAufbauBoundaryAnalysis
+    area_angstrom_squared: float
+    delta_k_inverse_angstrom: float
+    axial_cutoff_a0: float
+    spec_fingerprint: str
+    initial_density_sha256: str
+    initial_fock_sha256: str
+    initial_branch_mode: Literal["half_metal_sz_plus"] = field(
+        default="half_metal_sz_plus", init=False
+    )
+    initial_branch_rng_used: bool = field(default=False, init=False)
+    authority: str = field(default=VITURI2024_HF_SCF_AUTHORITY, init=False)
+    scf_stationarity_established: bool = field(default=False, init=False)
+    finite_domain_cutoff_converged: bool = field(default=False, init=False)
+    production_ready: bool = field(default=False, init=False)
+    paper_reproduction_verified: bool = field(default=False, init=False)
+
+    def __post_init__(self) -> None:
+        holes = _strict_int(self.holes_per_valley, "holes_per_valley")
+        if holes < 1 or type(self.analysis) is not Vituri2024GlobalAufbauBoundaryAnalysis:
+            raise ValueError("invalid initial-Fock boundary record")
+        object.__setattr__(self, "holes_per_valley", holes)
+        for name in (
+            "area_angstrom_squared",
+            "delta_k_inverse_angstrom",
+            "axial_cutoff_a0",
+        ):
+            object.__setattr__(
+                self, name, _finite_real(getattr(self, name), name, positive=True)
+            )
+        for name in (
+            "spec_fingerprint",
+            "initial_density_sha256",
+            "initial_fock_sha256",
+        ):
+            value = getattr(self, name)
+            if (
+                not isinstance(value, str)
+                or len(value) != 64
+                or any(character not in "0123456789abcdef" for character in value)
+            ):
+                raise ValueError(f"{name} must be a lowercase SHA-256 digest")
+        if (
+            self.initial_branch_mode != "half_metal_sz_plus"
+            or self.initial_branch_rng_used is not False
+            or self.authority != VITURI2024_HF_SCF_AUTHORITY
+            or any(
+                (
+                    self.scf_stationarity_established,
+                    self.finite_domain_cutoff_converged,
+                    self.production_ready,
+                    self.paper_reproduction_verified,
+                )
+            )
+        ):
+            raise ValueError("initial-Fock boundary record authority was inflated")
+
+@dataclass(frozen=True, slots=True)
+class Vituri2024InitialFockBoundarySelection:
+    choice: Vituri2024InitialFockBoundaryScanChoice
+    records: tuple[Vituri2024InitialFockBoundaryRecord, ...]
+    selected: Vituri2024InitialFockBoundaryRecord
+    target_record: Vituri2024InitialFockBoundaryRecord
+    target_admitted: bool
+    fallback_used: bool
+    selection_key: tuple[float, float, float, int]
+    binding_fingerprint: str
+    authority: str = field(default=VITURI2024_HF_SCF_AUTHORITY, init=False)
+    branch_conditioned_regulator_admission_only: bool = field(
+        default=True, init=False
+    )
+    scf_stationarity_established: bool = field(default=False, init=False)
+    finite_domain_cutoff_converged: bool = field(default=False, init=False)
+    global_ground_state_proved: bool = field(default=False, init=False)
+    production_ready: bool = field(default=False, init=False)
+    paper_reproduction_verified: bool = field(default=False, init=False)
+
+    def __post_init__(self) -> None:
+        if type(self.choice) is not Vituri2024InitialFockBoundaryScanChoice:
+            raise TypeError("selection choice has the wrong exact type")
+        if type(self.records) is not tuple or any(
+            type(record) is not Vituri2024InitialFockBoundaryRecord
+            for record in self.records
+        ):
+            raise TypeError("selection records must be an exact tuple of records")
+        if (
+            type(self.selected) is not Vituri2024InitialFockBoundaryRecord
+            or type(self.target_record) is not Vituri2024InitialFockBoundaryRecord
+        ):
+            raise TypeError("selection selected/target record has the wrong exact type")
+        if type(self.target_admitted) is not bool or type(self.fallback_used) is not bool:
+            raise TypeError("selection target/fallback flags must be native bool")
+        self.choice.validate_live_state()
+        expected_holes = tuple(
+            range(
+                self.choice.scan_min_holes_per_valley,
+                self.choice.scan_max_holes_per_valley + 1,
+            )
+        )
+        if tuple(record.holes_per_valley for record in self.records) != expected_holes:
+            raise ValueError("initial-Fock boundary record inventory drifted")
+        for record in self.records:
+            spec = Vituri2024CartesianHFSpec(
+                mesh_size=self.choice.mesh_size,
+                holes_per_valley=record.holes_per_valley,
+                total_hole_density_cm2=self.choice.total_hole_density_cm2,
+                delta1_ev=self.choice.delta1_ev,
+                gate_distance_angstrom=self.choice.gate_distance_angstrom,
+                coulomb_e2_ev_angstrom=self.choice.coulomb_e2_ev_angstrom,
+                precision=self.choice.precision,
+            )
+            if (
+                record.initial_branch_mode != self.choice.initial_branch_mode
+                or record.initial_branch_rng_used is not False
+                or record.spec_fingerprint != spec.fingerprint
+                or record.area_angstrom_squared != spec.area_angstrom_squared
+                or record.delta_k_inverse_angstrom
+                != spec.delta_k_inverse_angstrom
+                or record.axial_cutoff_a0 != spec.axial_k_cutoff_a0
+                or record.analysis.fock_shape != (4, 4, spec.nk)
+                or record.analysis.total_occupied != spec.total_electrons
+                or record.analysis.degeneracy_tolerance_ev
+                != self.choice.degeneracy_tolerance_ev
+                or record.analysis.minimum_gap_to_eigensolver_residual_ratio
+                != self.choice.minimum_gap_to_eigensolver_residual_ratio
+            ):
+                raise ValueError("initial-Fock boundary record semantic drifted")
+        target_record = next(
+            record
+            for record in self.records
+            if record.holes_per_valley == self.choice.target_holes_per_valley
+        )
+        target_admitted = target_record.analysis.closed_global_aufbau_boundary
+        if self.target_record != target_record or self.target_admitted is not target_admitted:
+            raise ValueError("initial-Fock target admission receipt drifted")
+        candidates = tuple(
+            record
+            for record in self.records
+            if record.analysis.closed_global_aufbau_boundary
+        )
+        if not candidates:
+            raise ValueError("initial-Fock boundary scan has no admitted candidate")
+        fallback_used = self.selected.holes_per_valley != self.choice.target_holes_per_valley
+        if self.fallback_used is not fallback_used:
+            raise ValueError("initial-Fock fallback receipt drifted")
+        if fallback_used and not self.choice.allow_fallback:
+            raise ValueError("target boundary is not admitted and fallback is disabled")
+        expected = min(
+            candidates,
+            key=lambda record: _initial_fock_selection_key(self.choice, record),
+        )
+        if self.selected != expected:
+            raise ValueError("initial-Fock boundary selection drifted")
+        if self.selection_key != _initial_fock_selection_key(self.choice, expected):
+            raise ValueError("initial-Fock boundary selection key drifted")
+        if self.binding_fingerprint != _initial_fock_binding_fingerprint(
+            self.choice, self.records
+        ):
+            raise ValueError("initial-Fock boundary binding fingerprint drifted")
+        if (
+            self.authority != VITURI2024_HF_SCF_AUTHORITY
+            or self.branch_conditioned_regulator_admission_only is not True
+            or any(
+                (
+                    self.scf_stationarity_established,
+                    self.finite_domain_cutoff_converged,
+                    self.global_ground_state_proved,
+                    self.production_ready,
+                    self.paper_reproduction_verified,
+                )
+            )
+        ):
+            raise ValueError("initial-Fock boundary selection authority was inflated")
+
+    def validate_live_state(self, *, recompute_branch_bindings: bool = False) -> None:
+        """Validate receipts, optionally rebuilding every declared branch Fock."""
+
+        if type(recompute_branch_bindings) is not bool:
+            raise TypeError("recompute_branch_bindings must be native bool")
+        self.__post_init__()
+        if not recompute_branch_bindings:
+            return
+        for record in self.records:
+            spec = Vituri2024CartesianHFSpec(
+                mesh_size=self.choice.mesh_size,
+                holes_per_valley=record.holes_per_valley,
+                total_hole_density_cm2=self.choice.total_hole_density_cm2,
+                delta1_ev=self.choice.delta1_ev,
+                gate_distance_angstrom=self.choice.gate_distance_angstrom,
+                coulomb_e2_ev_angstrom=self.choice.coulomb_e2_ev_angstrom,
+                precision=self.choice.precision,
+            )
+            prepared = prepare_vituri2024_homogeneous_hf(spec)
+            problem = make_vituri2024_hf_problem(prepared)
+            state = make_vituri2024_hf_state(prepared)
+            problem.initializer(state, init_mode=self.choice.initial_branch_mode, seed=0)
+            fock = state.h0 + problem.kernel.interaction_builder(state.density)
+            analysis = analyze_vituri2024_global_aufbau_boundary(
+                fock,
+                total_occupied=spec.total_electrons,
+                degeneracy_tolerance_ev=self.choice.degeneracy_tolerance_ev,
+                minimum_gap_to_eigensolver_residual_ratio=(
+                    self.choice.minimum_gap_to_eigensolver_residual_ratio
+                ),
+            )
+            if (
+                record.initial_density_sha256 != _array_sha256(state.density)
+                or record.initial_fock_sha256 != _array_sha256(fock)
+                or record.analysis != analysis
+            ):
+                raise ValueError("initial-Fock branch/Fock live binding drifted")
+
+
+def _initial_fock_binding_fingerprint(
+    choice: Vituri2024InitialFockBoundaryScanChoice,
+    records: tuple[Vituri2024InitialFockBoundaryRecord, ...],
+) -> str:
+    payload = {
+        "api_version": VITURI2024_HF_SCF_API_VERSION,
+        "choice": choice.fingerprint,
+        "records": [asdict(record) for record in records],
+    }
+    return sha256(
+        json.dumps(
+            payload, sort_keys=True, separators=(",", ":"), allow_nan=False
+        ).encode()
+    ).hexdigest()
+
+
+def _initial_fock_selection_key(
+    choice: Vituri2024InitialFockBoundaryScanChoice,
+    record: Vituri2024InitialFockBoundaryRecord,
+) -> tuple[float, float, float, int]:
+    return (
+        float(abs(record.holes_per_valley - choice.target_holes_per_valley)),
+        abs(record.axial_cutoff_a0 - choice.target_axial_cutoff_a0),
+        -record.analysis.boundary_gap_ev,
+        record.holes_per_valley,
+    )
 
 def build_vituri2024_cartesian_mesh(spec: Vituri2024CartesianHFSpec) -> tuple[Array, Array]:
     if type(spec) is not Vituri2024CartesianHFSpec:
@@ -931,6 +1463,90 @@ def make_vituri2024_hf_state(
     )
 
 
+def scan_vituri2024_initial_fock_aufbau_boundaries(
+    choice: Vituri2024InitialFockBoundaryScanChoice,
+) -> Vituri2024InitialFockBoundarySelection:
+    """Select a nearby closed initial-Fock boundary for one declared branch.
+
+    Every candidate keeps the physical total hole density fixed. Changing
+    ``H_v`` changes the finite area, reciprocal spacing, UV subset, and
+    interaction normalization, so the result is regulator admission only and
+    must never be reported as cutoff convergence or a repair of another finite
+    system.
+    """
+
+    if type(choice) is not Vituri2024InitialFockBoundaryScanChoice:
+        raise TypeError("choice must be Vituri2024InitialFockBoundaryScanChoice")
+    choice.validate_live_state()
+    records: list[Vituri2024InitialFockBoundaryRecord] = []
+    for holes_per_valley in range(
+        choice.scan_min_holes_per_valley,
+        choice.scan_max_holes_per_valley + 1,
+    ):
+        spec = Vituri2024CartesianHFSpec(
+            mesh_size=choice.mesh_size,
+            holes_per_valley=holes_per_valley,
+            total_hole_density_cm2=choice.total_hole_density_cm2,
+            delta1_ev=choice.delta1_ev,
+            gate_distance_angstrom=choice.gate_distance_angstrom,
+            coulomb_e2_ev_angstrom=choice.coulomb_e2_ev_angstrom,
+            precision=choice.precision,
+        )
+        prepared = prepare_vituri2024_homogeneous_hf(spec)
+        problem = make_vituri2024_hf_problem(prepared)
+        state = make_vituri2024_hf_state(prepared)
+        problem.initializer(state, init_mode=choice.initial_branch_mode, seed=0)
+        fock = state.h0 + problem.kernel.interaction_builder(state.density)
+        analysis = analyze_vituri2024_global_aufbau_boundary(
+            fock,
+            total_occupied=spec.total_electrons,
+            degeneracy_tolerance_ev=choice.degeneracy_tolerance_ev,
+            minimum_gap_to_eigensolver_residual_ratio=(
+                choice.minimum_gap_to_eigensolver_residual_ratio
+            ),
+        )
+        records.append(
+            Vituri2024InitialFockBoundaryRecord(
+                holes_per_valley=holes_per_valley,
+                analysis=analysis,
+                area_angstrom_squared=spec.area_angstrom_squared,
+                delta_k_inverse_angstrom=spec.delta_k_inverse_angstrom,
+                axial_cutoff_a0=spec.axial_k_cutoff_a0,
+                spec_fingerprint=spec.fingerprint,
+                initial_density_sha256=_array_sha256(state.density),
+                initial_fock_sha256=_array_sha256(fock),
+            )
+        )
+    candidates = tuple(
+        record
+        for record in records
+        if record.analysis.closed_global_aufbau_boundary
+    )
+    if not candidates:
+        raise ValueError("initial-Fock boundary scan has no admitted candidate")
+    selected = min(
+        candidates,
+        key=lambda record: _initial_fock_selection_key(choice, record),
+    )
+    frozen_records = tuple(records)
+    target_record = next(
+        record
+        for record in frozen_records
+        if record.holes_per_valley == choice.target_holes_per_valley
+    )
+    return Vituri2024InitialFockBoundarySelection(
+        choice=choice,
+        records=frozen_records,
+        selected=selected,
+        target_record=target_record,
+        target_admitted=target_record.analysis.closed_global_aufbau_boundary,
+        fallback_used=(selected.holes_per_valley != choice.target_holes_per_valley),
+        selection_key=_initial_fock_selection_key(choice, selected),
+        binding_fingerprint=_initial_fock_binding_fingerprint(
+            choice, frozen_records
+        ),
+    )
+
 def diagnose_vituri2024_half_metal(
     prepared: Vituri2024PreparedHomogeneousHF,
     run: HartreeFockRun,
@@ -1116,12 +1732,18 @@ __all__ = [
     "Vituri2024FixedDensitySCFChoice",
     "Vituri2024HalfMetalDiagnostics",
     "Vituri2024HFSeedRun",
+    "Vituri2024GlobalAufbauBoundaryAnalysis",
+    "Vituri2024InitialFockBoundaryRecord",
+    "Vituri2024InitialFockBoundaryScanChoice",
+    "Vituri2024InitialFockBoundarySelection",
     "Vituri2024HFState",
     "Vituri2024PreparedHomogeneousHF",
+    "analyze_vituri2024_global_aufbau_boundary",
     "build_vituri2024_cartesian_mesh",
     "diagnose_vituri2024_half_metal",
     "make_vituri2024_hf_problem",
     "make_vituri2024_hf_state",
     "prepare_vituri2024_homogeneous_hf",
     "run_vituri2024_hf_seed",
+    "scan_vituri2024_initial_fock_aufbau_boundaries",
 ]

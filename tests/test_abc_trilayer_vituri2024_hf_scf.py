@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
@@ -15,11 +17,15 @@ from mean_field.systems.abc_trilayer.vituri2024_hf_scf import (
     VITURI2024_HF_SCF_AUTHORITY,
     VITURI2024_TOTAL_HOLE_DENSITY_CM2,
     Vituri2024CartesianHFSpec,
+    analyze_vituri2024_global_aufbau_boundary,
+    Vituri2024InitialFockBoundaryScanChoice,
+    Vituri2024InitialFockBoundarySelection,
     build_vituri2024_cartesian_mesh,
     make_vituri2024_hf_problem,
     make_vituri2024_hf_state,
     prepare_vituri2024_homogeneous_hf,
     run_vituri2024_hf_seed,
+    scan_vituri2024_initial_fock_aufbau_boundaries,
 )
 
 
@@ -49,6 +55,215 @@ def test_cartesian_spec_closes_density_area_spacing_and_exact_mesh() -> None:
     assert not mesh.flags.writeable
     assert spec.production_ready is False
     assert spec.paper_reproduction_verified is False
+
+
+def test_global_aufbau_boundary_analyzer_uses_global_rank_and_full_shell() -> None:
+    fock = np.zeros((2, 2, 2), dtype=np.complex128)
+    # Both occupied states are at k=0; a per-k rank-one policy is not equivalent.
+    fock[:, :, 0] = np.diag([0.0, 0.5])
+    fock[:, :, 1] = np.diag([2.0, 3.0])
+    analysis = analyze_vituri2024_global_aufbau_boundary(
+        fock,
+        total_occupied=2,
+        minimum_gap_to_eigensolver_residual_ratio=1.0e3,
+    )
+    assert analysis.boundary_gap_ev == 1.5
+    assert analysis.shell_multiplicity == 1
+    assert analysis.occupied_in_boundary_shell == 1
+    assert analysis.closed_global_aufbau_boundary
+    assert analysis.fock_energy_scale_ev == 3.0
+    assert analysis.effective_eigensolver_residual_floor_ev == pytest.approx(
+        np.finfo(np.float64).eps * 3.0
+    )
+    assert analysis.gap_to_effective_eigensolver_residual_ratio == pytest.approx(
+        1.5 / analysis.effective_eigensolver_residual_floor_ev
+    )
+
+    degenerate = fock.copy()
+    degenerate[:, :, 0] = np.diag([0.0, 1.0])
+    degenerate[:, :, 1] = np.diag([1.0, 3.0])
+    complete = analyze_vituri2024_global_aufbau_boundary(
+        degenerate,
+        total_occupied=3,
+        minimum_gap_to_eigensolver_residual_ratio=1.0e3,
+    )
+    assert complete.boundary_gap_ev == 2.0
+    assert complete.shell_multiplicity == 2
+    assert complete.occupied_in_boundary_shell == 2
+    assert complete.closed_global_aufbau_boundary
+    partial = analyze_vituri2024_global_aufbau_boundary(
+        degenerate,
+        total_occupied=2,
+        minimum_gap_to_eigensolver_residual_ratio=1.0e3,
+    )
+    assert partial.boundary_gap_ev == 0.0
+    assert partial.shell_multiplicity == 2
+    assert partial.occupied_in_boundary_shell == 1
+    assert not partial.closed_global_aufbau_boundary
+    with pytest.raises(ValueError, match="analysis drifted"):
+        replace(partial, closed_global_aufbau_boundary=True)
+
+
+def test_global_aufbau_boundary_uses_actual_residual_when_it_dominates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_eigh = hf_scf.np.linalg.eigh
+
+    def biased_eigh(matrix):
+        values, vectors = original_eigh(matrix)
+        values = values.copy()
+        values[0] += 1.0e-8
+        return values, vectors
+
+    monkeypatch.setattr(hf_scf.np.linalg, "eigh", biased_eigh)
+    fock = np.zeros((2, 2, 2), dtype=np.complex128)
+    rotation = np.asarray([[1.0, 1.0], [-1.0, 1.0]]) / np.sqrt(2.0)
+    fock[:, :, 0] = rotation @ np.diag([0.0, 0.5]) @ rotation.T
+    fock[:, :, 1] = np.diag([2.0, 3.0])
+    analysis = analyze_vituri2024_global_aufbau_boundary(
+        fock,
+        total_occupied=2,
+        minimum_gap_to_eigensolver_residual_ratio=1.0e3,
+    )
+    assert analysis.maximum_eigensolver_residual_ev == pytest.approx(1.0e-8)
+    assert analysis.effective_eigensolver_residual_floor_ev == pytest.approx(1.0e-8)
+    assert analysis.effective_eigensolver_residual_floor_ev > (
+        np.finfo(np.float64).eps * analysis.fock_energy_scale_ev
+    )
+    small_gap = fock.copy()
+    small_gap[:, :, 0] = np.diag([0.0, 5.0e-9])
+    below_floor = analyze_vituri2024_global_aufbau_boundary(
+        small_gap,
+        total_occupied=1,
+        minimum_gap_to_eigensolver_residual_ratio=1.0,
+    )
+    assert below_floor.boundary_gap_ev < (
+        below_floor.effective_eigensolver_residual_floor_ev
+    )
+    assert not below_floor.closed_global_aufbau_boundary
+    with pytest.raises(ValueError, match=">=1"):
+        analyze_vituri2024_global_aufbau_boundary(
+            fock,
+            total_occupied=2,
+            minimum_gap_to_eigensolver_residual_ratio=0.5,
+        )
+
+
+def test_initial_fock_boundary_scan_is_branch_conditioned_and_fail_closed() -> None:
+    target = Vituri2024CartesianHFSpec(mesh_size=3, holes_per_valley=2)
+    choice = Vituri2024InitialFockBoundaryScanChoice(
+        mesh_size=3,
+        target_holes_per_valley=2,
+        scan_min_holes_per_valley=1,
+        scan_max_holes_per_valley=4,
+    )
+    assert choice.target_axial_cutoff_a0 == target.axial_k_cutoff_a0
+    assert choice.initial_branch_rng_used is False
+    selection = scan_vituri2024_initial_fock_aufbau_boundaries(choice)
+    assert tuple(record.holes_per_valley for record in selection.records) == (1, 2, 3, 4)
+    assert selection.selected.holes_per_valley == 2
+    assert selection.target_record == selection.selected
+    assert selection.target_admitted is True
+    assert selection.fallback_used is False
+    assert selection.selected.analysis.closed_global_aufbau_boundary
+    assert selection.selected.initial_branch_mode == "half_metal_sz_plus"
+    assert selection.selected.initial_branch_rng_used is False
+    assert type(selection.selected.analysis.closed_global_aufbau_boundary) is bool
+    assert (
+        selection.selected.analysis.gap_to_effective_eigensolver_residual_ratio
+        >= 1.0e6
+    )
+    assert selection.selection_key == (
+        0.0,
+        0.0,
+        -selection.selected.analysis.boundary_gap_ev,
+        2,
+    )
+    assert selection.branch_conditioned_regulator_admission_only is True
+    assert selection.scf_stationarity_established is False
+    assert selection.finite_domain_cutoff_converged is False
+    assert selection.global_ground_state_proved is False
+    assert all(
+        record.spec_fingerprint
+        == Vituri2024CartesianHFSpec(
+            mesh_size=3, holes_per_valley=record.holes_per_valley
+        ).fingerprint
+        for record in selection.records
+    )
+    selection.validate_live_state(recompute_branch_bindings=True)
+    bad_records = list(selection.records)
+    bad_records[0] = replace(bad_records[0], initial_fock_sha256="0" * 64)
+    with pytest.raises(ValueError, match="binding fingerprint drifted"):
+        replace(selection, records=tuple(bad_records))
+    with pytest.raises(TypeError, match="exact tuple"):
+        replace(selection, records=list(selection.records))  # type: ignore[arg-type]
+
+
+def test_initial_fock_boundary_scan_rejects_live_drift_and_no_candidate() -> None:
+    with pytest.raises(ValueError, match=">=1"):
+        Vituri2024InitialFockBoundaryScanChoice(
+            mesh_size=3,
+            target_holes_per_valley=2,
+            scan_min_holes_per_valley=1,
+            scan_max_holes_per_valley=4,
+            minimum_gap_to_eigensolver_residual_ratio=0.5,
+        )
+    with pytest.raises(TypeError, match="unexpected keyword"):
+        Vituri2024InitialFockBoundaryScanChoice(
+            mesh_size=3,
+            target_holes_per_valley=2,
+            scan_min_holes_per_valley=1,
+            scan_max_holes_per_valley=4,
+            initial_branch_mode="half_metal_sx",  # type: ignore[call-arg]
+        )
+    choice = Vituri2024InitialFockBoundaryScanChoice(
+        mesh_size=3,
+        target_holes_per_valley=2,
+        scan_min_holes_per_valley=1,
+        scan_max_holes_per_valley=4,
+    )
+    object.__setattr__(choice, "target_axial_cutoff_a0", 0.3)
+    with pytest.raises(ValueError, match="choice drifted"):
+        scan_vituri2024_initial_fock_aufbau_boundaries(choice)
+    blocked_fallback = Vituri2024InitialFockBoundaryScanChoice(
+        mesh_size=3,
+        target_holes_per_valley=3,
+        scan_min_holes_per_valley=2,
+        scan_max_holes_per_valley=4,
+        minimum_gap_to_eigensolver_residual_ratio=5.0e13,
+    )
+    with pytest.raises(ValueError, match="fallback is disabled"):
+        scan_vituri2024_initial_fock_aufbau_boundaries(blocked_fallback)
+    fallback = Vituri2024InitialFockBoundaryScanChoice(
+        mesh_size=3,
+        target_holes_per_valley=3,
+        scan_min_holes_per_valley=2,
+        scan_max_holes_per_valley=4,
+        minimum_gap_to_eigensolver_residual_ratio=5.0e13,
+        allow_fallback=True,
+    )
+    fallback_selection = scan_vituri2024_initial_fock_aufbau_boundaries(fallback)
+    target_record = next(
+        record
+        for record in fallback_selection.records
+        if record.holes_per_valley == fallback.target_holes_per_valley
+    )
+    assert not target_record.analysis.closed_global_aufbau_boundary
+    assert fallback_selection.target_record == target_record
+    assert fallback_selection.target_admitted is False
+    assert fallback_selection.fallback_used is True
+    assert fallback_selection.selected.holes_per_valley in (2, 4)
+    assert fallback_selection.selected.analysis.closed_global_aufbau_boundary
+
+    impossible = Vituri2024InitialFockBoundaryScanChoice(
+        mesh_size=3,
+        target_holes_per_valley=2,
+        scan_min_holes_per_valley=1,
+        scan_max_holes_per_valley=4,
+        minimum_gap_to_eigensolver_residual_ratio=1.0e30,
+    )
+    with pytest.raises(ValueError, match="no admitted candidate"):
+        scan_vituri2024_initial_fock_aufbau_boundaries(impossible)
 
 
 def test_prepared_h0_and_functional_share_mesh_gauge_and_active_band() -> None:
@@ -208,7 +423,15 @@ def test_intervalley_coherence_diagnostic_cannot_cancel_between_momenta() -> Non
 def test_spec_rejects_nonphysical_integer_arithmetic() -> None:
     with pytest.raises(ValueError, match="odd integer"):
         Vituri2024CartesianHFSpec(mesh_size=4, holes_per_valley=1)
-    with pytest.raises(ValueError, match="incompatible"):
+    with pytest.raises(ValueError, match="1<=H_v<=Nk"):
+        Vituri2024CartesianHFSpec(mesh_size=3, holes_per_valley=10)
+    branch_specific = prepare_vituri2024_homogeneous_hf(
         Vituri2024CartesianHFSpec(mesh_size=3, holes_per_valley=5)
+    )
+    branch_problem = make_vituri2024_hf_problem(branch_specific)
+    branch_state = make_vituri2024_hf_state(branch_specific)
+    branch_problem.initializer(branch_state, init_mode="half_metal_sz_plus", seed=0)
+    with pytest.raises(ValueError, match="IVC seed cannot realize"):
+        branch_problem.initializer(branch_state, init_mode="ivc_x", seed=0)
     with pytest.raises(TypeError, match="integer"):
         Vituri2024CartesianHFSpec(mesh_size=True, holes_per_valley=1)
