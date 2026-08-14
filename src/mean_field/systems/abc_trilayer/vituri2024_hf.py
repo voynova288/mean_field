@@ -11,13 +11,22 @@ divided by the finite area exactly once.  Momentum is a literal finite-domain
 coordinate: there is no torus wrap, reciprocal carry, tolerance inclusion,
 averaging, or post-Hermitization.
 
-The specialization is an algebraic candidate for independent reproduction.  It
-includes the analytic q=0 direct term only to remain exactly comparable with
-the existing full oracle; it is not yet an authorized physical Hartree
-background.  Consequently it must not be used for branch-energy comparison or
-SCF before a separate fixed-density background choice is derived and tested.
-It does not establish the paper's missing UV domain, gate distance, q=0 Hartree
-background, SCF branch, production result, or paper reproduction.
+The specialization is an algebraic candidate for independent reproduction.
+The printed HF equation retains the finite dual-gate zero-transfer direct term
+and does not display a neutralizing-background subtraction.  After deriving
+the direct contraction from the correctly printed projected quartic operator
+(rather than the HF equation's malformed repeated ``ii`` index), that term is
+a common identity at fixed particle rank.  The separate printed
+``Delta mu * N`` term is also a common identity.  Within the same fixed-area,
+fixed-reference, fixed-kernel functional, neither term changes fixed-rank SCF
+projectors, same-rank branch ordering, or a number-conserving TDHF Hessian.
+This source silence does not establish an author no-background convention.
+The analytic kernel formula is paper-derived, while the numerical gate
+distance, the e-squared unit realization, and its executable zero-transfer
+retention remain explicit non-paper choices.  They give no absolute-energy,
+chemical-potential, or cross-rank authority.  The module also does not
+establish compressibility, UV/domain convergence, the author's SCF branch,
+production readiness, or paper numerical reproduction.
 """
 
 from __future__ import annotations
