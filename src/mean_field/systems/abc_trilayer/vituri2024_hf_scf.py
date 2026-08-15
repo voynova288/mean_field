@@ -31,6 +31,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field, replace
 from hashlib import sha256
+from itertools import combinations
 import json
 import math
 from numbers import Real
@@ -43,7 +44,9 @@ from mean_field.core.hf import (
     HartreeFockKernel,
     HartreeFockProblem,
     HartreeFockRun,
-    run_hartree_fock_problem,
+    StateBoundPreviousDensityBuilder,
+ run_hartree_fock_problem,
+ select_maximum_overlap_rank_projector,
 )
 
 from .vituri2024 import (
@@ -77,6 +80,9 @@ SeedMode = Literal[
 ]
 
 VITURI2024_HF_SCF_API_VERSION: Final[str] = "vituri2024_homogeneous_hf_scf.v3"
+VITURI2024_MAXIMUM_OVERLAP_AUFBAU_API_VERSION: Final[str] = (
+ "vituri2024_maximum_overlap_aufbau.v1"
+)
 VITURI2024_HF_SCF_AUTHORITY: Final[str] = (
     "independent_homogeneous_reproduction_choice_not_author_source_"
     "incommensurate_phase_production_tdhf_or_paper_reproduction"
@@ -485,6 +491,252 @@ class Vituri2024FixedDensitySCFChoice:
         self._validate_fields()
         if self._current_fingerprint() != self.fingerprint:
             raise ValueError("fixed-density SCF choice fingerprint drifted")
+
+
+@dataclass(frozen=True, slots=True)
+class Vituri2024ExplicitShellBranchChoice:
+ """One coordinate branch in an exhaustively declared exact shell fanout."""
+
+ trigger_fock_sha256: str
+ trigger_previous_density_sha256: str
+ expected_shell_flat_indices: tuple[int, ...]
+ selected_shell_flat_indices: tuple[int, ...]
+ branch_index: int
+ branch_count: int
+ coordinate_branch_only: bool = True
+ author_exact_numerical_policy: bool = False
+ branch_set_fingerprint: str = field(init=False)
+ fingerprint: str = field(init=False)
+
+ def __post_init__(self) -> None:
+  for value, label in (
+   (self.trigger_fock_sha256, "trigger_fock_sha256"),
+   (self.trigger_previous_density_sha256, "trigger_previous_density_sha256"),
+  ):
+   if not isinstance(value, str) or len(value) != 64 or any(
+    character not in "0123456789abcdef" for character in value
+   ):
+    raise ValueError(f"{label} must be a lowercase SHA256 digest")
+  if type(self.expected_shell_flat_indices) is not tuple or type(
+   self.selected_shell_flat_indices
+  ) is not tuple:
+   raise TypeError("shell branch indices must be exact tuples")
+  shell = tuple(
+   _strict_int(value, "expected shell flat index")
+   for value in self.expected_shell_flat_indices
+  )
+  selected = tuple(
+   _strict_int(value, "selected shell flat index")
+   for value in self.selected_shell_flat_indices
+  )
+  if shell != tuple(sorted(set(shell))) or selected != tuple(
+   sorted(set(selected))
+  ):
+   raise ValueError("shell branch indices must be sorted and unique")
+  if not shell or not selected or len(selected) >= len(shell):
+   raise ValueError("explicit shell branch must be a proper nonempty subset")
+  if not set(selected).issubset(shell):
+   raise ValueError("selected shell branch is outside the expected shell")
+  branch_index = _strict_int(self.branch_index, "branch_index")
+  branch_count = _strict_int(self.branch_count, "branch_count")
+  if branch_count < 1 or branch_count > 64 or not 0 <= branch_index < branch_count:
+   raise ValueError("invalid branch index/count")
+  expected_branch_count = math.comb(len(shell), len(selected))
+  if branch_count != expected_branch_count:
+   raise ValueError("branch count does not exhaust the coordinate shell fanout")
+  canonical_branches = tuple(combinations(shell, len(selected)))
+  if selected != tuple(canonical_branches[branch_index]):
+   raise ValueError("branch index does not match the canonical shell combination")
+  if self.coordinate_branch_only is not True:
+   raise ValueError("only coordinate shell branches are implemented")
+  if self.author_exact_numerical_policy is not False:
+   raise ValueError("author-exact shell branch policy is not established")
+  branch_set_payload = {
+   "trigger_fock_sha256": self.trigger_fock_sha256,
+   "trigger_previous_density_sha256": (
+    self.trigger_previous_density_sha256
+   ),
+   "expected_shell_flat_indices": shell,
+   "selected_rank": len(selected),
+   "branch_count": branch_count,
+   "coordinate_branch_only": self.coordinate_branch_only,
+  }
+  branch_set_fingerprint = sha256(
+   json.dumps(
+    branch_set_payload,
+    sort_keys=True,
+    separators=(",", ":"),
+    allow_nan=False,
+   ).encode()
+  ).hexdigest()
+  payload = {
+   "branch_set_fingerprint": branch_set_fingerprint,
+   "trigger_fock_sha256": self.trigger_fock_sha256,
+   "trigger_previous_density_sha256": (
+    self.trigger_previous_density_sha256
+   ),
+   "expected_shell_flat_indices": shell,
+   "selected_shell_flat_indices": selected,
+   "branch_index": branch_index,
+   "branch_count": branch_count,
+   "coordinate_branch_only": self.coordinate_branch_only,
+   "author_exact_numerical_policy": self.author_exact_numerical_policy,
+  }
+  object.__setattr__(self, "expected_shell_flat_indices", shell)
+  object.__setattr__(self, "selected_shell_flat_indices", selected)
+  object.__setattr__(self, "branch_set_fingerprint", branch_set_fingerprint)
+  object.__setattr__(
+   self,
+   "fingerprint",
+   sha256(
+    json.dumps(
+     payload,
+     sort_keys=True,
+     separators=(",", ":"),
+     allow_nan=False,
+    ).encode()
+   ).hexdigest(),
+  )
+
+ def validate_live_state(self) -> None:
+  expected = Vituri2024ExplicitShellBranchChoice(
+   trigger_fock_sha256=self.trigger_fock_sha256,
+   trigger_previous_density_sha256=self.trigger_previous_density_sha256,
+   expected_shell_flat_indices=self.expected_shell_flat_indices,
+   selected_shell_flat_indices=self.selected_shell_flat_indices,
+   branch_index=self.branch_index,
+   branch_count=self.branch_count,
+   coordinate_branch_only=self.coordinate_branch_only,
+   author_exact_numerical_policy=self.author_exact_numerical_policy,
+  )
+  if expected.fingerprint != self.fingerprint:
+   raise ValueError("explicit shell branch fingerprint drifted")
+
+
+def make_vituri2024_explicit_shell_branch_choices(
+ *,
+ trigger_fock_sha256: str,
+ trigger_previous_density_sha256: str,
+ shell_flat_indices: tuple[int, ...],
+ selected_rank: int,
+ maximum_branch_count: int = 64,
+) -> tuple[Vituri2024ExplicitShellBranchChoice, ...]:
+ """Enumerate all coordinate pure branches for one declared shell."""
+
+ shell = tuple(
+  sorted(
+   _strict_int(value, "shell flat index") for value in shell_flat_indices
+  )
+ )
+ if len(set(shell)) != len(shell) or not shell:
+  raise ValueError("shell_flat_indices must be nonempty and unique")
+ rank = _strict_int(selected_rank, "selected_rank")
+ if not 0 < rank < len(shell):
+  raise ValueError("selected_rank must be inside the shell")
+ limit = _strict_int(maximum_branch_count, "maximum_branch_count")
+ if limit < 1 or limit > 64:
+  raise ValueError("maximum_branch_count must be in [1, 64]")
+ count = math.comb(len(shell), rank)
+ if count > limit:
+  raise ValueError("coordinate shell branch count exceeds the declared limit")
+ candidates = tuple(combinations(shell, rank))
+ return tuple(
+  Vituri2024ExplicitShellBranchChoice(
+   trigger_fock_sha256=trigger_fock_sha256,
+   trigger_previous_density_sha256=trigger_previous_density_sha256,
+   expected_shell_flat_indices=shell,
+   selected_shell_flat_indices=tuple(selected),
+   branch_index=index,
+   branch_count=count,
+  )
+  for index, selected in enumerate(candidates)
+ )
+
+
+@dataclass(frozen=True, slots=True)
+class Vituri2024MaximumOverlapAufbauChoice:
+ """Independent ODA-compatible policy for a set-valued Fock ground state.
+
+ Only an exactly equal-energy shell may use maximum-overlap continuation.
+ A tied overlap cutoff remains unresolved unless one exact-triggered member of
+ an exhaustively declared coordinate branch fanout is supplied. Stable orbital
+ ordering is never used as a physical branch selector.
+ """
+
+ energy_shell_tolerance_ev: float = VITURI2024_DEFAULT_AUFBAU_GAP_TOLERANCE_EV
+ overlap_gap_tolerance: float = 1.0e-12
+ previous_density_role: str = "current_oda_mixed_density"
+ unresolved_overlap_policy: str = "reject_no_arbitrary_branch"
+ explicit_branch: Vituri2024ExplicitShellBranchChoice | None = None
+ exact_energy_tie_required: bool = True
+ author_exact_numerical_policy: bool = False
+ fingerprint: str = field(init=False)
+
+ def __post_init__(self) -> None:
+  energy_tolerance = _finite_real(
+   self.energy_shell_tolerance_ev,
+   "energy_shell_tolerance_ev",
+   positive=True,
+  )
+  overlap_tolerance = _finite_real(
+   self.overlap_gap_tolerance,
+   "overlap_gap_tolerance",
+   positive=True,
+  )
+  if energy_tolerance != VITURI2024_DEFAULT_AUFBAU_GAP_TOLERANCE_EV:
+   raise ValueError("energy shell tolerance is locked to the baseline Aufbau gate")
+  if self.previous_density_role != "current_oda_mixed_density":
+   raise ValueError("unsupported previous-density role")
+  if self.explicit_branch is None:
+   if self.unresolved_overlap_policy != "reject_no_arbitrary_branch":
+    raise ValueError("unsupported unresolved-overlap policy")
+   branch_fingerprint = None
+  else:
+   if type(self.explicit_branch) is not Vituri2024ExplicitShellBranchChoice:
+    raise TypeError("explicit_branch must be a typed shell branch choice")
+   self.explicit_branch.validate_live_state()
+   if self.unresolved_overlap_policy != "exact_triggered_coordinate_branch":
+    raise ValueError("explicit branch requires exact-triggered branch policy")
+   branch_fingerprint = self.explicit_branch.fingerprint
+  if self.exact_energy_tie_required is not True:
+   raise ValueError("only exact energy ties are authorized")
+  if self.author_exact_numerical_policy is not False:
+   raise ValueError("author-exact tie policy is not established")
+  payload = {
+   "api_version": VITURI2024_MAXIMUM_OVERLAP_AUFBAU_API_VERSION,
+   "energy_shell_tolerance_ev": energy_tolerance,
+   "overlap_gap_tolerance": overlap_tolerance,
+   "previous_density_role": self.previous_density_role,
+   "unresolved_overlap_policy": self.unresolved_overlap_policy,
+   "explicit_branch_fingerprint": branch_fingerprint,
+   "exact_energy_tie_required": self.exact_energy_tie_required,
+   "author_exact_numerical_policy": self.author_exact_numerical_policy,
+  }
+  object.__setattr__(
+   self,
+   "fingerprint",
+   sha256(
+    json.dumps(
+     payload,
+     sort_keys=True,
+     separators=(",", ":"),
+     allow_nan=False,
+    ).encode()
+   ).hexdigest(),
+  )
+
+ def validate_live_state(self) -> None:
+  expected = Vituri2024MaximumOverlapAufbauChoice(
+   energy_shell_tolerance_ev=self.energy_shell_tolerance_ev,
+   overlap_gap_tolerance=self.overlap_gap_tolerance,
+   previous_density_role=self.previous_density_role,
+   unresolved_overlap_policy=self.unresolved_overlap_policy,
+   explicit_branch=self.explicit_branch,
+   exact_energy_tie_required=self.exact_energy_tie_required,
+   author_exact_numerical_policy=self.author_exact_numerical_policy,
+  )
+  if expected.fingerprint != self.fingerprint:
+   raise ValueError("maximum-overlap Aufbau choice fingerprint drifted")
 
 
 @dataclass(frozen=True, slots=True)
@@ -1442,6 +1694,309 @@ def _density_update_builder(
     return build
 
 
+def _maximum_overlap_density_update_builder(
+ prepared: Vituri2024PreparedHomogeneousHF,
+ state: Vituri2024HFState,
+ choice: Vituri2024MaximumOverlapAufbauChoice,
+) -> StateBoundPreviousDensityBuilder:
+ """Build a history-aware fixed-rank ground-state map for exact Fock ties."""
+
+ choice.validate_live_state()
+ total_occupied = prepared.spec.total_electrons
+ ordinary_builder = _density_update_builder(prepared)
+
+ def build(
+  hamiltonian: Array,
+  previous_native_density: Array,
+ ) -> DensityUpdateResult:
+  matrix = np.asarray(hamiltonian, dtype=np.complex128)
+  previous_native = np.asarray(previous_native_density, dtype=np.complex128)
+  expected_shape = (4, 4, prepared.spec.nk)
+  if matrix.shape != expected_shape or previous_native.shape != expected_shape:
+   raise ValueError("Vituri maximum-overlap Aufbau shape mismatch")
+  if not np.all(np.isfinite(matrix)) or not np.all(np.isfinite(previous_native)):
+   raise ValueError("Vituri maximum-overlap inputs must be finite")
+  previous = vituri2024_native_density_to_conventional_k_diagonal(
+   previous_native
+  )
+  hermiticity = float(
+   np.max(np.abs(previous - previous.swapaxes(0, 1).conj()))
+  )
+  particle_number = float(
+   sum(
+    np.trace(previous[:, :, momentum]).real
+    for momentum in range(prepared.spec.nk)
+   )
+  )
+  if hermiticity > 1.0e-10:
+   raise ValueError("previous ODA density is materially non-Hermitian")
+  if abs(particle_number - total_occupied) > 1.0e-7:
+   raise ValueError("previous ODA density changed the exact particle number")
+  minimum_density_eigenvalue = float("inf")
+  maximum_density_eigenvalue = float("-inf")
+  for momentum in range(prepared.spec.nk):
+   density_eigenvalues = np.linalg.eigvalsh(previous[:, :, momentum])
+   minimum_density_eigenvalue = min(
+    minimum_density_eigenvalue,
+    float(density_eigenvalues[0]),
+   )
+   maximum_density_eigenvalue = max(
+    maximum_density_eigenvalue,
+    float(density_eigenvalues[-1]),
+   )
+  if minimum_density_eigenvalue < -1.0e-10 or maximum_density_eigenvalue > 1.0 + 1.0e-10:
+   raise ValueError("previous ODA density left the fermionic interval [0, 1]")
+
+  energies = np.empty((4, prepared.spec.nk), dtype=np.float64)
+  eigenvectors = np.empty(
+   (4, 4, prepared.spec.nk), dtype=np.complex128
+  )
+  for momentum in range(prepared.spec.nk):
+   values, vectors = np.linalg.eigh(matrix[:, :, momentum])
+   energies[:, momentum] = values
+   eigenvectors[:, :, momentum] = vectors
+  flat_energies = energies.reshape(-1, order="C")
+  order = np.argsort(flat_energies, kind="stable")
+  sorted_energies = flat_energies[order]
+  lower = float(sorted_energies[total_occupied - 1])
+  upper = float(sorted_energies[total_occupied])
+  gap = upper - lower
+  if gap > choice.energy_shell_tolerance_ev:
+   return ordinary_builder(matrix)
+  if choice.exact_energy_tie_required and gap != 0.0:
+   raise ValueError(
+    "Vituri boundary splitting is unresolved but not an exact energy tie"
+   )
+
+  shell_flat = np.flatnonzero(flat_energies == lower)
+  below_flat = np.flatnonzero(flat_energies < lower)
+  shell_rank = total_occupied - int(below_flat.size)
+  shell_dimension = int(shell_flat.size)
+  if not 0 < shell_rank < shell_dimension:
+   raise RuntimeError("exact boundary shell inventory is inconsistent")
+
+  overlap = np.zeros(
+   (shell_dimension, shell_dimension), dtype=np.complex128
+  )
+  shell_band = shell_flat // prepared.spec.nk
+  shell_momentum = shell_flat % prepared.spec.nk
+  for left in range(shell_dimension):
+   momentum = int(shell_momentum[left])
+   vector_left = eigenvectors[:, int(shell_band[left]), momentum]
+   for right in range(shell_dimension):
+    if int(shell_momentum[right]) != momentum:
+     continue
+    vector_right = eigenvectors[:, int(shell_band[right]), momentum]
+    overlap[left, right] = np.vdot(
+     vector_left,
+     previous[:, :, momentum] @ vector_right,
+    )
+  selection = select_maximum_overlap_rank_projector(
+   overlap,
+   shell_rank,
+   overlap_gap_tolerance=choice.overlap_gap_tolerance,
+  )
+  explicit_branch_used = False
+  explicit_branch_index = -1
+  if selection.unique and selection.coefficient_projector is not None:
+   coefficient_projector = selection.coefficient_projector
+  else:
+   branch = choice.explicit_branch
+   if branch is None:
+    raise ValueError(
+     "Vituri maximum-overlap boundary remains nonunique; "
+     "explicit broken-symmetry branch fanout is required"
+    )
+   branch.validate_live_state()
+   if _array_sha256(matrix) != branch.trigger_fock_sha256:
+    raise ValueError("explicit shell branch Fock trigger mismatch")
+   if _array_sha256(previous_native) != branch.trigger_previous_density_sha256:
+    raise ValueError("explicit shell branch previous-density trigger mismatch")
+   actual_shell = tuple(int(value) for value in shell_flat.tolist())
+   if actual_shell != branch.expected_shell_flat_indices:
+    raise ValueError("explicit shell branch inventory mismatch")
+   if len(branch.selected_shell_flat_indices) != shell_rank:
+    raise ValueError("explicit shell branch rank mismatch")
+   if len(set(int(value) for value in shell_momentum.tolist())) != shell_dimension:
+    raise ValueError(
+     "coordinate shell branch requires one shell state per momentum block"
+    )
+   positions_by_flat = {
+    int(flat_index): position
+    for position, flat_index in enumerate(shell_flat.tolist())
+   }
+   selected_positions = tuple(
+    positions_by_flat[int(flat_index)]
+    for flat_index in branch.selected_shell_flat_indices
+   )
+   coefficient_projector = np.zeros(
+    (shell_dimension, shell_dimension), dtype=np.complex128
+   )
+   coefficient_projector[selected_positions, selected_positions] = 1.0
+   branch_overlap = float(
+    np.trace(overlap @ coefficient_projector).real
+   )
+   if abs(branch_overlap - selection.maximum_overlap_value) > max(
+    choice.overlap_gap_tolerance,
+    64.0 * np.finfo(np.float64).eps * max(1.0, abs(branch_overlap)),
+   ):
+    raise ValueError("explicit shell branch is not a maximum-overlap minimizer")
+   explicit_branch_used = True
+   explicit_branch_index = branch.branch_index
+  same_momentum = shell_momentum[:, None] == shell_momentum[None, :]
+  cross_momentum_entries = coefficient_projector[~same_momentum]
+  cross_momentum_residual = (
+   0.0
+   if cross_momentum_entries.size == 0
+   else float(np.max(np.abs(cross_momentum_entries)))
+  )
+  if cross_momentum_residual > 1.0e-10:
+   raise ValueError(
+    "maximum-overlap selection left the translation-preserving ansatz"
+   )
+
+  conventional = np.zeros_like(matrix)
+  below_mask = np.zeros(flat_energies.size, dtype=np.bool_)
+  below_mask[below_flat] = True
+  below = below_mask.reshape(energies.shape, order="C")
+  for momentum in range(prepared.spec.nk):
+   weights = below[:, momentum].astype(np.float64)
+   vectors = eigenvectors[:, :, momentum]
+   conventional[:, :, momentum] = (vectors * weights) @ vectors.conj().T
+   positions = np.flatnonzero(shell_momentum == momentum)
+   if positions.size:
+    shell_vectors = eigenvectors[
+     :,
+     shell_band[positions],
+     momentum,
+    ]
+    local_projector = coefficient_projector[np.ix_(positions, positions)]
+    conventional[:, :, momentum] += (
+     shell_vectors @ local_projector @ shell_vectors.conj().T
+    )
+
+  projector_residual = 0.0
+  selected_particles = 0.0
+  for momentum in range(prepared.spec.nk):
+   block = conventional[:, :, momentum]
+   selected_particles += float(np.trace(block).real)
+   projector_residual = max(
+    projector_residual,
+    float(np.max(np.abs(block - block.conj().T))),
+    float(np.max(np.abs(block @ block - block))),
+   )
+  if abs(selected_particles - total_occupied) > 1.0e-7:
+   raise RuntimeError("maximum-overlap Aufbau rank drifted")
+  if projector_residual > 1.0e-10:
+   raise RuntimeError("maximum-overlap Aufbau projector invariants failed")
+  native = np.asarray(
+   conventional.swapaxes(0, 1), dtype=np.complex128
+  )
+  mu = 0.5 * (lower + upper)
+  return DensityUpdateResult(
+   density=native,
+   energies=energies,
+   mu=mu,
+   observables={
+    "finite_size_fermi_gap_ev": gap,
+    "occupied_count": selected_particles,
+    "degenerate_shell_multiplicity": float(shell_dimension),
+    "degenerate_shell_selected_rank": float(shell_rank),
+    "maximum_overlap_cutoff_gap": float(
+     selection.overlap_cutoff_gap
+    ),
+    "maximum_overlap_value": selection.maximum_overlap_value,
+    "maximum_overlap_cross_momentum_residual": cross_momentum_residual,
+    "explicit_coordinate_branch_used": float(explicit_branch_used),
+    "explicit_coordinate_branch_index": float(explicit_branch_index),
+   },
+  )
+
+ return StateBoundPreviousDensityBuilder(
+  state=state,
+  callback=build,
+  policy_fingerprint=choice.fingerprint,
+ )
+
+
+def make_vituri2024_hf_maximum_overlap_problem(
+ prepared: Vituri2024PreparedHomogeneousHF,
+ state: Vituri2024HFState,
+ choice: Vituri2024MaximumOverlapAufbauChoice | None = None,
+) -> HartreeFockProblem:
+ """Return an ODA-compatible problem with fail-closed exact-tie continuation.
+
+ This is an independent numerical realization. It does not implement the
+ paper's many-start branch fanout when the overlap tie is itself unresolved.
+ """
+
+ if type(prepared) is not Vituri2024PreparedHomogeneousHF:
+  raise TypeError("prepared must be Vituri2024PreparedHomogeneousHF")
+ if type(state) is not Vituri2024HFState:
+  raise TypeError("state must be Vituri2024HFState")
+ prepared.validate_live_state()
+ if state.h0.shape != prepared.h0_native.shape or not np.array_equal(
+  state.h0, prepared.h0_native
+ ):
+  raise ValueError("state is not bound to the prepared Vituri problem")
+ selected_choice = (
+  Vituri2024MaximumOverlapAufbauChoice() if choice is None else choice
+ )
+ if type(selected_choice) is not Vituri2024MaximumOverlapAufbauChoice:
+  raise TypeError("choice must be Vituri2024MaximumOverlapAufbauChoice")
+ selected_choice.validate_live_state()
+ baseline = make_vituri2024_hf_problem(prepared)
+ if baseline.kernel.step_callback is not None:
+  raise RuntimeError("baseline Vituri problem unexpectedly owns a step callback")
+
+ def bound_initializer(
+  target_state: Vituri2024HFState,
+  *,
+  init_mode: str,
+  seed: int,
+ ) -> None:
+  if target_state is not state:
+   raise ValueError("maximum-overlap problem was run with a different HF state")
+  baseline.initializer(target_state, init_mode=init_mode, seed=seed)
+
+ def branch_audit_callback(
+  target_state: Vituri2024HFState,
+  step: object,
+ ) -> None:
+  density_update = getattr(step, "density_update")
+  observables = density_update.observables
+  if float(observables.get("explicit_coordinate_branch_used", 0.0)) == 1.0:
+   if target_state.diagnostics.get("explicit_coordinate_branch_used", 0.0) == 1.0:
+    raise RuntimeError("explicit coordinate branch trigger was reused")
+   branch = selected_choice.explicit_branch
+   if branch is None:
+    raise RuntimeError("branch-use observable lacks a typed branch choice")
+   target_state.diagnostics["explicit_coordinate_branch_used"] = 1.0
+   target_state.diagnostics["explicit_coordinate_branch_index"] = float(
+    branch.branch_index
+   )
+   target_state.diagnostics["explicit_coordinate_branch_count"] = float(
+    branch.branch_count
+   )
+   target_state.diagnostics["explicit_coordinate_branch_iteration"] = float(
+    getattr(step, "iteration")
+   )
+
+ return replace(
+  baseline,
+  initializer=bound_initializer,
+  kernel=replace(
+   baseline.kernel,
+   density_builder=_maximum_overlap_density_update_builder(
+    prepared,
+    state,
+    selected_choice,
+   ),
+   step_callback=branch_audit_callback,
+  ),
+ )
+
+
 def _energy_from_engine_inputs(
     interaction_h: Array, h0: Array, native_density: Array
 ) -> float:
@@ -1762,22 +2317,27 @@ __all__ = [
     "VITURI2024_DELTA1_EV",
     "VITURI2024_GATE_DISTANCE_ANGSTROM",
     "VITURI2024_HF_SCF_API_VERSION",
+ "VITURI2024_MAXIMUM_OVERLAP_AUFBAU_API_VERSION",
     "VITURI2024_HF_SCF_AUTHORITY",
     "VITURI2024_TOTAL_HOLE_DENSITY_CM2",
     "Vituri2024CartesianHFSpec",
-    "Vituri2024FixedDensitySCFChoice",
+    "Vituri2024ExplicitShellBranchChoice",
+ "Vituri2024FixedDensitySCFChoice",
     "Vituri2024HalfMetalDiagnostics",
     "Vituri2024HFSeedRun",
     "Vituri2024GlobalAufbauBoundaryAnalysis",
     "Vituri2024InitialFockBoundaryRecord",
     "Vituri2024InitialFockBoundaryScanChoice",
     "Vituri2024InitialFockBoundarySelection",
+ "Vituri2024MaximumOverlapAufbauChoice",
     "Vituri2024HFState",
     "Vituri2024PreparedHomogeneousHF",
     "analyze_vituri2024_global_aufbau_boundary",
     "build_vituri2024_cartesian_mesh",
     "diagnose_vituri2024_half_metal",
-    "make_vituri2024_hf_problem",
+    "make_vituri2024_explicit_shell_branch_choices",
+ "make_vituri2024_hf_maximum_overlap_problem",
+ "make_vituri2024_hf_problem",
     "make_vituri2024_hf_state",
     "prepare_vituri2024_homogeneous_hf",
     "run_vituri2024_hf_seed",

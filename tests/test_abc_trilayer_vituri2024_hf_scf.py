@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
-from mean_field.core.hf import DensityUpdateResult
+from mean_field.core.hf import (
+    DensityUpdateResult,
+    StateBoundPreviousDensityBuilder,
+)
 from mean_field.systems.abc_trilayer.vituri2024_hf import (
     vituri2024_native_density_to_conventional_k_diagonal,
 )
@@ -20,7 +24,10 @@ from mean_field.systems.abc_trilayer.vituri2024_hf_scf import (
     analyze_vituri2024_global_aufbau_boundary,
     Vituri2024InitialFockBoundaryScanChoice,
     Vituri2024InitialFockBoundarySelection,
+    Vituri2024MaximumOverlapAufbauChoice,
     build_vituri2024_cartesian_mesh,
+    make_vituri2024_explicit_shell_branch_choices,
+    make_vituri2024_hf_maximum_overlap_problem,
     make_vituri2024_hf_problem,
     make_vituri2024_hf_state,
     prepare_vituri2024_homogeneous_hf,
@@ -354,6 +361,308 @@ def test_global_aufbau_has_exact_rank_and_native_orientation() -> None:
     ) < 1.0e-13
     assert np.isfinite(update.mu)
     assert update.observables["finite_size_fermi_gap_ev"] > 1.0e-12
+
+
+def test_maximum_overlap_problem_preserves_open_gap_aufbau_exactly() -> None:
+    prepared = _prepared()
+    baseline = make_vituri2024_hf_problem(prepared)
+    state = make_vituri2024_hf_state(prepared)
+    continuation = make_vituri2024_hf_maximum_overlap_problem(prepared, state)
+    assert isinstance(
+        continuation.kernel.density_builder,
+        StateBoundPreviousDensityBuilder,
+    )
+    assert len(continuation.kernel.density_builder.policy_fingerprint) == 64
+    with pytest.raises(ValueError, match="different HF state"):
+        continuation.initializer(
+            make_vituri2024_hf_state(prepared),
+            init_mode="half_metal_sz_plus",
+            seed=0,
+        )
+    baseline.initializer(state, init_mode="half_metal_sz_plus", seed=0)
+    fock = state.h0 + baseline.kernel.interaction_builder(state.density)
+    baseline_update = baseline.kernel.density_builder(fock)
+    continued_update = continuation.kernel.density_builder(fock)
+    assert np.array_equal(continued_update.density, baseline_update.density)
+    assert np.array_equal(continued_update.energies, baseline_update.energies)
+    assert continued_update.mu == baseline_update.mu
+    assert continued_update.observables == baseline_update.observables
+
+
+def test_maximum_overlap_problem_selects_unique_exact_shell_branch() -> None:
+    prepared = _prepared()
+    state = make_vituri2024_hf_state(prepared)
+    problem = make_vituri2024_hf_maximum_overlap_problem(prepared, state)
+    assert isinstance(
+        problem.kernel.density_builder,
+        StateBoundPreviousDensityBuilder,
+    )
+    nk = prepared.spec.nk
+    values = np.empty((4, nk), dtype=np.float64)
+    for momentum in range(nk):
+        values[:, momentum] = np.asarray(
+            [momentum, 20 + momentum, 40 + momentum, 60 + momentum],
+            dtype=np.float64,
+        )
+    values[3, 6] = 100.0
+    values[3, 7] = 100.0
+    values[3, 8] = 200.0
+    fock = np.zeros((4, 4, nk), dtype=np.complex128)
+    for momentum in range(nk):
+        fock[:, :, momentum] = np.diag(values[:, momentum])
+
+    previous = np.zeros_like(fock)
+    previous[:3, :3, :] = np.eye(3, dtype=np.complex128)[:, :, None]
+    for momentum in range(6):
+        previous[3, 3, momentum] = 1.0
+    previous[3, 3, 6] = 1.0
+    state.density[:, :, :] = previous.swapaxes(0, 1)
+    update = problem.kernel.density_builder(fock)
+    conventional = vituri2024_native_density_to_conventional_k_diagonal(
+        update.density
+    )
+    assert conventional[3, 3, 6] == pytest.approx(1.0)
+    assert conventional[3, 3, 7] == pytest.approx(0.0)
+    assert update.observables["degenerate_shell_multiplicity"] == 2.0
+    assert update.observables["degenerate_shell_selected_rank"] == 1.0
+    assert update.observables["maximum_overlap_cutoff_gap"] == pytest.approx(1.0)
+    assert max(
+        np.max(
+            np.abs(
+                conventional[:, :, momentum] @ conventional[:, :, momentum]
+                - conventional[:, :, momentum]
+            )
+        )
+        for momentum in range(nk)
+    ) < 1.0e-13
+    particle_number = sum(
+        np.trace(conventional[:, :, momentum]).real for momentum in range(nk)
+    )
+    assert particle_number == pytest.approx(prepared.spec.total_electrons)
+    assert max(
+        np.max(
+            np.abs(
+                fock[:, :, momentum] @ conventional[:, :, momentum]
+                - conventional[:, :, momentum] @ fock[:, :, momentum]
+            )
+        )
+        for momentum in range(nk)
+    ) < 1.0e-13
+    linearized_energy = float(
+        np.einsum("abk,bak->", fock, conventional, optimize=False).real
+    )
+    expected_energy = float(
+        np.sum(np.sort(values.reshape(-1, order="C"))[: prepared.spec.total_electrons])
+    )
+    assert linearized_energy == pytest.approx(expected_energy, abs=1.0e-12)
+
+
+def test_maximum_overlap_problem_rejects_unresolved_overlap_tie() -> None:
+    prepared = _prepared()
+    choice = Vituri2024MaximumOverlapAufbauChoice()
+    state = make_vituri2024_hf_state(prepared)
+    problem = make_vituri2024_hf_maximum_overlap_problem(
+        prepared, state, choice
+    )
+    assert isinstance(
+        problem.kernel.density_builder,
+        StateBoundPreviousDensityBuilder,
+    )
+    nk = prepared.spec.nk
+    values = np.empty((4, nk), dtype=np.float64)
+    for momentum in range(nk):
+        values[:, momentum] = np.asarray(
+            [momentum, 20 + momentum, 40 + momentum, 60 + momentum],
+            dtype=np.float64,
+        )
+    values[3, 6] = values[3, 7] = 100.0
+    values[3, 8] = 200.0
+    fock = np.zeros((4, 4, nk), dtype=np.complex128)
+    for momentum in range(nk):
+        fock[:, :, momentum] = np.diag(values[:, momentum])
+    previous = np.zeros_like(fock)
+    previous[:3, :3, :] = np.eye(3, dtype=np.complex128)[:, :, None]
+    for momentum in range(6):
+        previous[3, 3, momentum] = 1.0
+    previous[3, 3, 6] = 0.5
+    previous[3, 3, 7] = 0.5
+    state.density[:, :, :] = previous.swapaxes(0, 1)
+    with pytest.raises(ValueError, match="branch fanout"):
+        problem.kernel.density_builder(fock)
+    state.density[0, 0, 0] = np.nan
+    with pytest.raises(ValueError, match="must be finite"):
+        problem.kernel.density_builder(fock)
+    state.density[:, :, :] = previous.swapaxes(0, 1)
+    split_fock = fock.copy()
+    split_fock[3, 3, 7] += 5.0e-13
+    with pytest.raises(ValueError, match="unresolved but not an exact energy tie"):
+        problem.kernel.density_builder(split_fock)
+    with pytest.raises(ValueError, match="locked"):
+        Vituri2024MaximumOverlapAufbauChoice(
+            energy_shell_tolerance_ev=5.0e-13
+        )
+    assert choice.author_exact_numerical_policy is False
+
+
+def test_explicit_shell_branch_fanout_is_exhaustive_and_trigger_bound() -> None:
+    prepared = _prepared()
+    nk = prepared.spec.nk
+    values = np.empty((4, nk), dtype=np.float64)
+    for momentum in range(nk):
+        values[:, momentum] = np.asarray(
+            [momentum, 20 + momentum, 40 + momentum, 60 + momentum],
+            dtype=np.float64,
+        )
+    values[3, 6] = values[3, 7] = 100.0
+    values[3, 8] = 200.0
+    fock = np.zeros((4, 4, nk), dtype=np.complex128)
+    for momentum in range(nk):
+        fock[:, :, momentum] = np.diag(values[:, momentum])
+    previous = np.zeros_like(fock)
+    previous[:3, :3, :] = np.eye(3, dtype=np.complex128)[:, :, None]
+    for momentum in range(6):
+        previous[3, 3, momentum] = 1.0
+    previous[3, 3, 6] = previous[3, 3, 7] = 0.5
+    previous_native = previous.swapaxes(0, 1)
+    shell = (3 * nk + 6, 3 * nk + 7)
+    branches = make_vituri2024_explicit_shell_branch_choices(
+        trigger_fock_sha256=hf_scf._array_sha256(fock),
+        trigger_previous_density_sha256=hf_scf._array_sha256(previous_native),
+        shell_flat_indices=shell,
+        selected_rank=1,
+    )
+    assert len(branches) == 2
+    assert len({branch.branch_set_fingerprint for branch in branches}) == 1
+    assert tuple(branch.selected_shell_flat_indices for branch in branches) == (
+        (shell[0],),
+        (shell[1],),
+    )
+    six = make_vituri2024_explicit_shell_branch_choices(
+        trigger_fock_sha256="1" * 64,
+        trigger_previous_density_sha256="2" * 64,
+        shell_flat_indices=(10, 11, 12, 13),
+        selected_rank=2,
+    )
+    assert len(six) == 6
+    assert tuple(branch.branch_index for branch in six) == tuple(range(6))
+    assert len({branch.branch_set_fingerprint for branch in six}) == 1
+    with pytest.raises(ValueError, match="exhaust"):
+        replace(branches[0], branch_count=1)
+    with pytest.raises(ValueError, match="canonical"):
+        replace(branches[0], branch_index=1)
+    with pytest.raises(ValueError, match="declared limit"):
+        make_vituri2024_explicit_shell_branch_choices(
+            trigger_fock_sha256="1" * 64,
+            trigger_previous_density_sha256="2" * 64,
+            shell_flat_indices=tuple(range(10)),
+            selected_rank=5,
+        )
+
+    state = make_vituri2024_hf_state(prepared)
+    state.density[:, :, :] = previous_native
+    choice = Vituri2024MaximumOverlapAufbauChoice(
+        unresolved_overlap_policy="exact_triggered_coordinate_branch",
+        explicit_branch=branches[0],
+    )
+    problem = make_vituri2024_hf_maximum_overlap_problem(
+        prepared, state, choice
+    )
+    assert problem.kernel.density_builder.policy_fingerprint == choice.fingerprint
+    update = problem.kernel.density_builder(fock)
+    conventional = vituri2024_native_density_to_conventional_k_diagonal(
+        update.density
+    )
+    assert conventional[3, 3, 6] == pytest.approx(1.0)
+    assert conventional[3, 3, 7] == pytest.approx(0.0)
+    assert update.observables["explicit_coordinate_branch_used"] == 1.0
+    assert update.observables["explicit_coordinate_branch_index"] == 0.0
+    assert problem.kernel.step_callback is not None
+    problem.kernel.step_callback(
+        state,
+        SimpleNamespace(density_update=update, iteration=3),
+    )
+    assert state.diagnostics["explicit_coordinate_branch_used"] == 1.0
+    assert state.diagnostics["explicit_coordinate_branch_index"] == 0.0
+    assert state.diagnostics["explicit_coordinate_branch_count"] == 2.0
+    assert state.diagnostics["explicit_coordinate_branch_iteration"] == 3.0
+
+    drifted_fock = fock.copy()
+    drifted_fock[0, 0, 0] += 1.0e-6
+    with pytest.raises(ValueError, match="Fock trigger mismatch"):
+        problem.kernel.density_builder(drifted_fock)
+
+
+def test_four_state_rank_two_coordinate_fanout_runs_all_six_ground_states() -> None:
+    prepared = _prepared()
+    nk = prepared.spec.nk
+    values = np.empty((4, nk), dtype=np.float64)
+    for momentum in range(nk):
+        values[:, momentum] = np.asarray(
+            [momentum, 20 + momentum, 40 + momentum, 60 + momentum],
+            dtype=np.float64,
+        )
+    for momentum in range(5, 9):
+        values[3, momentum] = 100.0
+    fock = np.zeros((4, 4, nk), dtype=np.complex128)
+    for momentum in range(nk):
+        fock[:, :, momentum] = np.diag(values[:, momentum])
+    previous = np.zeros_like(fock)
+    previous[:3, :3, :] = np.eye(3, dtype=np.complex128)[:, :, None]
+    for momentum in range(5):
+        previous[3, 3, momentum] = 1.0
+    for momentum in range(5, 9):
+        previous[3, 3, momentum] = 0.5
+    previous_native = previous.swapaxes(0, 1)
+    shell = tuple(3 * nk + momentum for momentum in range(5, 9))
+    branches = make_vituri2024_explicit_shell_branch_choices(
+        trigger_fock_sha256=hf_scf._array_sha256(fock),
+        trigger_previous_density_sha256=hf_scf._array_sha256(previous_native),
+        shell_flat_indices=shell,
+        selected_rank=2,
+    )
+    density_hashes: set[str] = set()
+    linearized_energies: list[float] = []
+    for branch in branches:
+        state = make_vituri2024_hf_state(prepared)
+        state.density[:, :, :] = previous_native
+        choice = Vituri2024MaximumOverlapAufbauChoice(
+            unresolved_overlap_policy="exact_triggered_coordinate_branch",
+            explicit_branch=branch,
+        )
+        problem = make_vituri2024_hf_maximum_overlap_problem(
+            prepared, state, choice
+        )
+        update = problem.kernel.density_builder(fock)
+        conventional = vituri2024_native_density_to_conventional_k_diagonal(
+            update.density
+        )
+        selected = {
+            flat_index - 3 * nk for flat_index in branch.selected_shell_flat_indices
+        }
+        assert {
+            momentum
+            for momentum in range(5, 9)
+            if conventional[3, 3, momentum].real > 0.5
+        } == selected
+        assert update.observables["explicit_coordinate_branch_used"] == 1.0
+        assert update.observables["explicit_coordinate_branch_index"] == float(
+            branch.branch_index
+        )
+        density_hashes.add(hf_scf._array_sha256(update.density))
+        linearized_energies.append(
+            float(
+                np.einsum(
+                    "abk,bak->",
+                    fock,
+                    conventional,
+                    optimize=False,
+                ).real
+            )
+        )
+    assert len(branches) == len(density_hashes) == 6
+    assert max(linearized_energies) - min(linearized_energies) == pytest.approx(
+        0.0, abs=1.0e-12
+    )
 
 
 def test_engine_energy_callback_matches_same_scalar_functional() -> None:

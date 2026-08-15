@@ -71,6 +71,12 @@ from .occupations import (
     unflatten_sector_blocks,
     unflatten_sector_energies,
 )
+from .degenerate_occupations import (
+ DensityStateProtocol,
+ MaximumOverlapRankSelection,
+ StateBoundPreviousDensityBuilder,
+ select_maximum_overlap_rank_projector,
+)
 from .coulomb import (
     E2_OVER_4PI_EPS0_EV_NM,
     ScreenedCoulombParams,
@@ -271,9 +277,12 @@ __all__ = [
     "HartreeFockStepResult",
     "InitMode",
     "MagneticOverlapData",
+ "MaximumOverlapRankSelection",
     "OverlapDiagnostics",
     "ParticleHolePair",
-    "ProjectedDensityBuilderProtocol",
+    "DensityStateProtocol",
+ "StateBoundPreviousDensityBuilder",
+ "ProjectedDensityBuilderProtocol",
     "ProjectedWavefunctionBasis",
     "ScreenedCoulombParams",
     "SingleFlavorSimplificationStatus",
@@ -369,6 +378,7 @@ __all__ = [
     "screened_coulomb",
     "screened_coulomb_finite_b",
     "screened_coulomb_matrix",
+ "select_maximum_overlap_rank_projector",
     "sector_block_energies",
     "shift_wavefunction_grid",
     "should_spill_hf_overlap_cache",
