@@ -43,6 +43,7 @@ from mean_field.core.hf import (
     DensityUpdateResult,
     HartreeFockKernel,
     HartreeFockProblem,
+    HartreeFockStepResult,
     HartreeFockRun,
     StateBoundPreviousDensityBuilder,
  run_hartree_fock_problem,
@@ -81,7 +82,7 @@ SeedMode = Literal[
 
 VITURI2024_HF_SCF_API_VERSION: Final[str] = "vituri2024_homogeneous_hf_scf.v3"
 VITURI2024_MAXIMUM_OVERLAP_AUFBAU_API_VERSION: Final[str] = (
- "vituri2024_maximum_overlap_aufbau.v1"
+ "vituri2024_maximum_overlap_aufbau.v2"
 )
 VITURI2024_HF_SCF_AUTHORITY: Final[str] = (
     "independent_homogeneous_reproduction_choice_not_author_source_"
@@ -654,6 +655,68 @@ def make_vituri2024_explicit_shell_branch_choices(
 
 
 @dataclass(frozen=True, slots=True)
+class Vituri2024ExplicitShellBranchPath:
+ """One ordered exact-trigger leaf path through unresolved Fock shells.
+
+ This object does not certify sibling completeness. Scientific orchestration
+ must enumerate every coordinate choice at every reached shell without
+ postselection.
+ """
+
+ branches: tuple[Vituri2024ExplicitShellBranchChoice, ...]
+ author_exact_numerical_policy: bool = False
+ fingerprint: str = field(init=False)
+
+ def __post_init__(self) -> None:
+  if type(self.branches) is not tuple:
+   raise TypeError("explicit shell branch path must be an exact tuple")
+  if not 1 <= len(self.branches) <= 64:
+   raise ValueError("explicit shell branch path length must be in [1, 64]")
+  triggers: list[tuple[str, str]] = []
+  branch_fingerprints: list[str] = []
+  for branch in self.branches:
+   if type(branch) is not Vituri2024ExplicitShellBranchChoice:
+    raise TypeError("branch path entries must be typed shell choices")
+   branch.validate_live_state()
+   triggers.append(
+    (
+     branch.trigger_fock_sha256,
+     branch.trigger_previous_density_sha256,
+    )
+   )
+   branch_fingerprints.append(branch.fingerprint)
+  if len(set(triggers)) != len(triggers):
+   raise ValueError("explicit shell branch path repeats an exact trigger")
+  if self.author_exact_numerical_policy is not False:
+   raise ValueError("author-exact shell branch path is not established")
+  payload = {
+   "api_version": VITURI2024_MAXIMUM_OVERLAP_AUFBAU_API_VERSION,
+   "ordered_branch_fingerprints": branch_fingerprints,
+   "branch_path_length": len(branch_fingerprints),
+   "author_exact_numerical_policy": self.author_exact_numerical_policy,
+  }
+  object.__setattr__(
+   self,
+   "fingerprint",
+   sha256(
+    json.dumps(
+     payload,
+     sort_keys=True,
+     separators=(",", ":"),
+     allow_nan=False,
+    ).encode()
+   ).hexdigest(),
+  )
+
+ def validate_live_state(self) -> None:
+  expected = Vituri2024ExplicitShellBranchPath(
+   branches=self.branches,
+   author_exact_numerical_policy=self.author_exact_numerical_policy,
+  )
+  if expected.fingerprint != self.fingerprint:
+   raise ValueError("explicit shell branch path fingerprint drifted")
+
+@dataclass(frozen=True, slots=True)
 class Vituri2024MaximumOverlapAufbauChoice:
  """Independent ODA-compatible policy for a set-valued Fock ground state.
 
@@ -670,6 +733,7 @@ class Vituri2024MaximumOverlapAufbauChoice:
  explicit_branch: Vituri2024ExplicitShellBranchChoice | None = None
  exact_energy_tie_required: bool = True
  author_exact_numerical_policy: bool = False
+ explicit_branch_path: Vituri2024ExplicitShellBranchPath | None = None
  fingerprint: str = field(init=False)
 
  def __post_init__(self) -> None:
@@ -687,17 +751,28 @@ class Vituri2024MaximumOverlapAufbauChoice:
    raise ValueError("energy shell tolerance is locked to the baseline Aufbau gate")
   if self.previous_density_role != "current_oda_mixed_density":
    raise ValueError("unsupported previous-density role")
-  if self.explicit_branch is None:
+  if self.explicit_branch is not None and self.explicit_branch_path is not None:
+   raise ValueError("explicit_branch and explicit_branch_path are mutually exclusive")
+  branch_path_fingerprint: str | None = None
+  if self.explicit_branch is None and self.explicit_branch_path is None:
    if self.unresolved_overlap_policy != "reject_no_arbitrary_branch":
     raise ValueError("unsupported unresolved-overlap policy")
    branch_fingerprint = None
-  else:
+  elif self.explicit_branch is not None:
    if type(self.explicit_branch) is not Vituri2024ExplicitShellBranchChoice:
     raise TypeError("explicit_branch must be a typed shell branch choice")
    self.explicit_branch.validate_live_state()
    if self.unresolved_overlap_policy != "exact_triggered_coordinate_branch":
     raise ValueError("explicit branch requires exact-triggered branch policy")
    branch_fingerprint = self.explicit_branch.fingerprint
+  else:
+   if type(self.explicit_branch_path) is not Vituri2024ExplicitShellBranchPath:
+    raise TypeError("explicit_branch_path must be a typed branch path")
+   self.explicit_branch_path.validate_live_state()
+   if self.unresolved_overlap_policy != "exact_triggered_coordinate_branch_path":
+    raise ValueError("explicit branch path requires path policy")
+   branch_fingerprint = None
+   branch_path_fingerprint = self.explicit_branch_path.fingerprint
   if self.exact_energy_tie_required is not True:
    raise ValueError("only exact energy ties are authorized")
   if self.author_exact_numerical_policy is not False:
@@ -709,6 +784,7 @@ class Vituri2024MaximumOverlapAufbauChoice:
    "previous_density_role": self.previous_density_role,
    "unresolved_overlap_policy": self.unresolved_overlap_policy,
    "explicit_branch_fingerprint": branch_fingerprint,
+   "explicit_branch_path_fingerprint": branch_path_fingerprint,
    "exact_energy_tie_required": self.exact_energy_tie_required,
    "author_exact_numerical_policy": self.author_exact_numerical_policy,
   }
@@ -732,11 +808,41 @@ class Vituri2024MaximumOverlapAufbauChoice:
    previous_density_role=self.previous_density_role,
    unresolved_overlap_policy=self.unresolved_overlap_policy,
    explicit_branch=self.explicit_branch,
+   explicit_branch_path=self.explicit_branch_path,
    exact_energy_tie_required=self.exact_energy_tie_required,
    author_exact_numerical_policy=self.author_exact_numerical_policy,
   )
   if expected.fingerprint != self.fingerprint:
    raise ValueError("maximum-overlap Aufbau choice fingerprint drifted")
+
+
+def _explicit_shell_branch_sequence(
+ choice: Vituri2024MaximumOverlapAufbauChoice,
+) -> tuple[Vituri2024ExplicitShellBranchChoice, ...]:
+ if choice.explicit_branch is not None:
+  return (choice.explicit_branch,)
+ if choice.explicit_branch_path is not None:
+  return choice.explicit_branch_path.branches
+ return ()
+
+
+@dataclass(frozen=True, slots=True)
+class _Vituri2024PendingExplicitBranchUse:
+ generation: int
+ branch_fingerprint: str
+ trigger_fock_sha256: str
+ trigger_previous_density_sha256: str
+ update_object_id: int
+ update_density_sha256: str
+
+
+@dataclass(slots=True)
+class _Vituri2024ExplicitBranchAuditState:
+ next_generation: int = 0
+ last_branch_iteration: int = 0
+ pending: _Vituri2024PendingExplicitBranchUse | None = None
+ consumed: list[tuple[int, int, int, str]] = field(default_factory=list)
+ terminal_rejection: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -1698,10 +1804,13 @@ def _maximum_overlap_density_update_builder(
  prepared: Vituri2024PreparedHomogeneousHF,
  state: Vituri2024HFState,
  choice: Vituri2024MaximumOverlapAufbauChoice,
+ audit_state: _Vituri2024ExplicitBranchAuditState,
 ) -> StateBoundPreviousDensityBuilder:
  """Build a history-aware fixed-rank ground-state map for exact Fock ties."""
 
  choice.validate_live_state()
+ if type(audit_state) is not _Vituri2024ExplicitBranchAuditState:
+  raise TypeError("audit_state must be a private explicit-branch audit state")
  total_occupied = prepared.spec.total_electrons
  ordinary_builder = _density_update_builder(prepared)
 
@@ -1709,6 +1818,11 @@ def _maximum_overlap_density_update_builder(
   hamiltonian: Array,
   previous_native_density: Array,
  ) -> DensityUpdateResult:
+  choice.validate_live_state()
+  if audit_state.terminal_rejection:
+   raise RuntimeError("explicit shell branch audit state is terminally rejected")
+  if audit_state.pending is not None:
+   raise RuntimeError("explicit shell branch result was not audited")
   matrix = np.asarray(hamiltonian, dtype=np.complex128)
   previous_native = np.asarray(previous_native_density, dtype=np.complex128)
   expected_shape = (4, 4, prepared.spec.nk)
@@ -1798,19 +1912,31 @@ def _maximum_overlap_density_update_builder(
   )
   explicit_branch_used = False
   explicit_branch_index = -1
+  explicit_branch_generation = -1
+  explicit_branch_sequence = _explicit_shell_branch_sequence(choice)
+  explicit_branch_path_length = len(explicit_branch_sequence)
   if selection.unique and selection.coefficient_projector is not None:
    coefficient_projector = selection.coefficient_projector
   else:
-   branch = choice.explicit_branch
-   if branch is None:
+   if not explicit_branch_sequence:
     raise ValueError(
      "Vituri maximum-overlap boundary remains nonunique; "
      "explicit broken-symmetry branch fanout is required"
     )
+   explicit_branch_generation = audit_state.next_generation
+   if explicit_branch_generation >= explicit_branch_path_length:
+    audit_state.terminal_rejection = True
+    raise ValueError(
+     "Vituri maximum-overlap branch path is exhausted; "
+     "a new explicit broken-symmetry branch fanout is required"
+    )
+   branch = explicit_branch_sequence[explicit_branch_generation]
    branch.validate_live_state()
-   if _array_sha256(matrix) != branch.trigger_fock_sha256:
+   trigger_fock_sha256 = _array_sha256(matrix)
+   trigger_previous_density_sha256 = _array_sha256(previous_native)
+   if trigger_fock_sha256 != branch.trigger_fock_sha256:
     raise ValueError("explicit shell branch Fock trigger mismatch")
-   if _array_sha256(previous_native) != branch.trigger_previous_density_sha256:
+   if trigger_previous_density_sha256 != branch.trigger_previous_density_sha256:
     raise ValueError("explicit shell branch previous-density trigger mismatch")
    actual_shell = tuple(int(value) for value in shell_flat.tolist())
    if actual_shell != branch.expected_shell_flat_indices:
@@ -1893,7 +2019,7 @@ def _maximum_overlap_density_update_builder(
    conventional.swapaxes(0, 1), dtype=np.complex128
   )
   mu = 0.5 * (lower + upper)
-  return DensityUpdateResult(
+  update = DensityUpdateResult(
    density=native,
    energies=energies,
    mu=mu,
@@ -1909,8 +2035,26 @@ def _maximum_overlap_density_update_builder(
     "maximum_overlap_cross_momentum_residual": cross_momentum_residual,
     "explicit_coordinate_branch_used": float(explicit_branch_used),
     "explicit_coordinate_branch_index": float(explicit_branch_index),
+    "explicit_coordinate_branch_generation": float(
+     explicit_branch_generation
+    ),
+    "explicit_coordinate_branch_path_length": float(
+     explicit_branch_path_length
+    ),
    },
   )
+  if explicit_branch_used:
+   if audit_state.pending is not None:
+    raise RuntimeError("explicit shell branch pending receipt was overwritten")
+   audit_state.pending = _Vituri2024PendingExplicitBranchUse(
+    generation=explicit_branch_generation,
+    branch_fingerprint=branch.fingerprint,
+    trigger_fock_sha256=trigger_fock_sha256,
+    trigger_previous_density_sha256=trigger_previous_density_sha256,
+    update_object_id=id(update),
+    update_density_sha256=_array_sha256(update.density),
+   )
+  return update
 
  return StateBoundPreviousDensityBuilder(
   state=state,
@@ -1926,8 +2070,9 @@ def make_vituri2024_hf_maximum_overlap_problem(
 ) -> HartreeFockProblem:
  """Return an ODA-compatible problem with fail-closed exact-tie continuation.
 
- This is an independent numerical realization. It does not implement the
- paper's many-start branch fanout when the overlap tie is itself unresolved.
+ This independent numerical realization can follow an exhaustively declared,
+ exact-triggered coordinate branch path. It does not infer the paper's
+ unpublished many-start branch-selection policy.
  """
 
  if type(prepared) is not Vituri2024PreparedHomogeneousHF:
@@ -1945,9 +2090,13 @@ def make_vituri2024_hf_maximum_overlap_problem(
  if type(selected_choice) is not Vituri2024MaximumOverlapAufbauChoice:
   raise TypeError("choice must be Vituri2024MaximumOverlapAufbauChoice")
  selected_choice.validate_live_state()
+ explicit_branch_sequence = _explicit_shell_branch_sequence(selected_choice)
+ audit_state = _Vituri2024ExplicitBranchAuditState()
  baseline = make_vituri2024_hf_problem(prepared)
  if baseline.kernel.step_callback is not None:
   raise RuntimeError("baseline Vituri problem unexpectedly owns a step callback")
+ if baseline.kernel.final_state_callback is not None:
+  raise RuntimeError("baseline Vituri problem unexpectedly owns a final callback")
 
  def bound_initializer(
   target_state: Vituri2024HFState,
@@ -1957,21 +2106,196 @@ def make_vituri2024_hf_maximum_overlap_problem(
  ) -> None:
   if target_state is not state:
    raise ValueError("maximum-overlap problem was run with a different HF state")
+  if (
+   audit_state.next_generation != 0
+   or audit_state.last_branch_iteration != 0
+   or audit_state.pending is not None
+   or audit_state.consumed
+   or audit_state.terminal_rejection
+  ):
+   raise RuntimeError("maximum-overlap problem cannot be reinitialized after use")
   baseline.initializer(target_state, init_mode=init_mode, seed=seed)
+
+ def validate_consumed_branch_diagnostics(
+  target_state: Vituri2024HFState,
+ ) -> None:
+  diagnostics = target_state.diagnostics
+  actual_keys = {
+   key for key in diagnostics if key.startswith("explicit_coordinate_branch_")
+  }
+  if not audit_state.consumed:
+   if actual_keys:
+    raise RuntimeError("explicit branch diagnostics are stale or preseeded")
+   return
+  expected_keys = {
+   "explicit_coordinate_branch_used",
+   "explicit_coordinate_branch_use_count",
+   "explicit_coordinate_branch_path_length",
+   "explicit_coordinate_branch_index",
+   "explicit_coordinate_branch_count",
+   "explicit_coordinate_branch_iteration",
+   "explicit_coordinate_branch_last_generation",
+   "explicit_coordinate_branch_last_index",
+   "explicit_coordinate_branch_last_count",
+   "explicit_coordinate_branch_last_iteration",
+  }
+  expected_generation_values: dict[str, float] = {}
+  for generation, (index, count, iteration, _fingerprint) in enumerate(
+   audit_state.consumed
+  ):
+   expected_generation_values.update(
+    {
+     f"explicit_coordinate_branch_generation_{generation}_index": float(index),
+     f"explicit_coordinate_branch_generation_{generation}_count": float(count),
+     f"explicit_coordinate_branch_generation_{generation}_iteration": float(
+      iteration
+     ),
+    }
+   )
+  expected_keys.update(expected_generation_values)
+  if actual_keys != expected_keys:
+   raise RuntimeError("explicit branch diagnostic namespace drifted")
+  if (
+   float(diagnostics["explicit_coordinate_branch_used"]) != 1.0
+   or float(diagnostics["explicit_coordinate_branch_use_count"])
+   != float(len(audit_state.consumed))
+   or float(diagnostics["explicit_coordinate_branch_path_length"])
+   != float(len(explicit_branch_sequence))
+  ):
+   raise RuntimeError("explicit branch diagnostic aggregate drifted")
+  if any(
+   float(diagnostics[key]) != value
+   for key, value in expected_generation_values.items()
+  ):
+   raise RuntimeError("explicit branch generation diagnostics drifted")
+  first_index, first_count, first_iteration, _ = audit_state.consumed[0]
+  last_index, last_count, last_iteration, _ = audit_state.consumed[-1]
+  if (
+   float(diagnostics["explicit_coordinate_branch_index"]) != float(first_index)
+   or float(diagnostics["explicit_coordinate_branch_count"]) != float(first_count)
+   or float(diagnostics["explicit_coordinate_branch_iteration"])
+   != float(first_iteration)
+   or float(diagnostics["explicit_coordinate_branch_last_generation"])
+   != float(len(audit_state.consumed) - 1)
+   or float(diagnostics["explicit_coordinate_branch_last_index"])
+   != float(last_index)
+   or float(diagnostics["explicit_coordinate_branch_last_count"])
+   != float(last_count)
+   or float(diagnostics["explicit_coordinate_branch_last_iteration"])
+   != float(last_iteration)
+  ):
+   raise RuntimeError("explicit branch first/last diagnostics drifted")
 
  def branch_audit_callback(
   target_state: Vituri2024HFState,
-  step: object,
+  step: HartreeFockStepResult,
  ) -> None:
-  density_update = getattr(step, "density_update")
+  if audit_state.terminal_rejection:
+   raise RuntimeError("explicit branch audit state is terminally rejected")
+  selected_choice.validate_live_state()
+  if target_state is not state:
+   raise RuntimeError("explicit branch callback received a different HF state")
+  if type(step) is not HartreeFockStepResult:
+   raise TypeError("explicit branch callback requires HartreeFockStepResult")
+  density_update = step.density_update
   observables = density_update.observables
-  if float(observables.get("explicit_coordinate_branch_used", 0.0)) == 1.0:
-   if target_state.diagnostics.get("explicit_coordinate_branch_used", 0.0) == 1.0:
-    raise RuntimeError("explicit coordinate branch trigger was reused")
-   branch = selected_choice.explicit_branch
-   if branch is None:
-    raise RuntimeError("branch-use observable lacks a typed branch choice")
-   target_state.diagnostics["explicit_coordinate_branch_used"] = 1.0
+  if float(observables.get("explicit_coordinate_branch_used", 0.0)) != 1.0:
+   if audit_state.pending is not None:
+    raise RuntimeError("non-branch step left a pending branch receipt")
+   validate_consumed_branch_diagnostics(target_state)
+   return
+  raw_generation = float(observables["explicit_coordinate_branch_generation"])
+  raw_path_length = float(observables["explicit_coordinate_branch_path_length"])
+  if any(
+   not math.isfinite(value) or value < 0.0 or value != math.floor(value)
+   for value in (raw_generation, raw_path_length)
+  ):
+   raise RuntimeError("explicit coordinate branch audit counters drifted")
+  generation = int(raw_generation)
+  path_length = int(raw_path_length)
+  use_count = audit_state.next_generation
+  pending = audit_state.pending
+  if pending is None:
+   raise RuntimeError("branch-use observable lacks a pending builder receipt")
+  if (
+   pending.update_object_id != id(density_update)
+   or pending.update_density_sha256 != _array_sha256(density_update.density)
+   or pending.trigger_fock_sha256 != _array_sha256(step.total_hamiltonian)
+   or pending.trigger_previous_density_sha256
+   != _array_sha256(step.previous_density)
+   or pending.generation != generation
+  ):
+   raise RuntimeError("branch-use observable does not match its builder receipt")
+  validate_consumed_branch_diagnostics(target_state)
+  if path_length != len(explicit_branch_sequence):
+   raise RuntimeError("branch-use observable path length drifted")
+  if generation != use_count:
+   raise RuntimeError("explicit coordinate branch trigger was reused or reordered")
+  if generation >= len(explicit_branch_sequence):
+   raise RuntimeError("branch-use observable exceeds the typed branch path")
+  branch = explicit_branch_sequence[generation]
+  branch.validate_live_state()
+  if (
+   pending.branch_fingerprint != branch.fingerprint
+   or float(observables["explicit_coordinate_branch_index"])
+   != float(branch.branch_index)
+  ):
+   raise RuntimeError("branch-use observable index/fingerprint drifted")
+  iteration = _strict_int(step.iteration, "explicit branch iteration")
+  if iteration <= audit_state.last_branch_iteration:
+   raise RuntimeError("explicit branch iteration did not increase")
+  oda_lambda = float(step.oda_lambda)
+  if not math.isfinite(oda_lambda) or not 0.0 <= oda_lambda <= 1.0:
+   raise RuntimeError("explicit branch step has an invalid ODA parameter")
+  expected_mixed = (
+   oda_lambda * np.asarray(density_update.density)
+   + (1.0 - oda_lambda) * np.asarray(step.previous_density)
+  )
+  mixed = np.asarray(step.mixed_density)
+  mixed_scale = max(1.0, _max_abs(expected_mixed))
+  if (
+   mixed.shape != expected_mixed.shape
+   or not np.all(np.isfinite(mixed))
+   or _max_abs(mixed - expected_mixed)
+   > 32.0 * np.finfo(np.float64).eps * mixed_scale
+   or not np.array_equal(np.asarray(target_state.density), mixed)
+  ):
+   raise RuntimeError("explicit branch receipt is not bound to the applied state")
+  audit_state.next_generation = use_count + 1
+  audit_state.last_branch_iteration = iteration
+  audit_state.pending = None
+  audit_state.consumed.append(
+   (branch.branch_index, branch.branch_count, iteration, branch.fingerprint)
+  )
+  target_state.diagnostics["explicit_coordinate_branch_used"] = 1.0
+  target_state.diagnostics["explicit_coordinate_branch_use_count"] = float(
+   use_count + 1
+  )
+  target_state.diagnostics["explicit_coordinate_branch_path_length"] = float(
+   path_length
+  )
+  target_state.diagnostics[
+   f"explicit_coordinate_branch_generation_{generation}_index"
+  ] = float(branch.branch_index)
+  target_state.diagnostics[
+   f"explicit_coordinate_branch_generation_{generation}_count"
+  ] = float(branch.branch_count)
+  target_state.diagnostics[
+   f"explicit_coordinate_branch_generation_{generation}_iteration"
+  ] = float(iteration)
+  target_state.diagnostics["explicit_coordinate_branch_last_generation"] = float(
+   generation
+  )
+  target_state.diagnostics["explicit_coordinate_branch_last_index"] = float(
+   branch.branch_index
+  )
+  target_state.diagnostics["explicit_coordinate_branch_last_count"] = float(
+   branch.branch_count
+  )
+  target_state.diagnostics["explicit_coordinate_branch_last_iteration"] = float(
+   iteration
+  )
+  if generation == 0:
    target_state.diagnostics["explicit_coordinate_branch_index"] = float(
     branch.branch_index
    )
@@ -1979,8 +2303,38 @@ def make_vituri2024_hf_maximum_overlap_problem(
     branch.branch_count
    )
    target_state.diagnostics["explicit_coordinate_branch_iteration"] = float(
-    getattr(step, "iteration")
+    iteration
    )
+
+ def final_branch_audit_callback(
+  target_state: Vituri2024HFState,
+  density_update: DensityUpdateResult,
+ ) -> None:
+  if audit_state.terminal_rejection:
+   raise RuntimeError("explicit branch audit state is terminally rejected")
+  selected_choice.validate_live_state()
+  if target_state is not state:
+   raise RuntimeError("explicit final callback received a different HF state")
+  if type(density_update) is not DensityUpdateResult:
+   raise TypeError("explicit final callback requires DensityUpdateResult")
+  observables = density_update.observables
+  if float(observables.get("explicit_coordinate_branch_used", 0.0)) == 1.0:
+   pending = audit_state.pending
+   if (
+    pending is None
+    or pending.update_object_id != id(density_update)
+    or pending.update_density_sha256 != _array_sha256(density_update.density)
+   ):
+    raise RuntimeError("final branch use lacks its builder receipt")
+   audit_state.pending = None
+   audit_state.terminal_rejection = True
+   raise RuntimeError(
+    "final recomputation encountered an unresolved explicit branch; "
+    "a new branch fanout is required"
+   )
+  if audit_state.pending is not None:
+   raise RuntimeError("final recomputation left a pending branch receipt")
+  validate_consumed_branch_diagnostics(target_state)
 
  return replace(
   baseline,
@@ -1991,8 +2345,10 @@ def make_vituri2024_hf_maximum_overlap_problem(
     prepared,
     state,
     selected_choice,
+    audit_state,
    ),
    step_callback=branch_audit_callback,
+   final_state_callback=final_branch_audit_callback,
   ),
  )
 
@@ -2322,6 +2678,7 @@ __all__ = [
     "VITURI2024_TOTAL_HOLE_DENSITY_CM2",
     "Vituri2024CartesianHFSpec",
     "Vituri2024ExplicitShellBranchChoice",
+ "Vituri2024ExplicitShellBranchPath",
  "Vituri2024FixedDensitySCFChoice",
     "Vituri2024HalfMetalDiagnostics",
     "Vituri2024HFSeedRun",

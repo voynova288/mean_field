@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from types import SimpleNamespace
-
 import numpy as np
 import pytest
 
 from mean_field.core.hf import (
     DensityUpdateResult,
+    HartreeFockStepResult,
     StateBoundPreviousDensityBuilder,
+    run_hartree_fock_problem,
 )
 from mean_field.systems.abc_trilayer.vituri2024_hf import (
     vituri2024_native_density_to_conventional_k_diagonal,
@@ -21,6 +21,7 @@ from mean_field.systems.abc_trilayer.vituri2024_hf_scf import (
     VITURI2024_HF_SCF_AUTHORITY,
     VITURI2024_TOTAL_HOLE_DENSITY_CM2,
     Vituri2024CartesianHFSpec,
+    Vituri2024ExplicitShellBranchPath,
     analyze_vituri2024_global_aufbau_boundary,
     Vituri2024InitialFockBoundaryScanChoice,
     Vituri2024InitialFockBoundarySelection,
@@ -39,6 +40,35 @@ from mean_field.systems.abc_trilayer.vituri2024_hf_scf import (
 def _prepared():
     return prepare_vituri2024_homogeneous_hf(
         Vituri2024CartesianHFSpec(mesh_size=3, holes_per_valley=1)
+    )
+
+
+def _explicit_branch_step(
+    *,
+    state,
+    update: DensityUpdateResult,
+    previous_density: np.ndarray,
+    total_hamiltonian: np.ndarray,
+    iteration: int,
+    oda_lambda: float = 1.0,
+) -> HartreeFockStepResult:
+    mixed_density = (
+        oda_lambda * update.density
+        + (1.0 - oda_lambda) * previous_density
+    )
+    state.density[:, :, :] = mixed_density
+    return HartreeFockStepResult(
+        iteration=iteration,
+        previous_density=previous_density.copy(),
+        interaction_h=np.zeros_like(total_hamiltonian),
+        total_hamiltonian=total_hamiltonian.copy(),
+        density_update=update,
+        mixed_density=mixed_density.copy(),
+        oda_lambda=oda_lambda,
+        norm_raw=0.0,
+        norm_mixed=0.0,
+        norm_selected=0.0,
+        energy=0.0,
     )
 
 
@@ -387,6 +417,25 @@ def test_maximum_overlap_problem_preserves_open_gap_aufbau_exactly() -> None:
     assert np.array_equal(continued_update.energies, baseline_update.energies)
     assert continued_update.mu == baseline_update.mu
     assert continued_update.observables == baseline_update.observables
+    assert continuation.kernel.final_state_callback is not None
+    continuation.kernel.final_state_callback(state, continued_update)
+
+
+def test_maximum_overlap_problem_runs_open_gap_final_recomputation() -> None:
+    prepared = _prepared()
+    state = make_vituri2024_hf_state(prepared)
+    problem = make_vituri2024_hf_maximum_overlap_problem(prepared, state)
+    run = run_hartree_fock_problem(
+        state,
+        problem,
+        init_mode="half_metal_sz_plus",
+        seed=0,
+        max_iter=1,
+        oda_stall_threshold=1.0e-8,
+        max_oda_lambda=1.0,
+    )
+    assert run.iterations == 1
+    assert np.isfinite(run.state.diagnostics["final_raw_norm"])
 
 
 def test_maximum_overlap_problem_selects_unique_exact_shell_branch() -> None:
@@ -546,6 +595,42 @@ def test_explicit_shell_branch_fanout_is_exhaustive_and_trigger_bound() -> None:
     assert len(six) == 6
     assert tuple(branch.branch_index for branch in six) == tuple(range(6))
     assert len({branch.branch_set_fingerprint for branch in six}) == 1
+    second_generation = make_vituri2024_explicit_shell_branch_choices(
+        trigger_fock_sha256="3" * 64,
+        trigger_previous_density_sha256="4" * 64,
+        shell_flat_indices=(20, 21),
+        selected_rank=1,
+    )[1]
+    golden_path = Vituri2024ExplicitShellBranchPath(
+        branches=(six[0], second_generation)
+    )
+    golden_choice = Vituri2024MaximumOverlapAufbauChoice(
+        unresolved_overlap_policy="exact_triggered_coordinate_branch_path",
+        explicit_branch_path=golden_path,
+    )
+    assert six[0].fingerprint == (
+        "9bf91aa48a5a185fefa032f1b81981fc0a551987dc5e722de9e2c8e4e6cc36c8"
+    )
+    assert second_generation.fingerprint == (
+        "8d06f241f1aa43d065504ea687de9264dd97418e80d5261ffd8d951bf6a5525c"
+    )
+    assert golden_path.fingerprint == (
+        "8ecd0499eddec543802c230da9bdfe665060ce25c2abb96540dcac23a936111d"
+    )
+    assert golden_choice.fingerprint == (
+        "1aa66c7ad65588f650bda791e3965cc594fa73fae7f53c6fce68d1333a9c6976"
+    )
+    positional_legacy_choice = Vituri2024MaximumOverlapAufbauChoice(
+        hf_scf.VITURI2024_DEFAULT_AUFBAU_GAP_TOLERANCE_EV,
+        1.0e-12,
+        "current_oda_mixed_density",
+        "exact_triggered_coordinate_branch",
+        branches[0],
+        True,
+        False,
+    )
+    assert positional_legacy_choice.explicit_branch is branches[0]
+    assert positional_legacy_choice.explicit_branch_path is None
     with pytest.raises(ValueError, match="exhaust"):
         replace(branches[0], branch_count=1)
     with pytest.raises(ValueError, match="canonical"):
@@ -558,6 +643,42 @@ def test_explicit_shell_branch_fanout_is_exhaustive_and_trigger_bound() -> None:
             selected_rank=5,
         )
 
+    drift_choice = Vituri2024MaximumOverlapAufbauChoice(
+        unresolved_overlap_policy="exact_triggered_coordinate_branch",
+        explicit_branch=branches[1],
+    )
+    drift_state = make_vituri2024_hf_state(prepared)
+    drift_state.density[:, :, :] = previous_native
+    drift_problem = make_vituri2024_hf_maximum_overlap_problem(
+        prepared, drift_state, drift_choice
+    )
+    object.__setattr__(drift_choice, "overlap_gap_tolerance", 2.0e-12)
+    with pytest.raises(ValueError, match="choice fingerprint drifted"):
+        drift_problem.kernel.density_builder(fock)
+
+    callback_branch = replace(branches[1])
+    callback_choice = Vituri2024MaximumOverlapAufbauChoice(
+        unresolved_overlap_policy="exact_triggered_coordinate_branch",
+        explicit_branch=callback_branch,
+    )
+    callback_state = make_vituri2024_hf_state(prepared)
+    callback_state.density[:, :, :] = previous_native
+    callback_problem = make_vituri2024_hf_maximum_overlap_problem(
+        prepared, callback_state, callback_choice
+    )
+    callback_update = callback_problem.kernel.density_builder(fock)
+    callback_step = _explicit_branch_step(
+        state=callback_state,
+        update=callback_update,
+        previous_density=previous_native,
+        total_hamiltonian=fock,
+        iteration=3,
+    )
+    object.__setattr__(callback_branch, "fingerprint", "0" * 64)
+    assert callback_problem.kernel.step_callback is not None
+    with pytest.raises(ValueError, match="branch fingerprint drifted"):
+        callback_problem.kernel.step_callback(callback_state, callback_step)
+
     state = make_vituri2024_hf_state(prepared)
     state.density[:, :, :] = previous_native
     choice = Vituri2024MaximumOverlapAufbauChoice(
@@ -568,6 +689,10 @@ def test_explicit_shell_branch_fanout_is_exhaustive_and_trigger_bound() -> None:
         prepared, state, choice
     )
     assert problem.kernel.density_builder.policy_fingerprint == choice.fingerprint
+    drifted_fock = fock.copy()
+    drifted_fock[0, 0, 0] += 1.0e-6
+    with pytest.raises(ValueError, match="Fock trigger mismatch"):
+        problem.kernel.density_builder(drifted_fock)
     update = problem.kernel.density_builder(fock)
     conventional = vituri2024_native_density_to_conventional_k_diagonal(
         update.density
@@ -576,20 +701,254 @@ def test_explicit_shell_branch_fanout_is_exhaustive_and_trigger_bound() -> None:
     assert conventional[3, 3, 7] == pytest.approx(0.0)
     assert update.observables["explicit_coordinate_branch_used"] == 1.0
     assert update.observables["explicit_coordinate_branch_index"] == 0.0
+    assert update.observables["explicit_coordinate_branch_generation"] == 0.0
+    assert update.observables["explicit_coordinate_branch_path_length"] == 1.0
+    with pytest.raises(RuntimeError, match="not audited"):
+        problem.kernel.density_builder(fock)
     assert problem.kernel.step_callback is not None
-    problem.kernel.step_callback(
-        state,
-        SimpleNamespace(density_update=update, iteration=3),
+    assert problem.kernel.final_state_callback is not None
+    different_state = make_vituri2024_hf_state(prepared)
+    different_step = _explicit_branch_step(
+        state=different_state,
+        update=update,
+        previous_density=previous_native,
+        total_hamiltonian=fock,
+        iteration=3,
     )
+    with pytest.raises(RuntimeError, match="different HF state"):
+        problem.kernel.step_callback(different_state, different_step)
+    forged_update = replace(update, density=update.density.copy())
+    forged_step = _explicit_branch_step(
+        state=state,
+        update=forged_update,
+        previous_density=previous_native,
+        total_hamiltonian=fock,
+        iteration=3,
+    )
+    with pytest.raises(RuntimeError, match="builder receipt"):
+        problem.kernel.step_callback(state, forged_step)
+    valid_step = _explicit_branch_step(
+        state=state,
+        update=update,
+        previous_density=previous_native,
+        total_hamiltonian=fock,
+        iteration=3,
+    )
+    problem.kernel.step_callback(state, valid_step)
     assert state.diagnostics["explicit_coordinate_branch_used"] == 1.0
     assert state.diagnostics["explicit_coordinate_branch_index"] == 0.0
     assert state.diagnostics["explicit_coordinate_branch_count"] == 2.0
     assert state.diagnostics["explicit_coordinate_branch_iteration"] == 3.0
+    assert state.diagnostics["explicit_coordinate_branch_use_count"] == 1.0
+    assert state.diagnostics["explicit_coordinate_branch_path_length"] == 1.0
 
-    drifted_fock = fock.copy()
-    drifted_fock[0, 0, 0] += 1.0e-6
+    repeated_update = problem.kernel.density_builder(fock)
+    assert repeated_update.observables["explicit_coordinate_branch_used"] == 0.0
+    assert np.array_equal(repeated_update.density, update.density)
+    state.diagnostics["explicit_coordinate_branch_last_index"] = 99.0
+    with pytest.raises(RuntimeError, match="first/last diagnostics drifted"):
+        problem.kernel.final_state_callback(state, repeated_update)
+    state.diagnostics["explicit_coordinate_branch_last_index"] = 0.0
+    problem.kernel.final_state_callback(state, repeated_update)
+
+
+def test_final_explicit_branch_use_poisoned_after_rejection() -> None:
+    prepared = _prepared()
+    nk = prepared.spec.nk
+    values = np.empty((4, nk), dtype=np.float64)
+    for momentum in range(nk):
+        values[:, momentum] = np.asarray(
+            [momentum, 20 + momentum, 40 + momentum, 60 + momentum],
+            dtype=np.float64,
+        )
+    values[3, 6] = values[3, 7] = 100.0
+    values[3, 8] = 200.0
+    fock = np.zeros((4, 4, nk), dtype=np.complex128)
+    for momentum in range(nk):
+        fock[:, :, momentum] = np.diag(values[:, momentum])
+    previous = np.zeros_like(fock)
+    previous[:3, :3, :] = np.eye(3, dtype=np.complex128)[:, :, None]
+    for momentum in range(6):
+        previous[3, 3, momentum] = 1.0
+    previous[3, 3, 6] = previous[3, 3, 7] = 0.5
+    previous_native = previous.swapaxes(0, 1)
+    branch = make_vituri2024_explicit_shell_branch_choices(
+        trigger_fock_sha256=hf_scf._array_sha256(fock),
+        trigger_previous_density_sha256=hf_scf._array_sha256(previous_native),
+        shell_flat_indices=(3 * nk + 6, 3 * nk + 7),
+        selected_rank=1,
+    )[0]
+    choice = Vituri2024MaximumOverlapAufbauChoice(
+        unresolved_overlap_policy="exact_triggered_coordinate_branch",
+        explicit_branch=branch,
+    )
+    state = make_vituri2024_hf_state(prepared)
+    state.density[:, :, :] = previous_native
+    problem = make_vituri2024_hf_maximum_overlap_problem(prepared, state, choice)
+    update = problem.kernel.density_builder(fock)
+    assert problem.kernel.final_state_callback is not None
+    with pytest.raises(RuntimeError, match="new branch fanout"):
+        problem.kernel.final_state_callback(state, update)
+    with pytest.raises(RuntimeError, match="terminally rejected"):
+        problem.kernel.density_builder(fock)
+    step = _explicit_branch_step(
+        state=state,
+        update=update,
+        previous_density=previous_native,
+        total_hamiltonian=fock,
+        iteration=3,
+    )
+    assert problem.kernel.step_callback is not None
+    with pytest.raises(RuntimeError, match="terminally rejected"):
+        problem.kernel.step_callback(state, step)
+
+
+def test_exact_triggered_branch_path_consumes_two_generations_in_order() -> None:
+    prepared = _prepared()
+    nk = prepared.spec.nk
+
+    first_values = np.empty((4, nk), dtype=np.float64)
+    for momentum in range(nk):
+        first_values[:, momentum] = np.asarray(
+            [momentum, 20 + momentum, 40 + momentum, 60 + momentum],
+            dtype=np.float64,
+        )
+    for momentum in range(5, 9):
+        first_values[3, momentum] = 100.0
+    first_fock = np.zeros((4, 4, nk), dtype=np.complex128)
+    for momentum in range(nk):
+        first_fock[:, :, momentum] = np.diag(first_values[:, momentum])
+
+    initial = np.zeros_like(first_fock)
+    initial[:3, :3, :] = np.eye(3, dtype=np.complex128)[:, :, None]
+    for momentum in range(5):
+        initial[3, 3, momentum] = 1.0
+    for momentum in range(5, 9):
+        initial[3, 3, momentum] = 0.5
+    initial_native = initial.swapaxes(0, 1)
+    first_shell = tuple(3 * nk + momentum for momentum in range(5, 9))
+    first_branches = make_vituri2024_explicit_shell_branch_choices(
+        trigger_fock_sha256=hf_scf._array_sha256(first_fock),
+        trigger_previous_density_sha256=hf_scf._array_sha256(initial_native),
+        shell_flat_indices=first_shell,
+        selected_rank=2,
+    )
+    first_branch = first_branches[0]
+
+    temporary_state = make_vituri2024_hf_state(prepared)
+    temporary_state.density[:, :, :] = initial_native
+    temporary_choice = Vituri2024MaximumOverlapAufbauChoice(
+        unresolved_overlap_policy="exact_triggered_coordinate_branch",
+        explicit_branch=first_branch,
+    )
+    temporary_problem = make_vituri2024_hf_maximum_overlap_problem(
+        prepared, temporary_state, temporary_choice
+    )
+    first_update_reference = temporary_problem.kernel.density_builder(first_fock)
+
+    second_values = np.empty((4, nk), dtype=np.float64)
+    for momentum in range(nk):
+        second_values[:, momentum] = np.asarray(
+            [momentum, 20 + momentum, 40 + momentum, 200 + momentum],
+            dtype=np.float64,
+        )
+    for momentum in range(5):
+        second_values[3, momentum] = 60.0 + momentum
+    second_values[3, 7] = 65.0
+    second_values[3, 5] = second_values[3, 6] = 100.0
+    second_fock = np.zeros((4, 4, nk), dtype=np.complex128)
+    for momentum in range(nk):
+        second_fock[:, :, momentum] = np.diag(second_values[:, momentum])
+    second_shell = tuple(3 * nk + momentum for momentum in (5, 6))
+    second_branches = make_vituri2024_explicit_shell_branch_choices(
+        trigger_fock_sha256=hf_scf._array_sha256(second_fock),
+        trigger_previous_density_sha256=hf_scf._array_sha256(
+            first_update_reference.density
+        ),
+        shell_flat_indices=second_shell,
+        selected_rank=1,
+    )
+    path = Vituri2024ExplicitShellBranchPath(
+        branches=(first_branch, second_branches[0])
+    )
+    reversed_path = Vituri2024ExplicitShellBranchPath(
+        branches=(second_branches[0], first_branch)
+    )
+    assert len(path.fingerprint) == 64
+    assert reversed_path.fingerprint != path.fingerprint
+    drifted_path = Vituri2024ExplicitShellBranchPath(branches=path.branches)
+    object.__setattr__(drifted_path, "fingerprint", "0" * 64)
+    with pytest.raises(ValueError, match="path fingerprint drifted"):
+        drifted_path.validate_live_state()
+    with pytest.raises(ValueError, match="repeats an exact trigger"):
+        Vituri2024ExplicitShellBranchPath(branches=(first_branch, first_branch))
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        Vituri2024MaximumOverlapAufbauChoice(
+            unresolved_overlap_policy="exact_triggered_coordinate_branch_path",
+            explicit_branch=first_branch,
+            explicit_branch_path=path,
+        )
+
+    state = make_vituri2024_hf_state(prepared)
+    state.density[:, :, :] = initial_native
+    choice = Vituri2024MaximumOverlapAufbauChoice(
+        unresolved_overlap_policy="exact_triggered_coordinate_branch_path",
+        explicit_branch_path=path,
+    )
+    problem = make_vituri2024_hf_maximum_overlap_problem(prepared, state, choice)
+    assert problem.kernel.step_callback is not None
+
+    first_update = problem.kernel.density_builder(first_fock)
+    assert np.array_equal(first_update.density, first_update_reference.density)
+    assert first_update.observables["explicit_coordinate_branch_generation"] == 0.0
+    first_step = _explicit_branch_step(
+        state=state,
+        update=first_update,
+        previous_density=initial_native,
+        total_hamiltonian=first_fock,
+        iteration=3,
+    )
+    state.diagnostics["explicit_coordinate_branch_use_count"] = 1.0
+    with pytest.raises(RuntimeError, match="stale or preseeded"):
+        problem.kernel.step_callback(state, first_step)
+    state.diagnostics.clear()
+    problem.kernel.step_callback(state, first_step)
+    assert state.diagnostics["explicit_coordinate_branch_use_count"] == 1.0
+
+    drifted_second_fock = second_fock.copy()
+    drifted_second_fock[0, 0, 0] += 1.0e-6
     with pytest.raises(ValueError, match="Fock trigger mismatch"):
-        problem.kernel.density_builder(drifted_fock)
+        problem.kernel.density_builder(drifted_second_fock)
+
+    second_update = problem.kernel.density_builder(second_fock)
+    second_conventional = vituri2024_native_density_to_conventional_k_diagonal(
+        second_update.density
+    )
+    assert second_update.observables["explicit_coordinate_branch_generation"] == 1.0
+    assert second_update.observables["explicit_coordinate_branch_path_length"] == 2.0
+    assert second_conventional[3, 3, 5] == pytest.approx(1.0)
+    assert second_conventional[3, 3, 6] == pytest.approx(0.0)
+    second_step = _explicit_branch_step(
+        state=state,
+        update=second_update,
+        previous_density=first_update.density,
+        total_hamiltonian=second_fock,
+        iteration=5,
+    )
+    problem.kernel.step_callback(state, second_step)
+    assert state.diagnostics["explicit_coordinate_branch_use_count"] == 2.0
+    assert state.diagnostics["explicit_coordinate_branch_last_generation"] == 1.0
+    assert state.diagnostics[
+        "explicit_coordinate_branch_generation_0_iteration"
+    ] == 3.0
+    assert state.diagnostics[
+        "explicit_coordinate_branch_generation_1_iteration"
+    ] == 5.0
+    state.density[:, :, :] = first_update.density
+    with pytest.raises(ValueError, match="branch path is exhausted"):
+        problem.kernel.density_builder(second_fock)
+    with pytest.raises(RuntimeError, match="terminally rejected"):
+        problem.kernel.step_callback(state, second_step)
 
 
 def test_four_state_rank_two_coordinate_fanout_runs_all_six_ground_states() -> None:
