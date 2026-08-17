@@ -1,0 +1,72 @@
+{
+  "schema": "mean_field.vituri2024.n101_hv896_nested_branch_external_attestation.v1",
+  "observed_at_utc": "2026-08-17T05:05:01Z",
+  "source_commit": "a397fa070e117811aa0809fdc0c44c25a7d58ab0",
+  "runroot": "/data/home/ziyuzhu/.runs/Mean_Field_a397fa0_vituri_hf_n101_hv896_nested_branch_oda_v2_20260816",
+  "job": {
+    "job_id": "279879",
+    "job_name": "vitN101NB2",
+    "state": "COMPLETED",
+    "exit_code": "0:0",
+    "elapsed": "00:58:05",
+    "elapsed_seconds": 3485,
+    "start_cluster_local": "2026-08-17T10:30:39",
+    "end_cluster_local": "2026-08-17T11:28:44",
+    "node": "node034",
+    "allocated_cpus": 64,
+    "requested_memory": "250G",
+    "partition": "regular256",
+    "account": "hmt03",
+    "sacct_command": "sacct -j 279879 -X -n -P -o JobIDRaw,JobName,State,ExitCode,Elapsed,ElapsedRaw,Start,End,NodeList,AllocCPUS,ReqMem,Partition,Account,Comment",
+    "sacct_record": "279879|vitN101NB2|COMPLETED|0:0|00:58:05|3485|2026-08-17T10:30:39|2026-08-17T11:28:44|node034|64|250G|regular256|hmt03|."
+  },
+  "artifact_sha256": {
+    "COMPLETE_279879.json": "e9e0d25a752e48118af8cce64abf669de881af964cbd061d595f1208ca70a4e9",
+    "completion_279879.json": "85c8b2dbb48c6618e32f106fdde3a4420933be1d84cf112a1eeb75b40b1033ba",
+    "output/summary_279879.json": "0363a4559e06e0822fe28188276b9e01a59bdf335d088f93d1418aaaa191e83a",
+    "output/nested_branch_arrays_279879.npz": "33d212083429611a80d6b4f6a167137194ad4247dab4d8267f62a46a119229cd",
+    "output/postflight_279879.json": "51c3c80df9c1a25ab05a70919d6094f11918548196416fa4781ceac80eabb294",
+    "APPROVAL.json": "d86bffdb5fd07280058c978c38310708ad23f920558a79d47728dda291dcc959",
+    "config/contract.json": "45d5728697856586253c64e7cada2655fed555f13e79930a45c330250d00ed60",
+    "PAYLOAD_SHA256SUMS.txt": "aa48efdcc10db9bf0cfe24314253ba6909b16b87dd3a72122bdb5c909087a94d"
+  },
+  "sealed_outcome": {
+    "scientific_outcome": "eight_leaf_branch_tree_closed",
+    "executed_child_path_count": 4,
+    "current_coordinate_leaf_count": 8,
+    "stationary_coordinate_leaf_count": 8,
+    "unresolved_frontier_count": 0,
+    "distinct_final_density_hash_count": 6,
+    "fresh_replay_arrays_exact": true,
+    "fresh_replay_maximum_array_residual": 0.0
+  },
+  "child_endpoint_classes": [
+    {
+      "path_ids": ["p1_c0", "p1_c1"],
+      "final_density_sha256": "5808983ec8f2ce155fd00a3b9214b20fbf2ab284e3e3d6bd8d610f90457d679b",
+      "independent_energy_ev": 20379.958970065687,
+      "holes_by_valley": [888.0, 904.0],
+      "valley_balance_residual": 16.0,
+      "valid_homogeneous_half_metal_candidate": false
+    },
+    {
+      "path_ids": ["p4_c0", "p4_c1"],
+      "final_density_sha256": "ed53bf1466b9fe58a2cab1408bb6fbb75172b506f6a8cd32009f90333c1ed9bf",
+      "independent_energy_ev": 20379.958970065687,
+      "holes_by_valley": [904.0, 888.0],
+      "valley_balance_residual": 16.0,
+      "valid_homogeneous_half_metal_candidate": false
+    }
+  ],
+  "stationary_energy_spread_ev": 0.0007066224425216205,
+  "authority": {
+    "independent_finite_volume_coordinate_branch_tree_qualifier": true,
+    "author_exact_numerical_policy": false,
+    "stationary_source_promotion_authorized": false,
+    "local_hf_stability_proved": false,
+    "tdhf_source_promotion_authorized": false,
+    "production_ready": false,
+    "paper_reproduction_verified": false
+  },
+  "integrity_scope": "This Git-tracked record externally anchors the observed Slurm terminal state and sealed artifact hashes. The runroot seal is tamper-evident, not cryptographically signed or administrator-immutable."
+}
