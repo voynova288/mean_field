@@ -1,0 +1,58 @@
+{
+  "schema": "vituri2024_hf_band_panel_c_matched_density_provenance_v1",
+  "source_commit": "a397fa070e117811aa0809fdc0c44c25a7d58ab0",
+  "slurm_job_id": "303156",
+  "runroot": "/data/home/ziyuzhu/.runs/Mean_Field_a397fa0_vituri_hf_band_panel_c_n103_mirror_branch_v2_20260818",
+  "sealed_artifacts": {
+    "COMPLETE_303156.json": "a250289cfcbdbe06f69f930bf6e3330ecee1c9033551cf58cd76f4a2a1aaf9ee",
+    "output/summary_303156.json": "365e094041cb639b25a7d953a8b5cfccdaa076d9e341d8dd393146ab14ea205a",
+    "output/mirror_branch_arrays_303156.npz": "3240c825c2d7c3638f18afb43123cbd05ba33a234df5bc9ec945d25e34704ba3"
+  },
+  "paper_source": {
+    "arxiv_id": "2408.10309v1",
+    "source_archive_root": "/tmp/arxiv_2408.10309v1_audit",
+    "paper_pdf_path": "/tmp/arxiv_2408.10309v1_audit/2408.10309v1.pdf",
+    "paper_pdf_sha256": "ec761a2b494a8e5983ff3fb6cfb842e114526cc0ba8b3e7cdc7c128f5d204bc8",
+    "figure_path": "/tmp/arxiv_2408.10309v1_audit/source/figs/SC_fig_4.pdf",
+    "figure_panel": "c",
+    "figure_sha256": "8bc414ca89c47555a86f2b73e93f4b7fe1d2348124cce1adc77c0352df658766",
+    "panel_kind": "embedded raster",
+    "full_render_command": "pdftoppm -png -r 180 -singlefile SC_fig_4.pdf sc_fig4",
+    "full_render_tool": "pdftoppm 0.26.5",
+    "crop_path": "tmp/pdfs/vituri_sc_fig4/paper_panel_c_crop.png",
+    "crop_geometry_pixels": {"width": 670, "height": 600, "x_offset": 800, "y_offset": 410},
+    "crop_command": "convert sc_fig4.png -crop 670x600+800+410 +repage paper_panel_c_crop.png",
+    "crop_tool": "ImageMagick 6.9.10-68 Q16",
+    "crop_sha256": "3b054400e2c5e7cf04f51d9276aaecb46c96bc990265d064875a5e9bbb6e1b66"
+  },
+  "comparison": {
+    "plot_script_path": "tmp/plot_vituri_n103_paper_band_comparison.py",
+    "plot_script_sha256": "8c889daa1179e14d6f463a827705ef506da98c242464d1bbc44c40fc6c27f082",
+    "metrics_path": "reports/data/vituri2024_hf_band_panel_c_matched_density_metrics_20260818.json",
+    "metrics_sha256": "3fded3070f7b64d5f2863bde29819194bebdb9a95328e2bdcd9ff7717412cfa0",
+    "figure_path": "reports/figures/vituri2024_hf_band_panel_c_matched_density_comparison_20260818.png",
+    "figure_sha256": "5e87a54be91ec320bb1e5d70d153f49f44ebdcb5ceb577d7bb9958980ef57031",
+    "display_window": {"kx_a0": [-0.1, 0.1], "energy_mev": [-8.0, 12.0]},
+    "calculated_curve": "valley +, exact saved ky=0 nodes; four path curves per regulator shown as a coincident mean/envelope",
+    "paper_used_as_solver_input": false,
+    "paper_used_for_parameter_fitting": false,
+    "paper_curve_transformed_or_rescaled": false,
+    "paper_orientation_used_to_choose_displayed_valley": true,
+    "paper_axes_used_for_display_window": true,
+    "interpolation": "none for plotted calculated lines; reported Fermi roots use explicitly labelled linear interpolation between adjacent saved nodes"
+  },
+  "external_scheduler_receipt": {
+    "observed_at_utc": "2026-08-17T22:41:46Z",
+    "command": "sacct -j 303156 -X -n -P -o JobIDRaw,JobName,State,ExitCode,Elapsed,ElapsedRaw,Start,End,NodeList,AllocCPUS,ReqMem,Partition,Account",
+    "record": "303156|vitBandMirBr2|COMPLETED|0:0|00:40:20|2420|2026-08-18T05:20:38|2026-08-18T06:00:58|node043|64|250G|regular256|hmt03",
+    "scope": "Git-tracked external accounting evidence; not part of COMPLETE_303156.json"
+  },
+  "authority": {
+    "fixed_sector_diagnostic": true,
+    "unrestricted_global_aufbau_solution": false,
+    "local_hf_stability_proved": false,
+    "paper_reproduction_verified": false,
+    "author_exact_numerical_policy": false,
+    "tdhf_source_promotion_authorized": false
+  }
+}
