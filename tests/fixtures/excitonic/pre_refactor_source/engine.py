@@ -187,7 +187,6 @@ def run_hartree_fock_iterations(
     final_state_callback: Callable[[HartreeFockStateProtocol, DensityUpdateResult], None] | None = None,
     convergence_metric: Callable[[np.ndarray, np.ndarray], float] | None = None,
     convergence_rule: Literal["raw", "mixed"] = "raw",
-    require_final_raw_convergence: bool = False,
     max_iter: int = 300,
     oda_stall_threshold: float = 1e-3,
     max_oda_lambda: float | None = None,
@@ -313,12 +312,6 @@ def run_hartree_fock_iterations(
     if not np.isfinite(final_norm) or final_norm < 0.0:
         raise ValueError(f"convergence_metric returned invalid final norm {final_norm!r}")
     state.diagnostics["final_raw_norm"] = final_norm
-    if (
-        require_final_raw_convergence
-        and exit_reason == "converged"
-        and final_norm > state.precision
-    ):
-        exit_reason = "final_raw_residual"
     if final_state_callback is not None:
         final_state_callback(state, final_density_update)
 

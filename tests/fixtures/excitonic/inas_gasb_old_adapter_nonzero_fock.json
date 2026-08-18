@@ -1,0 +1,37 @@
+{
+  "classification": "pre-refactor InAs/GaSb nonzero ProjectedFockOperator trajectory oracle",
+  "fixture_npz": "inas_gasb_old_adapter_nonzero_fock.npz",
+  "fixture_sha256": "2157f19039bd2fc76b283221890fd6c50e6c26497b30cc336f1d036a8821c3ee",
+  "generator": {
+    "path": "tests/fixtures/excitonic/generate_old_adapter_nonzero_fock.py",
+    "sha256": "9461ceada0688347a3b10e13503f5e29568ea8274279167a6f9779da09e207e8",
+    "command": "PARITY_OUTPUT=<fixture_npz> PYTHONPATH=<pre_refactor_src> python generate_old_adapter_nonzero_fock.py"
+  },
+  "pre_refactor_source_snapshot": "pre_refactor_source",
+  "pre_refactor_sources": {
+    "src/mean_field/systems/inas_gasb/matrix_ei.py": "48f49ce3099a63bb7ac3c889ad930c43b61a0e7805792d31f567e00149be1cd5",
+    "src/mean_field/systems/inas_gasb/projected_model.py": "0b5b9fb7ac9f0790e841a8597074be95268ef970bd67c7bd094edd4934739b4a",
+    "src/mean_field/systems/inas_gasb/conventions.py": "e99a9b3032b30de0f3fed05eb9d81507db45e0710a338a0ebc91fa381d5b2f0a",
+    "src/mean_field/core/hf/engine.py": "7039bee3095e9901fbff6ced6a560ce162389f4d5e7ceed4d8e995163e263456"
+  },
+  "runtime": {
+    "host": "test001",
+    "python": "3.13.9 | packaged by conda-forge | GCC 14.3.0",
+    "numpy": "2.3.5",
+    "scipy": "1.16.3"
+  },
+  "expected": {
+    "converged": true,
+    "exit_reason": "converged",
+    "iterations": 70
+  },
+  "contract": {
+    "constraint_policy": "kane_poisson_fixed_mu",
+    "fixed_mu_mev": 0.0,
+    "normal_ordering_reference_policy": "electron_hole_vacuum",
+    "temperature_K": 0.25,
+    "mixing": 0.3,
+    "precision": 1e-11,
+    "nonzero_microscopic_fock": true
+  }
+}

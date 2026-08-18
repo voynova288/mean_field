@@ -38,7 +38,9 @@ class HartreeFockKernel:
     density_postprocessor: Callable[[np.ndarray], None] | None = None
     step_callback: Callable[[HartreeFockStateProtocol, HartreeFockStepResult], None] | None = None
     final_state_callback: Callable[[HartreeFockStateProtocol, DensityUpdateResult], None] | None = None
+    convergence_metric: Callable[[np.ndarray, np.ndarray], float] | None = None
     convergence_rule: Literal["raw", "mixed"] = "raw"
+    require_final_raw_convergence: bool = False
 
 
 @dataclass(frozen=True)
@@ -71,7 +73,9 @@ def run_hartree_fock_problem(
         density_postprocessor=problem.kernel.density_postprocessor,
         step_callback=problem.kernel.step_callback,
         final_state_callback=problem.kernel.final_state_callback,
+        convergence_metric=problem.kernel.convergence_metric,
         convergence_rule=problem.kernel.convergence_rule,
+        require_final_raw_convergence=problem.kernel.require_final_raw_convergence,
         max_iter=max_iter,
         oda_stall_threshold=oda_stall_threshold,
         max_oda_lambda=max_oda_lambda,
