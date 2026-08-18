@@ -11,6 +11,19 @@ from .artifacts import (
     write_contract_artifacts,
 )
 from .bands import BandBundle, KGrid, KPath, band_bundle_from_result, compute_bands
+from .excitonic import (
+    ElectronHoleSubspaces,
+    FixedChemicalPotential,
+    FixedOccupation,
+    LinearSelfEnergyCertificate,
+    LinearSelfEnergyFunctional,
+    ReferenceSubtractedHFConfig,
+    ReferenceSubtractedHFResult,
+    certify_linear_self_energy,
+    fermi_density_from_hamiltonian,
+    make_fermi_density_builder,
+    run_reference_subtracted_hf,
+)
 from .hf import HFConfig, HFResult, HFState, WavefunctionBundle, reconstruct_canonical_hf_run_result, run_hf
 from .models import (
     BandEigenResult,
@@ -27,6 +40,17 @@ from .models import (
 
 __all__ = [
     "ArtifactManifest",
+    "ElectronHoleSubspaces",
+    "FixedChemicalPotential",
+    "FixedOccupation",
+    "LinearSelfEnergyCertificate",
+    "LinearSelfEnergyFunctional",
+    "ReferenceSubtractedHFConfig",
+    "ReferenceSubtractedHFResult",
+    "certify_linear_self_energy",
+    "fermi_density_from_hamiltonian",
+    "make_fermi_density_builder",
+    "run_reference_subtracted_hf",
     "BandBundle",
     "BandEigenResult",
     "ContinuumModel",

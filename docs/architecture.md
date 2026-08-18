@@ -42,6 +42,22 @@ src/mean_field/
 - TBG zero-field benchmark orchestration, artifact export, plotting, and runner helpers are archived out of the tracked public surface. Tracked zero-field TBG keeps the core BM model, overlaps, HF kernels, path helpers, and HF contract adapters.
 - Benchmark metadata loaders and package CLI glue are archived out of the tracked public surface for now.
 
+## Generic excitonic matrix-HF layer
+
+System-independent finite-temperature electron-hole matrix mean field lives in
+`src/mean_field/core/hf/excitonic.py` and is exposed through
+`mean_field.api.excitonic`. The core owns ket-oriented weighted density
+bookkeeping, explicit `D=P-P_ref` iteration, fixed-chemical-potential and
+fixed-occupation Fermi maps, linear self-energy assembly, thermodynamics, and
+explicit electron/hole coherence diagnostics. It must not infer electron/hole
+identity from energy rank or embed a material-specific normal-ordering,
+screening, electrostatic, or chemical-potential convention.
+
+Physical-system adapters own Hamiltonians, source fingerprints, subspace
+labels/projectors, microscopic interaction kernels, electrostatic ensembles,
+and the physical interpretation of `P_ref` and a fixed chemical potential.
+See `docs/excitonic_hf_api.md` for formulas and the public contract.
+
 ## Retirement archive policy
 
 Cleanup may retire system-specific implementation surfaces even when they could be useful as debugging references later. Before deleting or replacing substantial system-specific HF, topology, bands, band-plot, or Berry-curvature plotting code, copy the old tracked file or code slice into an ignored local archive such as `local_archive/retired_surface/<date-or-commit>/...`. The archive is intentionally not pushed to git and must not be imported by package code, tests, scripts, or docs examples. It is a recovery/reference stash only; the package surface and LOC metrics count only files tracked by git.
