@@ -11,11 +11,14 @@ The package started as a benchmark-driven rewrite of a Julia `TBG_HartreeFock` w
 - `mean_field.systems.tmbg`: twisted monolayer-bilayer graphene continuum model and validation checks.
 - `mean_field.systems.tdbg`: twisted double bilayer graphene continuum model and projected-HF helpers.
 - `mean_field.systems.htg`: primitive helical trilayer graphene continuum model and projected-HF adapter for Kwan et al. style calculations.
-- `analysis.topology`: minimal system-independent FHS link/plaquette/Chern helpers, wavefunction-grid canonicalization helpers, and a small system-facing adapter for already-built eigenvector grids. Thin `mean_field.systems.{tmbg,tdbg,RnG_hBN,htg}.topology` wrappers and matching model `topology_on_grid(...)` convenience methods delegate to this common API. `mean_field.core.hf.reconstruction` contains the system-independent projected-basis array contraction helper; TDBG, HTG primitive, and RLG-hBN now have reviewed system-owned reconstruction adapters. `mean_field.systems.tmbg.polshyn_supercell.reconstruct_polshyn_wang_hf_micro_wavefunctions` is a public flat-k diagnostic API and its returned bundles remain topology-ineligible; Polshyn topology must go through `mean_field.systems.tmbg.topology.compute_polshyn_projected_hf_topology`, which owns doubled-cell reshape/sewing before delegating to common FHS. Paper workflows remain archived/review-gated under `local_archive/retired_surface/topology_untracked_20260622/`; optional QGT helpers are archived under `local_archive/optional_features/topology_quantum_geometry_20260625/`.
+- `mean_field.systems.inas_gasb`: projected E1/H1 matrix-excitonic HF adapter and source-bound axial/radial interaction machinery. The public API is generic; material-specific reproduction authority remains report-gated.
+- `analysis.topology`: minimal system-independent FHS link/plaquette/Chern core. System adapters build a topology-ready `FHSState` with explicit sewing metadata, then callers invoke `analysis.topology.compute_lattice_topology(state)`. `mean_field.core.hf.reconstruction` contains the system-independent projected-basis array contraction helper; TDBG, HTG primitive, and RLG-hBN have system-owned reconstruction adapters. `mean_field.systems.tmbg.polshyn_supercell.reconstruct_polshyn_wang_hf_micro_wavefunctions` returns topology-ineligible flat-k diagnostics; Polshyn topology must first use `mean_field.systems.tmbg.topology.fhs_state_from_polshyn_projected_hf` for doubled-cell reshape/sewing, then enter the common FHS core. Paper workflows remain archived/review-gated under `local_archive/retired_surface/topology_untracked_20260622/`; optional QGT helpers are archived under `local_archive/optional_features/topology_quantum_geometry_20260625/`.
 - `analysis.optical_response`: reusable WannierBerri-style, gauge-safe derivative and shift-current helpers for Berry-connection generalized derivatives, shift vectors, response components, named conventions, occupations, Lorentzian/heatmap accumulation, and one-k-point tensor helpers.
 - `analysis.response_derivative_gauge` and `analysis.shift_current`: historical compatibility import paths that re-export the common optical-response API. System-specific Hamiltonians/derivatives live under `mean_field.systems.*`; historical shift-current audit notes stay in ignored local reports/internal workspaces.
 
 Large generated outputs, local benchmark bundles, PDFs, Slurm logs, local tests, historical reports, planning notes, and code-agent work documents are intentionally not versioned. They should be regenerated, kept in an internal workspace, or stored separately.
+
+An explicit publication exception is [`docs/du2017_n95_reproduction_status.md`](docs/du2017_n95_reproduction_status.md), requested as a durable, provenance-bound scientific-status report for the public InAs/GaSb adapter. It includes original SVG replots/schematics and hashes of internal evidence, but does not distribute calculation NPZs or claim paper reproduction.
 
 ## Install
 
@@ -65,7 +68,7 @@ sbatch scripts/submit_mean_field.sbatch python -m compileall -q src scripts
 
 - `src/mean_field/`: installable Python package.
 - `scripts/`: stable/generic entrypoints only; one-off wrappers should stay in ignored scratch paths.
-- `docs/`: stable architecture, framework/API contracts, script policy, and durable migration maps only.
+- `docs/`: stable architecture, framework/API contracts, script policy, durable migration maps, and explicitly approved provenance-bound status reports.
 
 The following local directories are ignored by design:
 

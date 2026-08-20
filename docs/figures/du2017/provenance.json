@@ -1,0 +1,86 @@
+{
+  "additional_report_sources": {
+    "results/du2017_inas_gasb_excitonic_insulator/runs/du2017_kane8_band_views_20260811/kane_poisson_fixed_canonical_mu_literal_note2_bcs/report.json": "aae1c27cff946280acc733e7ae192640793e81002391b85e909c3bddeac35862"
+  },
+  "figures": {
+    "canonical_n95_kane_poisson.svg": {
+      "classification": "independently calculated fixed-regulator saved-grid checkpoint replot; radial ray only",
+      "figure_sha256": "78e11c0a9c3b8a4e0665f851d1b4703550007468cef1249c5cace6f9ee765a15",
+      "metrics": {
+        "electron_density_nm2": 0.003030400009183813,
+        "final_fixed_point_residual_mev": 1.6593757091953876e-05,
+        "gamma_active_quartet_separation_mev": 24.77589599775412,
+        "hole_density_nm2": 0.0030304000091838194,
+        "minimum_middle_rank_gap_k_nm_inv": 0.147,
+        "minimum_middle_rank_gap_mev": 3.5364671164550288,
+        "mu_mev": 113.8688022886634,
+        "potential_peak_to_peak_mev": 19.056097126608684
+      },
+      "sources": {
+        "results/inas_gasb_matrix_ei_experiment/runs/phase0_du2017_N95_plane_wave_canonical_scf_k024_20260730/CONTRACT_CORRECTION.json": "0d5c452c61335f95acb22b52374df098bfa33ddaacecaebff601669a84e999ed",
+        "results/inas_gasb_matrix_ei_experiment/runs/phase0_du2017_N95_plane_wave_canonical_scf_k024_20260730/canonical_N95_kane_poisson.npz": "33f3116faf74080ab83ac342d70ecca59ee3b8e4eeb60c24a20911b1f6041c3a"
+      },
+      "transformations": [
+        "potential shifted by its z-weighted mean for display",
+        "active quartet energies shifted by saved mu_KP",
+        "marker color is z-integrated Gamma6 weight",
+        "no interpolation or off-grid reconstruction"
+      ]
+    },
+    "literal_note2_bcs_result.svg": {
+      "classification": "independently calculated literal printed Note-2 scalar-model output",
+      "figure_sha256": "d4ecc9e35cdb32ca0cee4a233e58383b1964d25d4cf363aa73cac7c66745d26d",
+      "sources": {
+        "results/du2017_inas_gasb_excitonic_insulator/runs/du2017_literal_note2_fixed_density_bcs_20260816/nr320_k024.npz": "a412305105f9a19f589fee17135c36bf01cf51c0da1fa4e7280be19271620a5f",
+        "results/du2017_inas_gasb_excitonic_insulator/runs/du2017_literal_note2_fixed_density_bcs_20260816/report.json": "a3d3885e35cf7661bb7f34c1c43f5fe59fc87a19aee7f05166a663628a228d1f"
+      },
+      "transformations": [
+        "panel a display cropped to k <= 0.12 nm^-1 from a kmax=0.24 nm^-1 solver",
+        "panel b uses saved physical k dk/(2pi) JDOS with Gaussian gamma=0.1 meV",
+        "JDOS normalized by its saved maximum"
+      ]
+    },
+    "paper_fig2_semantics_schematic.svg": {
+      "classification": "original conceptual redraw; not digitization, not to scale, and not numerical evidence",
+      "figure_sha256": "9214dc36c7c33c8c52bb3453a4faf53eba00c7e61042e73a0232e61ca4f8597b",
+      "manually_read_approximate_values": {
+        "k_zero_feature_energy_mev": 7.0,
+        "ring_minimum_energy_mev": 1.5,
+        "ring_minimum_k_nm_inv": 0.024
+      },
+      "source": "Du et al., Nature Communications 8, 1971 (2017), Fig. 2 caption and main-text pair-breaking discussion, DOI 10.1038/s41467-017-01988-1",
+      "transformations": [
+        "curve shapes, widths, and relative JDOS amplitudes are illustrative",
+        "reported high-energy fine doublet is not resolved in the schematic"
+      ]
+    },
+    "same_parent_nr640_matrix_bcs_and_bare_current.svg": {
+      "classification": "independently calculated fixed-mu radial exchange-only matrix state plus postflight-rejected bare-current lineshape",
+      "figure_sha256": "bf9fcbafb58383ce06039d9341a17256ec5eeaf9914ee3290a93e3d140d630d0",
+      "sources": {
+        "results/inas_gasb_matrix_ei_experiment/runs/phase2_du2017_N95_refined_raw_radial_nr640_forecast_20260818/bare_current_response_nr320_nr640_postflight/POSTFLIGHT_REJECTED.json": "c2573e89ff2dfd2d7cc27fa1c383d1b42123ee4d7ca72a15b8582b83d43a1e09",
+        "results/inas_gasb_matrix_ei_experiment/runs/phase2_du2017_N95_refined_raw_radial_nr640_forecast_20260818/bare_current_response_nr320_nr640_postflight/report.json": "9f80006fa0d4105d70d6f4b5483a88fba6d2e0ec6fe1d9d4596fd4d4c896d88f",
+        "results/inas_gasb_matrix_ei_experiment/runs/phase2_du2017_N95_refined_raw_radial_nr640_forecast_20260818/bare_current_response_nr640/bare_current_response_nr640.npz": "cc2016f663a57ffae578673a3dd3e92988e4b458526dc75d78ef8b915b0654be",
+        "results/inas_gasb_matrix_ei_experiment/runs/phase2_du2017_N95_refined_raw_radial_nr640_forecast_20260818/bare_current_response_nr640/report.json": "4f067af4eeb35b5d9b9a0abf7809bd35b9c075268a5bf9486dc92b8eaa0a3bf0",
+        "results/inas_gasb_matrix_ei_experiment/runs/phase2_du2017_N95_refined_raw_radial_nr640_forecast_20260818/fixed_mu_matrix_bcs_normal_tr/metadata.json": "eec206b743117857f58f1ce7231ff861ca63fbbbf4314caf2454731ed6425d2a",
+        "results/inas_gasb_matrix_ei_experiment/runs/phase2_du2017_N95_refined_raw_radial_nr640_forecast_20260818/fixed_mu_matrix_bcs_normal_tr/result.npz": "d112970f3853b9b03a714fd513c9c163132205c7056296db723eb733b0828580",
+        "results/inas_gasb_matrix_ei_experiment/runs/phase2_du2017_N95_refined_raw_radial_nr640_forecast_20260818/refined_raw_radial_kane4_nr640_forecast.npz": "7c0def02b2db9091677c01ed38f1e608620f12509046c6d033937a0929724f52"
+      },
+      "transformations": [
+        "matrix-order curves are singular values of saved Sigma_F[:2,2:]",
+        "band energies shifted by fixed mu_KP",
+        "bare-current curve is the saved peak-normalized gamma=0.2 meV shape",
+        "peak-position and gauge gates passed; overall postflight rejected because shape L1=0.03120597 > 0.02"
+      ]
+    }
+  },
+  "generator": {
+    "path": "docs/figures/du2017/generate_figures.py",
+    "sha256": "d28d152be25a76a2966a8db5123b5a447fdbe60be101b426f6d0ccce8b2da2ea"
+  },
+  "regeneration_command": "DU2017_SOURCE_ROOT=/path/to/Mean_Field python docs/figures/du2017/generate_figures.py",
+  "reuse_rights": "no separate license is granted for report figures; repository policy applies",
+  "schema": "du2017-report-figure-provenance-v2",
+  "source_distribution": "internal calculation archive; hashes and transformations public, source bytes not distributed",
+  "source_root": "/data/home/ziyuzhu/Mean_Field"
+}
