@@ -1,0 +1,203 @@
+{
+  "schema": "vituri2024_hf_band_panel_c_discrepancy_followup_v2",
+  "date": "2026-08-20",
+  "paper_target": {
+    "delta1_mev": 28.0,
+    "signed_carrier_density_cm2": -1030000000000.0,
+    "hole_density_magnitude_cm2": 1030000000000.0,
+    "cut": "ky=0",
+    "paper_claim": "incipient central pocket remains above the Fermi level"
+  },
+  "stationary_parent": {
+    "job_id": "303156",
+    "regulator": "N101/Hv768 fixed half-metal sector",
+    "sentinel_sha256": "a250289cfcbdbe06f69f930bf6e3330ecee1c9033551cf58cd76f4a2a1aaf9ee",
+    "summary_sha256": "365e094041cb639b25a7d953a8b5cfccdaa076d9e341d8dd393146ab14ea205a",
+    "arrays_sha256": "3240c825c2d7c3638f18afb43123cbd05ba33a234df5bc9ec945d25e34704ba3",
+    "center_total_mev": -3.8536573011633823,
+    "center_h0_mev": -4.742626465799579,
+    "centered_hf_selfenergy_mev": 0.8889691646361966,
+    "decomposition_provenance": "deterministically derived from the sealed job-303156 arrays; not a separately sealed child artifact",
+    "frozen_fock_global_diagonal_sort_audit": {
+      "provenance": "deterministically derived from the sealed job-303156 arrays; not a separately sealed child artifact",
+      "Hv768": {
+        "changed_occupation_count": 0,
+        "global_gap_mev": 0.03965959841445432,
+        "center_relative_global_mu_mev": -3.8536573011633823
+      },
+      "Hv770": {
+        "changed_occupation_count": 0,
+        "global_gap_mev": 0.0607893704602791,
+        "center_relative_global_mu_mev": -3.857536476147061
+      },
+      "scope": "saved-Fock diagonal global resort only; does not establish an unrestricted/coherent HF solution or trajectory"
+    }
+  },
+  "uv_one_shot": {
+    "job_id": "432973",
+    "runroot": "/data/home/ziyuzhu/.runs/Mean_Field_a397fa0_vituri_hf_band_panel_c_uv_one_shot_v2_20260818",
+    "sentinel_sha256": "483242f2e8c7be3fa4f2c909194e319f14927d8e646128a11acca285e4e3f929",
+    "summary_sha256": "55912a0ce79ce148e3835e1b8e4a0ea13a4b5cef5e5728f267a422f3139668aa",
+    "arrays_sha256": "44bab7a0f3876365507e08233764418097bacacaef693a3e3768fe31e196dcfb",
+    "postflight_sha256": "3b13b9bdddbac73f0930b93a87db491ee4f1152661da09cf076866701b6bfa0d",
+    "fixed_inputs": {
+      "holes_per_valley": 768,
+      "hole_density_magnitude_cm2": 1030000000000.0,
+      "delta_k_a0": 0.004002561189590611,
+      "delta1_mev": 28.0,
+      "gate_distance_angstrom": 250.0,
+      "epsilon": 8.0,
+      "qtf_per_a0": 0.04,
+      "normal_order_reference": "R0"
+    },
+    "centers_mev": {
+      "N81_kaxial_a0_0.1601024476": -5.119621283990017,
+      "N101_kaxial_a0_0.2001280595": -4.335194183177737,
+      "N121_kaxial_a0_0.2401536714": -3.5285998944898367
+    },
+    "run_semantics": {
+      "interaction_actions_per_domain": 1,
+      "no_scf_update": true,
+      "no_fock_derived_occupation_selection": true,
+      "identical_hole_labels_across_domains": true,
+      "identical_projector_on_common_momentum_labels": true,
+      "same_global_array_shape_across_domains": false
+    },
+    "fock_boundary_diagnostics": {
+      "N81": {
+        "gap_mev": 0.0,
+        "exact_multiplicity": 2,
+        "unique_aufbau_update_authorized": false
+      },
+      "N101": {
+        "gap_mev": 0.0,
+        "exact_multiplicity": 2,
+        "unique_aufbau_update_authorized": false
+      },
+      "N121": {
+        "gap_mev": 0.00863880840684672,
+        "exact_lower_multiplicity": 2,
+        "exact_upper_multiplicity": 2,
+        "unique_aufbau_update_authorized": true
+      },
+      "interpretation": "the one-shot center and boundary energy remain defined; no Fock-derived occupation was selected"
+    },
+    "center_steps_mev": [
+      0.7844271008122794,
+      0.8065942886879007
+    ],
+    "center_span_mev": 1.5910213895001801,
+    "monotonic": true,
+    "missing_stationary_center_scale_mev": 3.8536573011633823,
+    "decision": "tested one-shot square-domain span is below the missing center scale; no UV convergence plateau is established"
+  },
+  "scheduler_evidence_outside_sentinel": {
+    "job432965": {
+      "state": "FAILED",
+      "exit_code": "1:0",
+      "elapsed": "00:00:15",
+      "node": "node025",
+      "classification": "pre_numeric_runtime_identity_mismatch",
+      "scientific_output_published": false,
+      "stderr_sha256": "65ebcf6ba916aedbc7c78ccdfaad711b82d2dc1103eda7f1e8193ba0a8fe2e2f"
+    },
+    "job432973": {
+      "state": "COMPLETED",
+      "exit_code": "0:0",
+      "elapsed": "00:25:14",
+      "node": "node025",
+      "slurm_step_maxrss_kib": 63938584,
+      "process_ru_maxrss_kib": 63840112
+    }
+  },
+  "paper_method_audit": {
+    "figure4c_quantity": {
+      "interpretation": "electron HF eigenvalue minus electron chemical potential",
+      "hole_sign_reversal_allowed": false,
+      "reason": "the plotted central feature is a local minimum whose downward crossing creates an occupied inner electron pocket and annular hole Fermi surface"
+    },
+    "hamiltonian_mapping": {
+      "third_lowest_band_zero_based_index": 2,
+      "basis": ["A1", "B3", "B1", "A2", "B2", "A3"],
+      "delta1_ev": 0.028,
+      "matrix_mapping_match": true,
+      "paper_b3_psi6_gauge_label_conflict_affects_spectrum": false
+    },
+    "printed_hartree_index": {
+      "expected_from_projected_quartic": "outer u_ii(k), inner u_jj(k'); in the homogeneous deltaG=0, q=0 sector the sums factorize to an identity",
+      "printed_equation": "inner u_ii(k') with an unused sum_j",
+      "saved_array_audit_sha256": "3151f5b736c64da87a68e0d28dcd686666bc85cb9f719f836dddaefb6b5d5ede",
+      "frozen_d250_same_i_after_deleting_unused_j_sum_center_mev": 32.16789500111395,
+      "frozen_d250_fully_literal_same_i_factor6_center_mev": 225.48528445820358,
+      "conclusion": "the printed expression is internally malformed and the projected quartic implies inner jj; both frozen counterfactuals are grossly incompatible with the slightly positive paper minimum, while the author implementation remains unidentified"
+    },
+    "full_active_reference_frozen_candidate": {
+      "formula": "F_h(R=I)=F_h(R=0)+h0-F_full(R=0), up to a k-independent Hartree identity",
+      "formula_assumptions": [
+        "homogeneous flavor-diagonal saved state",
+        "exactly full same-valley comparator flavor",
+        "hole and comparator flavors share identical h0 and total Hartree field",
+        "k-independent Hartree constants are removed from centered energies"
+      ],
+      "general_RI_identity": false,
+      "saved_array_audit_sha256": "8ac360d3588fbf0fc32dd4ae583ac49432885bbdba9d5e107525ccf6b09bf766",
+      "stationary_R0_center_mev": -3.8536573011633823,
+      "stationary_RI_candidate_center_mev": -1.795131642305936,
+      "stationary_RI_candidate_crossing_count": 4,
+      "initial_fock_RI_candidate_centers_mev": {
+        "N81": -2.226897167243558,
+        "N101": -2.2268971672434468,
+        "N121": -2.2268971672434468
+      },
+      "interpretation": "the tested frozen N81/N101/N121 R0 trend cancels algebraically in this candidate because hole labels and boundary ordering remain common; this does not establish larger-domain, different-shape, or post-SCF UV convergence",
+      "authority": "saved-array frozen-density diagnostic only; R=I is not implied by the printed raw quartic functional and no R=I SCF was run"
+    },
+    "gate_distance_vector_inference": {
+      "figure": "SM Fig. 5 vector PDF",
+      "figure_sha256": "0e1f55ec1ca11c6c0cbaa5f8cb00aec8393e095766b0c208b08f9e061718120c",
+      "inference_audit_sha256": "a60716777ac8465a46f43113d67d29ed736a2c311ee073eb217ee8a2e46679c5",
+      "q0_epsilon8_qtf0_mev_a0_squared": 689783.3173058856,
+      "q0_epsilon8_qtf004_mev_a0_squared": 98539.43722352022,
+      "inferred_d_from_unscreened_a0": 150.03967421229035,
+      "inferred_d_from_screened_a0": 150.2670772085408,
+      "likely_author_input_d_a0": 150.0,
+      "likely_author_input_d_angstrom": 369.0,
+      "authority": "conditional vector-figure inference using the printed V0/VTF formula and logarithmic-axis calibration; d is not stated in the paper text and author code is unavailable"
+    },
+    "source_state_scope": "the supplement describes a general unrestricted mBZ IVC/CDW multistart and transfer-learning procedure, but does not identify whether Fig.4(c) came from that solver converging to zero IVC/CDW or a separately constrained homogeneous calculation; job303156 is a homogeneous fixed-sector stationary state"
+  },
+  "public_source_audit": {
+    "search_date": "2026-08-20",
+    "arxiv_versions": ["v1"],
+    "source_package_contains_numerical_code_or_arrays": false,
+    "specified_hf_extraction_delta_k_per_a0": 0.004,
+    "specified_pairing_interpolation_delta_k_per_a0": 0.0016,
+    "delta_k_statement_scope": "low-temperature linearized-gap workflow: HF spectrum and effective interaction obtained on the 0.004/a0 grid and interpolated to 0.0016/a0; the source does not explicitly identify which grid produced displayed Fig. 4(c)",
+    "not_found_in_records_checked": [
+      "HF momentum-domain shape and extent",
+      "HF point count and endpoint policy",
+      "finite-grid exact-rank occupation/tie policy",
+      "panel-c numerical band data",
+      "linked public code/data repository"
+    ],
+    "records_checked": [
+      "https://arxiv.org/abs/2408.10309",
+      "https://arxiv.org/html/2408.10309v1",
+      "https://doi.org/10.1103/PhysRevB.111.075103",
+      "institutional publication records and targeted GitHub/Zenodo/Figshare/OSF/Dryad queries"
+    ],
+    "scope": "bounded public-source search; does not prove private author code/data are absent"
+  },
+  "conclusions": {
+    "electron_hole_sign_flip_explains_mismatch": false,
+    "active_band_or_delta1_mapping_error_found": false,
+    "tested_frozen_printed_hartree_counterfactual_matches_paper": false,
+    "frozen_full_active_reference_candidate_sufficient": false,
+    "saved_fock_global_diagonal_resort_changes_projector": false,
+    "tested_uv_interval_sufficient_at_one_shot_level": false,
+    "uv_domain_converged": false,
+    "unrestricted_coherent_or_finite_q_basin_excluded": false,
+    "interaction_normalization_or_convention_error_excluded": false,
+    "paper_reproduction_verified": false
+  }
+}
