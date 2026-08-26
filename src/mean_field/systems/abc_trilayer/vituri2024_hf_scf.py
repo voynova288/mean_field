@@ -61,6 +61,7 @@ from .vituri2024_hf import (
     make_vituri2024_translational_q0_reproduction_choice,
     vituri2024_native_density_to_conventional_k_diagonal,
 )
+from .vituri2024_hf_fft import Vituri2024TranslationalHFFFTFunctional
 from .vituri2024_hf_preflight import (
     ACTIVE_BAND_STATES_VALLEY_ORDER,
     INTERNAL_FLAVOR_ORDER,
@@ -80,7 +81,7 @@ SeedMode = Literal[
     "random_projector",
 ]
 
-VITURI2024_HF_SCF_API_VERSION: Final[str] = "vituri2024_homogeneous_hf_scf.v3"
+VITURI2024_HF_SCF_API_VERSION: Final[str] = "vituri2024_homogeneous_hf_scf.v4"
 VITURI2024_MAXIMUM_OVERLAP_AUFBAU_API_VERSION: Final[str] = (
  "vituri2024_maximum_overlap_aufbau.v2"
 )
@@ -155,6 +156,10 @@ class Vituri2024CartesianHFSpec:
     gate_distance_angstrom: float = VITURI2024_GATE_DISTANCE_ANGSTROM
     coulomb_e2_ev_angstrom: float = VITURI2024_COULOMB_E2_EV_ANGSTROM
     precision: float = VITURI2024_DEFAULT_PRECISION
+    construction_mode: Literal["density_derived", "explicit_spacing"] = (
+        "density_derived"
+    )
+    requested_delta_k_a0: float | None = None
     area_angstrom_squared: float = field(init=False)
     side_length_angstrom: float = field(init=False)
     delta_k_inverse_angstrom: float = field(init=False)
@@ -189,12 +194,41 @@ class Vituri2024CartesianHFSpec:
             positive=True,
         )
         precision = _finite_real(self.precision, "precision", positive=True)
+        if self.construction_mode not in ("density_derived", "explicit_spacing"):
+            raise ValueError("invalid Vituri Cartesian HF construction_mode")
+        construction_mode = self.construction_mode
+        if construction_mode == "density_derived":
+            if self.requested_delta_k_a0 is not None:
+                raise ValueError(
+                    "density-derived construction requires requested_delta_k_a0=None"
+                )
+            requested_delta_k_a0 = None
+        else:
+            if self.requested_delta_k_a0 is None:
+                raise ValueError(
+                    "explicit-spacing construction requires requested_delta_k_a0"
+                )
+            requested_delta_k_a0 = _finite_real(
+                self.requested_delta_k_a0,
+                "requested_delta_k_a0",
+                positive=True,
+            )
         density_a2 = density_cm2 * VITURI2024_CM2_TO_ANGSTROM2
         total_holes = 2 * holes_per_valley
         area = total_holes / density_a2
         side = math.sqrt(area)
         delta_k = 2.0 * math.pi / side
-        axial_k_cutoff_a0 = (size // 2) * delta_k * VITURI2024_PARAMETERS.a0
+        realized_delta_k_a0 = delta_k * VITURI2024_PARAMETERS.a0
+        if requested_delta_k_a0 is not None and not math.isclose(
+            realized_delta_k_a0,
+            requested_delta_k_a0,
+            rel_tol=8.0 * float(np.finfo(np.float64).eps),
+            abs_tol=0.0,
+        ):
+            raise ValueError(
+                "explicit-spacing construction is inconsistent with total density"
+            )
+        axial_k_cutoff_a0 = (size // 2) * realized_delta_k_a0
         corner_k_cutoff_a0 = math.sqrt(2.0) * axial_k_cutoff_a0
         total_electrons = 4 * nk - total_holes
         object.__setattr__(self, "mesh_size", size)
@@ -204,6 +238,10 @@ class Vituri2024CartesianHFSpec:
         object.__setattr__(self, "gate_distance_angstrom", gate)
         object.__setattr__(self, "coulomb_e2_ev_angstrom", e2)
         object.__setattr__(self, "precision", precision)
+        object.__setattr__(self, "construction_mode", construction_mode)
+        object.__setattr__(
+            self, "requested_delta_k_a0", requested_delta_k_a0
+        )
         object.__setattr__(self, "area_angstrom_squared", area)
         object.__setattr__(self, "side_length_angstrom", side)
         object.__setattr__(self, "delta_k_inverse_angstrom", delta_k)
@@ -224,6 +262,8 @@ class Vituri2024CartesianHFSpec:
             "gate_distance_angstrom": self.gate_distance_angstrom,
             "coulomb_e2_ev_angstrom": self.coulomb_e2_ev_angstrom,
             "precision": self.precision,
+            "construction_mode": self.construction_mode,
+            "requested_delta_k_a0": self.requested_delta_k_a0,
             "area_angstrom_squared": self.area_angstrom_squared,
             "side_length_angstrom": self.side_length_angstrom,
             "delta_k_inverse_angstrom": self.delta_k_inverse_angstrom,
@@ -246,8 +286,22 @@ class Vituri2024CartesianHFSpec:
         expected_area = self.total_holes / density_a2
         expected_side = math.sqrt(expected_area)
         expected_delta_k = 2.0 * math.pi / expected_side
-        expected_axial = (
-            (self.mesh_size // 2) * expected_delta_k * VITURI2024_PARAMETERS.a0
+        expected_delta_k_a0 = expected_delta_k * VITURI2024_PARAMETERS.a0
+        expected_axial = (self.mesh_size // 2) * expected_delta_k_a0
+        mode_consistent = (
+            self.construction_mode == "density_derived"
+            and self.requested_delta_k_a0 is None
+        ) or (
+            self.construction_mode == "explicit_spacing"
+            and type(self.requested_delta_k_a0) is float
+            and math.isfinite(self.requested_delta_k_a0)
+            and self.requested_delta_k_a0 > 0.0
+            and math.isclose(
+                expected_delta_k_a0,
+                self.requested_delta_k_a0,
+                rel_tol=8.0 * float(np.finfo(np.float64).eps),
+                abs_tol=0.0,
+            )
         )
         locked = (
             type(self.mesh_size) is int,
@@ -265,6 +319,7 @@ class Vituri2024CartesianHFSpec:
             self.axial_k_cutoff_a0 == expected_axial,
             self.k_cutoff_a0 == expected_axial,
             self.corner_k_cutoff_a0 == math.sqrt(2.0) * expected_axial,
+            mode_consistent,
             self.authority == VITURI2024_HF_SCF_AUTHORITY,
             self.production_ready is False,
             self.paper_reproduction_verified is False,
@@ -281,6 +336,59 @@ class Vituri2024CartesianHFSpec:
         return self.total_holes / self.area_angstrom_squared / VITURI2024_CM2_TO_ANGSTROM2
 
 
+def make_vituri2024_cartesian_hf_spec_from_spacing(
+    mesh_size: int,
+    holes_per_valley: int,
+    delta_k_a0: float,
+    *,
+    delta1_ev: float = VITURI2024_DELTA1_EV,
+    gate_distance_angstrom: float = VITURI2024_GATE_DISTANCE_ANGSTROM,
+    coulomb_e2_ev_angstrom: float = VITURI2024_COULOMB_E2_EV_ANGSTROM,
+    precision: float = VITURI2024_DEFAULT_PRECISION,
+) -> Vituri2024CartesianHFSpec:
+    """Derive the realized fixed density from an explicit Cartesian spacing.
+
+    ``delta_k_a0`` is the dimensionless nearest-neighbor grid spacing
+    ``Delta k * a0``.  The returned finite-volume spec immutably records the
+    explicit-spacing construction mode and exact requested value.  It grants
+    no UV-convergence or paper authority.
+    """
+
+    size = _strict_int(mesh_size, "mesh_size")
+    holes = _strict_int(holes_per_valley, "holes_per_valley")
+    spacing_a0 = _finite_real(delta_k_a0, "delta_k_a0", positive=True)
+    delta_k = spacing_a0 / VITURI2024_PARAMETERS.a0
+    area = (2.0 * math.pi / delta_k) ** 2
+    density_cm2 = 2 * holes / area / VITURI2024_CM2_TO_ANGSTROM2
+    spec = Vituri2024CartesianHFSpec(
+        mesh_size=size,
+        holes_per_valley=holes,
+        total_hole_density_cm2=density_cm2,
+        delta1_ev=delta1_ev,
+        gate_distance_angstrom=gate_distance_angstrom,
+        coulomb_e2_ev_angstrom=coulomb_e2_ev_angstrom,
+        precision=precision,
+        construction_mode="explicit_spacing",
+        requested_delta_k_a0=spacing_a0,
+    )
+    realized_spacing_a0 = (
+        spec.delta_k_inverse_angstrom * VITURI2024_PARAMETERS.a0
+    )
+    if not math.isclose(
+        realized_spacing_a0,
+        spacing_a0,
+        rel_tol=8.0 * float(np.finfo(np.float64).eps),
+        abs_tol=0.0,
+    ):
+        raise RuntimeError("explicit-spacing Vituri spec failed to realize delta_k_a0")
+    return spec
+
+
+Vituri2024HomogeneousHFFunctional = (
+    Vituri2024TranslationalHFFunctional | Vituri2024TranslationalHFFFTFunctional
+)
+
+
 @dataclass(frozen=True, slots=True)
 class Vituri2024PreparedHomogeneousHF:
     spec: Vituri2024CartesianHFSpec
@@ -289,7 +397,7 @@ class Vituri2024PreparedHomogeneousHF:
     active_band_states: Array
     active_band_energies_by_valley: Array
     h0_native: Array
-    functional: Vituri2024TranslationalHFFunctional
+    functional: Vituri2024HomogeneousHFFunctional
     fixed_density_scf_choice: "Vituri2024FixedDensitySCFChoice"
     minimum_lower_gap_ev: float
     minimum_upper_gap_ev: float
@@ -330,6 +438,11 @@ class Vituri2024PreparedHomogeneousHF:
                 or not np.all(np.isfinite(value))
             ):
                 raise ValueError(f"prepared {label} drifted")
+        if type(self.functional) not in (
+            Vituri2024TranslationalHFFunctional,
+            Vituri2024TranslationalHFFFTFunctional,
+        ):
+            raise TypeError("prepared HF requires an approved dense or FFT functional")
         if (
             self.functional.nk != nk
             or not np.array_equal(self.functional.ordered_mesh, self.ordered_mesh)
@@ -1522,7 +1635,7 @@ def _prepared_fingerprint(
     states: Array,
     energies: Array,
     h0: Array,
-    functional: Vituri2024TranslationalHFFunctional,
+    functional: Vituri2024HomogeneousHFFunctional,
     fixed_density_choice: Vituri2024FixedDensitySCFChoice,
     minimum_lower_gap_ev: float,
     minimum_upper_gap_ev: float,
@@ -1549,10 +1662,12 @@ def _prepared_fingerprint(
     ).hexdigest()
 
 
-def prepare_vituri2024_homogeneous_hf(
+def _prepare_vituri2024_homogeneous_hf(
     spec: Vituri2024CartesianHFSpec,
+    *,
+    fft_workers: int | None,
 ) -> Vituri2024PreparedHomogeneousHF:
-    """Build mesh, source-gauge active states, h0, and shared functional."""
+    """Build common states and select only the interaction backend."""
 
     if type(spec) is not Vituri2024CartesianHFSpec:
         raise TypeError("spec must be Vituri2024CartesianHFSpec")
@@ -1593,20 +1708,33 @@ def prepare_vituri2024_homogeneous_hf(
             "explicitly; no identity quotient and no paper/source background claim."
         )
     )
-    functional = Vituri2024TranslationalHFFunctional(
-        ordered_mesh=mesh,
-        active_band_states=np.asarray(states, dtype=np.complex128),
-        h0_native=h0,
-        normal_order_reference_native=reference,
-        mesh_receipt=mesh_receipt,
-        interaction=_interaction_choice(spec),
-        normal_order_reference_fingerprint=_array_sha256(reference),
-        q0_choice=q0_choice,
-        provenance=(
-            "Independent homogeneous Vituri HF functional at Delta1=28 meV; "
-            "not author source, incommensurate ansatz, or production TDHF."
-        ),
+    interaction = _interaction_choice(spec)
+    functional_provenance = (
+        "Independent homogeneous Vituri HF functional at Delta1=28 meV; "
+        "not author source, incommensurate ansatz, or production TDHF."
     )
+    common_functional_arguments = {
+        "ordered_mesh": mesh,
+        "active_band_states": np.asarray(states, dtype=np.complex128),
+        "h0_native": h0,
+        "normal_order_reference_native": reference,
+        "mesh_receipt": mesh_receipt,
+        "interaction": interaction,
+        "normal_order_reference_fingerprint": _array_sha256(reference),
+        "q0_choice": q0_choice,
+        "provenance": functional_provenance,
+    }
+    if fft_workers is None:
+        functional: Vituri2024HomogeneousHFFunctional = (
+            Vituri2024TranslationalHFFunctional(**common_functional_arguments)
+        )
+    else:
+        functional = Vituri2024TranslationalHFFFTFunctional(
+            integer_mesh_labels=labels,
+            delta_k_inverse_angstrom=spec.delta_k_inverse_angstrom,
+            fft_workers=fft_workers,
+            **common_functional_arguments,
+        )
     fixed_density_choice = Vituri2024FixedDensitySCFChoice()
     readonly_states = _readonly(states, np.dtype(np.complex128))
     readonly_energies = _readonly(energies, np.dtype(np.float64))
@@ -1635,6 +1763,29 @@ def prepare_vituri2024_homogeneous_hf(
         minimum_lower_gap_ev=float(np.min(lower_gaps)),
         minimum_upper_gap_ev=float(np.min(upper_gaps)),
         fingerprint=fingerprint,
+    )
+
+
+def prepare_vituri2024_homogeneous_hf(
+    spec: Vituri2024CartesianHFSpec,
+) -> Vituri2024PreparedHomogeneousHF:
+    """Build the unchanged dense-oracle homogeneous Vituri HF preparation."""
+
+    return _prepare_vituri2024_homogeneous_hf(spec, fft_workers=None)
+
+
+def prepare_vituri2024_homogeneous_hf_fft(
+    spec: Vituri2024CartesianHFSpec,
+    fft_workers: int = 1,
+) -> Vituri2024PreparedHomogeneousHF:
+    """Build an algebraically equivalent candidate exact no-wrap FFT backend.
+
+    This preparation is not evidence of UV convergence, production readiness,
+    a selected SCF branch, or paper reproduction.
+    """
+
+    return _prepare_vituri2024_homogeneous_hf(
+        spec, fft_workers=fft_workers
     )
 
 
@@ -2688,15 +2839,18 @@ __all__ = [
     "Vituri2024InitialFockBoundarySelection",
  "Vituri2024MaximumOverlapAufbauChoice",
     "Vituri2024HFState",
+    "Vituri2024HomogeneousHFFunctional",
     "Vituri2024PreparedHomogeneousHF",
     "analyze_vituri2024_global_aufbau_boundary",
     "build_vituri2024_cartesian_mesh",
     "diagnose_vituri2024_half_metal",
+    "make_vituri2024_cartesian_hf_spec_from_spacing",
     "make_vituri2024_explicit_shell_branch_choices",
  "make_vituri2024_hf_maximum_overlap_problem",
  "make_vituri2024_hf_problem",
     "make_vituri2024_hf_state",
     "prepare_vituri2024_homogeneous_hf",
+    "prepare_vituri2024_homogeneous_hf_fft",
     "run_vituri2024_hf_seed",
     "scan_vituri2024_initial_fock_aufbau_boundaries",
 ]
