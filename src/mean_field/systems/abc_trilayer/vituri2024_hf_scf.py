@@ -1,8 +1,14 @@
-"""Independent homogeneous half-metal HF source for Vituri-2024 ABC trilayer.
+"""Legacy global-Aufbau homogeneous HF source for Vituri-2024 ABC trilayer.
 
-This module turns the validated translational ``E/F/dF`` algebra into a
-fixed-density SCF problem through the reusable :mod:`mean_field.core.hf`
-engine.  It deliberately implements only a translation-preserving one-active-
+This module turns the translational ``E/F/dF`` algebra into a fixed-total-rank
+SCF problem through the reusable :mod:`mean_field.core.hf` engine.  Its legacy
+``half_metal_*`` seeds stable-sort exact ``h0`` shells, while every later
+density update uses one global Aufbau operation over all flavors.  Those
+numerics remain unchanged for reproducibility but are not panel-c fixed-sector
+authority.  Use :func:`run_vituri2024_fixed_sector_bfs` from
+``vituri2024_hf_fixed_sector`` for exhaustive fixed-flavor-rank semantics.
+
+This module deliberately implements only a translation-preserving one-active-
 band ansatz.  In particular, it cannot find the incommensurate IVC crystal.
 
 Independent reproduction choices
@@ -36,6 +42,7 @@ import json
 import math
 from numbers import Real
 from typing import Final, Literal
+import warnings
 
 import numpy as np
 
@@ -96,6 +103,10 @@ VITURI2024_COULOMB_E2_EV_ANGSTROM: Final[float] = 14.3996454784255
 VITURI2024_CM2_TO_ANGSTROM2: Final[float] = 1.0e-16
 VITURI2024_DEFAULT_PRECISION: Final[float] = 1.0e-9
 VITURI2024_DEFAULT_AUFBAU_GAP_TOLERANCE_EV: Final[float] = 1.0e-12
+class Vituri2024LegacyHalfMetalSeedWarning(UserWarning):
+    """The requested legacy seed is not panel-c fixed-sector authority."""
+
+
 VITURI2024_FIXED_DENSITY_SCF_POLICY: Final[str] = (
     "R0_fixed_integer_rank_retain_finite_dual_gate_q0_direct_and_exchange_"
     "uniform_direct_is_constant_energy_plus_identity_fock_no_term_dropped_"
@@ -2525,6 +2536,14 @@ def make_vituri2024_hf_problem(
     prepared.validate_live_state()
 
     def initializer(state: Vituri2024HFState, *, init_mode: str, seed: int) -> None:
+        if init_mode.startswith("half_metal_"):
+            warnings.warn(
+                "legacy half_metal_* is a stable-coordinate seed for the global-"
+                "Aufbau workflow, not panel-c fixed-sector authority; use "
+                "run_vituri2024_fixed_sector_bfs for exhaustive fixed-sector closure",
+                Vituri2024LegacyHalfMetalSeedWarning,
+                stacklevel=2,
+            )
         state.density[:, :, :] = _native_density_from_seed(
             prepared, init_mode, seed  # type: ignore[arg-type]
         )
@@ -2837,6 +2856,7 @@ __all__ = [
     "Vituri2024InitialFockBoundaryRecord",
     "Vituri2024InitialFockBoundaryScanChoice",
     "Vituri2024InitialFockBoundarySelection",
+    "Vituri2024LegacyHalfMetalSeedWarning",
  "Vituri2024MaximumOverlapAufbauChoice",
     "Vituri2024HFState",
     "Vituri2024HomogeneousHFFunctional",

@@ -174,6 +174,24 @@ sandbox, hostile-code proof, or global completeness proof.  No full-space
 functional receipt by itself establishes A/B scalar-Hessian equality,
 production readiness, or paper reproduction.
 
+## Vituri fixed-sector HF boundary
+
+`mean_field.systems.abc_trilayer.vituri2024_hf_fixed_sector` owns the
+Vituri-specific full/partial flavor ranks, uniform exact-shell initializer,
+and exhaustive simultaneous branch-product BFS. Every ordered path is
+replayed from an independently rebuilt common initializer through
+`core/hf.run_hartree_fock_problem`; generic SCF/ODA remains in
+`src/mean_field/core/hf`, while no filesystem, plotting, Slurm, author-cutoff,
+or paper-production policy enters the adapter. In-process BFS results are
+candidate receipts only: they cannot claim independent finite-volume authority
+or local Hessian stability. The sealed independent discriminator remains
+external job461276. Its tracked N179 fixture covers only
+`selected_hole_spin=+1` endpoint-array and canonical branch-inventory parity;
+it does not claim full per-iteration trajectory or capsule-fingerprint parity.
+The `-1` sector remains an unsealed generic symmetry-related candidate. The legacy
+`vituri2024_hf_scf` global-Aufbau path remains numerically unchanged and is not
+fixed-sector authority.
+
 ## Performance strategy
 
 The right performance target is not "Python everywhere"; it is "Python orchestration with optimized kernels where needed".
