@@ -1,0 +1,548 @@
+{
+  "all_endpoints_stationary": true,
+  "authority": {
+    "author_cutoff_identified": false,
+    "full_paper_reproduction_verified": false,
+    "independent_finite_volume_fixed_sector_fft_full_scf_discriminator": true,
+    "production_authority": false,
+    "tdhf_authority": false,
+    "unrestricted_ground_state_established": false,
+    "uv_plateau_established": false,
+    "visual_match_promotes_authority": false
+  },
+  "cases": [
+    {
+      "case": {
+        "case_id": "fd_n081_hv768_d250",
+        "delta1_ev": 0.028,
+        "family": "fixed_density_uv_ladder",
+        "gate_distance_angstrom": 250.0,
+        "holes_per_valley": 768,
+        "mesh_size": 81,
+        "requested_delta_k_a0": null,
+        "spacing_mode": "density_derived",
+        "total_hole_density_cm2": 1030000000000.0
+      },
+      "center_mev_flavor3_unique": [
+        -5.019549361193865
+      ],
+      "exact_grid_local_maxima_flavor3_unique": [
+        [
+          {
+            "energy_mev": 5.557685903601284,
+            "x_a0": -0.05603585665426856
+          },
+          {
+            "energy_mev": 6.33814655255549,
+            "x_a0": 0.04803073427508733
+          }
+        ]
+      ],
+      "exact_stationary_endpoint_array_coalescence": false,
+      "fresh_raw_exact_rebuild_all_endpoints": true,
+      "independent_bfs_closure_verified": true,
+      "linear_crossings_a0_flavor3_unique": [
+        [
+          -0.07750659452264266,
+          -0.03043012629190543,
+          0.025467381356208206,
+          0.06321302075091483
+        ]
+      ],
+      "max_energy_E_F_residual_ev": 0.0,
+      "max_final_raw_norm": 0.0,
+      "min_common_mu_width_ev": 1.6247879811359667e-05,
+      "normal_endpoint_count": 4,
+      "outcome": "closed_all_stationary",
+      "replayed_path_count": 5,
+      "stationary_endpoint_count": 4,
+      "stationary_endpoint_group_count": 4,
+      "terminal_rejection_count": 0,
+      "unconsumed_frontier_count": 0
+    },
+    {
+      "case": {
+        "case_id": "fd_n101_hv768_d250",
+        "delta1_ev": 0.028,
+        "family": "fixed_density_uv_ladder",
+        "gate_distance_angstrom": 250.0,
+        "holes_per_valley": 768,
+        "mesh_size": 101,
+        "requested_delta_k_a0": null,
+        "spacing_mode": "density_derived",
+        "total_hole_density_cm2": 1030000000000.0
+      },
+      "center_mev_flavor3_unique": [
+        -3.8536573011633823
+      ],
+      "exact_grid_local_maxima_flavor3_unique": [
+        [
+          {
+            "energy_mev": 5.623415720469982,
+            "x_a0": -0.05603585665426856
+          },
+          {
+            "energy_mev": 6.596181269469925,
+            "x_a0": 0.044028173085496725
+          }
+        ]
+      ],
+      "exact_stationary_endpoint_array_coalescence": true,
+      "fresh_raw_exact_rebuild_all_endpoints": true,
+      "independent_bfs_closure_verified": true,
+      "linear_crossings_a0_flavor3_unique": [
+        [
+          -0.07557849811885675,
+          -0.026824051599543583,
+          0.02241297310720949,
+          0.06208493228479814
+        ]
+      ],
+      "max_energy_E_F_residual_ev": 7.275957614183426e-12,
+      "max_final_raw_norm": 0.0,
+      "min_common_mu_width_ev": 3.965959841445432e-05,
+      "normal_endpoint_count": 4,
+      "outcome": "closed_all_stationary",
+      "replayed_path_count": 5,
+      "stationary_endpoint_count": 4,
+      "stationary_endpoint_group_count": 1,
+      "terminal_rejection_count": 0,
+      "unconsumed_frontier_count": 0
+    },
+    {
+      "case": {
+        "case_id": "fd_n121_hv768_d250",
+        "delta1_ev": 0.028,
+        "family": "fixed_density_uv_ladder",
+        "gate_distance_angstrom": 250.0,
+        "holes_per_valley": 768,
+        "mesh_size": 121,
+        "requested_delta_k_a0": null,
+        "spacing_mode": "density_derived",
+        "total_hole_density_cm2": 1030000000000.0
+      },
+      "center_mev_flavor3_unique": [
+        -2.551095813048576
+      ],
+      "exact_grid_local_maxima_flavor3_unique": [
+        [
+          {
+            "energy_mev": 5.673074363241604,
+            "x_a0": -0.05203329546467795
+          },
+          {
+            "energy_mev": 7.142446114687395,
+            "x_a0": 0.044028173085496725
+          }
+        ]
+      ],
+      "exact_stationary_endpoint_array_coalescence": true,
+      "fresh_raw_exact_rebuild_all_endpoints": true,
+      "independent_bfs_closure_verified": true,
+      "linear_crossings_a0_flavor3_unique": [
+        [
+          -0.0737372460021373,
+          -0.021935227064883597,
+          0.01845230923688056,
+          0.06124118824356587
+        ]
+      ],
+      "max_energy_E_F_residual_ev": 2.255546860396862e-10,
+      "max_final_raw_norm": 0.0,
+      "min_common_mu_width_ev": 1.5378966274237627e-05,
+      "normal_endpoint_count": 1,
+      "outcome": "closed_all_stationary",
+      "replayed_path_count": 1,
+      "stationary_endpoint_count": 1,
+      "stationary_endpoint_group_count": 1,
+      "terminal_rejection_count": 0,
+      "unconsumed_frontier_count": 0
+    },
+    {
+      "case": {
+        "case_id": "fd_n141_hv768_d250",
+        "delta1_ev": 0.028,
+        "family": "fixed_density_uv_ladder",
+        "gate_distance_angstrom": 250.0,
+        "holes_per_valley": 768,
+        "mesh_size": 141,
+        "requested_delta_k_a0": null,
+        "spacing_mode": "density_derived",
+        "total_hole_density_cm2": 1030000000000.0
+      },
+      "center_mev_flavor3_unique": [
+        -1.621431925099781
+      ],
+      "exact_grid_local_maxima_flavor3_unique": [
+        [
+          {
+            "energy_mev": 5.515123638923924,
+            "x_a0": -0.05203329546467795
+          },
+          {
+            "energy_mev": 7.4336538635981775,
+            "x_a0": 0.044028173085496725
+          }
+        ]
+      ],
+      "exact_stationary_endpoint_array_coalescence": false,
+      "fresh_raw_exact_rebuild_all_endpoints": true,
+      "independent_bfs_closure_verified": true,
+      "linear_crossings_a0_flavor3_unique": [
+        [
+          -0.07159640362826619,
+          -0.0177798505099199,
+          0.014870031461490126,
+          0.06036289645949043
+        ]
+      ],
+      "max_energy_E_F_residual_ev": 2.3283064365386963e-10,
+      "max_final_raw_norm": 0.0,
+      "min_common_mu_width_ev": 3.5074828130809976e-06,
+      "normal_endpoint_count": 4,
+      "outcome": "closed_all_stationary",
+      "replayed_path_count": 5,
+      "stationary_endpoint_count": 4,
+      "stationary_endpoint_group_count": 4,
+      "terminal_rejection_count": 0,
+      "unconsumed_frontier_count": 0
+    },
+    {
+      "case": {
+        "case_id": "fd_n161_hv768_d250",
+        "delta1_ev": 0.028,
+        "family": "fixed_density_uv_ladder",
+        "gate_distance_angstrom": 250.0,
+        "holes_per_valley": 768,
+        "mesh_size": 161,
+        "requested_delta_k_a0": null,
+        "spacing_mode": "density_derived",
+        "total_hole_density_cm2": 1030000000000.0
+      },
+      "center_mev_flavor3_unique": [
+        -0.6427949091896146
+      ],
+      "exact_grid_local_maxima_flavor3_unique": [
+        [
+          {
+            "energy_mev": 5.357238219159566,
+            "x_a0": -0.04803073427508733
+          },
+          {
+            "energy_mev": 7.657991236087014,
+            "x_a0": 0.044028173085496725
+          }
+        ]
+      ],
+      "exact_stationary_endpoint_array_coalescence": false,
+      "fresh_raw_exact_rebuild_all_endpoints": true,
+      "independent_bfs_closure_verified": true,
+      "linear_crossings_a0_flavor3_unique": [
+        [
+          -0.06952959860455757,
+          -0.011269014744534287,
+          0.009610284904547853,
+          0.059463097012919276
+        ]
+      ],
+      "max_energy_E_F_residual_ev": 5.820766091346741e-10,
+      "max_final_raw_norm": 0.0,
+      "min_common_mu_width_ev": 2.9887930077965308e-05,
+      "normal_endpoint_count": 16,
+      "outcome": "closed_all_stationary",
+      "replayed_path_count": 21,
+      "stationary_endpoint_count": 16,
+      "stationary_endpoint_group_count": 4,
+      "terminal_rejection_count": 0,
+      "unconsumed_frontier_count": 0
+    },
+    {
+      "case": {
+        "case_id": "fd_n179_hv768_d250",
+        "delta1_ev": 0.028,
+        "family": "fixed_density_uv_ladder",
+        "gate_distance_angstrom": 250.0,
+        "holes_per_valley": 768,
+        "mesh_size": 179,
+        "requested_delta_k_a0": null,
+        "spacing_mode": "density_derived",
+        "total_hole_density_cm2": 1030000000000.0
+      },
+      "center_mev_flavor3_unique": [
+        0.4753650487918648
+      ],
+      "exact_grid_local_maxima_flavor3_unique": [
+        [
+          {
+            "energy_mev": 5.597789214256466,
+            "x_a0": -0.04803073427508733
+          },
+          {
+            "energy_mev": 8.292051636334286,
+            "x_a0": 0.040025611895906116
+          }
+        ]
+      ],
+      "exact_stationary_endpoint_array_coalescence": true,
+      "fresh_raw_exact_rebuild_all_endpoints": true,
+      "independent_bfs_closure_verified": true,
+      "linear_crossings_a0_flavor3_unique": [
+        [
+          -0.0684039170865791,
+          0.05927475922282507
+        ]
+      ],
+      "max_energy_E_F_residual_ev": 2.3283064365386963e-10,
+      "max_final_raw_norm": 0.0,
+      "min_common_mu_width_ev": 0.00012379952605634514,
+      "normal_endpoint_count": 4,
+      "outcome": "closed_all_stationary",
+      "replayed_path_count": 5,
+      "stationary_endpoint_count": 4,
+      "stationary_endpoint_group_count": 1,
+      "terminal_rejection_count": 0,
+      "unconsumed_frontier_count": 0
+    },
+    {
+      "case": {
+        "case_id": "fd_n181_hv768_d250",
+        "delta1_ev": 0.028,
+        "family": "fixed_density_uv_ladder",
+        "gate_distance_angstrom": 250.0,
+        "holes_per_valley": 768,
+        "mesh_size": 181,
+        "requested_delta_k_a0": null,
+        "spacing_mode": "density_derived",
+        "total_hole_density_cm2": 1030000000000.0
+      },
+      "center_mev_flavor3_unique": [
+        0.6148603922389029
+      ],
+      "exact_grid_local_maxima_flavor3_unique": [
+        [
+          {
+            "energy_mev": 5.680655122301204,
+            "x_a0": -0.04803073427508733
+          },
+          {
+            "energy_mev": 8.425690746424408,
+            "x_a0": 0.040025611895906116
+          }
+        ]
+      ],
+      "exact_stationary_endpoint_array_coalescence": true,
+      "fresh_raw_exact_rebuild_all_endpoints": true,
+      "independent_bfs_closure_verified": true,
+      "linear_crossings_a0_flavor3_unique": [
+        [
+          -0.06839291952985294,
+          0.05933502950399321
+        ]
+      ],
+      "max_energy_E_F_residual_ev": 1.979060471057892e-09,
+      "max_final_raw_norm": 0.0,
+      "min_common_mu_width_ev": 0.00011207538073332302,
+      "normal_endpoint_count": 4,
+      "outcome": "closed_all_stationary",
+      "replayed_path_count": 5,
+      "stationary_endpoint_count": 4,
+      "stationary_endpoint_group_count": 1,
+      "terminal_rejection_count": 0,
+      "unconsumed_frontier_count": 0
+    },
+    {
+      "case": {
+        "case_id": "fd_n201_hv768_d250",
+        "delta1_ev": 0.028,
+        "family": "fixed_density_uv_ladder",
+        "gate_distance_angstrom": 250.0,
+        "holes_per_valley": 768,
+        "mesh_size": 201,
+        "requested_delta_k_a0": null,
+        "spacing_mode": "density_derived",
+        "total_hole_density_cm2": 1030000000000.0
+      },
+      "center_mev_flavor3_unique": [
+        1.5902459800773983
+      ],
+      "exact_grid_local_maxima_flavor3_unique": [
+        [
+          {
+            "energy_mev": 6.028426703092116,
+            "x_a0": -0.04803073427508733
+          },
+          {
+            "energy_mev": 9.40716666971575,
+            "x_a0": 0.040025611895906116
+          }
+        ]
+      ],
+      "exact_stationary_endpoint_array_coalescence": false,
+      "fresh_raw_exact_rebuild_all_endpoints": true,
+      "independent_bfs_closure_verified": true,
+      "linear_crossings_a0_flavor3_unique": [
+        [
+          -0.06744649395179173,
+          0.05957967580332138
+        ]
+      ],
+      "max_energy_E_F_residual_ev": 3.026798367500305e-09,
+      "max_final_raw_norm": 0.0,
+      "min_common_mu_width_ev": 2.4794375319991957e-05,
+      "normal_endpoint_count": 4,
+      "outcome": "closed_all_stationary",
+      "replayed_path_count": 5,
+      "stationary_endpoint_count": 4,
+      "stationary_endpoint_group_count": 4,
+      "terminal_rejection_count": 0,
+      "unconsumed_frontier_count": 0
+    },
+    {
+      "case": {
+        "case_id": "paper_n179_hv769_d369",
+        "delta1_ev": 0.028,
+        "family": "paper_profile_discriminator",
+        "gate_distance_angstrom": 369.0,
+        "holes_per_valley": 769,
+        "mesh_size": 179,
+        "requested_delta_k_a0": 0.004,
+        "spacing_mode": "explicit_delta_k_a0",
+        "total_hole_density_cm2": null
+      },
+      "center_mev_flavor3_unique": [
+        0.5341260322007102
+      ],
+      "exact_grid_local_maxima_flavor3_unique": [
+        [
+          {
+            "energy_mev": 5.669600667347119,
+            "x_a0": -0.048
+          },
+          {
+            "energy_mev": 8.338280301741996,
+            "x_a0": 0.04
+          }
+        ]
+      ],
+      "exact_stationary_endpoint_array_coalescence": false,
+      "fresh_raw_exact_rebuild_all_endpoints": true,
+      "independent_bfs_closure_verified": true,
+      "linear_crossings_a0_flavor3_unique": [
+        [
+          -0.068458620650229,
+          0.05928404828849599
+        ],
+        [
+          -0.06845862065022869,
+          0.05928404828849599
+        ]
+      ],
+      "max_energy_E_F_residual_ev": 2.2118911147117615e-09,
+      "max_final_raw_norm": 0.0,
+      "min_common_mu_width_ev": 2.2434024090856042e-05,
+      "normal_endpoint_count": 4,
+      "outcome": "closed_all_stationary",
+      "replayed_path_count": 5,
+      "stationary_endpoint_count": 4,
+      "stationary_endpoint_group_count": 4,
+      "terminal_rejection_count": 0,
+      "unconsumed_frontier_count": 0
+    },
+    {
+      "case": {
+        "case_id": "paper_n179_hv769_d250",
+        "delta1_ev": 0.028,
+        "family": "paper_profile_discriminator",
+        "gate_distance_angstrom": 250.0,
+        "holes_per_valley": 769,
+        "mesh_size": 179,
+        "requested_delta_k_a0": 0.004,
+        "spacing_mode": "explicit_delta_k_a0",
+        "total_hole_density_cm2": null
+      },
+      "center_mev_flavor3_unique": [
+        0.4861230189128207
+      ],
+      "exact_grid_local_maxima_flavor3_unique": [
+        [
+          {
+            "energy_mev": 5.6257013798886035,
+            "x_a0": -0.048
+          },
+          {
+            "energy_mev": 8.294009405437563,
+            "x_a0": 0.04
+          }
+        ]
+      ],
+      "exact_stationary_endpoint_array_coalescence": false,
+      "fresh_raw_exact_rebuild_all_endpoints": true,
+      "independent_bfs_closure_verified": true,
+      "linear_crossings_a0_flavor3_unique": [
+        [
+          -0.06845840440241813,
+          0.0592858722743643
+        ]
+      ],
+      "max_energy_E_F_residual_ev": 7.566995918750763e-10,
+      "max_final_raw_norm": 0.0,
+      "min_common_mu_width_ev": 1.9914128324138858e-05,
+      "normal_endpoint_count": 4,
+      "outcome": "closed_all_stationary",
+      "replayed_path_count": 5,
+      "stationary_endpoint_count": 4,
+      "stationary_endpoint_group_count": 4,
+      "terminal_rejection_count": 0,
+      "unconsumed_frontier_count": 0
+    }
+  ],
+  "completion_sentinel_sha256": "39972ac3a68e9c72969306d6b58a963e56289713617878aa8ba2abe7dce2bd29",
+  "consumer_status": "PASS_ALL_ENDPOINTS_STATIONARY_BFS_CLOSED",
+  "created_utc_date": "2026-08-28",
+  "failed_predecessors": [
+    {
+      "completion_sentinel": false,
+      "evidence_manifest_path": "prior_failure/job_456071/EVIDENCE_SHA256SUMS.txt",
+      "evidence_manifest_sha256": "90d6806830da52e4c3401767d5fc87b91f8c11696ba2b401d3984683feee985a",
+      "evidence_scope": "v3 capsule provenance, not v3 scientific output",
+      "job_id": "456071",
+      "reason": "v1 runtime allowlist omitted llvmlite/numba/yaml mapped binaries",
+      "status": "FAILED_PRE_NUMERICAL"
+    },
+    {
+      "completion_sentinel": false,
+      "evidence_manifest_path": "prior_failure/job_461208/EVIDENCE_SHA256SUMS.txt",
+      "evidence_manifest_sha256": "27bf8ec787b2eabc79a2fd88e650f060e16434806bb91cca647fba609e401c9f",
+      "evidence_scope": "v3 capsule provenance, not v3 scientific output",
+      "job_id": "461208",
+      "reason": "v2 runner ProcessPool imports added _multiprocessing and _queue beyond standalone 118-entry inventory",
+      "status": "FAILED_PRE_NUMERICAL"
+    }
+  ],
+  "final_output_manifest_sha256": "4a72d52be2d6ab1179b3faf9531742ad88d7f9700d1d48b62b4f5ee02517ef27",
+  "independent_bfs_closure_verified": true,
+  "interpretation": {
+    "author_cutoff_identified": false,
+    "computed_n179_finite_cutoff_positive_center_two_crossing_profile_obtained": true,
+    "gate_distance_effect_at_n101_or_uv_limit_directly_tested": false,
+    "paper_reproduction_verified": false,
+    "published_panel_quantitative_comparison_performed": false,
+    "sampled_n81_n201_center_drift_observed": true,
+    "sampled_n81_n201_plateau_observed": false,
+    "tested_n179_gate_distance_shift_small_relative_to_sampled_cutoff_drift": true,
+    "uv_plateau_established": false
+  },
+  "job_id": "461276",
+  "normal_rejection_count": 0,
+  "postflight_sha256": "644a9c759564808f952f157c17d13c6160187b2bc6992864e2f288e5d1ae1b4b",
+  "runroot": "/data/home/ziyuzhu/.runs/Mean_Field_ec45b19_vituri_panel_c_fft_full_scf_ladder_v3_20260828",
+  "scheduler_metadata_scope": {
+    "sealed_output_claim": "root sentinel establishes completed publication and accepted scientific postflight",
+    "slurm_terminal_state_exit_elapsed": "externally observed from sacct after completion; not included in the sealed output manifest"
+  },
+  "schema": "mean_field.vituri2024.panel_c_fft_full_scf_ladder_attestation.v1",
+  "source_commit": "ec45b19768a19ce500be9171dd929376ee7c9fa1",
+  "summary_sha256": "4a1e290b221b290e6dc00f25fe67de9af15e4576903b70c1bb27261fd5f6b77c",
+  "terminal_rejection_count": 0,
+  "unconsumed_frontier_count": 0
+}
