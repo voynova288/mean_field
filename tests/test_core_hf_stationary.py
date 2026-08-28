@@ -84,7 +84,7 @@ def test_stationary_solver_converges_to_saddle_that_energy_descent_leaves() -> N
         config=StationarySolveConfig(
             residual_rms_tolerance=1.0e-12,
             residual_max_tolerance=1.0e-12,
-            anderson_max_iterations=30,
+            anderson_max_iterations=0,
             anderson_memory=1,
             krylov_max_iterations=30,
         ),

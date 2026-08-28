@@ -78,7 +78,6 @@ class StationarySolveConfig:
         positive = (
             self.residual_rms_tolerance,
             self.residual_max_tolerance,
-            self.anderson_max_iterations,
             self.anderson_memory,
             self.anderson_regularization,
             self.krylov_max_iterations,
@@ -86,6 +85,8 @@ class StationarySolveConfig:
         )
         if any(float(value) <= 0.0 or not np.isfinite(float(value)) for value in positive):
             raise ValueError("stationary solver tolerances and iteration controls must be positive")
+        if self.anderson_max_iterations < 0:
+            raise ValueError("anderson_max_iterations must be nonnegative")
         if self.anderson_line_search not in {None, "armijo", "wolfe"}:
             raise ValueError("unsupported Anderson line search")
 
@@ -162,24 +163,28 @@ def solve_stationary_residual(
             best_residual = residual.copy()
         return residual
 
-    anderson_converged = True
-    try:
-        candidate = np.asarray(
-            anderson(
-                tracked,
-                initial,
-                M=int(config.anderson_memory),
-                maxiter=int(config.anderson_max_iterations),
-                f_tol=float(config.residual_max_tolerance),
-                w0=float(config.anderson_regularization),
-                line_search=config.anderson_line_search,
-            ),
-            dtype=np.float64,
-        )
-    except NoConvergence as error:
-        anderson_converged = False
-        candidate = np.asarray(error.args[0], dtype=np.float64)
-        tracked(candidate)
+    anderson_converged = False
+    if config.anderson_max_iterations == 0:
+        candidate = initial.copy()
+    else:
+        anderson_converged = True
+        try:
+            candidate = np.asarray(
+                anderson(
+                    tracked,
+                    initial,
+                    M=int(config.anderson_memory),
+                    maxiter=int(config.anderson_max_iterations),
+                    f_tol=float(config.residual_max_tolerance),
+                    w0=float(config.anderson_regularization),
+                    line_search=config.anderson_line_search,
+                ),
+                dtype=np.float64,
+            )
+        except NoConvergence as error:
+            anderson_converged = False
+            candidate = np.asarray(error.args[0], dtype=np.float64)
+            tracked(candidate)
 
     candidate_residual = tracked(candidate)
     candidate_rms = float(np.sqrt(np.mean(candidate_residual**2)))

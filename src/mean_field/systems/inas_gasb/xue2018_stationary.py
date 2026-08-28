@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Iterable
 
 import numpy as np
@@ -16,6 +16,7 @@ from mean_field.core.hf.stationary import (
     unpack_hermitian_matrix_field,
 )
 
+from .xue2018 import xue2018_standard_parameters
 from .xue2018_hf import (
     Xue2018HFState,
     xue2018_global_neutral_projector,
@@ -23,6 +24,7 @@ from .xue2018_hf import (
     xue2018_reference_relative_energy_density,
 )
 from .xue2018_symmetry import project_xue2018_full_trs, xue2018_trs_residual
+from .zeng2022 import build_zeng2022_folded_h0
 
 Array = np.ndarray
 
@@ -60,6 +62,7 @@ class Xue2018DensityMap:
     chemical_potential_ry: float
     number_residual: float
     trs_leakage_max: float
+    interaction_hermiticity_error: float
 
 
 @dataclass(frozen=True)
@@ -120,7 +123,22 @@ def xue2018_stationary_density_map(
     density = np.asarray(density_delta, dtype=np.complex128)
     if density.shape != state.reference_density.shape:
         raise ValueError("density_delta shape does not match the Xue state")
-    interaction_h = xue2018_interaction_action(state, density)
+    interaction_raw = xue2018_interaction_action(state, density)
+    interaction_error = float(
+        np.max(
+            np.abs(interaction_raw - np.swapaxes(interaction_raw.conj(), 0, 1)),
+            initial=0.0,
+        )
+    )
+    interaction_scale = max(1.0, float(np.max(np.abs(interaction_raw), initial=0.0)))
+    if interaction_error > 1.0e-10 * interaction_scale:
+        raise ValueError(
+            "interaction action has non-roundoff Hermiticity error: "
+            f"{interaction_error:.3e} at scale {interaction_scale:.3e}"
+        )
+    interaction_h = 0.5 * (
+        interaction_raw + np.swapaxes(interaction_raw.conj(), 0, 1)
+    )
     hamiltonian = state.h0 + interaction_h
     if thermal_energy_ry > 0.0:
         update = fermi_density_from_hamiltonian(
@@ -162,7 +180,54 @@ def xue2018_stationary_density_map(
         chemical_potential_ry=float(update.mu),
         number_residual=number_residual,
         trs_leakage_max=leakage,
+        interaction_hermiticity_error=interaction_error,
     )
+
+
+def xue2018_state_at_parameters(
+    template: Xue2018HFState,
+    *,
+    eg_ry: float,
+    hybridization_ab_ry: float,
+) -> Xue2018HFState:
+    """Reuse one regulator/kernel while replacing only source Hamiltonian parameters."""
+
+    params = xue2018_standard_parameters(
+        eg_ry=float(eg_ry),
+        hybridization_ab_ry=float(hybridization_ab_ry),
+    )
+    h0 = build_zeng2022_folded_h0(template.mesh.points_ab_inv, template.basis, params)
+    return replace(
+        template,
+        params=params,
+        h0=h0,
+        hamiltonian=h0.copy(),
+        density=np.zeros_like(template.density),
+        energies=np.zeros_like(template.energies),
+        diagnostics={},
+    )
+
+
+def xue2018_stationary_residual_vector(
+    state: Xue2018HFState,
+    vector: Array,
+    *,
+    thermal_energy_ry: float,
+) -> Array:
+    """Return the packed complete-TRS stationary residual for one Xue state."""
+
+    dimension = state.h0.shape[0]
+    density = unpack_hermitian_matrix_field(vector, dimension=dimension, nk=state.nk)
+    constrained_density = project_xue2018_neutral_density_delta(
+        state,
+        project_xue2018_full_trs(density, state.mesh),
+    )
+    mapped = xue2018_stationary_density_map(
+        state,
+        constrained_density,
+        thermal_energy_ry=float(thermal_energy_ry),
+    )
+    return pack_hermitian_matrix_field(density - mapped.density_delta_trs)
 
 
 def solve_xue2018_stationary_root(
@@ -181,17 +246,11 @@ def solve_xue2018_stationary_root(
     initial_vector = pack_hermitian_matrix_field(initial)
 
     def residual_builder(vector: Array) -> Array:
-        density = unpack_hermitian_matrix_field(vector, dimension=dimension, nk=nk)
-        constrained_density = project_xue2018_neutral_density_delta(
+        return xue2018_stationary_residual_vector(
             state,
-            project_xue2018_full_trs(density, state.mesh),
-        )
-        mapped = xue2018_stationary_density_map(
-            state,
-            constrained_density,
+            vector,
             thermal_energy_ry=config.thermal_energy_ry,
         )
-        return pack_hermitian_matrix_field(density - mapped.density_delta_trs)
 
     root = solve_stationary_residual(residual_builder, initial_vector, config=config.root)
     density = unpack_hermitian_matrix_field(root.vector, dimension=dimension, nk=nk)
@@ -291,5 +350,7 @@ __all__ = [
     "project_xue2018_neutral_density_delta",
     "run_xue2018_temperature_homotopy",
     "solve_xue2018_stationary_root",
+    "xue2018_state_at_parameters",
+    "xue2018_stationary_residual_vector",
     "xue2018_stationary_density_map",
 ]

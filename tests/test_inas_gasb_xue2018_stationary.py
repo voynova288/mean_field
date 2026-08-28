@@ -3,7 +3,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mean_field.core.hf.stationary import StationarySolveConfig
+from mean_field.core.hf.stationary import (
+    StationarySolveConfig,
+    pack_hermitian_matrix_field,
+)
 from mean_field.systems.inas_gasb.xue2018_hf import (
     build_xue2018_hf_state,
     run_xue2018_hf,
@@ -12,7 +15,9 @@ from mean_field.systems.inas_gasb.xue2018_hf import (
 from mean_field.systems.inas_gasb.xue2018_stationary import (
     Xue2018StationaryConfig,
     solve_xue2018_stationary_root,
+    xue2018_state_at_parameters,
     xue2018_stationary_density_map,
+    xue2018_stationary_residual_vector,
 )
 from mean_field.systems.inas_gasb.xue2018_symmetry import (
     project_xue2018_full_trs,
@@ -109,6 +114,26 @@ def test_xue2018_stationary_solver_accepts_known_normal_fixed_point() -> None:
     assert stationary.full_residual_max < 1.0e-9
     assert stationary.trs_error < 1.0e-12
     assert abs(stationary.number_residual) < 1.0e-12
+
+
+def test_xue2018_parameter_family_reuses_regulator_and_returns_full_residual() -> None:
+    state = _small_state()
+    changed = xue2018_state_at_parameters(
+        state,
+        eg_ry=-0.5,
+        hybridization_ab_ry=0.23,
+    )
+    assert changed.q0_kernel is state.q0_kernel
+    assert changed.mesh is state.mesh
+    assert np.max(np.abs(changed.h0 - state.h0)) > 0.0
+    vector = pack_hermitian_matrix_field(np.zeros_like(state.density))
+    residual = xue2018_stationary_residual_vector(
+        changed,
+        vector,
+        thermal_energy_ry=1.0e-2,
+    )
+    assert residual.shape == vector.shape
+    assert np.all(np.isfinite(residual))
 
 
 def test_xue2018_stationary_map_rejects_negative_temperature() -> None:
