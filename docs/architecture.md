@@ -58,6 +58,16 @@ labels/projectors, microscopic interaction kernels, electrostatic ensembles,
 and the physical interpretation of `P_ref` and a fixed chemical potential.
 See `docs/excitonic_hf_api.md` for formulas and the public contract.
 
+Higher-energy HF branches are not routed through the energy-descent ODA loop.
+System-independent antiunitary projection, Hermitian-field coordinates,
+stationary residual solving, and pseudo-arclength continuation live in
+`core/hf/{symmetry,stationary,continuation}.py`. A system adapter supplies the
+physical residual, exact mesh partner map, antiunitary basis matrix,
+fixed-number convention, and parameter scaling. Solver success is subordinate
+to explicit full residual, symmetry, number, and continuation-constraint
+gates; a constrained-subspace root cannot be promoted as an unrestricted HF
+solution without a full-space residual check.
+
 ## Retirement archive policy
 
 Cleanup may retire system-specific implementation surfaces even when they could be useful as debugging references later. Before deleting or replacing substantial system-specific HF, topology, bands, band-plot, or Berry-curvature plotting code, copy the old tracked file or code slice into an ignored local archive such as `local_archive/retired_surface/<date-or-commit>/...`. The archive is intentionally not pushed to git and must not be imported by package code, tests, scripts, or docs examples. It is a recovery/reference stash only; the package surface and LOC metrics count only files tracked by git.

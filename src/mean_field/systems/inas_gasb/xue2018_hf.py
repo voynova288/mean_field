@@ -325,6 +325,15 @@ def _xue2018_interaction_action(
     )
 
 
+def xue2018_interaction_action(
+    state: Xue2018HFState,
+    density_delta: ComplexArray,
+) -> ComplexArray:
+    """Return the bound Xue Hartree--Fock self-energy action on ``D``."""
+
+    return _xue2018_interaction_action(state, density_delta)
+
+
 def _weighted_oda_parameter(state: Xue2018HFState, delta_density: ComplexArray) -> float:
     delta_h = _xue2018_interaction_action(state, delta_density)
     interaction_h = state.hamiltonian - state.h0
@@ -459,6 +468,7 @@ __all__ = [
     "build_xue2018_hf_state",
     "run_xue2018_hf",
     "xue2018_global_neutral_projector",
+    "xue2018_interaction_action",
     "xue2018_reference_relative_energy_density",
     "xue2018_seed_hamiltonian",
     "xue2018_square_mesh",
