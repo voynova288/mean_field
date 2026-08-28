@@ -59,6 +59,11 @@
       "thermal_energy_ry": 0.001,
       "vertical_continuation_sha256": "df3f4c83e5c43891009d6287c3fbccefe050e214ceafde7bf39c69459499ad83"
     },
+    "historical_offgrid_diagnostic": {
+      "authority": "diagnostic_nonunique_continuous_extension_of_omitted_q0_lane",
+      "source_sha256": "f82c5a31419af6a891820cb50bf59180d99fdfe72aca4e364da38559acc571d5",
+      "warning": "The source node associated with the starting mesh cell is omitted throughout the bounded local minimization. This is continuous inside that cell and matches the historical node rule at its center, but it is not continuum regulator authority."
+    },
     "p24_fixed_point_map_stability": {
       "authority": "historical_omitted_q0_local_jacobian_diagnostic_not_energy_hessian",
       "classification": "fixed_point_iteration_unstable_in_both_trs_and_trsb_sectors_not_energy_hessian",
@@ -75,7 +80,8 @@
       {
         "eg_ry": -0.3999999999999999,
         "gap_grid_ry": 0.05746583952791476,
-        "gap_offgrid_ry": null,
+        "gap_offgrid_authority": "diagnostic_nonunique_continuous_extension_of_omitted_q0_lane",
+        "gap_offgrid_ry": 0.04467853173264935,
         "hybridization_ab_ry": 0.2,
         "number_residual": -8.659739592076221e-15,
         "point": 21,
@@ -89,7 +95,8 @@
       {
         "eg_ry": -0.5,
         "gap_grid_ry": 0.08341031895950286,
-        "gap_offgrid_ry": null,
+        "gap_offgrid_authority": "diagnostic_nonunique_continuous_extension_of_omitted_q0_lane",
+        "gap_offgrid_ry": 0.07084041253174163,
         "hybridization_ab_ry": 0.2,
         "number_residual": 2.4424906541753444e-15,
         "point": 22,
@@ -103,7 +110,8 @@
       {
         "eg_ry": -0.5,
         "gap_grid_ry": 0.10956852973346554,
-        "gap_offgrid_ry": null,
+        "gap_offgrid_authority": "diagnostic_nonunique_continuous_extension_of_omitted_q0_lane",
+        "gap_offgrid_ry": 0.10679454188863058,
         "hybridization_ab_ry": 0.21,
         "number_residual": -8.659739592076221e-15,
         "point": 23,
@@ -117,7 +125,8 @@
       {
         "eg_ry": -0.5,
         "gap_grid_ry": 0.14985969727921328,
-        "gap_offgrid_ry": null,
+        "gap_offgrid_authority": "diagnostic_nonunique_continuous_extension_of_omitted_q0_lane",
+        "gap_offgrid_ry": 0.14979735196975788,
         "hybridization_ab_ry": 0.22,
         "number_residual": -3.3306690738754696e-15,
         "point": 24,
@@ -131,7 +140,8 @@
       {
         "eg_ry": -0.5,
         "gap_grid_ry": 0.20984958340353965,
-        "gap_offgrid_ry": null,
+        "gap_offgrid_authority": "diagnostic_nonunique_continuous_extension_of_omitted_q0_lane",
+        "gap_offgrid_ry": 0.2089863056877535,
         "hybridization_ab_ry": 0.22999999999999998,
         "number_residual": 8.659739592076221e-15,
         "point": 25,
@@ -145,7 +155,8 @@
       {
         "eg_ry": -0.5,
         "gap_grid_ry": 0.3007521168844431,
-        "gap_offgrid_ry": null,
+        "gap_offgrid_authority": "diagnostic_nonunique_continuous_extension_of_omitted_q0_lane",
+        "gap_offgrid_ry": 0.2963743120814628,
         "hybridization_ab_ry": 0.24,
         "number_residual": -1.2878587085651816e-14,
         "point": 26,

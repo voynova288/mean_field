@@ -142,14 +142,14 @@ full unprojected residual checks
 we found a genuine unrestricted stationary branch with branch ID
 `xue2018-trs-full-stationary-p21-p26-v1`.
 
-| Fig. 2 point | paper blue / `Ry*` | stationary grid gap / `Ry*` |
-|---:|---:|---:|
-| 21 | `0.36149` | `0.05747` |
-| 22 | `0.28576` | `0.08341` |
-| 23 | `0.16825` | `0.10957` |
-| 24 | `0.05279` | `0.14986` |
-| 25 | `0.00842` | `0.20985` |
-| 26 | `0.13157` | `0.30075` |
+| Fig. 2 point | paper blue / `Ry*` | stationary grid gap / `Ry*` | local-cell off-grid diagnostic / `Ry*` |
+|---:|---:|---:|---:|
+| 21 | `0.36149` | `0.05747` | `0.04468` |
+| 22 | `0.28576` | `0.08341` | `0.07084` |
+| 23 | `0.16825` | `0.10957` | `0.10679` |
+| 24 | `0.05279` | `0.14986` | `0.14980` |
+| 25 | `0.00842` | `0.20985` | `0.20899` |
+| 26 | `0.13157` | `0.30075` | `0.29637` |
 
 Every listed zero-temperature point has full residual RMS below `3e-11`, full
 residual maximum below `4e-10`, and TR error below `4e-12`. The p24 root is
@@ -159,6 +159,12 @@ unstable under simple fixed-point iteration in both sectors:
 - TR-breaking-complement spectral radius: `2.30457`.
 
 These are fixed-point-map eigenvalues, not an energy-Hessian certificate.
+The off-grid column omits the source node associated with the bounded local
+mesh cell throughout minimization. It is a continuous local extension of the
+historical omitted-`q=0` rule, but it is non-unique and not continuum
+regulator authority. It confirms that mesh-node minimization is not the source
+of the p24--p26 disagreement.
+
 The finite-temperature horizontal pseudo-arclength branch folds at
 `A = 0.24844 Ry* a_B*`, before reaching Fig. 2 point 27.
 
