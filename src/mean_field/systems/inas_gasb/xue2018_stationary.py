@@ -230,6 +230,44 @@ def xue2018_stationary_residual_vector(
     return pack_hermitian_matrix_field(density - mapped.density_delta_trs)
 
 
+def xue2018_unrestricted_density_map_vector(
+    state: Xue2018HFState,
+    vector: Array,
+    *,
+    thermal_energy_ry: float,
+) -> Array:
+    """Return the unrestricted fixed-number density map in packed coordinates."""
+
+    density = unpack_hermitian_matrix_field(vector, dimension=state.h0.shape[0], nk=state.nk)
+    density = project_xue2018_neutral_density_delta(state, density)
+    mapped = xue2018_stationary_density_map(
+        state,
+        density,
+        thermal_energy_ry=float(thermal_energy_ry),
+    )
+    return pack_hermitian_matrix_field(mapped.density_delta_raw)
+
+
+def xue2018_trs_tangent_projector_vector(state: Xue2018HFState, vector: Array) -> Array:
+    """Project a packed tangent onto the fixed-number complete-TRS sector."""
+
+    field = unpack_hermitian_matrix_field(vector, dimension=state.h0.shape[0], nk=state.nk)
+    projected = project_xue2018_neutral_density_delta(
+        state,
+        project_xue2018_full_trs(field, state.mesh),
+    )
+    return pack_hermitian_matrix_field(projected)
+
+
+def xue2018_trsb_tangent_projector_vector(state: Xue2018HFState, vector: Array) -> Array:
+    """Project a packed tangent onto the TR-odd complement at fixed number."""
+
+    field = unpack_hermitian_matrix_field(vector, dimension=state.h0.shape[0], nk=state.nk)
+    trs = project_xue2018_full_trs(field, state.mesh)
+    projected = project_xue2018_neutral_density_delta(state, field - trs)
+    return pack_hermitian_matrix_field(projected)
+
+
 def solve_xue2018_stationary_root(
     state: Xue2018HFState,
     initial_density_delta: Array,
@@ -351,6 +389,9 @@ __all__ = [
     "run_xue2018_temperature_homotopy",
     "solve_xue2018_stationary_root",
     "xue2018_state_at_parameters",
+    "xue2018_trs_tangent_projector_vector",
+    "xue2018_trsb_tangent_projector_vector",
+    "xue2018_unrestricted_density_map_vector",
     "xue2018_stationary_residual_vector",
     "xue2018_stationary_density_map",
 ]

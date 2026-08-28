@@ -14,10 +14,14 @@ from mean_field.systems.inas_gasb.xue2018_hf import (
 )
 from mean_field.systems.inas_gasb.xue2018_stationary import (
     Xue2018StationaryConfig,
+    project_xue2018_neutral_density_delta,
     solve_xue2018_stationary_root,
     xue2018_state_at_parameters,
     xue2018_stationary_density_map,
     xue2018_stationary_residual_vector,
+    xue2018_trs_tangent_projector_vector,
+    xue2018_trsb_tangent_projector_vector,
+    xue2018_unrestricted_density_map_vector,
 )
 from mean_field.systems.inas_gasb.xue2018_symmetry import (
     project_xue2018_full_trs,
@@ -114,6 +118,13 @@ def test_xue2018_stationary_solver_accepts_known_normal_fixed_point() -> None:
     assert stationary.full_residual_max < 1.0e-9
     assert stationary.trs_error < 1.0e-12
     assert abs(stationary.number_residual) < 1.0e-12
+    vector = pack_hermitian_matrix_field(stationary.density_delta)
+    mapped = xue2018_unrestricted_density_map_vector(
+        state,
+        vector,
+        thermal_energy_ry=0.0,
+    )
+    assert np.max(np.abs(mapped - vector)) < 1.0e-9
 
 
 def test_xue2018_parameter_family_reuses_regulator_and_returns_full_residual() -> None:
@@ -134,6 +145,22 @@ def test_xue2018_parameter_family_reuses_regulator_and_returns_full_residual() -
     )
     assert residual.shape == vector.shape
     assert np.all(np.isfinite(residual))
+
+
+def test_xue2018_trs_and_trsb_tangent_projectors_decompose_field() -> None:
+    state = _small_state()
+    rng = np.random.default_rng(71)
+    raw = rng.normal(size=state.h0.shape) + 1j * rng.normal(size=state.h0.shape)
+    field = raw + np.swapaxes(raw.conj(), 0, 1)
+    vector = pack_hermitian_matrix_field(field)
+    trs = xue2018_trs_tangent_projector_vector(state, vector)
+    trsb = xue2018_trsb_tangent_projector_vector(state, vector)
+    neutral = pack_hermitian_matrix_field(
+        project_xue2018_neutral_density_delta(state, field)
+    )
+    assert trs + trsb == pytest.approx(neutral, abs=2.0e-13)
+    assert xue2018_trs_tangent_projector_vector(state, trs) == pytest.approx(trs, abs=2.0e-13)
+    assert xue2018_trsb_tangent_projector_vector(state, trsb) == pytest.approx(trsb, abs=2.0e-13)
 
 
 def test_xue2018_stationary_map_rejects_negative_temperature() -> None:

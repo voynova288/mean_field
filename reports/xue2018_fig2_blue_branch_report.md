@@ -123,41 +123,80 @@ off-grid estimate `0.0619796 Ry*`. However its full residual RMS is about
 `0.0700`, so it is an initializer, not an HF fixed point.
 
 Within the literal four-term constrained ansatz, Newton--Krylov finds a p24
-root with residual RMS `2.9e-15` and gap `0.18836 Ry*`. Releasing that root to
-the complete 16-Pauli HF space sends it to the normal root. It is therefore not
-yet an unrestricted blue-branch solution.
+root with residual RMS `2.9e-15` and gap `0.18836 Ry*`. A direct full-space
+restart from that constrained root falls into the normal basin; this does not
+prove that the corresponding unrestricted saddle is absent.
+
+## Full stationary branch now found
+
+Using the low-gap chord only as an initializer, followed by
+
+```text
+complete-TRS residual projection
+T/Ry* = 1e-2 -> 3e-3 -> 1e-3 -> 3e-4 -> 1e-4 -> 0
+Newton--Krylov root refinement
+pseudo-arclength continuation
+full unprojected residual checks
+```
+
+we found a genuine unrestricted stationary branch with branch ID
+`xue2018-trs-full-stationary-p21-p26-v1`.
+
+| Fig. 2 point | paper blue / `Ry*` | stationary grid gap / `Ry*` |
+|---:|---:|---:|
+| 21 | `0.36149` | `0.05747` |
+| 22 | `0.28576` | `0.08341` |
+| 23 | `0.16825` | `0.10957` |
+| 24 | `0.05279` | `0.14986` |
+| 25 | `0.00842` | `0.20985` |
+| 26 | `0.13157` | `0.30075` |
+
+Every listed zero-temperature point has full residual RMS below `3e-11`, full
+residual maximum below `4e-10`, and TR error below `4e-12`. The p24 root is
+unstable under simple fixed-point iteration in both sectors:
+
+- complete-TRS Jacobian spectral radius: `1.95042`;
+- TR-breaking-complement spectral radius: `2.30457`.
+
+These are fixed-point-map eigenvalues, not an energy-Hessian certificate.
+The finite-temperature horizontal pseudo-arclength branch folds at
+`A = 0.24844 Ry* a_B*`, before reaching Fig. 2 point 27.
 
 ## Current conclusion
 
-The correct statement is:
+The stationary-root hypothesis was partly correct: ODA missed a real
+higher-energy full-TRS stationary branch. However, the branch found from the
+low-gap initializer is **not the paper blue curve**. Its p21--p26 gap trend is
+opposite to the paper trend, and it folds before point 27 instead of connecting
+the displayed NI-like and QSHI-like sides.
 
-> Existing energy-descent ODA finds normal-like and strong-TRS attractive
-> roots. The gap-closing higher-energy TR-preserving branch required by the
-> paper has not yet been tracked as a complete stationary solution. Low-gap
-> chord directions and constrained roots are high-quality initializers for a
-> full-TRS stationary-root continuation, not proof that the paper branch has
-> been found.
+Therefore the remaining problem is no longer merely “implement a root
+solver.” We must determine whether another full stationary branch exists, or
+whether the paper used an unpublished constrained/legacy closure.
 
-It is equally incorrect to claim either that the blue saddle has been found or
-that it cannot exist because ODA leaves it.
+## Remaining solver work
 
-## Required solver work
+Implemented and validated:
 
-The next implementation must provide separate APIs for:
-
-1. the full residual
+1. full residual
    \[
    R[D;p]=D-\left[P_{\beta,\mu}(H_0(p)+\Sigma_H[D]+\Sigma_F[D])-P_{\rm ref}\right];
    \]
-2. an exact full-TRS projector using the integer `k <-> -k` permutation;
-3. Anderson/Broyden initialization and Newton--Krylov refinement without an
-   energy-decrease constraint;
-4. finite-temperature homotopy toward the zero-temperature rank-two map;
-5. pseudo-arclength continuation through folds, first over Fig. 2 points
-   21--30;
-6. residual, symmetry, energy, branch-overlap, and stability diagnostics;
-7. regulator-safe arbitrary-k gap evaluation in the cell-integrated physical
-   lane.
+2. exact full-TRS projector with integer `k <-> -k` pairing;
+3. Anderson/Newton--Krylov stationary solving without physical-energy descent;
+4. finite-temperature homotopy to the zero-temperature rank-two map;
+5. pseudo-arclength continuation through a verified fold;
+6. full residual, TR, number, overlap, energy, and local fixed-map stability diagnostics.
+
+Still required:
+
+1. multi-start branch enumeration on both sides of the fold and from NI/QSHI
+   endpoints, without selecting by paper gap;
+2. regulator-safe arbitrary-k gap evaluation in the cell-integrated physical
+   lane;
+3. fixed-window and momentum-window continuation of the stationary branch;
+4. an energy-Hessian or equivalent thermodynamic stability classification;
+5. author code/data or an explicit historical constrained-solver prescription.
 
 A historical omitted-`q=0` node rule has no unique continuous arbitrary-k
 extension. Its mesh-node gaps must remain labeled historical; continuous gap

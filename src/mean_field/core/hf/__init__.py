@@ -72,6 +72,10 @@ from .continuation import (
     PseudoArclengthResult,
     continue_pseudo_arclength,
 )
+from .stability import (
+    FixedPointMapSpectrum,
+    leading_fixed_point_map_eigenvalues,
+)
 from .stationary import (
     StationarySolveConfig,
     StationarySolveResult,
@@ -242,6 +246,7 @@ __all__ = [
     "DiskBackedArrayMapping",
     "E2_OVER_4PI_EPS0_EV_NM",
     "FixedMixingRun",
+    "FixedPointMapSpectrum",
     "FlavorBandData",
     "HFOverlapBlockSet",
     "HFOverlapMemoryEstimate",
@@ -354,6 +359,7 @@ __all__ = [
     "ProjectorConvention",
     "ReferencePolicy",
     "average_reference_density",
+    "leading_fixed_point_map_eigenvalues",
     "load_projector_from_hf_archive",
     "stored_density_to_projector",
     "summarize_hf_state_archive",

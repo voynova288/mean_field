@@ -13,6 +13,7 @@ class Xue2018ArtifactValidation:
     dataset_id: str
     full_path_branch_id: str
     strong_anchor_branch_id: str
+    stationary_branch_id: str
     checked_paths: tuple[str, ...]
 
 
@@ -82,17 +83,26 @@ def validate_xue2018_report_artifacts(report_root: str | Path) -> Xue2018Artifac
         raise ValueError("branch-data and manifest dataset_id differ")
     full_id = str(branch_data["full_path_dataset"]["branch_id"])
     strong_id = str(branch_data["strong_trs_anchor_dataset"]["branch_id"])
+    stationary_id = str(branch_data["stationary_trs_branch_dataset"]["branch_id"])
     if manifest.get("full_path_branch_id") != full_id:
         raise ValueError("full-path branch_id differs between JSON and manifest")
     if manifest.get("strong_anchor_branch_id") != strong_id:
         raise ValueError("strong-anchor branch_id differs between JSON and manifest")
+    if manifest.get("stationary_branch_id") != stationary_id:
+        raise ValueError("stationary branch_id differs between JSON and manifest")
     if branch_data["full_path_dataset"].get("status") != "stale_historical_branch_artifact":
         raise ValueError("old full-path TRS curve must remain explicitly stale")
 
     report_relative = str(manifest.get("report", ""))
     report_path = _resolve_relative(root, report_relative)
     report = report_path.read_text()
-    required_text = (dataset_id, full_id, strong_id, manifest["figures"][0]["path"])
+    required_text = (
+        dataset_id,
+        full_id,
+        strong_id,
+        stationary_id,
+        manifest["figures"][0]["path"],
+    )
     missing = [item for item in required_text if item not in report]
     if missing:
         raise ValueError(f"report is not bound to manifest identifiers: {missing}")
@@ -101,6 +111,7 @@ def validate_xue2018_report_artifacts(report_root: str | Path) -> Xue2018Artifac
         dataset_id=dataset_id,
         full_path_branch_id=full_id,
         strong_anchor_branch_id=strong_id,
+        stationary_branch_id=stationary_id,
         checked_paths=tuple(checked),
     )
 

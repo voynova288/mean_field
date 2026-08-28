@@ -18,6 +18,7 @@ def test_xue2018_report_json_png_share_one_manifest_lineage() -> None:
     assert result.dataset_id == "xue2018-fig2-branch-lineage-audit-v1"
     assert result.full_path_branch_id == "xue2018-trs-weak-seed-normal-attractor-fullpath-v1"
     assert result.strong_anchor_branch_id == "xue2018-trs-strong-attractor-p24-p26-v1"
+    assert result.stationary_branch_id == "xue2018-trs-full-stationary-p21-p26-v1"
     assert "figures/xue2018_fig2_branch_lineage_audit.png" in result.checked_paths
 
 

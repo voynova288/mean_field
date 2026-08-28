@@ -2,7 +2,7 @@
   "data": [
     {
       "path": "data/xue2018_fig2_branch_data.json",
-      "sha256": "83d1c2d7f81783ce0c472e262916cbd00c19ef884c6f18988b7c3f2a710d6742"
+      "sha256": "18621c33a0758019c2f91e039b4b89a3959a0e3c15859a8f65ca3db788df4455"
     },
     {
       "path": "data/xue2018_fig2_stale_postflight.json",
@@ -18,12 +18,13 @@
     {
       "dataset_id": "xue2018-fig2-branch-lineage-audit-v1",
       "path": "figures/xue2018_fig2_branch_lineage_audit.png",
-      "sha256": "a3341f080af4c1bf781af22bc1582625289d7def8c233994e0d2855ad15b0cbc"
+      "sha256": "fd1ddffa6aaff8d06a2229a82fcc8f7a3c2db80331c65069d11d2a1479b41313"
     }
   ],
   "full_path_branch_id": "xue2018-trs-weak-seed-normal-attractor-fullpath-v1",
   "mixed_branch_curve_forbidden": true,
   "report": "xue2018_fig2_blue_branch_report.md",
   "schema": "xue2018-fig2-artifact-manifest-v1",
+  "stationary_branch_id": "xue2018-trs-full-stationary-p21-p26-v1",
   "strong_anchor_branch_id": "xue2018-trs-strong-attractor-p24-p26-v1"
 }

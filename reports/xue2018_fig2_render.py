@@ -66,6 +66,9 @@ def main() -> None:
     anchors = branch_data["strong_trs_anchor_dataset"]["anchors"]
     anchor_x = np.asarray([row["point"] for row in anchors])
     anchor_gap = np.asarray([row["gap_grid_ry"] for row in anchors])
+    stationary = branch_data["stationary_trs_branch_dataset"]["zero_temperature_points"]
+    stationary_x = np.asarray([row["point"] for row in stationary])
+    stationary_gap = np.asarray([row["gap_grid_ry"] for row in stationary])
 
     FIGURES.mkdir(parents=True, exist_ok=True)
     fig, axes = plt.subplots(3, 1, figsize=(9.2, 8.8), sharex=True)
@@ -98,6 +101,16 @@ def main() -> None:
         zorder=4,
         label="strong-TRS ODA attractor anchors",
     )
+    axes[2].plot(
+        stationary_x,
+        stationary_gap,
+        color="tab:purple",
+        marker="D",
+        ms=4.5,
+        lw=1.5,
+        zorder=5,
+        label="full stationary TRS branch (p21--p26)",
+    )
     axes[2].set_ylabel(r"TR-preserving gap $/Ry^*$")
     axes[2].set_xlabel("Fig. 2 point index")
     axes[2].grid(alpha=0.18)
@@ -111,6 +124,7 @@ def main() -> None:
             "Dataset-ID": dataset_id,
             "Full-Path-Branch-ID": branch_data["full_path_dataset"]["branch_id"],
             "Strong-Anchor-Branch-ID": branch_data["strong_trs_anchor_dataset"]["branch_id"],
+            "Stationary-Branch-ID": branch_data["stationary_trs_branch_dataset"]["branch_id"],
         },
     )
     plt.close(fig)
@@ -133,6 +147,7 @@ def main() -> None:
         ],
         "full_path_branch_id": branch_data["full_path_dataset"]["branch_id"],
         "strong_anchor_branch_id": branch_data["strong_trs_anchor_dataset"]["branch_id"],
+        "stationary_branch_id": branch_data["stationary_trs_branch_dataset"]["branch_id"],
         "mixed_branch_curve_forbidden": True,
     }
     MANIFEST.write_text(json.dumps(manifest, indent=2, sort_keys=True, allow_nan=False) + "\n")
