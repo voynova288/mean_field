@@ -176,9 +176,17 @@ low-gap initializer is **not the paper blue curve**. Its p21--p26 gap trend is
 opposite to the paper trend, and it folds before point 27 instead of connecting
 the displayed NI-like and QSHI-like sides.
 
+A deterministic p25 inventory from eight independent complete-TRS starts
+found only three already known root classes: one normal-like root, five
+strong-TRS convergences, and two low-gap stationary-branch convergences. A
+full density-chord scan likewise has only the endpoint sign changes and one
+interior initializer interval. This is not an exhaustive nonexistence proof,
+but no additional paper-like near-zero p25 root was found.
+
 Therefore the remaining problem is no longer merely “implement a root
-solver.” We must determine whether another full stationary branch exists, or
-whether the paper used an unpublished constrained/legacy closure.
+solver.” We must determine whether a disconnected branch exists outside the
+current multistart/chord basins, or whether the paper used an unpublished
+constrained/legacy closure.
 
 ## Remaining solver work
 
