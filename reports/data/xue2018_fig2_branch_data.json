@@ -1,0 +1,83 @@
+{
+  "schema": "xue2018-fig2-branch-data-v1",
+  "dataset_id": "xue2018-fig2-branch-lineage-audit-v1",
+  "authority": "historical_finite_grid_branch_lineage_audit_not_continuum_authority",
+  "regulator": {
+    "points_per_axis": 61,
+    "k_bounds_ab_inv": [-3.0, 3.0],
+    "mesh_policy": "inclusive_nodes_uniform_weight_diagnostic",
+    "weights": "uniform_spacing_squared_over_2pi_squared",
+    "self_cell_policy": "omitted_single_q0_point_diagnostic",
+    "physical_continuum_authority": false
+  },
+  "full_path_dataset": {
+    "branch_id": "xue2018-trs-weak-seed-normal-attractor-fullpath-v1",
+    "status": "stale_historical_branch_artifact",
+    "solver_type": "oda_energy_descent_independent_restarts",
+    "symmetry_constraint": "none_explicit_seed_only",
+    "stability_class": "stable_attractor_or_collapsed_normal_branch",
+    "source_json": "xue2018_fig2_stale_postflight.json",
+    "source_json_sha256": "6e87335e32cbdfdfba42a4bb0a9f99852412a95e98f343a10a8905f295fa4b06",
+    "warning": "This is the dataset plotted in the previously tracked bottom panel. It is not the strong TRS p24-p26 branch quoted in the report and is not the paper blue stationary branch."
+  },
+  "strong_trs_anchor_dataset": {
+    "branch_id": "xue2018-trs-strong-attractor-p24-p26-v1",
+    "status": "converged_stable_attractor_anchors_not_continuous_paper_branch",
+    "solver_type": "oda_energy_descent_independent_strong_seed",
+    "symmetry_constraint": "none_explicit_trs_seed_only",
+    "stability_class": "strong_trs_local_attractor_under_oda",
+    "anchors": [
+      {
+        "point": 24,
+        "eg_ry": -0.5,
+        "hybridization_ab_ry": 0.22,
+        "gap_grid_ry": 1.0162071705298845,
+        "gap_offgrid_ry": null,
+        "root_residual_rms": 7.833494856642831e-8,
+        "root_residual_max": null,
+        "tr_error_ry": 1.9e-13,
+        "reference_relative_energy_ry_ab2": -0.38010018420641256,
+        "initial_seed": "trs_nematic_amplitude_1.0_ry",
+        "parent_root": null,
+        "summary_sha256": "e42b54c19173da3ebad25ca38e93f32630031ccdd04fd41af2d5a56102930de8",
+        "state_sha256": "d3d52a484550931d67454909222d21a372c597cb18564cdf743083fa15c65635"
+      },
+      {
+        "point": 25,
+        "eg_ry": -0.5,
+        "hybridization_ab_ry": 0.23,
+        "gap_grid_ry": 0.9139061754754572,
+        "gap_offgrid_ry": null,
+        "root_residual_rms": 8.538321103776096e-8,
+        "root_residual_max": null,
+        "tr_error_ry": null,
+        "reference_relative_energy_ry_ab2": -0.3897228790400226,
+        "initial_seed": "trs_nematic_amplitude_1.0_ry",
+        "parent_root": null,
+        "summary_sha256": "a00846e045140856adeecbf9d786b8923fae7d26e3173b993acf99f5448a129f",
+        "state_sha256": "b5f8089cbf151b7e6d49a21819ab80f399b74fb3ce89f205004878806de91d7c"
+      },
+      {
+        "point": 26,
+        "eg_ry": -0.5,
+        "hybridization_ab_ry": 0.24,
+        "gap_grid_ry": 0.7808864621046744,
+        "gap_offgrid_ry": null,
+        "root_residual_rms": 9.392654973957567e-8,
+        "root_residual_max": null,
+        "tr_error_ry": null,
+        "reference_relative_energy_ry_ab2": -0.3998948486724581,
+        "initial_seed": "trs_nematic_amplitude_1.0_ry",
+        "parent_root": null,
+        "summary_sha256": "fd4b50c56a9ad8c79e38c55617a3e28963cd5d290de7c2b0a277896514132a06",
+        "state_sha256": "d0010d696aa3fd35fd3a45b4a180c14c3b8320cdefaed325f5bb8ae1f6ee7ef5"
+      }
+    ]
+  },
+  "paper_digitization": {
+    "authority": "comparison_only_not_solver_input",
+    "source_json": "xue2018_fig2_digitized_markers.json",
+    "source_json_sha256": "1647f40d41d9b4de3e0475323ac731e064adcb17059c93e97269644be435013e",
+    "paper_pdf_sha256": "012bfbce807fc49f4714e7a92f59e76546c6ab01ffbebe22f03bbfb81c7c2ba2"
+  }
+}

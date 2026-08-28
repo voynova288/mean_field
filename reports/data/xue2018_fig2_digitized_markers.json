@@ -6,7 +6,9 @@
     "phi_pixels_per_0p5": 187.5,
     "phi_y_zero_px": 908.0
   },
-  "image": "/data/home/ziyuzhu/Mean_Field/tmp/pdfs/xue2018_nematic/render/fig2_600_crop.png",
+  "image": "arxiv:1710.00410v3#fig2_600dpi_crop",
+  "image_sha256": "c6e57cd492af1df5dbaff0e2439844575d350fe47a3e9c705e6ef969e7c4b134",
+  "paper_pdf_sha256": "012bfbce807fc49f4714e7a92f59e76546c6ab01ffbebe22f03bbfb81c7c2ba2",
   "schema": "xue2018-fig2-image-marker-digitization-v2",
   "series": {
     "black": [

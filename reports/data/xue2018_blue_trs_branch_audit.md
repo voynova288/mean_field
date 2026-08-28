@@ -81,9 +81,9 @@ is a core source-lineage/constraint ambiguity, not a plotting, seed-amplitude,
 ODA, self-cell, Hartree, or simple-mesh problem.
 
 No empirical scale, interaction multiplier, coordinate shift, or smoothing
-was used. Zeng finite-Q ground-state work should not inherit the blue branch as
-an authority until author code/data or an explicit constrained-solver
-prescription is found.
+was used. The blue branch must remain non-authoritative until a complete
+stationary-root continuation or author code/data supplies the missing solver
+contract.
 
 ## Main artifacts
 

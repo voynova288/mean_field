@@ -6,12 +6,12 @@ The package started as a benchmark-driven rewrite of a Julia `TBG_HartreeFock` w
 
 ## Excitonic reproduction debug branch
 
-The `debug/excitonic-reproduction` branch is the shared InAs/GaSb excitonic
-HF reproduction and audit lane; it is not limited to Du et al. 2017. Its
-current consolidated report, calculated figures, paper-digitization overlay,
-and explicit unresolved discrepancies are in
-[`reports/excitonic_reproduction_debug_report.md`](reports/excitonic_reproduction_debug_report.md).
-The report supersedes the older Du-only UV-debug notes removed from this
+The `debug/excitonic-reproduction` branch currently has one active target:
+Xue--MacDonald 2018 Fig. 2, especially its higher-energy
+TR-preserving blue branch. The versioned branch-lineage report and
+paper-digitization comparison are in
+[`reports/xue2018_fig2_blue_branch_report.md`](reports/xue2018_fig2_blue_branch_report.md).
+Earlier mixed-paper and provenance-inconsistent reports are retired from this
 branch.
 
 ## Scope

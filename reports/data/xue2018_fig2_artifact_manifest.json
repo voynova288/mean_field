@@ -1,0 +1,29 @@
+{
+  "data": [
+    {
+      "path": "data/xue2018_fig2_branch_data.json",
+      "sha256": "83d1c2d7f81783ce0c472e262916cbd00c19ef884c6f18988b7c3f2a710d6742"
+    },
+    {
+      "path": "data/xue2018_fig2_stale_postflight.json",
+      "sha256": "6e87335e32cbdfdfba42a4bb0a9f99852412a95e98f343a10a8905f295fa4b06"
+    },
+    {
+      "path": "data/xue2018_fig2_digitized_markers.json",
+      "sha256": "1647f40d41d9b4de3e0475323ac731e064adcb17059c93e97269644be435013e"
+    }
+  ],
+  "dataset_id": "xue2018-fig2-branch-lineage-audit-v1",
+  "figures": [
+    {
+      "dataset_id": "xue2018-fig2-branch-lineage-audit-v1",
+      "path": "figures/xue2018_fig2_branch_lineage_audit.png",
+      "sha256": "a3341f080af4c1bf781af22bc1582625289d7def8c233994e0d2855ad15b0cbc"
+    }
+  ],
+  "full_path_branch_id": "xue2018-trs-weak-seed-normal-attractor-fullpath-v1",
+  "mixed_branch_curve_forbidden": true,
+  "report": "xue2018_fig2_blue_branch_report.md",
+  "schema": "xue2018-fig2-artifact-manifest-v1",
+  "strong_anchor_branch_id": "xue2018-trs-strong-attractor-p24-p26-v1"
+}
