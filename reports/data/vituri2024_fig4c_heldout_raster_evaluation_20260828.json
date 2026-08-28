@@ -1,0 +1,456 @@
+{
+  "artifact_hashes_sha256": {
+    "comparison_csv": "a200ce7d4fdcd58dec8d8faa9c566cc92aaba5cf172a1f8bfbaa45dffb12057a",
+    "diagnostic_png": "2357e700a59e55dbb74858d4a6206c927409d90d91030e1ac807cb91702df1eb",
+    "paper_component_pixels_csv": "15344ed5de2733db6275199a5f3f25c0589ea935292bd14ac774b386b018b328",
+    "paper_samples_csv": "52e2cfeb8a21dcccb87c911ca5dc4af9fdf857aa717c1d0c9aa62f4ec917d6e9"
+  },
+  "artifacts": {
+    "comparison_csv": "/tmp/vituri_fig4c_raster_eval_20260828/comparison.csv",
+    "diagnostic_png": "/tmp/vituri_fig4c_raster_eval_20260828/diagnostic_overlay.png",
+    "paper_component_pixels_csv": "/tmp/vituri_fig4c_raster_eval_20260828/paper_component_pixels.csv",
+    "paper_samples_csv": "/tmp/vituri_fig4c_raster_eval_20260828/paper_samples.csv"
+  },
+  "calculation_was_frozen_before_paper_extraction": true,
+  "calibration": {
+    "single_pixel_center_uncertainty": {
+      "x_kx_a0": 0.00018867924528301889,
+      "x_px": 0.5,
+      "y_meV": 0.02666666666666667,
+      "y_px": 0.5
+    },
+    "x_formula": "x=-0.1+(pixel_x-x_left)*0.2/(x_right-x_left)",
+    "x_kx_a0_per_pixel": 0.00037735849056603777,
+    "y_formula": "E=12-(pixel_y-y_top)*20/(y_bottom-y_top)",
+    "y_meV_per_pixel": 0.05333333333333334
+  },
+  "center": {
+    "calculated_straight_node_polyline_E_meV": 0.5341260322007102,
+    "paper_E_meV": 0.3999999999999986,
+    "paper_minus_calculated_meV": -0.13412603220071162,
+    "paper_raster_uncertainty_meV": 0.05333333333333334,
+    "pixel_x": 356,
+    "x_kx_a0": 0.0
+  },
+  "comparison_definition": "paper per-column samples minus linear interpolation of the independent raw calculated-node polyline at identical published x",
+  "evaluation_type": "held-out quantitative raster evaluation",
+  "extraction": {
+    "centerline_rule": "per-column median of raw selected pixels; no smoothing/interpolation",
+    "component_stats": [
+      {
+        "label": 7,
+        "pixel_count": 2123,
+        "unique_x_count": 402,
+        "x_max": 539,
+        "x_min": 138,
+        "x_span_fraction_of_frame": 0.7566037735849057,
+        "y_max": 474,
+        "y_min": 175,
+        "y_span_fraction_of_frame": 0.7973333333333333
+      },
+      {
+        "label": 5,
+        "pixel_count": 8,
+        "unique_x_count": 4,
+        "x_max": 95,
+        "x_min": 92,
+        "x_span_fraction_of_frame": 0.005660377358490566,
+        "y_max": 137,
+        "y_min": 136,
+        "y_span_fraction_of_frame": 0.0026666666666666666
+      },
+      {
+        "label": 6,
+        "pixel_count": 8,
+        "unique_x_count": 4,
+        "x_max": 620,
+        "x_min": 617,
+        "x_span_fraction_of_frame": 0.005660377358490566,
+        "y_max": 137,
+        "y_min": 136,
+        "y_span_fraction_of_frame": 0.0026666666666666666
+      },
+      {
+        "label": 8,
+        "pixel_count": 8,
+        "unique_x_count": 4,
+        "x_max": 95,
+        "x_min": 92,
+        "x_span_fraction_of_frame": 0.005660377358490566,
+        "y_max": 231,
+        "y_min": 230,
+        "y_span_fraction_of_frame": 0.0026666666666666666
+      },
+      {
+        "label": 9,
+        "pixel_count": 8,
+        "unique_x_count": 4,
+        "x_max": 620,
+        "x_min": 617,
+        "x_span_fraction_of_frame": 0.005660377358490566,
+        "y_max": 231,
+        "y_min": 230,
+        "y_span_fraction_of_frame": 0.0026666666666666666
+      },
+      {
+        "label": 10,
+        "pixel_count": 8,
+        "unique_x_count": 6,
+        "x_max": 97,
+        "x_min": 92,
+        "x_span_fraction_of_frame": 0.009433962264150943,
+        "y_max": 326,
+        "y_min": 324,
+        "y_span_fraction_of_frame": 0.005333333333333333
+      },
+      {
+        "label": 11,
+        "pixel_count": 8,
+        "unique_x_count": 4,
+        "x_max": 620,
+        "x_min": 617,
+        "x_span_fraction_of_frame": 0.005660377358490566,
+        "y_max": 325,
+        "y_min": 324,
+        "y_span_fraction_of_frame": 0.0026666666666666666
+      },
+      {
+        "label": 12,
+        "pixel_count": 8,
+        "unique_x_count": 4,
+        "x_max": 95,
+        "x_min": 92,
+        "x_span_fraction_of_frame": 0.005660377358490566,
+        "y_max": 419,
+        "y_min": 418,
+        "y_span_fraction_of_frame": 0.0026666666666666666
+      },
+      {
+        "label": 15,
+        "pixel_count": 8,
+        "unique_x_count": 2,
+        "x_max": 224,
+        "x_min": 223,
+        "x_span_fraction_of_frame": 0.0018867924528301887,
+        "y_max": 474,
+        "y_min": 471,
+        "y_span_fraction_of_frame": 0.008
+      },
+      {
+        "label": 2,
+        "pixel_count": 7,
+        "unique_x_count": 2,
+        "x_max": 224,
+        "x_min": 223,
+        "x_span_fraction_of_frame": 0.0018867924528301887,
+        "y_max": 104,
+        "y_min": 101,
+        "y_span_fraction_of_frame": 0.008
+      },
+      {
+        "label": 13,
+        "pixel_count": 7,
+        "unique_x_count": 4,
+        "x_max": 620,
+        "x_min": 617,
+        "x_span_fraction_of_frame": 0.005660377358490566,
+        "y_max": 419,
+        "y_min": 418,
+        "y_span_fraction_of_frame": 0.0026666666666666666
+      },
+      {
+        "label": 14,
+        "pixel_count": 6,
+        "unique_x_count": 2,
+        "x_max": 489,
+        "x_min": 488,
+        "x_span_fraction_of_frame": 0.0018867924528301887,
+        "y_max": 474,
+        "y_min": 470,
+        "y_span_fraction_of_frame": 0.010666666666666666
+      },
+      {
+        "label": 3,
+        "pixel_count": 5,
+        "unique_x_count": 2,
+        "x_max": 357,
+        "x_min": 356,
+        "x_span_fraction_of_frame": 0.0018867924528301887,
+        "y_max": 104,
+        "y_min": 101,
+        "y_span_fraction_of_frame": 0.008
+      },
+      {
+        "label": 16,
+        "pixel_count": 5,
+        "unique_x_count": 2,
+        "x_max": 357,
+        "x_min": 356,
+        "x_span_fraction_of_frame": 0.0018867924528301887,
+        "y_max": 474,
+        "y_min": 471,
+        "y_span_fraction_of_frame": 0.008
+      },
+      {
+        "label": 4,
+        "pixel_count": 4,
+        "unique_x_count": 1,
+        "x_max": 489,
+        "x_min": 489,
+        "x_span_fraction_of_frame": 0.0,
+        "y_max": 104,
+        "y_min": 101,
+        "y_span_fraction_of_frame": 0.008
+      },
+      {
+        "label": 1,
+        "pixel_count": 1,
+        "unique_x_count": 1,
+        "x_max": 92,
+        "x_min": 92,
+        "x_span_fraction_of_frame": 0.0,
+        "y_max": 101,
+        "y_min": 101,
+        "y_span_fraction_of_frame": 0.0
+      },
+      {
+        "label": 17,
+        "pixel_count": 1,
+        "unique_x_count": 1,
+        "x_max": 92,
+        "x_min": 92,
+        "x_span_fraction_of_frame": 0.0,
+        "y_max": 474,
+        "y_min": 474,
+        "y_span_fraction_of_frame": 0.0
+      },
+      {
+        "label": 18,
+        "pixel_count": 1,
+        "unique_x_count": 1,
+        "x_max": 620,
+        "x_min": 620,
+        "x_span_fraction_of_frame": 0.0,
+        "y_max": 474,
+        "y_min": 474,
+        "y_span_fraction_of_frame": 0.0
+      }
+    ],
+    "connectivity": 8,
+    "curve_component_label": 7,
+    "curve_component_pixel_count": 2123,
+    "curve_component_qualification": "unique component with x-span >50% frame and y-span >25% frame",
+    "dark_threshold_inclusive": 160,
+    "frame_candidate_min_col_run_fraction_of_image_height": 0.5,
+    "frame_candidate_min_row_run_fraction_of_image_width": 0.6,
+    "gray_zero_dashed_line_status": "excluded: not connected to the uniquely qualified dark curve component at threshold",
+    "grayscale_conversion": "Pillow RGB to L (ITU-R 601 luma implementation)",
+    "interior_margin_px": 1,
+    "qualified_component_count": 1,
+    "total_interior_components": 18
+  },
+  "frame_pixels": {
+    "detection": "closed dark rectangle from full-image row/column contiguous-run thresholds",
+    "height_px_between_lines": 375,
+    "width_px_between_lines": 530,
+    "x_left": 91,
+    "x_right": 621,
+    "y_bottom": 475,
+    "y_top": 100
+  },
+  "host_observed": "test001",
+  "host_required": "test001",
+  "input_hashes_sha256": {
+    "calculated_branch_csv": "61242bd926e6fbd0f0b39e713d4bffbeda00d4876725eaf5c662c58f8f61caa3",
+    "direct_crop_png": "3b054400e2c5e7cf04f51d9276aaecb46c96bc990265d064875a5e9bbb6e1b66"
+  },
+  "inputs": {
+    "calculated_branch_csv": "/data/home/ziyuzhu/.runs/Mean_Field_09075cd_vituri_fig4c_chosen_contract_v2_20260828/output/job_462560/original_staging/bundle/branches/branch_0000.csv",
+    "direct_crop_png": "/data/home/ziyuzhu/.worktrees/mean_field_vituri_degenerate_oda/tmp/pdfs/vituri_sc_fig4/paper_panel_c_crop.png"
+  },
+  "panel": "Vituri Fig. 4(c)",
+  "paper_data_used_to_fit_calculation": false,
+  "paper_samples": {
+    "boundary_adjacent_note": "Preserved but flagged: selected ink reaches the pixel immediately inside the excluded frame border, so the full line profile may be clipped.",
+    "boundary_adjacent_sample_count": 6,
+    "boundary_adjacent_sample_indices": [
+      0,
+      1,
+      2,
+      399,
+      400,
+      401
+    ],
+    "count": 402,
+    "paper_E_centerline_range_meV": [
+      -7.946666666666669,
+      7.946666666666666
+    ],
+    "paper_x_range_kx_a0": [
+      -0.08226415094339623,
+      0.06905660377358491
+    ],
+    "per_sample_y_half_span_uncertainty_px_max": 12.5,
+    "per_sample_y_half_span_uncertainty_px_median": 1.5,
+    "per_sample_y_uncertainty_meV_max": 0.6666666666666667,
+    "per_sample_y_uncertainty_meV_median": 0.08,
+    "pixel_x_range": [
+      138,
+      539
+    ],
+    "pixel_y_component_range": [
+      175,
+      474
+    ]
+  },
+  "peaks": {
+    "calculated_straight_node_polyline": [
+      {
+        "E_meV": 5.669600667347119,
+        "extremum_rule": "maximum raw node; a straight-node polyline has extrema at nodes or endpoints",
+        "kind": "left_local",
+        "raw_calculated_node_index_sorted": 77,
+        "x_kx_a0": -0.048
+      },
+      {
+        "E_meV": 8.338280301741996,
+        "extremum_rule": "maximum raw node; a straight-node polyline has extrema at nodes or endpoints",
+        "kind": "right_global",
+        "raw_calculated_node_index_sorted": 99,
+        "x_kx_a0": 0.04
+      }
+    ],
+    "paper_raster": [
+      {
+        "E_meV": 5.066666666666666,
+        "centerline_plateau_pixel_x_range": [
+          227,
+          228
+        ],
+        "kind": "left_local",
+        "raster_x_uncertainty_kx_a0": 0.00037735849056603777,
+        "raster_x_uncertainty_px": 1.0,
+        "raster_y_uncertainty_meV": 0.08,
+        "raster_y_uncertainty_px": 1.5,
+        "representative_pixel_x": 227.5,
+        "representative_pixel_y": 230.0,
+        "selected_pixel_y_range_at_plateau_columns": [
+          229,
+          231
+        ],
+        "x_kx_a0": -0.04849056603773585
+      },
+      {
+        "E_meV": 7.946666666666666,
+        "centerline_plateau_pixel_x_range": [
+          468,
+          470
+        ],
+        "kind": "right_global",
+        "raster_x_uncertainty_kx_a0": 0.0005660377358490566,
+        "raster_x_uncertainty_px": 1.5,
+        "raster_y_uncertainty_meV": 0.08,
+        "raster_y_uncertainty_px": 1.5,
+        "representative_pixel_x": 469.0,
+        "representative_pixel_y": 176.0,
+        "selected_pixel_y_range_at_plateau_columns": [
+          175,
+          177
+        ],
+        "x_kx_a0": 0.04264150943396228
+      }
+    ],
+    "paper_rule": "separate x<0 and x>0; exact maximum of unsmoothed per-column raster centerline; report plateau and occupied-pixel uncertainty"
+  },
+  "published_axes_fixed_before_comparison": {
+    "axis_source": "task-specified published axes; no fit to calculated data",
+    "x_kx_a0": [
+      -0.1,
+      0.1
+    ],
+    "y_meV": [
+      -8.0,
+      12.0
+    ]
+  },
+  "rescaling": false,
+  "residual_metrics_meV": {
+    "mae": 0.656716051601949,
+    "max_absolute": 3.479483044568237,
+    "max_absolute_point": {
+      "adjacent_to_excluded_frame_border": true,
+      "calculated_E_meV": -11.319483044568237,
+      "paper_E_meV": -7.84,
+      "paper_x_kx_a0": 0.06905660377358491
+    },
+    "max_absolute_sample_index": 401,
+    "mean_signed": 0.12182987234526571,
+    "non_boundary_adjacent_secondary": {
+      "mae": 0.6181924678626021,
+      "max_absolute": 2.9303111811986344,
+      "rmse": 0.8870888819066269,
+      "sample_count": 396
+    },
+    "rmse": 0.9635577996292399
+  },
+  "smoothing": false,
+  "uncertainty_note": "Raster uncertainties are pixel-quantization/selected-line-thickness bounds, not statistical confidence intervals. Boundary-adjacent samples are explicitly flagged because clipping is not bounded by line thickness. Calculation values have no raster uncertainty assigned.",
+  "used_as_solver_or_pass_gate": false,
+  "user_supplied_branch_agreement_max_meV": 1.78e-12,
+  "visual_verification": {
+    "diagnostic_png_sha256": "2357e700a59e55dbb74858d4a6206c927409d90d91030e1ac807cb91702df1eb",
+    "fail_closed_note": "Would fail if the selected component included border/ticks/text/dashed line or if another component met the span qualification.",
+    "observation": "The red 8-connected component follows one unambiguous continuous dark paper curve. The detected frame, ticks/text, and gray dashed zero line are absent from the selected component; cyan per-column medians remain centered on the dark trace. Six endpoint samples adjacent to the excluded bottom frame border are visibly clipped and are explicitly flagged.",
+    "passed": true,
+    "status": "passed_manual_inspection"
+  },
+  "zero_crossings": {
+    "calculated_straight_node_polyline": [
+      {
+        "bracket_indices": [
+          7,
+          8
+        ],
+        "x": -0.06845862065022869
+      },
+      {
+        "bracket_indices": [
+          39,
+          40
+        ],
+        "x": 0.05928404828849599
+      }
+    ],
+    "paper_centerline_linear_between_adjacent_columns": [
+      {
+        "bracket_indices": [
+          33,
+          33
+        ],
+        "pixel_x_interpolated": 171.0,
+        "raster_x_uncertainty_kx_a0": 0.0009433962264150945,
+        "raster_x_uncertainty_px": 2.5,
+        "raw_zero_row_pixel_x_range": [
+          170,
+          173
+        ],
+        "x": -0.06981132075471698
+      },
+      {
+        "bracket_indices": [
+          380,
+          380
+        ],
+        "pixel_x_interpolated": 518.0,
+        "raster_x_uncertainty_kx_a0": 0.0005660377358490566,
+        "raster_x_uncertainty_px": 1.5,
+        "raw_zero_row_pixel_x_range": [
+          518,
+          519
+        ],
+        "x": 0.06113207547169813
+      }
+    ],
+    "zero_energy_pixel_row": 325
+  }
+}

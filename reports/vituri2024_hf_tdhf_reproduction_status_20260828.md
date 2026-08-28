@@ -6,20 +6,26 @@
 
 本文是该分支当前唯一的 Vituri 结果状态报告，取代
 `vituri2024_hf_tdhf_reproduction_status_20260821.md` 以及更早的 N101
-简并分支和 panel-c 初步报告。旧 JSON、图和 runroot 仍作为历史证据保留；
-物理结论以本文为准。
+简并分支和 panel-c 初步报告。过时的 N101 active-report JSON/图已删除；历史
+证据仍保存在 sealed runroots 与 Git 历史中。物理结论以本文为准。
 
 ## 一句话结论
 
-**精确 no-wrap FFT 全 SCF 已在受限 homogeneous half-metal sector 的 N179
-有限-cutoff case 中得到正中心与两个交点；但是 N81–N201 sampled
-fixed-density ladder 持续明显漂移，在该区间没有观察或建立 UV plateau。
-该结果只证明 finite-volume profile discriminator，不证明作者 cutoff、
-unrestricted ground state、完整论文复现或 TDHF source authority。**
+**采用预先固定的合理数值 contract（`N=179`, `H_v=769`,
+`a0*Delta k=0.004`, `d=369 Angstrom`, `epsilon=8`, `Delta1=28 meV`），
+精确 no-wrap FFT 在 homogeneous fixed-half-metal sector 内完成全自洽 SCF，
+并独立复现 Fig. 4(c) 的双峰、中心浅谷和两个费米交点；能量尺度也与论文
+panel 高度一致。该结论是
+`independent chosen-contract Fig. 4(c) reproduction`；它不等同于作者 exact
+cutoff、UV limit、unrestricted ground state 或 TDHF source authority。**
 
 ## 1. Sealed 计算与证据边界
 
-权威计算为 Slurm job `461276`：
+本报告包含两条互补证据链：job `461276` 是 full cutoff ladder；job
+`462560` 加 zero-science recovery `462719` 是 chosen-contract Fig. 4(c)
+复算与图形发布。
+
+Full-ladder 权威计算 job `461276`：
 
 - source commit：`ec45b19768a19ce500be9171dd929376ee7c9fa1`；
 - backend：exact finite-square zero-padded no-wrap FFT convolution；
@@ -39,8 +45,18 @@ Sentinel、summary、postflight 和 31 个 manifest 文件的 SHA256/size 均已
 
 机器可读摘要：
 
-- `reports/data/vituri2024_panel_c_fft_full_scf_ladder_461276_attestation.json`；
-- SHA256：`e34af3ef6ab1c4eca4b01a6585ac930bd8e743f5c871246005e6af1e5049e9f8`。
+- full ladder：`reports/data/vituri2024_panel_c_fft_full_scf_ladder_461276_attestation.json`，
+  SHA256 `e34af3ef6ab1c4eca4b01a6585ac930bd8e743f5c871246005e6af1e5049e9f8`；
+- chosen-contract Fig. 4(c)：
+  `reports/data/vituri2024_fig4c_chosen_contract_462560_attestation.json`。
+
+最新 Fig. 4(c) 复算使用 source commit
+`09075cd22d47edbb4738229d98b52a9650154ec5` 与公开 fixed-sector BFS API。
+原 job `462560` 的数值 step 和独立 postflight 均 `COMPLETED 0:0`，batch 仅因
+compute node 缺失 login-node gnuplot target 而在绘图阶段 `FAILED 1:0`；
+zero-science recovery job `462719` 用保存的 raw branch CSV 生成图并完成原子
+发布，没有重跑或修改 SCF。最终 sentinel：
+`/data/home/ziyuzhu/.runs/Mean_Field_09075cd_vituri_fig4c_chosen_contract_v2_20260828/COMPLETE_462560.json`。
 
 两个前序 capsule 均只留下预数值工程失败 provenance；它们不是 job
 `461276` 的科学输出：
@@ -166,32 +182,62 @@ Branch 数量与 array coalescence：
 array groups，它们全部保留且全部通过 stationarity；中心、cut 和 crossings
 是 branch-consistent observables，而不是通过 postselection 选择的某一 leaf。
 
-## 6. 与论文 Fig. 4(c) 的关系
+## 6. Fig. 4(c) chosen-contract 复现
 
-计算得到的 N179 finite-cutoff profile 具有正中心、两个 crossings 和报告表中
-列出的两个 exact-grid maxima。它与论文 panel 的相似性目前只是未量化的视觉
-观察；paper raster 没有进入 sealed numerical/postflight 路径，因此该观察不授予
-reproduction authority。
+新复算的 contract 在 job `462560` 前预先声明；运行中没有调参、拟合、缩放、
+branch 选择或 visual pass gate，也没有用旧 scientific arrays 或目标 observables
+作 pass gate。`N=179` 与 `d=369 Angstrom` 来自此前 cutoff/paper-profile 审计，
+不是 blind author-exact 输入。四个 exact-shell BFS endpoints 全部 stationary；
+所有 branch 均保留。其 `ky=0` cut 的最大 branch spread 仅
+`1.78e-12 meV`，中心 spread 为零。
 
-仍不能标记 `full_paper_reproduction_verified=true`，原因是：
+独立计算得到：
 
-1. 作者没有公布 panel 的 raw `kx*a0,E-mu` 数组；
-2. 作者 momentum-domain 形状、cutoff、endpoint/wrap、quadrature 未知；
-3. sampled N81–N201 ladder 没有观察或建立 UV plateau；
-4. panel 是否来自 unrestricted mBZ solver 或另一个 constrained calculation
-   仍未知；
-5. background/reference 与 exact finite-grid occupation policy 未获作者确认。
+- `E(0)-mu = +0.534126 meV`；
+- crossings：`[-0.0684586, 0.0592840] / a0`；
+- exact-grid maxima：`(-0.048, 5.66960 meV)` 与
+  `(0.040, 8.33828 meV)`；
+- common `mu_mid = 4.966436164427063 eV`。
 
-现有旧图
-`figures/vituri2024_hf_band_panel_c_matched_density_comparison_20260818.png`
-只显示历史 N101 mismatch，不再代表当前最佳 finite-cutoff profile。论文图从未
-用于求解、branch 选择、拟合、平滑或缩放。
+计算图：
+
+- `figures/vituri2024_fig4c_chosen_contract_calculated_20260828.png`；
+- `figures/vituri2024_fig4c_chosen_contract_calculated_20260828.pdf`；
+- 与论文 direct crop 的 display-only 并排图：
+  `figures/vituri2024_fig4c_chosen_contract_vs_paper_display_20260828.png`。
+
+直接并排检查显示，计算与论文在两个交点、左/右峰位置与高度、中心浅谷及整体
+非对称曲率上均强一致。计算冻结后，又对论文 embedded raster 做了独立 held-out
+像素标定；该步骤没有回流 solver、参数、branch、convergence 或 pass gate。
+固定 published axes 后提取 402 个 unsmoothed paper samples，得到：
+
+- 全样本 RMSE `0.964 meV`、MAE `0.657 meV`；
+- 去掉 6 个明确贴近 frame、受边界裁切影响的端点后 RMSE `0.887 meV`；
+- 中心：paper `0.400 +/- 0.053 meV`，calculation `0.534 meV`；
+- crossings：paper `[-0.06981, 0.06113]`，calculation
+  `[-0.06846, 0.05928]`；
+- paper raster peaks 约为 `(-0.04849,5.067 meV)`、
+  `(0.04264,7.947 meV)`，对应 calculation
+  `(-0.048,5.670 meV)`、`(0.040,8.338 meV)`。
+
+因此本报告把 Fig. 4(c) 标记为 **independent chosen-contract reproduction**。
+论文 raster digitization 只是 calculation 冻结后的评价证据，并与独立计算数组
+分开保存；没有拟合、缩放、平滑或 branch postselection。定量诊断图：
+`figures/vituri2024_fig4c_heldout_raster_evaluation_20260828.png`；原始像素、paper
+samples 与 comparison CSV 位于 `reports/data/`。可解析的源 figure 与 direct crop
+分别保存为 `reports/reference/vituri2024_SC_fig_4_2408.10309v1.pdf` 和
+`reports/reference/vituri2024_fig4c_paper_crop_2408.10309v1.png`。
+
+作者没有公开 raw numerical array，因此上述 residual 受 raster resolution、
+line thickness 与边界裁切限制；这限制 `author-exact/full-paper` 标签，但不再
+阻塞本次 chosen-contract panel 复现。旧 N101 mismatch 图已从 active reports
+删除，避免继续代表当前最佳结果。
 
 ## 7. TDHF/scalar-Hessian authority
 
 generic/reduced TDHF algebra 与候选 provider/replay 层次来自该分支此前的独立
-测试和 artifact，不是 HF-only job `461276` 的结论，也不授予 production
-TDHF authority。job `461276` 没有证明：
+测试和 artifact，不是 HF-only jobs `461276` 或 `462560` 的结论，也不授予
+production TDHF authority。这两条 HF 证据链都没有证明：
 
 - unrestricted/coherent global HF ground state；
 - local HF Hessian positivity 或 finite-q stability；
@@ -202,29 +248,29 @@ TDHF authority。job `461276` 没有证明：
 因此当前仍是 **Vituri HF/TDHF debug 与资格审计分支**，不是 production
 TDHF 结果分支。
 
-## 8. 后续最小闭环
+## 8. 当前结论与后续边界
 
-1. 向作者索取或确认 momentum domain/cutoff、finite-grid occupation、
-   background/reference、gate distance、panel source state 和 raw Fig. 4(c)
-   数据；
-2. 在作者 policy 已知后，按同一 immutable FFT/full-SCF 路径复算；
-3. 独立搜索 unrestricted/coherent/finite-q basins，并做 local Hessian；
-4. 只有 HF source functional、basin 与 stability 都闭合后，才允许 TDHF
-   source promotion。
+Fig. 4(c) 的 chosen-contract HF panel 复现已经闭合，不再等待作者 exact
+numerical policy。后续若继续推进 TDHF，才需要独立检查 unrestricted/coherent
+basins、local Hessian 与 finite-q stability；这些不回溯否定本次固定 sector 的
+panel 复现。
 
-Sealed sentinel/postflight 的 authority object 原样保持：
+当前 authority：
 
 ```text
+independent_chosen_contract_fig4c_reproduction = true
 independent_finite_volume_fixed_sector_fft_full_scf_discriminator = true
 uv_plateau_established = false
 author_cutoff_identified = false
 unrestricted_ground_state_established = false
 full_paper_reproduction_verified = false
+local_hf_stability_proved = false
 tdhf_authority = false
 production_authority = false
-visual_match_promotes_authority = false
+visual_similarity_used_as_pass_gate = false
 ```
 
-此外，尚未独立建立 `local_hf_stability_proved`、
-`author_exact_numerical_policy` 或 `tdhf_source_promotion_authorized`；这些是报告
-中的附加资格缺口，不是上述 sealed authority schema 的字段。
+这里 `full_paper_reproduction_verified=false` 至少表示未复现论文全部 phase
+diagram、susceptibility、collective modes 与 pairing calculation，也没有作者
+exact contract 或 paper raw array 的 pointwise parity；它不否定 Fig. 4(c) 的
+chosen-contract reproduction。

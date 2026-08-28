@@ -1,0 +1,248 @@
+{
+  "claim": "independent_chosen_contract_Fig4c_reproduction",
+  "contract": {
+    "branch_policy": "all exact-shell coordinate branches retained; no postselection",
+    "delta1_ev": 0.028,
+    "delta_k_a0": 0.004,
+    "domain": "odd endpoint-inclusive finite Cartesian square",
+    "epsilon_r": 8.0,
+    "gate_distance_angstrom": 369.0,
+    "holes_per_valley": 769,
+    "interaction_reference": "active-electron R=0",
+    "mesh_size": 179,
+    "momentum_wrap": false,
+    "realized_total_hole_density_cm2": 1030021683137.7852,
+    "selected_hole_spin": 1
+  },
+  "created_utc_date": "2026-08-28",
+  "execution": {
+    "completion_sentinel_sha256": "c5c170f5e2fc6b259851fcaa856da9dd82c42691ac58598b1c691c49f3e96bde",
+    "final_output_manifest_sha256": "9496b1d353e273a9323c589f90ba4a65dc0a43c6936e9d0ee6000bb193feebc8",
+    "original_failure_scope": "plot executable identity only; no scientific rejection",
+    "original_job_exit_code": "1:0",
+    "original_job_id": "462560",
+    "original_job_state": "FAILED",
+    "original_postflight_step_exit_code": "0:0",
+    "original_postflight_step_state": "COMPLETED",
+    "original_scientific_step_exit_code": "0:0",
+    "original_scientific_step_state": "COMPLETED",
+    "postflight_sha256": "a71dab87ea0cc2dcfba720992e30501ec16bfb9028a89017742796a824bd3b53",
+    "recovery_job_exit_code": "0:0",
+    "recovery_job_id": "462719",
+    "recovery_job_state": "COMPLETED",
+    "recovery_job_state_scope": "external post-completion scheduler observation; see tracked receipt",
+    "recovery_runroot": "/data/home/ziyuzhu/.runs/Mean_Field_09075cd_vituri_fig4c_chosen_contract_v2_plot_recovery_v7_20260828",
+    "recovery_scheduler_receipt": {
+      "path": "reports/data/vituri2024_fig4c_chosen_contract_recovery_462719_sacct.json",
+      "record": "462719|VitFig4cPlotRecoveryV7|COMPLETED|0:0|00:11:44|704|2026-08-28T20:45:36|2026-08-28T20:57:20|node051|64|regular128|hmt03",
+      "sha256": "e27f70cbf875584db08f7a682d19310292e3c76b8d06be194051fb2c855fac01"
+    },
+    "recovery_zero_scientific_updates": true,
+    "result_arrays_sha256": "109f6ec49c294c987452ed4be6852156be6c651b1a57bcb3ac81ade3caceef20",
+    "runroot": "/data/home/ziyuzhu/.runs/Mean_Field_09075cd_vituri_fig4c_chosen_contract_v2_20260828",
+    "summary_sha256": "800d13c0833761b9e424b733663f6a59c28fec0c1ede398bd12374368ed5a759"
+  },
+  "figures": {
+    "calculated_pdf": {
+      "path": "reports/figures/vituri2024_fig4c_chosen_contract_calculated_20260828.pdf",
+      "sha256": "fc81f01f87fe5b0179f72166ceede4da87ae62c40ceef554bdc37915aef14854"
+    },
+    "calculated_png": {
+      "path": "reports/figures/vituri2024_fig4c_chosen_contract_calculated_20260828.png",
+      "sha256": "2a9b9c0de98263f21529ae008efa8116685f5585ceec3017bdca4d86d5677956"
+    },
+    "side_by_side_display": {
+      "paper_crop_role": "direct display-only crop; never solver, branch, convergence, fit, or pass input",
+      "paper_digitized_or_fitted": false,
+      "path": "reports/figures/vituri2024_fig4c_chosen_contract_vs_paper_display_20260828.png",
+      "sha256": "450c01f00abf4c2b443bfc46ea5054fa99de4135816b15a6ea9ebb9a6246af01"
+    }
+  },
+  "held_out_quantitative_raster_evaluation": {
+    "calculation_frozen_before_extraction": true,
+    "center": {
+      "calculation_mev": 0.5341260322007102,
+      "paper_mev": 0.4,
+      "paper_minus_calculation_mev": -0.13412603220071162,
+      "paper_uncertainty_mev": 0.05333333333333334
+    },
+    "completion_sha256": "77881b96c5ce267c89713fe128c548fa355196677e0037997c31927553f7e7d9",
+    "crossings_kx_a0": {
+      "calculation": [
+        -0.068458620650229,
+        0.05928404828849599
+      ],
+      "paper": [
+        -0.06981132075471698,
+        0.06113207547169813
+      ]
+    },
+    "evaluation_script_sha256": "25ddfc32ddc18827dff50528c98bae2a4f6d7f230e5a1a0a3896787ed73d0b29",
+    "fixed_axes": {
+      "energy_mev": [
+        -8.0,
+        12.0
+      ],
+      "x_kx_a0": [
+        -0.1,
+        0.1
+      ]
+    },
+    "frame_pixels": {
+      "x_left": 91,
+      "x_right": 621,
+      "y_bottom": 475,
+      "y_top": 100
+    },
+    "peaks": {
+      "calculation": [
+        {
+          "energy_mev": 5.669600667347119,
+          "kx_a0": -0.048
+        },
+        {
+          "energy_mev": 8.338280301741996,
+          "kx_a0": 0.04
+        }
+      ],
+      "paper": [
+        {
+          "energy_mev": 5.066666666666666,
+          "kx_a0": -0.04849056603773585
+        },
+        {
+          "energy_mev": 7.946666666666666,
+          "kx_a0": 0.04264150943396228
+        }
+      ]
+    },
+    "raster_uncertainty": {
+      "median_line_half_span_mev": 0.08,
+      "x_half_pixel_kx_a0": 0.00018867924528301889,
+      "y_half_pixel_mev": 0.02666666666666667
+    },
+    "residuals_all_samples_mev": {
+      "mae": 0.656716051601949,
+      "max_abs": 3.479483044568237,
+      "rmse": 0.9635577996292399
+    },
+    "residuals_excluding_six_boundary_clipped_samples_mev": {
+      "mae": 0.6181924678626021,
+      "max_abs": 2.9303111811986344,
+      "rmse": 0.8870888819066269
+    },
+    "runroot": "/data/home/ziyuzhu/.runs/Mean_Field_09075cd_vituri_fig4c_raster_eval_v1_20260828",
+    "sample_count": 402,
+    "tracked_artifacts": {
+      "comparison_csv": {
+        "path": "reports/data/vituri2024_fig4c_raster_vs_calculation_comparison_20260828.csv",
+        "sha256": "c068773b2b30633a594ac412b689b4d46f2b96a6d0583f75c026be594c162101"
+      },
+      "diagnostic_png": {
+        "path": "reports/figures/vituri2024_fig4c_heldout_raster_evaluation_20260828.png",
+        "sha256": "2357e700a59e55dbb74858d4a6206c927409d90d91030e1ac807cb91702df1eb"
+      },
+      "evaluation_json": {
+        "path": "reports/data/vituri2024_fig4c_heldout_raster_evaluation_20260828.json",
+        "sha256": "d95f59ab9be4838cb3cb80f719a7eaa291cf693a07873a05a31e8be0df234dac"
+      },
+      "paper_component_pixels_csv": {
+        "path": "reports/data/vituri2024_fig4c_paper_raster_component_pixels_20260828.csv",
+        "sha256": "550b2c95303f1c195d417f52de808819e445c5bdcfc5444b69458af16b148a93"
+      },
+      "paper_samples_csv": {
+        "path": "reports/data/vituri2024_fig4c_paper_raster_samples_20260828.csv",
+        "sha256": "fb12b9dc1cdfa9fd3fe2db16b45750c6b2f1f78e4f4c4476becbf7d2ba2acaa5"
+      }
+    },
+    "tracked_csv_copy_policy": "CRLF from evaluation runtime normalized to LF only; numeric/text fields unchanged; immutable original hashes remain in evaluation.json and runroot manifest",
+    "used_as_solver_parameter_branch_convergence_or_pass_gate": false
+  },
+  "interpretation": {
+    "author_exact_contract_claimed": false,
+    "chosen_contract_fig4c_reproduced": true,
+    "held_out_raster_rmse_mev": 0.9635577996292399,
+    "local_hessian_stability_established": false,
+    "paper_curve_topology_and_energy_scale_agree_strongly_by_direct_visual_inspection": true,
+    "paper_raster_digitization_available_for_evaluation_only": true,
+    "paper_raw_array_available": false,
+    "pointwise_paper_residual_computed": true,
+    "production_authority": false,
+    "tdhf_authority": false,
+    "unrestricted_ground_state_established": false,
+    "uv_plateau_established": false,
+    "visual_similarity_used_as_pass_gate": false
+  },
+  "observables": {
+    "center_mev": 0.5341260322007102,
+    "exact_grid_local_maxima": [
+      {
+        "energy_mev": 5.669600667347119,
+        "kx_a0": -0.048
+      },
+      {
+        "energy_mev": 8.338280301741996,
+        "kx_a0": 0.04
+      }
+    ],
+    "mu_mid_ev": 4.966436164427063,
+    "straight_segment_crossings_kx_a0": [
+      -0.068458620650229,
+      0.05928404828849599
+    ]
+  },
+  "paper_source": {
+    "arxiv_id": "2408.10309v1",
+    "crop": {
+      "bytes": 18000,
+      "command": "convert sc_fig4.png -crop 670x600+800+410 +repage paper_panel_c_crop.png",
+      "generation_work_path": "tmp/pdfs/vituri_sc_fig4/paper_panel_c_crop.png",
+      "geometry_pixels": {
+        "height": 600,
+        "width": 670,
+        "x_offset": 800,
+        "y_offset": 410
+      },
+      "repository_path": "reports/reference/vituri2024_fig4c_paper_crop_2408.10309v1.png",
+      "sha256": "3b054400e2c5e7cf04f51d9276aaecb46c96bc990265d064875a5e9bbb6e1b66",
+      "tool": "ImageMagick 6.9.10-68 Q16"
+    },
+    "paper_pdf": {
+      "generation_source_path": "/data/home/ziyuzhu/Mean_Field/reference/2408.10309v1.pdf",
+      "repository_path": null,
+      "sha256": "ec761a2b494a8e5983ff3fb6cfb842e114526cc0ba8b3e7cdc7c128f5d204bc8"
+    },
+    "render": {
+      "command": "pdftoppm -png -r 180 -singlefile SC_fig_4.pdf sc_fig4",
+      "tool": "pdftoppm 0.26.5"
+    },
+    "retrieval": {
+      "abstract_url": "https://arxiv.org/abs/2408.10309",
+      "pdf_url": "https://arxiv.org/pdf/2408.10309v1",
+      "source_archive_url": "https://export.arxiv.org/e-print/2408.10309v1"
+    },
+    "source_figure": {
+      "archive_member_path": "source/figs/SC_fig_4.pdf",
+      "archive_path": "source/figs/SC_fig_4.pdf",
+      "kind": "embedded raster",
+      "panel": "c",
+      "repository_path": "reports/reference/vituri2024_SC_fig_4_2408.10309v1.pdf",
+      "sha256": "8bc414ca89c47555a86f2b73e93f4b7fe1d2348124cce1adc77c0352df658766"
+    },
+    "usage": "direct crop used only for display in the calculation/publication path; after calculation freeze the same hash-bound crop was separately digitized for held-out quantitative evaluation, never for fit, solver input, parameter choice, branch selection, convergence gate, or numerical pass gate"
+  },
+  "schema": "mean_field.vituri2024.fig4c_chosen_contract_attestation.v1",
+  "source_commit": "09075cd22d47edbb4738229d98b52a9650154ec5",
+  "validation": {
+    "all_normal_endpoints_stationary": true,
+    "all_observed_branches_retained": true,
+    "branch_tree_exhausted": true,
+    "center_branch_spread_mev": 0.0,
+    "fresh_raw_equals_engine_raw_exact": true,
+    "maximum_branch_cut_spread_mev": 1.7763568394002505e-12,
+    "replayed_path_count": 5,
+    "scientific_rejection_count": 0,
+    "stationary_endpoint_count": 4,
+    "unconsumed_frontier_count": 0
+  }
+}
