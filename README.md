@@ -4,6 +4,16 @@ Python code for continuum-model and projected Hartree-Fock calculations in graph
 
 The package started as a benchmark-driven rewrite of a Julia `TBG_HartreeFock` workflow and now contains reusable numerical infrastructure plus a tracked core profile for TBG zero-field HF, tMBG/Polshyn, TDBG, RnG/hBN, and primitive helical trilayer graphene. Optional exploratory ATMG/HTQG and finite-field/supercell lanes are archived locally for future reviewed restoration.
 
+## Excitonic reproduction debug branch
+
+The `debug/excitonic-reproduction` branch is the shared InAs/GaSb excitonic
+HF reproduction and audit lane; it is not limited to Du et al. 2017. Its
+current consolidated report, calculated figures, paper-digitization overlay,
+and explicit unresolved discrepancies are in
+[`reports/excitonic_reproduction_debug_report.md`](reports/excitonic_reproduction_debug_report.md).
+The report supersedes the older Du-only UV-debug notes removed from this
+branch.
+
 ## Scope
 
 - `mean_field.core.hf`: reusable projected Hartree-Fock machinery, including occupations, ODA iteration, Coulomb kernels, overlap contractions, flavor-sector helpers, and the generic TDHF/RPA core.
