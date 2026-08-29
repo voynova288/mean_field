@@ -220,11 +220,35 @@ minimum cell gives a lower local-cell gap of `0.2654547023 Ry*`; quadrature
 orders 48, 96, and 160 agree to below `1e-15`. This is a local-cell candidate,
 not yet a global continuum-gap certificate.
 
-This physical p24 checkpoint must remain separate from the historical
-omitted-`q=0` p21--p26 curve. It is **not continuum authority** until mesh,
-fixed-window, momentum-window, and broader candidate-cell convergence are
-complete, and it is not evidence that the paper blue point has been
-reproduced.
+A packed four-case convergence campaign then transported the same branch to
+additional midpoint/integrated-cell regulators. Every T=0 root passed the
+full residual, TR, and number gates; the minimum transported-seed overlap was
+`0.97571`. The resulting fixed-window mesh ladder is:
+
+| `kmax a_B*` | mesh | grid gap / `Ry*` | local-cell gap / `Ry*` |
+|---:|---:|---:|---:|
+| 3 | `41x41` | `0.3569980` | `0.2958275`* |
+| 3 | `61x61` | `0.2942311` | `0.2654547` |
+| 3 | `81x81` | `0.2795459` | `0.2613908` |
+
+The starred coarse-mesh local optimizer returned an abnormal status and is
+not used as an acceptance point. From `61x61` to `81x81`, the grid gap still
+changes by `-0.01469 Ry*` and the accepted local-cell candidate changes by
+`-0.00406 Ry*`; mesh convergence is improving but not yet demonstrated.
+
+More decisively, an approximately fixed-spacing window ladder gives:
+
+| `kmax a_B*` | mesh | cell width / `a_B*^-1` | local-cell gap / `Ry*` |
+|---:|---:|---:|---:|
+| 3 | `61x61` | `0.09836` | `0.2654547` |
+| 4 | `81x81` | `0.09877` | `0.3221144` |
+| 5 | `101x101` | `0.09901` | `0.3633038` |
+
+The local-cell gap increases by `0.09785 Ry*` from `kmax=3` to `5`, so the
+physical branch is strongly UV/window dependent under the public continuum
+model. This physical checkpoint must remain separate from the historical
+omitted-`q=0` p21--p26 curve. It is **not continuum authority**, and it is not
+evidence that the paper blue point has been reproduced.
 
 ## Current conclusion
 
@@ -288,9 +312,9 @@ Still required:
 1. extend branch enumeration beyond the completed p25 eigenmode/deflation and
    p27 endpoint/fold-sheet searches, especially with additional deterministic
    complete-TRS seeds and symmetry-orbit-aware deflation;
-2. extend the accepted physical p24 root through mesh, fixed-window, and
-   momentum-window convergence, and broaden the off-grid search beyond the
-   current saved-grid minimum cell;
+2. determine whether a controlled UV/reference closure can remove the
+   demonstrated physical-window drift without fitting the paper, and broaden
+   the off-grid search beyond the current saved-grid minimum cell;
 3. continue the physical stationary branch only after that regulator gate;
 4. an energy-Hessian or equivalent thermodynamic stability classification;
 5. author code/data or an explicit historical constrained-solver prescription.
