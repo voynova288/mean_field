@@ -113,6 +113,25 @@
       "trs_spectral_radius": 1.9504233439053573,
       "trsb_spectral_radius": 2.3045735303187698
     },
+    "p25_high_four_term_self_energy_release": {
+      "authority": "historical_omitted_q0_diagnostic_homotopy_not_physical_parameter",
+      "data": {
+        "authority": "historical_omitted_q0_diagnostic_homotopy_not_physical_parameter",
+        "campaign_v1_sha256": "95072d71eeee2f2cca9de5e6390eae638d296d63f3483ed975778da1cddc8bc7",
+        "campaign_v2_sha256": "de1646510a73c33063d307f8ff3b098bb1ef775c2980287071a508a9f73decef",
+        "constraint_start_gap_ry": 0.8665111286969716,
+        "endpoint_sha256": "79821e6895fc7ef74e7f93b720af0d9401431818574ba0da13e4df88071eadbb",
+        "endpoint_vs_refined_strong_max": 1.053642416746328e-08,
+        "endpoint_vs_refined_strong_overlap": 0.9999999999999998,
+        "endpoint_vs_refined_strong_rms": 3.864146068460599e-09,
+        "full_endpoint_gap_ry": 0.9139050434859335,
+        "full_endpoint_residual_rms": 2.104692113189921e-09,
+        "known_refined_strong_sha256": "1ecb5d9b98c02e820b1f407c670071bd5dbf055eb05bba934a981804b88ec085",
+        "schema": "xue2018-p25-high-four-term-release-verdict-v1",
+        "verdict": "The higher-gap p25 four-term constrained root releases to the already known strong-TRS full root, not to a separate paper-like branch."
+      },
+      "source_sha256": "f75c19e86c26ab0ab5926e06b5d5490522ab91d73645a582c96ed1c7277acd7e"
+    },
     "p25_multistart_inventory": {
       "authority": "deterministic_trs_multistart_branch_inventory_not_exhaustive_proof",
       "counts": {

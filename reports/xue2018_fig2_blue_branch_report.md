@@ -146,7 +146,12 @@ stationary roots:
 | 24 | `0.18836` | `0.14986` | `0.9999999999999998` |
 | 25 | `0.25635` | `0.20985` | `0.9999999999999991` |
 
-Thus the literal constrained roots do not hide a separate paper-like branch.
+A second, higher-gap constrained p25 root from forward constrained
+continuation was also released. Its gap evolves from `0.86651 Ry*` to
+`0.913905 Ry*`, and its endpoint overlaps the refined strong-TRS root by
+`0.9999999999999998`. Therefore the two known constrained p25 root classes
+map respectively to the low-gap stationary branch and the strong-TRS branch.
+Neither hides a separate paper-like branch.
 
 ## Full stationary branch now found
 
@@ -202,9 +207,10 @@ found only three already known root classes: one normal-like root, five
 strong-TRS convergences, and two low-gap stationary-branch convergences. A
 full density-chord scan likewise has only the endpoint sign changes and one
 interior initializer interval. This is not an exhaustive nonexistence proof,
-but no additional paper-like near-zero p25 root was found. The exact
-four-term constrained roots have also been excluded as a separate candidate:
-they release continuously into this same low-gap stationary branch.
+but no additional paper-like near-zero p25 root was found. The exact four-term constrained roots have also been excluded as a separate
+candidate: the low constrained root class releases into the low-gap stationary
+branch, while the higher constrained root class releases into the strong-TRS
+branch.
 
 Therefore the remaining problem is no longer merely “implement a root
 solver.” We must determine whether a disconnected branch exists outside the
