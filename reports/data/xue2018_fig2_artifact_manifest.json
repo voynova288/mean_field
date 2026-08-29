@@ -2,7 +2,7 @@
   "data": [
     {
       "path": "data/xue2018_fig2_branch_data.json",
-      "sha256": "33ebb02ac75b2c3c99bf4001d8574ec7d932de3b560bd3725868d46c7005e300"
+      "sha256": "4215c3b7c098bbfaac8e65910ca1215e066cea971e9c6fdc1d69e306f55abc6e"
     },
     {
       "path": "data/xue2018_fig2_stale_postflight.json",
@@ -28,7 +28,7 @@
     {
       "dataset_id": "xue2018-fig2-branch-lineage-audit-v1",
       "path": "figures/xue2018_fig2_paper_style_comparison.png",
-      "sha256": "8ad001a4494428c41b5c7fb21aa4023a57e2c0fad74eb701588f2036d32e580b"
+      "sha256": "016c228b377f7737c790952167ad0639aa697faa5d43870ef6c67ba5268effd6"
     }
   ],
   "full_path_branch_id": "xue2018-trs-weak-seed-normal-attractor-fullpath-v1",

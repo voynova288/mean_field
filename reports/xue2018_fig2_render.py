@@ -71,6 +71,9 @@ def main() -> None:
     stationary = branch_data["stationary_trs_branch_dataset"]["zero_temperature_points"]
     stationary_x = np.asarray([row["point"] for row in stationary])
     stationary_gap = np.asarray([row["gap_grid_ry"] for row in stationary])
+    full_inventory = branch_data["full_trs_stationary_root_inventory"]["points"]
+    inventory_x = np.asarray([row["point"] for row in full_inventory])
+    inventory_gap = np.asarray([row["gap_grid_ry"] for row in full_inventory])
 
     FIGURES.mkdir(parents=True, exist_ok=True)
     fig, axes = plt.subplots(3, 1, figsize=(9.2, 8.8), sharex=True)
@@ -149,7 +152,7 @@ def main() -> None:
             stationary_x,
             stationary_gap,
             "current calculation",
-            "full weak-seed diagnostic + certified stationary subset",
+            "62 certified TRS roots + connected low-branch subset",
         ),
     )
     for panel_index, (axis, order_values, ground_values, blue_x, blue_values, title, subtitle) in enumerate(comparison_panels):
@@ -187,16 +190,16 @@ def main() -> None:
         else:
             blue_handles = [
                 gap_axis.plot(
-                    x,
-                    stale_trs_gap,
+                    inventory_x,
+                    inventory_gap,
                     color="blue",
                     ls="--",
-                    marker="o",
+                    marker="D",
                     markerfacecolor="white",
-                    ms=3.3,
+                    ms=3.4,
                     lw=1.0,
-                    alpha=0.75,
-                    label="full weak-seed diagnostic (stale)",
+                    alpha=0.8,
+                    label="62 certified TRS roots (not one branch)",
                 )[0],
                 gap_axis.plot(
                     blue_x,

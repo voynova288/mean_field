@@ -11,6 +11,1910 @@
     "symmetry_constraint": "none_explicit_seed_only",
     "warning": "This is the dataset plotted in the previously tracked bottom panel. It is not the strong TRS p24-p26 branch quoted in the report and is not the paper blue stationary branch."
   },
+  "full_trs_stationary_root_inventory": {
+    "adjacent_diagnostics": [
+      {
+        "density_overlap": 0.9996900714160071,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": -0.10828333353738695,
+        "left_point": 1,
+        "relative_density_distance": 0.04723795772401066,
+        "right_point": 2
+      },
+      {
+        "density_overlap": 0.999616505477715,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": -0.11083667075619275,
+        "left_point": 2,
+        "relative_density_distance": 0.05149975867089607,
+        "right_point": 3
+      },
+      {
+        "density_overlap": 0.9215981499851053,
+        "diagnostic_discontinuity": true,
+        "gap_jump_ry": -0.052299642027521465,
+        "left_point": 3,
+        "relative_density_distance": 0.38881886895119044,
+        "right_point": 4
+      },
+      {
+        "density_overlap": 0.9367363085568037,
+        "diagnostic_discontinuity": true,
+        "gap_jump_ry": 0.08331219666288514,
+        "left_point": 4,
+        "relative_density_distance": 0.36804034432243166,
+        "right_point": 5
+      },
+      {
+        "density_overlap": 0.9852671030775143,
+        "diagnostic_discontinuity": true,
+        "gap_jump_ry": 0.053328548529699704,
+        "left_point": 5,
+        "relative_density_distance": 0.20541810677470193,
+        "right_point": 6
+      },
+      {
+        "density_overlap": 0.9931339912095284,
+        "diagnostic_discontinuity": true,
+        "gap_jump_ry": 0.031595542302117696,
+        "left_point": 6,
+        "relative_density_distance": 0.15007068252629369,
+        "right_point": 7
+      },
+      {
+        "density_overlap": 0.9958343787335941,
+        "diagnostic_discontinuity": true,
+        "gap_jump_ry": 0.01853155605195722,
+        "left_point": 7,
+        "relative_density_distance": 0.12049453410468443,
+        "right_point": 8
+      },
+      {
+        "density_overlap": 0.9970829848538412,
+        "diagnostic_discontinuity": true,
+        "gap_jump_ry": 0.00794868061914955,
+        "left_point": 8,
+        "relative_density_distance": 0.10185193710024745,
+        "right_point": 9
+      },
+      {
+        "density_overlap": 0.9977691395590051,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": -0.0004322195593673417,
+        "left_point": 9,
+        "relative_density_distance": 0.08896947060971865,
+        "right_point": 10
+      },
+      {
+        "density_overlap": 0.9981915572929311,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": -0.006835636839875203,
+        "left_point": 10,
+        "relative_density_distance": 0.0795219477794558,
+        "right_point": 11
+      },
+      {
+        "density_overlap": 0.9984731903940886,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": -0.01126603332411058,
+        "left_point": 11,
+        "relative_density_distance": 0.07229842587022359,
+        "right_point": 12
+      },
+      {
+        "density_overlap": 0.9986722061999246,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": -0.015816191823379455,
+        "left_point": 12,
+        "relative_density_distance": 0.06660304926864329,
+        "right_point": 13
+      },
+      {
+        "density_overlap": 0.9988190868676715,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": -0.020767993450449884,
+        "left_point": 13,
+        "relative_density_distance": 0.062006553957898836,
+        "right_point": 14
+      },
+      {
+        "density_overlap": 0.9989311095396153,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": -0.022270937068320507,
+        "left_point": 14,
+        "relative_density_distance": 0.05822955862508806,
+        "right_point": 15
+      },
+      {
+        "density_overlap": 0.9990186896467835,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": -0.0265811897824626,
+        "left_point": 15,
+        "relative_density_distance": 0.05508251457102251,
+        "right_point": 16
+      },
+      {
+        "density_overlap": 0.9990884212793927,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": -0.028089065907607402,
+        "left_point": 16,
+        "relative_density_distance": 0.052432581814955546,
+        "right_point": 17
+      },
+      {
+        "density_overlap": 0.999144642874463,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": -0.030186139681610324,
+        "left_point": 17,
+        "relative_density_distance": 0.05018430559039132,
+        "right_point": 18
+      },
+      {
+        "density_overlap": 0.9991902906122339,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": -0.032473253313634265,
+        "left_point": 18,
+        "relative_density_distance": 0.048267902890750065,
+        "right_point": 19
+      },
+      {
+        "density_overlap": 0.9992273853652561,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": -0.03708382231881191,
+        "left_point": 19,
+        "relative_density_distance": 0.04663191045962491,
+        "right_point": 20
+      },
+      {
+        "density_overlap": 0.9992573201700292,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": -0.03709039753544063,
+        "left_point": 20,
+        "relative_density_distance": 0.04523847856608996,
+        "right_point": 21
+      },
+      {
+        "density_overlap": 0.99928102346178,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": -0.04044419545682665,
+        "left_point": 21,
+        "relative_density_distance": 0.04406058004354161,
+        "right_point": 22
+      },
+      {
+        "density_overlap": 0.999711421525052,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": -0.08029087668838786,
+        "left_point": 22,
+        "relative_density_distance": 0.024041097817359407,
+        "right_point": 23
+      },
+      {
+        "density_overlap": 0.7592515276323357,
+        "diagnostic_discontinuity": true,
+        "gap_jump_ry": 0.7098390026548245,
+        "left_point": 23,
+        "relative_density_distance": 0.6754261312579639,
+        "right_point": 24
+      },
+      {
+        "density_overlap": 0.9999314579742182,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.03608790489844593,
+        "left_point": 24,
+        "relative_density_distance": 0.012121852273043358,
+        "right_point": 25
+      },
+      {
+        "density_overlap": 0.999934896822767,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.035401853231234126,
+        "left_point": 25,
+        "relative_density_distance": 0.011831967064166525,
+        "right_point": 26
+      },
+      {
+        "density_overlap": 0.9999380864125959,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.034919013962164014,
+        "left_point": 26,
+        "relative_density_distance": 0.011556037781855696,
+        "right_point": 27
+      },
+      {
+        "density_overlap": 0.9999410517080459,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.03459641303274252,
+        "left_point": 27,
+        "relative_density_distance": 0.011292920191535785,
+        "right_point": 28
+      },
+      {
+        "density_overlap": 0.9999438144234438,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.034290766880586965,
+        "left_point": 28,
+        "relative_density_distance": 0.011041603481061014,
+        "right_point": 29
+      },
+      {
+        "density_overlap": 0.9999463935423625,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.03250748493535882,
+        "left_point": 29,
+        "relative_density_distance": 0.010801190524522285,
+        "right_point": 30
+      },
+      {
+        "density_overlap": 0.9999488057394721,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.032087432387474024,
+        "left_point": 30,
+        "relative_density_distance": 0.010570881624644842,
+        "right_point": 31
+      },
+      {
+        "density_overlap": 0.9999510657257652,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.03172753892134672,
+        "left_point": 31,
+        "relative_density_distance": 0.010349961029156817,
+        "right_point": 32
+      },
+      {
+        "density_overlap": 0.9999531865330077,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.02985040449743792,
+        "left_point": 32,
+        "relative_density_distance": 0.010137785677165613,
+        "right_point": 33
+      },
+      {
+        "density_overlap": 0.99995517974963,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.029688189032170964,
+        "left_point": 33,
+        "relative_density_distance": 0.009933775751643411,
+        "right_point": 34
+      },
+      {
+        "density_overlap": 0.99995705571752,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.02947103437903076,
+        "left_point": 34,
+        "relative_density_distance": 0.009737406703095792,
+        "right_point": 35
+      },
+      {
+        "density_overlap": 0.9999588236971373,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.02807735076401885,
+        "left_point": 35,
+        "relative_density_distance": 0.009548202482575322,
+        "right_point": 36
+      },
+      {
+        "density_overlap": 0.9999604920067633,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.027844694048535956,
+        "left_point": 36,
+        "relative_density_distance": 0.009365729768937651,
+        "right_point": 37
+      },
+      {
+        "density_overlap": 0.9999620681405493,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.02699963453421761,
+        "left_point": 37,
+        "relative_density_distance": 0.00918959302430886,
+        "right_point": 38
+      },
+      {
+        "density_overlap": 0.9999635588690611,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.02670423145703804,
+        "left_point": 38,
+        "relative_density_distance": 0.009019430239705355,
+        "right_point": 39
+      },
+      {
+        "density_overlap": 0.9999649703252839,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.026620644984929775,
+        "left_point": 39,
+        "relative_density_distance": 0.008854909257730961,
+        "right_point": 40
+      },
+      {
+        "density_overlap": 0.9999663080785222,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.026111993457333504,
+        "left_point": 40,
+        "relative_density_distance": 0.008695724584134201,
+        "right_point": 41
+      },
+      {
+        "density_overlap": 0.9999675771981383,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.02479700654740924,
+        "left_point": 41,
+        "relative_density_distance": 0.008541594610193208,
+        "right_point": 42
+      },
+      {
+        "density_overlap": 0.9999687823087482,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.02327741518826265,
+        "left_point": 42,
+        "relative_density_distance": 0.008392259187302083,
+        "right_point": 43
+      },
+      {
+        "density_overlap": 0.9999699276381777,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.023256838143248526,
+        "left_point": 43,
+        "relative_density_distance": 0.0082474774985552,
+        "right_point": 44
+      },
+      {
+        "density_overlap": 0.9999710170592908,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.022176037655038616,
+        "left_point": 44,
+        "relative_density_distance": 0.008107026188009549,
+        "right_point": 45
+      },
+      {
+        "density_overlap": 0.9999720541265827,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.02169013434252376,
+        "left_point": 45,
+        "relative_density_distance": 0.007970697710006323,
+        "right_point": 46
+      },
+      {
+        "density_overlap": 0.9999730421082863,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.020913977144264795,
+        "left_point": 46,
+        "relative_density_distance": 0.007838298867557976,
+        "right_point": 47
+      },
+      {
+        "density_overlap": 0.9999739840146418,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.02077425477609074,
+        "left_point": 47,
+        "relative_density_distance": 0.007709649516702807,
+        "right_point": 48
+      },
+      {
+        "density_overlap": 0.9999748826228544,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.02079035649782357,
+        "left_point": 48,
+        "relative_density_distance": 0.007584581412309593,
+        "right_point": 49
+      },
+      {
+        "density_overlap": 0.9999757404991723,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.018873707378172178,
+        "left_point": 49,
+        "relative_density_distance": 0.007462937179578981,
+        "right_point": 50
+      },
+      {
+        "density_overlap": 0.9999765600184959,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.018084529935391558,
+        "left_point": 50,
+        "relative_density_distance": 0.007344569393585183,
+        "right_point": 51
+      },
+      {
+        "density_overlap": 0.9999773433818128,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.01721113211019576,
+        "left_point": 51,
+        "relative_density_distance": 0.007229339754531605,
+        "right_point": 52
+      },
+      {
+        "density_overlap": 0.9999780926317516,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.01651917245980483,
+        "left_point": 52,
+        "relative_density_distance": 0.007117118346442476,
+        "right_point": 53
+      },
+      {
+        "density_overlap": 0.9999788096664886,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.01577223735445532,
+        "left_point": 53,
+        "relative_density_distance": 0.007007782970133468,
+        "right_point": 54
+      },
+      {
+        "density_overlap": 0.999979496252193,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.0157241813547353,
+        "left_point": 54,
+        "relative_density_distance": 0.006901218540714592,
+        "right_point": 55
+      },
+      {
+        "density_overlap": 0.9999801540342135,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.014767575784286446,
+        "left_point": 55,
+        "relative_density_distance": 0.006797316543512074,
+        "right_point": 56
+      },
+      {
+        "density_overlap": 0.9999807845471369,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.013543408526909939,
+        "left_point": 56,
+        "relative_density_distance": 0.006695974540667332,
+        "right_point": 57
+      },
+      {
+        "density_overlap": 0.9999813892238487,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.012202109899947189,
+        "left_point": 57,
+        "relative_density_distance": 0.006597095723472075,
+        "right_point": 58
+      },
+      {
+        "density_overlap": 0.9999819694037216,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.011544241492385865,
+        "left_point": 58,
+        "relative_density_distance": 0.006500588505455565,
+        "right_point": 59
+      },
+      {
+        "density_overlap": 0.9999825263400216,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.011093721680643043,
+        "left_point": 59,
+        "relative_density_distance": 0.00640636615138213,
+        "right_point": 60
+      },
+      {
+        "density_overlap": 0.9999830612066143,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.010451185228733006,
+        "left_point": 60,
+        "relative_density_distance": 0.006314346439021263,
+        "right_point": 61
+      },
+      {
+        "density_overlap": 0.9999835751040624,
+        "diagnostic_discontinuity": false,
+        "gap_jump_ry": 0.008914171924916392,
+        "left_point": 61,
+        "relative_density_distance": 0.006224451350101811,
+        "right_point": 62
+      }
+    ],
+    "authority": "62_independently_certified_complete_TRS_stationary_roots_not_one_connected_branch",
+    "dataset_id": "xue2018-trs-full-weak-seed-stationary-inventory-v1",
+    "discontinuity_edges": [
+      [
+        3,
+        4
+      ],
+      [
+        4,
+        5
+      ],
+      [
+        5,
+        6
+      ],
+      [
+        6,
+        7
+      ],
+      [
+        7,
+        8
+      ],
+      [
+        8,
+        9
+      ],
+      [
+        23,
+        24
+      ]
+    ],
+    "paper_blue_comparison": {
+      "mae_ry": 0.4489560447243903,
+      "max_abs_error_point": 25,
+      "max_abs_error_ry": 1.8425759865835034,
+      "rmse_ry": 0.707734763215477
+    },
+    "points": [
+      {
+        "eg_ry": 1.6,
+        "energy_ry_ab2": -0.07868454456076218,
+        "full_residual_max": 2.065130908672118e-09,
+        "full_residual_rms": 3.8049668050118757e-10,
+        "gap_grid_k_ab_inv": [
+          0.0,
+          0.0
+        ],
+        "gap_grid_ry": 1.571397662353318,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": -1.9984014443252818e-15,
+        "phi1_gamma_abs_ry": 3.3089796316867266e-24,
+        "point": 1,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point01_trs_nematic/state.npz",
+        "source_sha256": "df8fbddf6876ec02256ee002e76f71af9e866bbf3e510873e83234daf419b2c0",
+        "stale_gap_difference_ry": -2.4887980565324597e-10,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point01/01_T0/stationary_root.npz",
+        "state_sha256": "c9f10e40fd8ea284cd1e88f6a6164473b3ea7b540592c88063f2e3d9a9b83206",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 5.394259281665853e-08
+      },
+      {
+        "eg_ry": 1.5,
+        "energy_ry_ab2": -0.08085951282195847,
+        "full_residual_max": 7.215836212806212e-11,
+        "full_residual_rms": 4.1863200705154746e-13,
+        "gap_grid_k_ab_inv": [
+          0.0,
+          0.0
+        ],
+        "gap_grid_ry": 1.463114328815931,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": -6.661338147750939e-16,
+        "phi1_gamma_abs_ry": 1.9721522630525295e-31,
+        "point": 2,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point02_trs_nematic/state.npz",
+        "source_sha256": "8960cc3978fdf3a6ae3c1dac01ce1e59b3fe33f62bf34164c60d94b68ad67329",
+        "stale_gap_difference_ry": -8.861800182558e-13,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point02/01_T0/stationary_root.npz",
+        "state_sha256": "270120c8cbf4abf8486eb8445ab312af5ef26a2949286f2aa11ac987005bcac0",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 6.787870684993162e-15
+      },
+      {
+        "eg_ry": 1.4000000000000001,
+        "energy_ry_ab2": -0.08322988380028776,
+        "full_residual_max": 3.082937380373711e-09,
+        "full_residual_rms": 3.009714733216729e-10,
+        "gap_grid_k_ab_inv": [
+          0.0,
+          0.0
+        ],
+        "gap_grid_ry": 1.3522776580597382,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": 2.220446049250313e-16,
+        "phi1_gamma_abs_ry": 0.0,
+        "point": 3,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point03_trs_nematic/state.npz",
+        "source_sha256": "90541254891971c6411e28320367218a91e6a6cdca36b657dc83cd0ac220df1d",
+        "stale_gap_difference_ry": -1.6877892416999885e-09,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point03/01_T0/stationary_root.npz",
+        "state_sha256": "99491a31228c26091c2d583bb32af94486abf045854b02235ac111bee42daa9a",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 1.0242034619804415e-07
+      },
+      {
+        "eg_ry": 1.3,
+        "energy_ry_ab2": -0.08587970597459126,
+        "full_residual_max": 2.644612621922571e-10,
+        "full_residual_rms": 2.023346753762437e-11,
+        "gap_grid_k_ab_inv": [
+          0.10000000000000009,
+          -0.09999999999999964
+        ],
+        "gap_grid_ry": 1.2999780160322167,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": -8.881784197001252e-16,
+        "phi1_gamma_abs_ry": 5.570802861058773e-17,
+        "point": 4,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point04_trs_nematic/state.npz",
+        "source_sha256": "b6bc99006b80482face56e32ded3b4fb7fdce1127ca6c52d993d5867f0d2d239",
+        "stale_gap_difference_ry": -0.33716599681794945,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point04/01_T0/stationary_root.npz",
+        "state_sha256": "8da10d94faa794f099299699f388ff1eaf0437f026fbfd665885730f945d99b5",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 0.6550555122146782
+      },
+      {
+        "eg_ry": 1.2000000000000002,
+        "energy_ry_ab2": -0.08968349135865279,
+        "full_residual_max": 3.3705857858145762e-09,
+        "full_residual_rms": 4.43715628326619e-10,
+        "gap_grid_k_ab_inv": [
+          0.30000000000000027,
+          0.20000000000000018
+        ],
+        "gap_grid_ry": 1.3832902126951019,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": 6.8833827526759706e-15,
+        "phi1_gamma_abs_ry": 8.226792991629085e-18,
+        "point": 5,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point05_trs_nematic/state.npz",
+        "source_sha256": "cf2f4ae4d7e57217edf2102453d22d0251f68cdc61cf1ff0103c5c3e14ef0bcf",
+        "stale_gap_difference_ry": 6.704756212450036e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point05/01_T0/stationary_root.npz",
+        "state_sha256": "193714d8b111c15ef1ee3297d6119cc54ad46c19b8c2b324ef5f7281552c2027",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 1.3075497802156089
+      },
+      {
+        "eg_ry": 1.1,
+        "energy_ry_ab2": -0.09493539053902768,
+        "full_residual_max": 4.678590848072872e-12,
+        "full_residual_rms": 3.960150861163033e-13,
+        "gap_grid_k_ab_inv": [
+          -0.3999999999999999,
+          0.20000000000000018
+        ],
+        "gap_grid_ry": 1.4366187612248016,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": 2.4424906541753444e-15,
+        "phi1_gamma_abs_ry": 1.1350909049326953e-16,
+        "point": 6,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point06_trs_nematic/state.npz",
+        "source_sha256": "4611e96a1c70ea4ade50ce165fe403a85677ac03f90b2e71448997960d5e0a95",
+        "stale_gap_difference_ry": 5.189807912309163e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point06/01_T0/stationary_root.npz",
+        "state_sha256": "acf174e556abb4ccc3e363a6f35c5f98849b53b01605ba4fc1165d9e9d00d5d2",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 1.6345090090133625
+      },
+      {
+        "eg_ry": 1.0,
+        "energy_ry_ab2": -0.10161169288969407,
+        "full_residual_max": 3.4129675830165073e-09,
+        "full_residual_rms": 5.676190298196271e-10,
+        "gap_grid_k_ab_inv": [
+          -0.5,
+          -0.2999999999999998
+        ],
+        "gap_grid_ry": 1.4682143035269193,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": -5.551115123125783e-15,
+        "phi1_gamma_abs_ry": 6.26342913351116e-17,
+        "point": 7,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point07_trs_nematic/state.npz",
+        "source_sha256": "a6ab737c4a69735eca828cdf500bd961699f13397cea370311fea1b5bcf0b976",
+        "stale_gap_difference_ry": 4.349830677874422e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point07/01_T0/stationary_root.npz",
+        "state_sha256": "cd00a9a813666a3fa2b5e5b8339f1a7d3211b41d9f94168ff91f8bc7ad246222",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 1.8446802201423602
+      },
+      {
+        "eg_ry": 0.9,
+        "energy_ry_ab2": -0.1096926114317652,
+        "full_residual_max": 3.3222313788883184e-12,
+        "full_residual_rms": 1.2050715766699958e-13,
+        "gap_grid_k_ab_inv": [
+          -0.5999999999999996,
+          0.30000000000000027
+        ],
+        "gap_grid_ry": 1.4867458595788765,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": 4.218847493575595e-15,
+        "phi1_gamma_abs_ry": 1.552121701394501e-20,
+        "point": 8,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point08_trs_nematic/state.npz",
+        "source_sha256": "9d499d2365bfb4f618c18dd0ffb578f96d465239270a75ff67bd348d99f85ee2",
+        "stale_gap_difference_ry": 3.38955207013214e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point08/01_T0/stationary_root.npz",
+        "state_sha256": "57ee27d9f63f076725aca0dd84b5a1b5ce7809b60d534772ea270a6c21dc8697",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 1.9897362029217265
+      },
+      {
+        "eg_ry": 0.8,
+        "energy_ry_ab2": -0.11916060958046801,
+        "full_residual_max": 3.3901215168441468e-12,
+        "full_residual_rms": 2.449647432243539e-13,
+        "gap_grid_k_ab_inv": [
+          -0.6999999999999997,
+          0.20000000000000018
+        ],
+        "gap_grid_ry": 1.494694540198026,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": -1.1102230246251565e-15,
+        "phi1_gamma_abs_ry": 2.261291587669092e-16,
+        "point": 9,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point09_trs_nematic/state.npz",
+        "source_sha256": "8efa432a872e8fa8c0edae2a61ec7831a61fcc6e29a82e1fa74ecc87639a4b76",
+        "stale_gap_difference_ry": 3.3424269951787267e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point09/01_T0/stationary_root.npz",
+        "state_sha256": "ea1cd25b34b84662b675ad3fe5ceba5bc9c999c0d0e512ef0017522ca676a0c9",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 2.0925647118146333
+      },
+      {
+        "eg_ry": 0.7000000000000001,
+        "energy_ry_ab2": -0.12999965917660866,
+        "full_residual_max": 2.166822277160918e-12,
+        "full_residual_rms": 1.091136099965217e-13,
+        "gap_grid_k_ab_inv": [
+          -0.3999999999999999,
+          -0.6999999999999997
+        ],
+        "gap_grid_ry": 1.4942623206386587,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": 3.3306690738754696e-15,
+        "phi1_gamma_abs_ry": 9.908803175217619e-18,
+        "point": 10,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point10_trs_nematic/state.npz",
+        "source_sha256": "5d35ba6ceab2a1269287bd00d83a0e2a935e796c932fb58217178872f3d9f24d",
+        "stale_gap_difference_ry": 2.928174247518456e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point10/01_T0/stationary_root.npz",
+        "state_sha256": "f543e7cdb5618bafd4fdaae475b7165f4e64ba84e3175743d44cbe37c8d34f6b",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 2.1657232355063387
+      },
+      {
+        "eg_ry": 0.6000000000000001,
+        "energy_ry_ab2": -0.1421948775280067,
+        "full_residual_max": 2.789268815917012e-12,
+        "full_residual_rms": 1.359567539852052e-13,
+        "gap_grid_k_ab_inv": [
+          -0.6999999999999997,
+          0.5
+        ],
+        "gap_grid_ry": 1.4874266837987835,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": 2.4424906541753444e-15,
+        "phi1_gamma_abs_ry": 1.1117026191304424e-17,
+        "point": 11,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point11_trs_nematic/state.npz",
+        "source_sha256": "27b7828c8e86970ecb87383862c00ca3e90cb7b99a5e8b6c2119abc55f1fe889",
+        "stale_gap_difference_ry": 3.4158523165572774e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point11/01_T0/stationary_root.npz",
+        "state_sha256": "cff2389009b5ca55f94ccdf2c0bc34702861993199305efdbd29a9e31e68e90a",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 2.2169641704181924
+      },
+      {
+        "eg_ry": 0.5,
+        "energy_ry_ab2": -0.1557323145206555,
+        "full_residual_max": 1.80017112327846e-12,
+        "full_residual_rms": 9.912840240694437e-14,
+        "gap_grid_k_ab_inv": [
+          0.7000000000000002,
+          0.6000000000000001
+        ],
+        "gap_grid_ry": 1.476160650474673,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": -2.220446049250313e-16,
+        "phi1_gamma_abs_ry": 1.426281060445584e-18,
+        "point": 12,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point12_trs_nematic/state.npz",
+        "source_sha256": "40fd90f16bb8f81f1ec1f86e8258269846f9164e535caca5965f81caac309eb3",
+        "stale_gap_difference_ry": 2.9863030315269157e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point12/01_T0/stationary_root.npz",
+        "state_sha256": "f3dad35587a97cd8ac03d732ddff7df2bff321a119caeb567bcf46e4d514f59c",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 2.25144708384241
+      },
+      {
+        "eg_ry": 0.3999999999999999,
+        "energy_ry_ab2": -0.17059882070215698,
+        "full_residual_max": 2.828626222139974e-12,
+        "full_residual_rms": 1.4555315158714492e-13,
+        "gap_grid_k_ab_inv": [
+          -0.2999999999999998,
+          -0.8999999999999999
+        ],
+        "gap_grid_ry": 1.4603444586512935,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": -6.661338147750939e-16,
+        "phi1_gamma_abs_ry": 2.4385112993461073e-16,
+        "point": 13,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point13_trs_nematic/state.npz",
+        "source_sha256": "c4508412470a3c306466fa02e9ca2ae580c2c3be9772208d734508da8d67fc77",
+        "stale_gap_difference_ry": 3.8105830446610867e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point13/01_T0/stationary_root.npz",
+        "state_sha256": "2ac33d779a160f7acc25f03757f694d871c544472f009d75c0aa64ca1a6c5d59",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 2.272788489323267
+      },
+      {
+        "eg_ry": 0.30000000000000004,
+        "energy_ry_ab2": -0.18678195944027173,
+        "full_residual_max": 6.160119636611228e-11,
+        "full_residual_rms": 8.340402971052455e-12,
+        "gap_grid_k_ab_inv": [
+          0.6000000000000001,
+          -0.7999999999999998
+        ],
+        "gap_grid_ry": 1.4395764652008436,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": 1.5543122344752192e-15,
+        "phi1_gamma_abs_ry": 2.2578941935741636e-16,
+        "point": 14,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point13/01_T0/stationary_root.npz",
+        "source_sha256": "2ac33d779a160f7acc25f03757f694d871c544472f009d75c0aa64ca1a6c5d59",
+        "stale_gap_difference_ry": 3.368990315610887e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point14_recovery_from13/05_T0/stationary_root.npz",
+        "state_sha256": "f8a929c3b4f88d9a7e2c3bcfde684654f61fe6c9680df290c92c60b36d8bb74e",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 2.2836199159479373
+      },
+      {
+        "eg_ry": 0.19999999999999996,
+        "energy_ry_ab2": -0.20426994660187878,
+        "full_residual_max": 1.735176891060064e-09,
+        "full_residual_rms": 2.4621797337492756e-10,
+        "gap_grid_k_ab_inv": [
+          -0.2999999999999998,
+          -1.0
+        ],
+        "gap_grid_ry": 1.417305528132523,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": -6.661338147750939e-16,
+        "phi1_gamma_abs_ry": 2.203099776604995e-18,
+        "point": 15,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point15_trs_nematic/state.npz",
+        "source_sha256": "fc9c624c53601f60b98e572c3d900e53470c45abba1f3fb7ef8b9db8f805a044",
+        "stale_gap_difference_ry": 3.681517586340277e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point15/01_T0/stationary_root.npz",
+        "state_sha256": "d56bd7c07514a1381173ca918340d7e8ff7fd42fb08eb4422ea702675f0c3b58",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 2.285909841661779
+      },
+      {
+        "eg_ry": 0.10000000000000009,
+        "energy_ry_ab2": -0.22305160169142796,
+        "full_residual_max": 2.7015945036623634e-11,
+        "full_residual_rms": 4.076659574724761e-12,
+        "gap_grid_k_ab_inv": [
+          -0.8999999999999999,
+          0.6000000000000001
+        ],
+        "gap_grid_ry": 1.3907243383500605,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": 9.547918011776346e-15,
+        "phi1_gamma_abs_ry": 1.0167768195999289e-17,
+        "point": 16,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point16_trs_nematic/state.npz",
+        "source_sha256": "9061cd94164450a5f09c3d28e696ac320ae1e750c480ab425de950bf2a571c3a",
+        "stale_gap_difference_ry": 4.721682378416858e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point16/01_T0/stationary_root.npz",
+        "state_sha256": "e3222c19a3d082296f9cc201898438feb086d0e7d9fc260e9c564d2ddd7cd2bb",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 2.281161110439458
+      },
+      {
+        "eg_ry": -0.0,
+        "energy_ry_ab2": -0.2431163264447038,
+        "full_residual_max": 4.6401152984105577e-10,
+        "full_residual_rms": 8.380825170955871e-11,
+        "gap_grid_k_ab_inv": [
+          1.0,
+          0.5
+        ],
+        "gap_grid_ry": 1.362635272442453,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": 5.10702591327572e-15,
+        "phi1_gamma_abs_ry": 2.230253206217369e-16,
+        "point": 17,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point17_trs_nematic/state.npz",
+        "source_sha256": "f4609495e91916644a7394948b3ccc071cd9c901347e38cb71abb71f95c8c020",
+        "stale_gap_difference_ry": 4.842278826799884e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point17/01_T0/stationary_root.npz",
+        "state_sha256": "aff5d2eba4fec2facfef9f3e066eb7787b923f171a9c8a7b2f92196f7e7a4143",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 2.270537820863823
+      },
+      {
+        "eg_ry": -0.10000000000000009,
+        "energy_ry_ab2": -0.2644540727391845,
+        "full_residual_max": 5.242377226297226e-10,
+        "full_residual_rms": 9.782661379677249e-11,
+        "gap_grid_k_ab_inv": [
+          1.0,
+          -0.5999999999999996
+        ],
+        "gap_grid_ry": 1.3324491327608428,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": -3.1086244689504383e-15,
+        "phi1_gamma_abs_ry": 4.5911428822359775e-17,
+        "point": 18,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point18_trs_nematic/state.npz",
+        "source_sha256": "4aa663e49507ce490bc89381175108de8751eaf4ac36db80e50c8cd55c03b553",
+        "stale_gap_difference_ry": 4.590831741424495e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point18/01_T0/stationary_root.npz",
+        "state_sha256": "6b405057259a5309e7213969aafa8a05574917b35bde7baab4a47ae0885ae04d",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 2.2549496585391022
+      },
+      {
+        "eg_ry": -0.19999999999999996,
+        "energy_ry_ab2": -0.2870553354371371,
+        "full_residual_max": 8.265166892263763e-11,
+        "full_residual_rms": 1.4678645466550834e-11,
+        "gap_grid_k_ab_inv": [
+          -0.8999999999999999,
+          0.8000000000000003
+        ],
+        "gap_grid_ry": 1.2999758794472085,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": -4.6629367034256575e-15,
+        "phi1_gamma_abs_ry": 2.1868909838014412e-17,
+        "point": 19,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point19_trs_nematic/state.npz",
+        "source_sha256": "c916c7cdfe031b11f8bc55f06ca7b640be9488cc3cbeda71b9d885b3a20c2b55",
+        "stale_gap_difference_ry": 5.053293878898302e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point19/01_T0/stationary_root.npz",
+        "state_sha256": "b3dd4672833be67a7210be505bd5bd06903d41f5386250cbd3e59d68e403e374",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 2.2351093514502987
+      },
+      {
+        "eg_ry": -0.30000000000000004,
+        "energy_ry_ab2": -0.31091114786704865,
+        "full_residual_max": 2.8645696925622133e-11,
+        "full_residual_rms": 4.201393411353265e-12,
+        "gap_grid_k_ab_inv": [
+          0.7000000000000002,
+          -1.0
+        ],
+        "gap_grid_ry": 1.2628920571283966,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": 2.886579864025407e-15,
+        "phi1_gamma_abs_ry": 2.220448930986459e-16,
+        "point": 20,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point20_trs_nematic/state.npz",
+        "source_sha256": "708f78f41aa25fa64e0b6752a526985942f0b210928b8d7f5ac6097560351c00",
+        "stale_gap_difference_ry": 5.612216140704618e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point20/01_T0/stationary_root.npz",
+        "state_sha256": "686c959e769277ef4c0ee356209fa0fc81cef53bdad3c89557cb934e608a6677",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 2.2115719655223374
+      },
+      {
+        "eg_ry": -0.3999999999999999,
+        "energy_ry_ab2": -0.3360130873341912,
+        "full_residual_max": 5.270617275954237e-12,
+        "full_residual_rms": 4.91322290161542e-13,
+        "gap_grid_k_ab_inv": [
+          -1.0999999999999999,
+          0.6000000000000001
+        ],
+        "gap_grid_ry": 1.225801659592956,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": 2.220446049250313e-15,
+        "phi1_gamma_abs_ry": 2.222885324561832e-16,
+        "point": 21,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point21_trs_nematic/state.npz",
+        "source_sha256": "6bae79aca1ca522db820a18659298e0708220f2d481fbb32a38cd67eda0db830",
+        "stale_gap_difference_ry": 6.027926031659803e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point21/01_T0/stationary_root.npz",
+        "state_sha256": "c2172ef5c115024e30aeaba9769bf9f2400a49f9467464f8d99e8f5d957ed1a6",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 2.184761270570784
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.3623532943275068,
+        "full_residual_max": 4.052369551033053e-12,
+        "full_residual_rms": 1.9705347354950246e-13,
+        "gap_grid_k_ab_inv": [
+          -0.7999999999999998,
+          1.0
+        ],
+        "gap_grid_ry": 1.1853574641361293,
+        "hybridization_ab_ry": 0.2,
+        "number_residual": 3.1086244689504383e-15,
+        "phi1_gamma_abs_ry": 2.2470752037194674e-16,
+        "point": 22,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point22_trs_nematic/state.npz",
+        "source_sha256": "c88116b48f1a6578b363666e12a72f23ec12f85d162c1afb3622233ef433910b",
+        "stale_gap_difference_ry": 6.845017723744462e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point22/01_T0/stationary_root.npz",
+        "state_sha256": "d4e6e6c39bcb04371dc001021d872c40e50f0bfe2acdf24a4e999f2b7853dccd",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 2.154986159343334
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.37098485791727626,
+        "full_residual_max": 3.918754210019415e-12,
+        "full_residual_rms": 2.017667493744083e-13,
+        "gap_grid_k_ab_inv": [
+          0.9000000000000004,
+          -0.8999999999999999
+        ],
+        "gap_grid_ry": 1.1050665874477414,
+        "hybridization_ab_ry": 0.21,
+        "number_residual": -1.3988810110276972e-14,
+        "phi1_gamma_abs_ry": 1.6415134558318817e-17,
+        "point": 23,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point23_trs_nematic/state.npz",
+        "source_sha256": "1233776b46496a25549c1cddbbd345054aa60cc13272dc925230daa613f364cf",
+        "stale_gap_difference_ry": 7.69542972234305e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point23/01_T0/stationary_root.npz",
+        "state_sha256": "ce7b4ee0ce57d0d268f026caf3eb68e040b323c5eb4410ee4eb415fcc81df8a5",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 2.120919107843081
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.411839209121686,
+        "full_residual_max": 1.5375478668033793e-12,
+        "full_residual_rms": 1.0456598941761324e-13,
+        "gap_grid_k_ab_inv": [
+          0.20000000000000018,
+          1.2000000000000002
+        ],
+        "gap_grid_ry": 1.814905590102566,
+        "hybridization_ab_ry": 0.22,
+        "number_residual": 2.220446049250313e-15,
+        "phi1_gamma_abs_ry": 7.888609052210118e-31,
+        "point": 24,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point24_trs_nematic/state.npz",
+        "source_sha256": "42bc55f1eb8d60644bee3e89e9a0663f86bbb86540cc3924c29390ab5b907baf",
+        "stale_gap_difference_ry": 5.100158380066944e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point24/01_T0/stationary_root.npz",
+        "state_sha256": "73c0706b7cecdbf59fcbcf35ca19e5bb0b78f29ef6f7022d5758134dfc1197ab",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 1.537294991260043e-14
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.42613358487313796,
+        "full_residual_max": 2.124189713015312e-12,
+        "full_residual_rms": 1.155575156615531e-13,
+        "gap_grid_k_ab_inv": [
+          -0.09999999999999964,
+          -1.2
+        ],
+        "gap_grid_ry": 1.8509934950010118,
+        "hybridization_ab_ry": 0.22999999999999998,
+        "number_residual": -4.6629367034256575e-15,
+        "phi1_gamma_abs_ry": 8.425038160928628e-31,
+        "point": 25,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point25_trs_nematic/state.npz",
+        "source_sha256": "7d64461429a5e65a46d489f1af13f8a971d9892538464d98ae7e49113a425dcc",
+        "stale_gap_difference_ry": 5.634801494291963e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point25/01_T0/stationary_root.npz",
+        "state_sha256": "d529a411838c671501afb7e1a702d68b797f4cde29c9c41945890e4fe6eee6bf",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 7.727532639188732e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.4407758632152663,
+        "full_residual_max": 2.3432367157738554e-12,
+        "full_residual_rms": 1.225471096784428e-13,
+        "gap_grid_k_ab_inv": [
+          1.2000000000000002,
+          0.0
+        ],
+        "gap_grid_ry": 1.886395348232246,
+        "hybridization_ab_ry": 0.24,
+        "number_residual": 2.4424906541753444e-15,
+        "phi1_gamma_abs_ry": 1.3953935429385222e-30,
+        "point": 26,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point26_trs_nematic/state.npz",
+        "source_sha256": "faea6ca137a7d42a07df4832a2dca9e6c6a58b8c09a96ff76b9e16c311fe00be",
+        "stale_gap_difference_ry": 5.263101705565987e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point26/01_T0/stationary_root.npz",
+        "state_sha256": "b91ccb66f4b7bff09812860878ac4b4a0ea63a8a878f2c19d7d67f959e5e6638",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 6.189804804834714e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.4557597048641969,
+        "full_residual_max": 2.4239499296641043e-12,
+        "full_residual_rms": 1.0849553500572826e-13,
+        "gap_grid_k_ab_inv": [
+          0.0,
+          -1.2
+        ],
+        "gap_grid_ry": 1.92131436219441,
+        "hybridization_ab_ry": 0.25,
+        "number_residual": -1.1102230246251565e-15,
+        "phi1_gamma_abs_ry": 0.0,
+        "point": 27,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point27_trs_nematic/state.npz",
+        "source_sha256": "3b7feade22639cc0584060ca7e393c970cfd258672f22688c42ffb40631e7a2e",
+        "stale_gap_difference_ry": 4.567913276520841e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point27/01_T0/stationary_root.npz",
+        "state_sha256": "e5f8fdb7288617e0c83ee00c51f8a3fcc13d60949e15927530e4bbea9e59519e",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 1.3346354647660577e-14
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.47107897719610237,
+        "full_residual_max": 2.3033797091898123e-12,
+        "full_residual_rms": 1.0347496316500401e-13,
+        "gap_grid_k_ab_inv": [
+          0.0,
+          -1.2
+        ],
+        "gap_grid_ry": 1.9559107752271525,
+        "hybridization_ab_ry": 0.26,
+        "number_residual": 4.440892098500626e-15,
+        "phi1_gamma_abs_ry": 1.9721522630525295e-31,
+        "point": 28,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point28_trs_nematic/state.npz",
+        "source_sha256": "5cd30fd0b350057a14d771e117c6ccc9217da013499dc1a2c0ba61fd3bcd3d90",
+        "stale_gap_difference_ry": 4.2903983077380303e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point28/01_T0/stationary_root.npz",
+        "state_sha256": "36b3fa536a7bf56ead9b9f2e9e0f9fb31a786c4c9a7f616dd001174388241956",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 2.906254595179856e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.4867277408610748,
+        "full_residual_max": 2.008393451546908e-12,
+        "full_residual_rms": 1.0039858765092301e-13,
+        "gap_grid_k_ab_inv": [
+          0.0,
+          1.2000000000000002
+        ],
+        "gap_grid_ry": 1.9902015421077395,
+        "hybridization_ab_ry": 0.27,
+        "number_residual": -6.217248937900877e-15,
+        "phi1_gamma_abs_ry": 3.944304526105059e-31,
+        "point": 29,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point29_trs_nematic/state.npz",
+        "source_sha256": "15236b08c9a3a528532fb4c8ccae2526fa5e6df0696468f4986f567c0520beed",
+        "stale_gap_difference_ry": 4.219899953916695e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point29/01_T0/stationary_root.npz",
+        "state_sha256": "528c33a07ee91a0c9c97da715e68c6aec586b67d62ca86b1c4413d39f50eeb7b",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 5.269000545183438e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.5027002378209985,
+        "full_residual_max": 2.224109785231576e-12,
+        "full_residual_rms": 1.1102166173976227e-13,
+        "gap_grid_k_ab_inv": [
+          -1.0999999999999999,
+          -0.3999999999999999
+        ],
+        "gap_grid_ry": 2.0227090270430983,
+        "hybridization_ab_ry": 0.28,
+        "number_residual": 6.217248937900877e-15,
+        "phi1_gamma_abs_ry": 2.789044477473679e-31,
+        "point": 30,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point30_trs_nematic/state.npz",
+        "source_sha256": "5638fbaa04b44f14297274e983c8fa8177f98d65436f3f096243353c0c28df6a",
+        "stale_gap_difference_ry": 4.289826209813441e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point30/01_T0/stationary_root.npz",
+        "state_sha256": "e4d08486bd5b69b55db01cccce0a61617b83c35a26cc2a2c455ed340801fc639",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 3.4177843630918485e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.5189908806107627,
+        "full_residual_max": 2.1148638396084607e-12,
+        "full_residual_rms": 1.169289660459726e-13,
+        "gap_grid_k_ab_inv": [
+          -1.0999999999999999,
+          -0.3999999999999999
+        ],
+        "gap_grid_ry": 2.0547964594305723,
+        "hybridization_ab_ry": 0.29,
+        "number_residual": -5.10702591327572e-15,
+        "phi1_gamma_abs_ry": 8.131392090366485e-31,
+        "point": 31,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point31_trs_nematic/state.npz",
+        "source_sha256": "6d105967ddca1acde312f0afcef89895be7f234308844b8005d8fc486efb1835",
+        "stale_gap_difference_ry": 4.277134078023437e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point31/01_T0/stationary_root.npz",
+        "state_sha256": "23252c20d8c26d956b1579a64b0321379d8e7c365722cec2b1e0feaf0969d5ff",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 7.959104401573453e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.5355942426559032,
+        "full_residual_max": 1.6986412276764895e-12,
+        "full_residual_rms": 9.4467950495416e-14,
+        "gap_grid_k_ab_inv": [
+          -0.2999999999999998,
+          -1.0999999999999999
+        ],
+        "gap_grid_ry": 2.086523998351919,
+        "hybridization_ab_ry": 0.3,
+        "number_residual": 6.8833827526759706e-15,
+        "phi1_gamma_abs_ry": 4.930380657631324e-31,
+        "point": 32,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point32_trs_nematic/state.npz",
+        "source_sha256": "93a076c03e2427cb231882bff9cf1bc8fc12d8923a0d32d06fe03414b9092b46",
+        "stale_gap_difference_ry": 3.737278913007458e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point32/01_T0/stationary_root.npz",
+        "state_sha256": "fc3ad74164551f2a6846a2b740ca361394fcfa7af6bac52e4718e9e9f08ebd0f",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 3.858793395568727e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.5525050495054377,
+        "full_residual_max": 2.731148640577885e-12,
+        "full_residual_rms": 1.2582446781373572e-13,
+        "gap_grid_k_ab_inv": [
+          1.1000000000000005,
+          0.30000000000000027
+        ],
+        "gap_grid_ry": 2.116374402849357,
+        "hybridization_ab_ry": 0.31,
+        "number_residual": 1.5543122344752192e-15,
+        "phi1_gamma_abs_ry": 1.9721522630525295e-31,
+        "point": 33,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point33_trs_nematic/state.npz",
+        "source_sha256": "6cb65517b8c29a21efb8b3e701f2d2d54c7a8682af2ab4f3d146d604d1f1a607",
+        "stale_gap_difference_ry": 4.295018962707786e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point33/01_T0/stationary_root.npz",
+        "state_sha256": "9e33a029ad4367aeeba1934e19f40a98d8367d3a1e46ddb9a8402d76231f747b",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 2.2130292466998652e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.5697181708646311,
+        "full_residual_max": 2.274291865944633e-12,
+        "full_residual_rms": 1.0267100891766972e-13,
+        "gap_grid_k_ab_inv": [
+          -1.0999999999999999,
+          0.30000000000000027
+        ],
+        "gap_grid_ry": 2.146062591881528,
+        "hybridization_ab_ry": 0.32,
+        "number_residual": -7.993605777301127e-15,
+        "phi1_gamma_abs_ry": 8.77829319232332e-31,
+        "point": 34,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point34_trs_nematic/state.npz",
+        "source_sha256": "1124d2f8b76c816471d1b4d2b409b1da77795be2c73c5f047b536c197125d56f",
+        "stale_gap_difference_ry": 3.9837452225910397e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point34/01_T0/stationary_root.npz",
+        "state_sha256": "86a7143c8f2aab9bc785ae43f7eb5d47c3533f1185727612a13635c230ca6262",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 1.6410381987123763e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.587228613327032,
+        "full_residual_max": 1.8973711490843925e-12,
+        "full_residual_rms": 9.186861532403583e-14,
+        "gap_grid_k_ab_inv": [
+          -0.19999999999999973,
+          1.1000000000000005
+        ],
+        "gap_grid_ry": 2.1755336262605587,
+        "hybridization_ab_ry": 0.32999999999999996,
+        "number_residual": -1.5543122344752192e-15,
+        "phi1_gamma_abs_ry": 3.952000737376667e-31,
+        "point": 35,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point35_trs_nematic/state.npz",
+        "source_sha256": "8c4ec2b1bcd198c0b0fdc7158d560f2dc817af5bd41405941dd0c98bce0a0c86",
+        "stale_gap_difference_ry": 3.7546585396341925e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point35/01_T0/stationary_root.npz",
+        "state_sha256": "e50c64d33e850689c784ecad5bde4c95eca29512ba3564d329cab4eb1f5b55a3",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 5.915855081928041e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.6050315137223341,
+        "full_residual_max": 2.131739229582763e-12,
+        "full_residual_rms": 9.562709249918966e-14,
+        "gap_grid_k_ab_inv": [
+          -1.0999999999999999,
+          -0.19999999999999973
+        ],
+        "gap_grid_ry": 2.2036109770245775,
+        "hybridization_ab_ry": 0.33999999999999997,
+        "number_residual": -2.220446049250313e-16,
+        "phi1_gamma_abs_ry": 7.888609052210118e-31,
+        "point": 36,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point36_trs_nematic/state.npz",
+        "source_sha256": "93ec10b2fe7e2632fd2bc909a636aaf2ebe5cc9c79ea52eb55cab823d0484392",
+        "stale_gap_difference_ry": 3.62230724970658e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point36/01_T0/stationary_root.npz",
+        "state_sha256": "80c21f8492e00cd5013481442592d7c942b270cd2b07205511d2ebba54e61e0e",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 9.140003628792652e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.6231221330081667,
+        "full_residual_max": 1.6930901125533637e-12,
+        "full_residual_rms": 9.454612585738234e-14,
+        "gap_grid_k_ab_inv": [
+          1.1000000000000005,
+          -0.09999999999999964
+        ],
+        "gap_grid_ry": 2.2314556710731135,
+        "hybridization_ab_ry": 0.35,
+        "number_residual": -3.1086244689504383e-15,
+        "phi1_gamma_abs_ry": 1.9721522630525295e-31,
+        "point": 37,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point37_trs_nematic/state.npz",
+        "source_sha256": "0f9a2100f153ed5eecca9ef2edb86beca3e0e1a5a5807cc87cdce9163ddedb03",
+        "stale_gap_difference_ry": 3.545438502783327e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point37/01_T0/stationary_root.npz",
+        "state_sha256": "0da525c9d107cd6b443fed43bd08d7c7336040d4ab1136b989e9c20b3dc673b7",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 1.0411751914331509e-14
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.6414958506442618,
+        "full_residual_max": 2.4722446312352986e-12,
+        "full_residual_rms": 1.0013573310084622e-13,
+        "gap_grid_k_ab_inv": [
+          -1.0999999999999999,
+          0.0
+        ],
+        "gap_grid_ry": 2.258455305607331,
+        "hybridization_ab_ry": 0.36,
+        "number_residual": 2.886579864025407e-15,
+        "phi1_gamma_abs_ry": 8.062199472431514e-31,
+        "point": 38,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point38_trs_nematic/state.npz",
+        "source_sha256": "fcc80d9719e52f592b498012420f0ab6a3601d882a60c7c5362b9ab16617afdc",
+        "stale_gap_difference_ry": 3.5352757254969447e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point38/01_T0/stationary_root.npz",
+        "state_sha256": "4055f25045aafca0ee07e678bcff5a2f6b0f2ef47d475ff6500f8f9a576e0e75",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 7.959662333762885e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.6601481593964431,
+        "full_residual_max": 2.468691917556498e-12,
+        "full_residual_rms": 9.708411778010741e-14,
+        "gap_grid_k_ab_inv": [
+          -1.0999999999999999,
+          0.0
+        ],
+        "gap_grid_ry": 2.285159537064369,
+        "hybridization_ab_ry": 0.37,
+        "number_residual": -9.103828801926284e-15,
+        "phi1_gamma_abs_ry": 3.974999965904944e-31,
+        "point": 39,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point39_trs_nematic/state.npz",
+        "source_sha256": "592af11740ca48922d16f48bacf3753b481ed5e9252edbed8943c837be31830c",
+        "stale_gap_difference_ry": 3.5838550216382714e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point39/01_T0/stationary_root.npz",
+        "state_sha256": "4cf4d870f7a1246066b5e9db5390f61e6c65b43a2b81e5245d007d283fc7a831",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 4.952443913858916e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.6790746605235467,
+        "full_residual_max": 5.863087793045452e-13,
+        "full_residual_rms": 4.153664940080593e-14,
+        "gap_grid_k_ab_inv": [
+          -1.0999999999999999,
+          0.0
+        ],
+        "gap_grid_ry": 2.311780182049299,
+        "hybridization_ab_ry": 0.38,
+        "number_residual": -1.6209256159527285e-14,
+        "phi1_gamma_abs_ry": 3.0814879110195774e-32,
+        "point": 40,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point39/01_T0/stationary_root.npz",
+        "source_sha256": "4cf4d870f7a1246066b5e9db5390f61e6c65b43a2b81e5245d007d283fc7a831",
+        "stale_gap_difference_ry": 3.6863137786724565e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point40/05_T0/stationary_root.npz",
+        "state_sha256": "180a38177686b3a33fe78c9dac7b35ef85227060a653da1d6db176109bfbc58b",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 3.4464076709715356e-16
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.6982710593085323,
+        "full_residual_max": 1.4022116801015727e-12,
+        "full_residual_rms": 1.1037245858135534e-13,
+        "gap_grid_k_ab_inv": [
+          -1.0,
+          -0.3999999999999999
+        ],
+        "gap_grid_ry": 2.3378921755066324,
+        "hybridization_ab_ry": 0.39,
+        "number_residual": 1.5543122344752192e-15,
+        "phi1_gamma_abs_ry": 3.944304526105059e-31,
+        "point": 41,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point41_trs_nematic/state.npz",
+        "source_sha256": "4e3214e257231723979810b71425d99b617db27de6918ea5a2e3cefdc046fff5",
+        "stale_gap_difference_ry": 2.9112779831308444e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point41/01_T0/stationary_root.npz",
+        "state_sha256": "fffdac2f4b5f90bb092a5d84fbfeb3c81ec9f1844e572a16b7d802f84e2c28d1",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 7.373957214495812e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.717733160898661,
+        "full_residual_max": 1.857847209407737e-12,
+        "full_residual_rms": 8.328932122814299e-14,
+        "gap_grid_k_ab_inv": [
+          -0.2999999999999998,
+          1.0
+        ],
+        "gap_grid_ry": 2.3626891820540417,
+        "hybridization_ab_ry": 0.4,
+        "number_residual": 3.9968028886505635e-15,
+        "phi1_gamma_abs_ry": 4.930380657631324e-32,
+        "point": 42,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point42_trs_nematic/state.npz",
+        "source_sha256": "4ef4347aadca38d18f54746085cbc0cc1f0d1bf26994334f10f237c69dc60aa8",
+        "stale_gap_difference_ry": 3.0391198979629053e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point42/01_T0/stationary_root.npz",
+        "state_sha256": "d79a688ac7c8804297a1af88d486b5bcdf131624ab567443c982cab16b046273",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 6.504063395872772e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.7374568664247445,
+        "full_residual_max": 2.507438701115916e-12,
+        "full_residual_rms": 9.365643184214887e-14,
+        "gap_grid_k_ab_inv": [
+          1.0,
+          -0.2999999999999998
+        ],
+        "gap_grid_ry": 2.3859665972423043,
+        "hybridization_ab_ry": 0.41000000000000003,
+        "number_residual": -6.8833827526759706e-15,
+        "phi1_gamma_abs_ry": 0.0,
+        "point": 43,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point43_trs_nematic/state.npz",
+        "source_sha256": "6d462623b8034aaad21bd7890bfa59bd084cf9a4c5503410f4a432474776b03e",
+        "stale_gap_difference_ry": 3.2477199152225467e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point43/01_T0/stationary_root.npz",
+        "state_sha256": "ffcab862f22ff14078a8c563f615832977f3100c0ceafd161dbae8affed22359",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 7.091838312622543e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.7574381693717701,
+        "full_residual_max": 1.9012569296705806e-12,
+        "full_residual_rms": 9.127004992016517e-14,
+        "gap_grid_k_ab_inv": [
+          1.0,
+          -0.2999999999999998
+        ],
+        "gap_grid_ry": 2.409223435385553,
+        "hybridization_ab_ry": 0.42,
+        "number_residual": -5.551115123125783e-15,
+        "phi1_gamma_abs_ry": 3.944304526105059e-31,
+        "point": 44,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point44_trs_nematic/state.npz",
+        "source_sha256": "6695ae5586053758a4665bb664d2ca910753449cac6ffd168ba5f555abae48b5",
+        "stale_gap_difference_ry": 3.5128139730389307e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point44/01_T0/stationary_root.npz",
+        "state_sha256": "49c306a99a2ace23fea15c141df8a86ade82a3d55bae774df6807abe2d2edf41",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 7.260407183362702e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.7776731521793181,
+        "full_residual_max": 2.0153878566020467e-12,
+        "full_residual_rms": 8.191515122840693e-14,
+        "gap_grid_k_ab_inv": [
+          -1.0,
+          0.20000000000000018
+        ],
+        "gap_grid_ry": 2.4313994730405915,
+        "hybridization_ab_ry": 0.43,
+        "number_residual": 5.551115123125783e-15,
+        "phi1_gamma_abs_ry": 3.1182465219507638e-31,
+        "point": 45,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point45_trs_nematic/state.npz",
+        "source_sha256": "d7d9ccf09f221983e5f3636cadf4aa552e217c0ea5ae6e732b49f92005c50192",
+        "stale_gap_difference_ry": 2.859384475861759e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point45/01_T0/stationary_root.npz",
+        "state_sha256": "2ad256c2e258a6674a197ca1df2e32c0df490fd77d692717cc7c2c1fc307efa2",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 1.5971187509236964e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.7981579830489399,
+        "full_residual_max": 1.834421503588146e-12,
+        "full_residual_rms": 9.461569702476819e-14,
+        "gap_grid_k_ab_inv": [
+          1.0,
+          0.10000000000000009
+        ],
+        "gap_grid_ry": 2.453089607383115,
+        "hybridization_ab_ry": 0.44,
+        "number_residual": -3.3306690738754696e-15,
+        "phi1_gamma_abs_ry": 8.131392090366485e-31,
+        "point": 46,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point46_trs_nematic/state.npz",
+        "source_sha256": "cbfaa7080717e5f15698d15147b093c2465f3cae5599d1fc4508c41e12de156a",
+        "stale_gap_difference_ry": 3.139828668174971e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point46/01_T0/stationary_root.npz",
+        "state_sha256": "35ecd08117f54689ae0f6e1d696148ef878a97f9be4990bca2291bdfea59525c",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 4.624979027897631e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.8188889129418664,
+        "full_residual_max": 2.170486013142181e-12,
+        "full_residual_rms": 8.528688810983004e-14,
+        "gap_grid_k_ab_inv": [
+          -1.0,
+          0.0
+        ],
+        "gap_grid_ry": 2.47400358452738,
+        "hybridization_ab_ry": 0.44999999999999996,
+        "number_residual": -7.327471962526033e-15,
+        "phi1_gamma_abs_ry": 7.949999931809887e-31,
+        "point": 47,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point47_trs_nematic/state.npz",
+        "source_sha256": "314da00f0556cd8b91e70f601b98d773cac639dce14bd520ee419384600d8e08",
+        "stale_gap_difference_ry": 2.604555708884959e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point47/01_T0/stationary_root.npz",
+        "state_sha256": "a0b0de9b427c2dd0db89f4021c8638ee78e08f0861254df7c17ae0fc0de74c35",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 2.2814903588319497e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.8398622727498553,
+        "full_residual_max": 2.1660451210436804e-12,
+        "full_residual_rms": 8.650854533580859e-14,
+        "gap_grid_k_ab_inv": [
+          1.0,
+          0.0
+        ],
+        "gap_grid_ry": 2.4947778393034707,
+        "hybridization_ab_ry": 0.45999999999999996,
+        "number_residual": -7.327471962526033e-15,
+        "phi1_gamma_abs_ry": 6.902532920683853e-31,
+        "point": 48,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point48_trs_nematic/state.npz",
+        "source_sha256": "50b94093c9fc5d64edbbf8e14cf8a5096d3c4a963c55a33578efe6a538dbe93b",
+        "stale_gap_difference_ry": 2.929209643731667e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point48/01_T0/stationary_root.npz",
+        "state_sha256": "999059552b76137a26f99a78d56d6f5de58448a0fdd6a6c845137f3dbdd6de23",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 2.4252096294753123e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.8610744706245375,
+        "full_residual_max": 1.6249224188413791e-12,
+        "full_residual_rms": 7.336192104632048e-14,
+        "gap_grid_k_ab_inv": [
+          -1.0,
+          0.0
+        ],
+        "gap_grid_ry": 2.5155681958012943,
+        "hybridization_ab_ry": 0.47,
+        "number_residual": 6.661338147750939e-16,
+        "phi1_gamma_abs_ry": 4.930380657631324e-32,
+        "point": 49,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point49_trs_nematic/state.npz",
+        "source_sha256": "d5dfb1b129433ed6c39093fc2be78de92b457803e463819a4473d285daf82f85",
+        "stale_gap_difference_ry": 2.4608079751686773e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point49/01_T0/stationary_root.npz",
+        "state_sha256": "922509661d162c78b0e4adf106c020c10537b2698e7b6e9dc9eca146710eeab7",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 3.9859216726387535e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.8825219894532469,
+        "full_residual_max": 2.079003635913068e-12,
+        "full_residual_rms": 7.729149216765015e-14,
+        "gap_grid_k_ab_inv": [
+          -0.2999999999999998,
+          0.9000000000000004
+        ],
+        "gap_grid_ry": 2.5344419031794665,
+        "hybridization_ab_ry": 0.48,
+        "number_residual": -8.215650382226158e-15,
+        "phi1_gamma_abs_ry": 0.0,
+        "point": 50,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point50_trs_nematic/state.npz",
+        "source_sha256": "1ce0bfee1f6c81b9fc1f3283830349510c8aeba64f97346c6291edabe99c129d",
+        "stale_gap_difference_ry": 2.76470375482063e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point50/01_T0/stationary_root.npz",
+        "state_sha256": "3003b205c487956e9ab6eedc507bcfaee5b954d3ba45dfde41303336cb8e1d3e",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 8.849274945715584e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.9042013844682713,
+        "full_residual_max": 2.0784485244007556e-12,
+        "full_residual_rms": 7.966274962513106e-14,
+        "gap_grid_k_ab_inv": [
+          -0.8999999999999999,
+          0.30000000000000027
+        ],
+        "gap_grid_ry": 2.552526433114858,
+        "hybridization_ab_ry": 0.49,
+        "number_residual": -5.551115123125783e-15,
+        "phi1_gamma_abs_ry": 7.904001474753334e-31,
+        "point": 51,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point51_trs_nematic/state.npz",
+        "source_sha256": "942715664e710d46e9fe4309d9dce541eb90efcc252e126e8650a126aae634bc",
+        "stale_gap_difference_ry": 2.3502974233480245e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point51/01_T0/stationary_root.npz",
+        "state_sha256": "04fe1a8624d333f2f57ae51415bbdd15d49b4f726615476cde3286b9bc5bff8f",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 3.783098624903489e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.9261092809801117,
+        "full_residual_max": 1.839528529501422e-12,
+        "full_residual_rms": 8.1260106748723e-14,
+        "gap_grid_k_ab_inv": [
+          -0.19999999999999973,
+          -0.8999999999999999
+        ],
+        "gap_grid_ry": 2.569737565225054,
+        "hybridization_ab_ry": 0.5,
+        "number_residual": 1.354472090042691e-14,
+        "phi1_gamma_abs_ry": 4.409866522165503e-31,
+        "point": 52,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point52_trs_nematic/state.npz",
+        "source_sha256": "99617f3ed0cd6591dfbcd09ba213d57b32564b1f9b47a03c1d2659227190304a",
+        "stale_gap_difference_ry": 2.7055461560010485e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point52/01_T0/stationary_root.npz",
+        "state_sha256": "2151dcc95d9231297951bc4d529db4704f5ea7583a2b41db9eeed1371b238bc1",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 2.0398339414078062e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.9482423722252209,
+        "full_residual_max": 2.1128654381641354e-12,
+        "full_residual_rms": 8.979225995916648e-14,
+        "gap_grid_k_ab_inv": [
+          0.9000000000000004,
+          0.10000000000000009
+        ],
+        "gap_grid_ry": 2.5862567376848586,
+        "hybridization_ab_ry": 0.51,
+        "number_residual": 1.9984014443252818e-15,
+        "phi1_gamma_abs_ry": 6.786344226498844e-31,
+        "point": 53,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point53_trs_nematic/state.npz",
+        "source_sha256": "043c9af02cfa24daf9cf70ab14427e3cf2cd5ab7b188e7463d20de1922b648af",
+        "stale_gap_difference_ry": 2.3059811216086246e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point53/01_T0/stationary_root.npz",
+        "state_sha256": "14c975f9f2fa1660e417977356a20a4cc82f367c2e52205e77b6a58ec84bfade",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 1.6961839684444378e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.9705974173194352,
+        "full_residual_max": 2.320144076861652e-12,
+        "full_residual_rms": 8.653062905793723e-14,
+        "gap_grid_k_ab_inv": [
+          0.9000000000000004,
+          0.0
+        ],
+        "gap_grid_ry": 2.602028975039314,
+        "hybridization_ab_ry": 0.52,
+        "number_residual": 1.709743457922741e-14,
+        "phi1_gamma_abs_ry": 8.131392090366485e-31,
+        "point": 54,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point54_trs_nematic/state.npz",
+        "source_sha256": "22001c4960e0dd7a650a764cd202a535af25ad82bcdc6bf51fe885aacac2757e",
+        "stale_gap_difference_ry": 2.722820378053825e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point54/01_T0/stationary_root.npz",
+        "state_sha256": "4c485c3ed1e1b3e8565ab691246fe16a372c405eb84d546894b3a0997e525806",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 8.411902389946508e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -0.9931712393092896,
+        "full_residual_max": 1.9024781749976682e-12,
+        "full_residual_rms": 7.570454755490517e-14,
+        "gap_grid_k_ab_inv": [
+          0.0,
+          -0.8999999999999999
+        ],
+        "gap_grid_ry": 2.6177531563940493,
+        "hybridization_ab_ry": 0.53,
+        "number_residual": -8.43769498715119e-15,
+        "phi1_gamma_abs_ry": 7.888609052210118e-31,
+        "point": 55,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point55_trs_nematic/state.npz",
+        "source_sha256": "089a042ff1650ae42421dcbcb78cd13ffe41b0ce5a5210a9ace48baa6ba13d17",
+        "stale_gap_difference_ry": 2.3599324361356366e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point55/01_T0/stationary_root.npz",
+        "state_sha256": "03b0c7034bcca4f8e9c3bead414eb27a8ffd19776307e6d02f8a16f78010cb4c",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 6.940905621615819e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -1.015960723315155,
+        "full_residual_max": 1.6888712650597881e-12,
+        "full_residual_rms": 8.30301561273866e-14,
+        "gap_grid_k_ab_inv": [
+          -0.2999999999999998,
+          -0.7999999999999998
+        ],
+        "gap_grid_ry": 2.6325207321783357,
+        "hybridization_ab_ry": 0.54,
+        "number_residual": -6.661338147750939e-16,
+        "phi1_gamma_abs_ry": 5.936964499831574e-31,
+        "point": 56,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point56_trs_nematic/state.npz",
+        "source_sha256": "a888df4485b10fbdcda5ebc07cfc51ee8978091633d8f130025ef9c816e7d26c",
+        "stale_gap_difference_ry": 2.7775844513300285e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point56/01_T0/stationary_root.npz",
+        "state_sha256": "f8544544f8c7c0abee0978dba28b2e118f3b9231969c9c84875a2ab1afa24ad6",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 3.424559707206493e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -1.0389628147586545,
+        "full_residual_max": 1.5785150964120476e-12,
+        "full_residual_rms": 7.824483050376028e-14,
+        "gap_grid_k_ab_inv": [
+          -0.7999999999999998,
+          0.30000000000000027
+        ],
+        "gap_grid_ry": 2.6460641407052456,
+        "hybridization_ab_ry": 0.55,
+        "number_residual": -1.1102230246251565e-15,
+        "phi1_gamma_abs_ry": 5.005307776791818e-31,
+        "point": 57,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point57_trs_nematic/state.npz",
+        "source_sha256": "1cfd4f27d68b319901affa520b77327287aa82e25cef66674aef3693e4c3a78b",
+        "stale_gap_difference_ry": 2.431148224957269e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point57/01_T0/stationary_root.npz",
+        "state_sha256": "6c679d471f0961f43ac64b4558999df7a435348b45b3b8dc536906bdb9a9cbbf",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 2.5262141403315816e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -1.0621745176693218,
+        "full_residual_max": 1.855515741056024e-12,
+        "full_residual_rms": 7.426640407501357e-14,
+        "gap_grid_k_ab_inv": [
+          -0.7999999999999998,
+          -0.19999999999999973
+        ],
+        "gap_grid_ry": 2.658266250605193,
+        "hybridization_ab_ry": 0.56,
+        "number_residual": 4.440892098500626e-15,
+        "phi1_gamma_abs_ry": 9.860761315262648e-32,
+        "point": 58,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point58_trs_nematic/state.npz",
+        "source_sha256": "2623b31a24668b4192cdfd15ed2323f918cebb42f6913201d18621118881067d",
+        "stale_gap_difference_ry": 2.102797918013266e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point58/01_T0/stationary_root.npz",
+        "state_sha256": "bd36fa007989e4e261d5a32943654a6668e4caa7d83c5ab78009fa73b1d448f5",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 1.839591903101989e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -1.0855928930656704,
+        "full_residual_max": 2.068234472574204e-12,
+        "full_residual_rms": 8.219932553787173e-14,
+        "gap_grid_k_ab_inv": [
+          -0.7999999999999998,
+          0.0
+        ],
+        "gap_grid_ry": 2.6698104920975787,
+        "hybridization_ab_ry": 0.57,
+        "number_residual": 4.440892098500626e-16,
+        "phi1_gamma_abs_ry": 3.944304526105059e-31,
+        "point": 59,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point59_trs_nematic/state.npz",
+        "source_sha256": "ca31c1dd5cbd72794c705392f0757b6f855383a718051980def2d89e7d3d1b3b",
+        "stale_gap_difference_ry": 2.5497659628115343e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point59/01_T0/stationary_root.npz",
+        "state_sha256": "becc9f9addba8b9957f5bc4502d36b207b09654757308c9b8b65eef01d342434",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 5.64712162478875e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -1.1092150574046222,
+        "full_residual_max": 1.9143575613611574e-12,
+        "full_residual_rms": 7.617230905155893e-14,
+        "gap_grid_k_ab_inv": [
+          0.0,
+          -0.7999999999999998
+        ],
+        "gap_grid_ry": 2.6809042137782217,
+        "hybridization_ab_ry": 0.58,
+        "number_residual": 1.1102230246251565e-15,
+        "phi1_gamma_abs_ry": 4.930380657631324e-31,
+        "point": 60,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point60_trs_nematic/state.npz",
+        "source_sha256": "73844895fe9d9c2718657aa07f3b608dea41ac836c45526b02c89aeb7f726bb4",
+        "stale_gap_difference_ry": 2.2588788706201512e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point60/01_T0/stationary_root.npz",
+        "state_sha256": "e37f35941f8b12894b705bca940e7c9bc225e4d361bf69885a8453bce99f28e5",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 5.84502634152919e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -1.1330381810962744,
+        "full_residual_max": 1.8478552021861105e-12,
+        "full_residual_rms": 7.042235375263077e-14,
+        "gap_grid_k_ab_inv": [
+          -0.6999999999999997,
+          0.30000000000000027
+        ],
+        "gap_grid_ry": 2.6913553990069548,
+        "hybridization_ab_ry": 0.59,
+        "number_residual": -2.886579864025407e-15,
+        "phi1_gamma_abs_ry": 0.0,
+        "point": 61,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point61_trs_nematic/state.npz",
+        "source_sha256": "1a798c97a9b844ae6097f8608fe3899008f20c2a7dc5f5171ea9eb02b315879d",
+        "stale_gap_difference_ry": 1.9672122864022867e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point61/01_T0/stationary_root.npz",
+        "state_sha256": "c687f6b3cba0ce30c35a52432c02b9b6a098861aa0971da33df491fef4d4ddb8",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 8.493814389708806e-15
+      },
+      {
+        "eg_ry": -0.5,
+        "energy_ry_ab2": -1.1570594870793305,
+        "full_residual_max": 1.9709789356170404e-12,
+        "full_residual_rms": 8.657305675817212e-14,
+        "gap_grid_k_ab_inv": [
+          -0.6999999999999997,
+          -0.19999999999999973
+        ],
+        "gap_grid_ry": 2.700269570931871,
+        "hybridization_ab_ry": 0.6,
+        "number_residual": 9.103828801926284e-15,
+        "phi1_gamma_abs_ry": 2.465190328815662e-31,
+        "point": 62,
+        "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/runs/point62_trs_nematic/state.npz",
+        "source_sha256": "59b1680355096c2426cfd1086e330657114b5bfb7f50a4514c903599047f6f64",
+        "stale_gap_difference_ry": 2.4222483041569376e-07,
+        "state": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/full_weak_seed_refinement_v1/point62/01_T0/stationary_root.npz",
+        "state_sha256": "b1d544e4cdfc4414defe0241ab78e6e4ac3b42b195508c1db62dec9ae39767d2",
+        "trs_error": 0.0,
+        "trs_nematic_gamma_abs_ry": 7.570886306144764e-15
+      }
+    ],
+    "regulator": {
+      "arbitrary_k_extension": "undefined_nonunique",
+      "mesh": "61x61 inclusive nodes [-3,3]^2",
+      "self_cell": "single q=0 node omitted"
+    },
+    "source_sha256": "fd88173a93f48cb8c50c8b353d2895f92fd317a1e8d6af5ae89992150fd536c9",
+    "status": "all_62_points_pass_complete_stationary_gates_but_not_one_connected_branch",
+    "warning": "These are independently certified complete-TRS roots. Connecting markers is a point-order visualization, not evidence of one continuous branch; the p21-p26 low stationary branch remains separate."
+  },
   "paper_digitization": {
     "authority": "comparison_only_not_solver_input",
     "paper_pdf_sha256": "012bfbce807fc49f4714e7a92f59e76546c6ab01ffbebe22f03bbfb81c7c2ba2",

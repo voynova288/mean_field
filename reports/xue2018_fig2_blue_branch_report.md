@@ -54,11 +54,21 @@ generated from one versioned branch-data file and bound by a hash manifest:
 
 For direct visual comparison with the paper layout, the following figure uses
 the same combined order-parameter/gap presentation. The current-calculation
-panel shows the historical black/red finite-grid candidate, the complete
-62-point weak-seed TRS diagnostic as an open dashed blue line, and the six
-certified p21--p26 points of the complete stationary TRS branch as solid blue
-diamonds. The dashed line is explicitly stale/attractor data; it is not spliced
-with the certified partial branch or promoted as a stationary branch.
+panel shows the historical black/red finite-grid candidate, a complete
+62-point inventory of independently certified complete-TRS stationary roots
+as an open dashed diamond line, and the six p21--p26 points of the connected
+low stationary branch as solid blue diamonds. Every open-diamond point passes
+the full residual, TRS, and number gates, but the inventory is not claimed to
+be one connected branch. In particular, it jumps between distinct root sheets
+near p23--p24; it is not spliced with the connected p21--p26 low branch.
+The 62-point certification has maximum full residual RMS / maximum
+`5.68e-10 / 3.41e-9`, zero final TR error, and maximum absolute number
+residual `1.71e-14`. Its comparison with the paper blue markers gives MAE
+`0.44896 Ry*`, RMSE `0.70773 Ry*`, and maximum error `1.84258 Ry*` at p25.
+Bulk job `465032` retained 61 completed point attempts before an engineering
+exception at p40; p40 was recovered from the accepted p39 checkpoint in job
+`465058`, and the sole near-gate p14 case was recovered from p13 in job
+`465084` without rerunning accepted points.
 
 ![Xue Fig. 2 paper-style comparison](figures/xue2018_fig2_paper_style_comparison.png)
 
