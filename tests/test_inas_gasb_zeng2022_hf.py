@@ -8,11 +8,14 @@ from mean_field.systems.inas_gasb.zeng2022 import Zeng2022Parameters, ZengSlabBa
 from mean_field.systems.inas_gasb.zeng2022_hf import (
     precompute_q0_coulomb_kernel,
     precompute_q0_toeplitz_coulomb_kernel,
+    q0_coulomb_kernel_row_with_integrated_cell,
+    q0_fock_at_k_from_integrated_cell_row,
     q0_fock_from_precomputed_kernel,
     q0_fock_from_toeplitz_kernel,
     q0_interaction_from_precomputed_kernel,
     q0_interaction_from_toeplitz_kernel,
     rectangular_coulomb_self_cell_average,
+    rectangular_coulomb_singular_cell_average,
     uniform_midpoint_kappa_mesh,
     zeng2022_fock_direct,
     zeng2022_hartree_direct,
@@ -62,6 +65,45 @@ def test_rectangular_coulomb_self_cell_is_integrated_not_q_floor() -> None:
         quadrature_order=160,
     )
     assert inter == pytest.approx(inter_high, rel=2e-13)
+
+
+def test_shifted_singular_cell_recovers_center_and_offset_symmetry() -> None:
+    centered = rectangular_coulomb_self_cell_average(
+        delta_kx_ab_inv=0.2,
+        delta_ky_ab_inv=0.3,
+        d_over_ab=0.4,
+    )
+    shifted_center = rectangular_coulomb_singular_cell_average(
+        delta_kx_ab_inv=0.2,
+        delta_ky_ab_inv=0.3,
+        query_offset_x_ab_inv=0.0,
+        query_offset_y_ab_inv=0.0,
+        d_over_ab=0.4,
+    )
+    assert shifted_center == pytest.approx(centered, rel=2.0e-14)
+    positive = rectangular_coulomb_singular_cell_average(
+        delta_kx_ab_inv=0.2,
+        delta_ky_ab_inv=0.3,
+        query_offset_x_ab_inv=0.07,
+        query_offset_y_ab_inv=-0.04,
+        d_over_ab=0.4,
+    )
+    reflected = rectangular_coulomb_singular_cell_average(
+        delta_kx_ab_inv=0.2,
+        delta_ky_ab_inv=0.3,
+        query_offset_x_ab_inv=-0.07,
+        query_offset_y_ab_inv=0.04,
+        d_over_ab=0.4,
+    )
+    assert positive == pytest.approx(reflected, rel=2.0e-14)
+    unscreened = rectangular_coulomb_singular_cell_average(
+        delta_kx_ab_inv=0.2,
+        delta_ky_ab_inv=0.3,
+        query_offset_x_ab_inv=0.07,
+        query_offset_y_ab_inv=-0.04,
+        d_over_ab=0.0,
+    )
+    assert unscreened[0] == pytest.approx(unscreened[1], rel=2.0e-14)
 
 
 def test_uniform_hartree_reproduces_eq9_capacitor_splitting() -> None:
@@ -180,6 +222,42 @@ def test_precomputed_q0_kernel_matches_direct_oracle_exactly() -> None:
         density, basis=basis, mesh=mesh, params=params, kernel=toeplitz
     )
     assert np.max(np.abs(fft_action - direct)) < 2e-14
+
+
+def test_single_k_integrated_row_matches_saved_grid_operator_at_mesh_centers() -> None:
+    mesh = uniform_midpoint_kappa_mesh(
+        kx_bounds_ab_inv=(-0.7, 0.7),
+        ky_bounds_ab_inv=(-0.5, 0.5),
+        nkx=3,
+        nky=3,
+    )
+    basis = ZengSlabBasis((0,))
+    params = xue2018_standard_parameters(eg_ry=-0.5, hybridization_ab_ry=0.2)
+    density = _random_neutral_hermitian_density(basis, mesh, seed=73)
+    kernel = precompute_q0_coulomb_kernel(mesh, d_over_ab=params.d_over_ab)
+    full_fock = q0_fock_from_precomputed_kernel(
+        density,
+        basis=basis,
+        mesh=mesh,
+        kernel=kernel,
+    )
+    for index in (0, 4, 8):
+        intra, inter = q0_coulomb_kernel_row_with_integrated_cell(
+            mesh.points_ab_inv[index],
+            mesh=mesh,
+            d_over_ab=params.d_over_ab,
+            singular_cell_index=index,
+        )
+        assert intra == pytest.approx(kernel.intra_ry_ab2[index], abs=2.0e-13)
+        assert inter == pytest.approx(kernel.inter_ry_ab2[index], abs=2.0e-13)
+        single = q0_fock_at_k_from_integrated_cell_row(
+            density,
+            basis=basis,
+            mesh=mesh,
+            intra_row_ry_ab2=intra,
+            inter_row_ry_ab2=inter,
+        )
+        assert single == pytest.approx(full_fock[:, :, index], abs=2.0e-14)
 
 
 def test_finite_q_slab_action_preserves_hermiticity() -> None:

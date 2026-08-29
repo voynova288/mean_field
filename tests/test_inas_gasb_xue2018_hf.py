@@ -6,8 +6,14 @@ import pytest
 from mean_field.systems.inas_gasb.xue2018_hf import (
     build_xue2018_hf_state,
     run_xue2018_hf,
+    xue2018_direct_gap_at_arbitrary_k,
+    xue2018_hamiltonian_at_arbitrary_k,
     xue2018_global_neutral_projector,
+    xue2018_interaction_action,
+    xue2018_minimize_continuum_gap,
+    xue2018_regulator_metadata,
     xue2018_seed_hamiltonian,
+    xue2018_singular_cell_index_at_k,
     xue2018_square_mesh,
 )
 from mean_field.systems.inas_gasb.zeng2022 import ZengSlabBasis
@@ -108,6 +114,90 @@ def test_xue2018_toeplitz_fft_backend_matches_dense_scf_steps() -> None:
     assert np.max(np.abs(dense_result.run.state.density - fft_result.run.state.density)) < 2e-14
     assert np.max(np.abs(dense_result.interaction_h - fft_result.interaction_h)) < 2e-14
     assert np.max(np.abs(dense_result.run.iter_energy - fft_result.run.iter_energy)) < 2e-14
+
+
+def test_xue2018_physical_arbitrary_k_matches_saved_operator_at_node() -> None:
+    state = build_xue2018_hf_state(
+        eg_ry=-0.5,
+        hybridization_ab_ry=0.2,
+        kmax_ab_inv=1.0,
+        points_per_axis=3,
+    )
+    rng = np.random.default_rng(101)
+    raw = rng.normal(size=state.h0.shape) + 1j * rng.normal(size=state.h0.shape)
+    density = 0.01 * (raw + np.swapaxes(raw.conj(), 0, 1))
+    weights = np.asarray(state.mesh.weights_ab2)
+    total = np.einsum("aak,k->", density, weights, optimize=True).real
+    density -= total / (4.0 * np.sum(weights)) * np.eye(4)[:, :, None]
+    interaction = xue2018_interaction_action(state, density)
+    for index in (0, 4, 8):
+        query = state.mesh.points_ab_inv[index]
+        assert xue2018_singular_cell_index_at_k(state, query) == index
+        hamiltonian = xue2018_hamiltonian_at_arbitrary_k(
+            state,
+            density,
+            query,
+            singular_cell_index=index,
+        )
+        assert hamiltonian == pytest.approx(
+            state.h0[:, :, index] + interaction[:, :, index],
+            abs=3.0e-13,
+        )
+        values = np.linalg.eigvalsh(hamiltonian)
+        assert xue2018_direct_gap_at_arbitrary_k(
+            state,
+            density,
+            query,
+            singular_cell_index=index,
+        ) == pytest.approx(values[2] - values[1], abs=2.0e-14)
+
+
+def test_xue2018_physical_local_gap_minimizer_is_cell_bound_and_fail_closed() -> None:
+    state = build_xue2018_hf_state(
+        eg_ry=-0.5,
+        hybridization_ab_ry=0.2,
+        kmax_ab_inv=1.0,
+        points_per_axis=3,
+    )
+    density = np.zeros_like(state.density)
+    center_gap = xue2018_direct_gap_at_arbitrary_k(
+        state,
+        density,
+        state.mesh.points_ab_inv[4],
+        singular_cell_index=4,
+        self_cell_quadrature_order=32,
+    )
+    metadata = xue2018_regulator_metadata(state)
+    assert np.asarray(metadata["window_bounds_ab_inv"]) == pytest.approx(
+        np.asarray([[-1.0, -1.0], [1.0, 1.0]])
+    )
+    assert metadata["self_cell_quadrature_order"] == 96
+    assert metadata["uv_qualification"] == "requires_separate_fixed_window_and_kmax_convergence"
+    result = xue2018_minimize_continuum_gap(
+        state,
+        density,
+        singular_cell_index=4,
+        self_cell_quadrature_order=32,
+        max_iterations=40,
+    )
+    assert result.gap_ry <= center_gap + 1.0e-12
+    assert np.max(np.abs(result.kappa_ab_inv - state.mesh.points_ab_inv[4])) <= (
+        0.5 * state.mesh.cell_widths_ab_inv[0] + 1.0e-12
+    )
+    historical = build_xue2018_hf_state(
+        eg_ry=-0.5,
+        hybridization_ab_ry=0.2,
+        kmax_ab_inv=1.0,
+        points_per_axis=3,
+        self_cell_policy="omitted_diagnostic",
+        mesh_policy="inclusive_nodes_uniform_weight_diagnostic",
+    )
+    with pytest.raises(ValueError, match="physical regulator"):
+        xue2018_hamiltonian_at_arbitrary_k(
+            historical,
+            np.zeros_like(historical.density),
+            np.zeros(2),
+        )
 
 
 def test_xue2018_concave_oda_chord_advances_instead_of_false_stall() -> None:

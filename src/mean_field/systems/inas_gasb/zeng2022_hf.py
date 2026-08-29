@@ -133,6 +133,75 @@ def uniform_midpoint_kappa_mesh(
     return mesh
 
 
+def rectangular_coulomb_singular_cell_average(
+    *,
+    delta_kx_ab_inv: float,
+    delta_ky_ab_inv: float,
+    query_offset_x_ab_inv: float,
+    query_offset_y_ab_inv: float,
+    d_over_ab: float,
+    quadrature_order: int = 96,
+) -> tuple[float, float]:
+    """Average the Coulomb kernels over a rectangle containing the query.
+
+    ``query_offset_*`` gives the query momentum relative to the source-cell
+    center. Splitting the shifted rectangle into four origin-corner
+    rectangles removes the integrable singularity in polar coordinates.
+    """
+
+    dx = float(delta_kx_ab_inv)
+    dy = float(delta_ky_ab_inv)
+    ox = float(query_offset_x_ab_inv)
+    oy = float(query_offset_y_ab_inv)
+    d = float(d_over_ab)
+    if not np.isfinite(dx) or not np.isfinite(dy) or dx <= 0.0 or dy <= 0.0:
+        raise ValueError("cell widths must be finite and positive")
+    if not np.isfinite(ox) or not np.isfinite(oy):
+        raise ValueError("query offsets must be finite")
+    tolerance = 1.0e-13 * max(1.0, dx, dy)
+    if abs(ox) > 0.5 * dx + tolerance or abs(oy) > 0.5 * dy + tolerance:
+        raise ValueError("query must lie inside the selected source cell")
+    if not np.isfinite(d) or d < 0.0:
+        raise ValueError("d_over_ab must be finite and nonnegative")
+    if int(quadrature_order) != quadrature_order or quadrature_order < 8:
+        raise ValueError("quadrature_order must be an integer >= 8")
+
+    x_extents = (max(0.0, 0.5 * dx + ox), max(0.0, 0.5 * dx - ox))
+    y_extents = (max(0.0, 0.5 * dy + oy), max(0.0, 0.5 * dy - oy))
+    nodes, weights = leggauss(int(quadrature_order))
+    intra_integral = 0.0
+    inter_integral = 0.0
+    for x_extent in x_extents:
+        for y_extent in y_extents:
+            if x_extent == 0.0 or y_extent == 0.0:
+                continue
+            intra_integral += x_extent * np.arcsinh(y_extent / x_extent)
+            intra_integral += y_extent * np.arcsinh(x_extent / y_extent)
+            theta_switch = float(np.arctan2(y_extent, x_extent))
+            for lo, hi, boundary in (
+                (0.0, theta_switch, "x"),
+                (theta_switch, 0.5 * np.pi, "y"),
+            ):
+                if hi == lo:
+                    continue
+                theta = 0.5 * (hi - lo) * nodes + 0.5 * (hi + lo)
+                if boundary == "x":
+                    radial_max = x_extent / np.cos(theta)
+                else:
+                    radial_max = y_extent / np.sin(theta)
+                if d == 0.0:
+                    radial_integral = radial_max
+                else:
+                    radial_integral = -np.expm1(-d * radial_max) / d
+                inter_integral += float(
+                    0.5 * (hi - lo) * np.dot(weights, radial_integral)
+                )
+    area = dx * dy
+    intra_average = 4.0 * np.pi * intra_integral / area
+    inter_average = 4.0 * np.pi * inter_integral / area
+    return float(intra_average), float(inter_average)
+
+
 def rectangular_coulomb_self_cell_average(
     *,
     delta_kx_ab_inv: float,
@@ -147,40 +216,14 @@ def rectangular_coulomb_self_cell_average(
     integral is analytic and only its smooth angular integral is quadratured.
     """
 
-    dx = float(delta_kx_ab_inv)
-    dy = float(delta_ky_ab_inv)
-    d = float(d_over_ab)
-    if not np.isfinite(dx) or not np.isfinite(dy) or dx <= 0.0 or dy <= 0.0:
-        raise ValueError("cell widths must be finite and positive")
-    if not np.isfinite(d) or d < 0.0:
-        raise ValueError("d_over_ab must be finite and nonnegative")
-    if int(quadrature_order) != quadrature_order or quadrature_order < 8:
-        raise ValueError("quadrature_order must be an integer >= 8")
-    a = 0.5 * dx
-    b = 0.5 * dy
-    area = dx * dy
-    integral_intra = 4.0 * (a * np.arcsinh(b / a) + b * np.arcsinh(a / b))
-    intra_average = 4.0 * np.pi * integral_intra / area
-    if d == 0.0:
-        return float(intra_average), float(intra_average)
-
-    nodes, weights = leggauss(int(quadrature_order))
-    theta_switch = float(np.arctan2(b, a))
-
-    def integrate_segment(lo: float, hi: float, boundary: str) -> float:
-        theta = 0.5 * (hi - lo) * nodes + 0.5 * (hi + lo)
-        if boundary == "x":
-            radial_max = a / np.cos(theta)
-        else:
-            radial_max = b / np.sin(theta)
-        radial_integral = -np.expm1(-d * radial_max) / d
-        return float(0.5 * (hi - lo) * np.dot(weights, radial_integral))
-
-    quadrant = integrate_segment(0.0, theta_switch, "x")
-    quadrant += integrate_segment(theta_switch, 0.5 * np.pi, "y")
-    integral_inter = 4.0 * quadrant
-    inter_average = 4.0 * np.pi * integral_inter / area
-    return float(intra_average), float(inter_average)
+    return rectangular_coulomb_singular_cell_average(
+        delta_kx_ab_inv=delta_kx_ab_inv,
+        delta_ky_ab_inv=delta_ky_ab_inv,
+        query_offset_x_ab_inv=0.0,
+        query_offset_y_ab_inv=0.0,
+        d_over_ab=d_over_ab,
+        quadrature_order=quadrature_order,
+    )
 
 
 def precompute_q0_coulomb_kernel(
@@ -217,6 +260,85 @@ def precompute_q0_coulomb_kernel(
     kernel = Q0CoulombKernel(intra_ry_ab2=intra, inter_ry_ab2=inter)
     kernel.validate(mesh.nk)
     return kernel
+
+
+def q0_coulomb_kernel_row_with_integrated_cell(
+    query_kappa_ab_inv: FloatArray,
+    *,
+    mesh: UniformKappaMesh,
+    d_over_ab: float,
+    singular_cell_index: int,
+    singular_cell_quadrature_order: int = 96,
+) -> tuple[FloatArray, FloatArray]:
+    """Build a midpoint kernel row with one shifted singular cell integrated.
+
+    This is the Nyström extension of the saved-grid regulator: all nonsingular
+    source cells retain midpoint evaluation, while the explicitly selected
+    cell is integrated with constant density over its rectangle. At a mesh
+    center the row exactly matches :func:`precompute_q0_coulomb_kernel`.
+    """
+
+    mesh.validate()
+    query = np.asarray(query_kappa_ab_inv, dtype=np.float64)
+    if query.shape != (2,) or not np.all(np.isfinite(query)):
+        raise ValueError("query_kappa_ab_inv must be a finite length-two vector")
+    index = int(singular_cell_index)
+    if index != singular_cell_index or not 0 <= index < mesh.nk:
+        raise ValueError("singular_cell_index is outside the mesh")
+    d = float(d_over_ab)
+    if not np.isfinite(d) or d < 0.0:
+        raise ValueError("d_over_ab must be finite and nonnegative")
+    points = np.asarray(mesh.points_ab_inv, dtype=np.float64)
+    q = np.linalg.norm(points - query[None, :], axis=1)
+    mask = np.arange(mesh.nk) != index
+    if np.any(q[mask] <= 1.0e-14):
+        raise ValueError("query coincides with a nonselected source cell")
+    intra = np.empty(mesh.nk, dtype=np.float64)
+    inter = np.empty(mesh.nk, dtype=np.float64)
+    intra[mask] = 4.0 * np.pi / q[mask]
+    inter[mask] = intra[mask] * np.exp(-q[mask] * d)
+    offset = query - points[index]
+    local_intra, local_inter = rectangular_coulomb_singular_cell_average(
+        delta_kx_ab_inv=mesh.cell_widths_ab_inv[0],
+        delta_ky_ab_inv=mesh.cell_widths_ab_inv[1],
+        query_offset_x_ab_inv=float(offset[0]),
+        query_offset_y_ab_inv=float(offset[1]),
+        d_over_ab=d,
+        quadrature_order=singular_cell_quadrature_order,
+    )
+    intra[index] = local_intra
+    inter[index] = local_inter
+    return intra, inter
+
+
+def q0_fock_at_k_from_integrated_cell_row(
+    density_delta: ComplexArray,
+    *,
+    basis: ZengSlabBasis,
+    mesh: UniformKappaMesh,
+    intra_row_ry_ab2: FloatArray,
+    inter_row_ry_ab2: FloatArray,
+) -> ComplexArray:
+    """Evaluate the Q=0 Fock self-energy at one query momentum."""
+
+    density = _validate_density(density_delta, basis=basis, mesh=mesh)
+    if basis.slab_indices != (0,):
+        raise ValueError("single-k Q0 Fock requires the one-slab basis")
+    intra = np.asarray(intra_row_ry_ab2, dtype=np.float64)
+    inter = np.asarray(inter_row_ry_ab2, dtype=np.float64)
+    if intra.shape != (mesh.nk,) or inter.shape != (mesh.nk,):
+        raise ValueError("single-k kernel rows must have shape (nk,)")
+    if np.any(~np.isfinite(intra)) or np.any(~np.isfinite(inter)):
+        raise ValueError("single-k kernel rows must be finite")
+    weighted_density = density * np.asarray(mesh.weights_ab2)[None, None, :]
+    result = np.empty((basis.dimension, basis.dimension), dtype=np.complex128)
+    for row in range(basis.dimension):
+        row_band, _row_spin, _row_slab = basis.label(row)
+        for col in range(basis.dimension):
+            col_band, _col_spin, _col_slab = basis.label(col)
+            kernel = intra if row_band == col_band else inter
+            result[row, col] = -np.dot(kernel, weighted_density[row, col, :])
+    return result
 
 
 def q0_fock_from_precomputed_kernel(
@@ -580,11 +702,14 @@ __all__ = [
     "UniformKappaMesh",
     "precompute_q0_coulomb_kernel",
     "precompute_q0_toeplitz_coulomb_kernel",
+    "q0_coulomb_kernel_row_with_integrated_cell",
+    "q0_fock_at_k_from_integrated_cell_row",
     "q0_fock_from_toeplitz_kernel",
     "q0_interaction_from_toeplitz_kernel",
     "q0_fock_from_precomputed_kernel",
     "q0_interaction_from_precomputed_kernel",
     "rectangular_coulomb_self_cell_average",
+    "rectangular_coulomb_singular_cell_average",
     "uniform_midpoint_kappa_mesh",
     "zeng2022_fock_direct",
     "zeng2022_hartree_direct",

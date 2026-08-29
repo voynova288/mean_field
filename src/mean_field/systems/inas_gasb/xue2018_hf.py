@@ -12,6 +12,7 @@ from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.optimize import minimize
 
 from mean_field.core.hf.engine import DensityUpdateResult, HartreeFockRun
 from mean_field.core.hf.problem import HartreeFockKernel, HartreeFockProblem, run_hartree_fock_problem
@@ -29,9 +30,12 @@ from .zeng2022_hf import (
     UniformKappaMesh,
     precompute_q0_coulomb_kernel,
     precompute_q0_toeplitz_coulomb_kernel,
+    q0_coulomb_kernel_row_with_integrated_cell,
+    q0_fock_at_k_from_integrated_cell_row,
     q0_interaction_from_precomputed_kernel,
     q0_interaction_from_toeplitz_kernel,
     uniform_midpoint_kappa_mesh,
+    zeng2022_hartree_direct,
 )
 
 ComplexArray = NDArray[np.complex128]
@@ -49,6 +53,7 @@ class Xue2018HFState:
     q0_kernel: Q0CoulombKernel | Q0ToeplitzCoulombKernel
     q0_kernel_backend: Literal["dense", "toeplitz_fft"]
     self_cell_policy: Literal["integrated", "omitted_diagnostic"]
+    self_cell_quadrature_order: int
     mesh_policy: Literal["midpoint_cells", "inclusive_nodes_uniform_weight_diagnostic"]
     density: ComplexArray
     hamiltonian: ComplexArray
@@ -60,6 +65,18 @@ class Xue2018HFState:
     @property
     def nk(self) -> int:
         return self.mesh.nk
+
+
+@dataclass(frozen=True)
+class Xue2018ContinuumGapResult:
+    gap_ry: float
+    kappa_ab_inv: FloatArray
+    singular_cell_index: int
+    initial_kappa_ab_inv: FloatArray
+    optimizer_success: bool
+    optimizer_message: str
+    optimizer_evaluations: int
+    self_cell_quadrature_order: int
 
 
 @dataclass(frozen=True)
@@ -243,6 +260,7 @@ def build_xue2018_hf_state(
         "midpoint_cells", "inclusive_nodes_uniform_weight_diagnostic"
     ] = "midpoint_cells",
     q0_kernel_backend: Literal["dense", "toeplitz_fft"] = "dense",
+    self_cell_quadrature_order: int = 96,
 ) -> Xue2018HFState:
     mesh = xue2018_square_mesh(
         kmax_ab_inv=kmax_ab_inv,
@@ -260,7 +278,11 @@ def build_xue2018_hf_state(
         raise ValueError(f"unsupported self_cell_policy {self_cell_policy!r}")
     if q0_kernel_backend == "dense":
         q0_kernel: Q0CoulombKernel | Q0ToeplitzCoulombKernel = (
-            precompute_q0_coulomb_kernel(mesh, d_over_ab=params.d_over_ab)
+            precompute_q0_coulomb_kernel(
+                mesh,
+                d_over_ab=params.d_over_ab,
+                self_cell_quadrature_order=self_cell_quadrature_order,
+            )
         )
         if self_cell_policy == "omitted_diagnostic":
             intra = np.asarray(q0_kernel.intra_ry_ab2).copy()
@@ -273,6 +295,7 @@ def build_xue2018_hf_state(
             mesh,
             d_over_ab=params.d_over_ab,
             omit_self_cell_diagnostic=self_cell_policy == "omitted_diagnostic",
+            self_cell_quadrature_order=self_cell_quadrature_order,
         )
     else:
         raise ValueError(f"unsupported q0_kernel_backend {q0_kernel_backend!r}")
@@ -285,6 +308,7 @@ def build_xue2018_hf_state(
         q0_kernel=q0_kernel,
         q0_kernel_backend=q0_kernel_backend,
         self_cell_policy=self_cell_policy,
+        self_cell_quadrature_order=int(self_cell_quadrature_order),
         mesh_policy=mesh_policy,
         density=np.zeros_like(h0),
         hamiltonian=h0.copy(),
@@ -332,6 +356,200 @@ def xue2018_interaction_action(
     """Return the bound Xue Hartree--Fock self-energy action on ``D``."""
 
     return _xue2018_interaction_action(state, density_delta)
+
+
+def _require_xue2018_physical_regulator(state: Xue2018HFState) -> None:
+    if state.mesh_policy != "midpoint_cells" or state.self_cell_policy != "integrated":
+        raise ValueError(
+            "arbitrary-k evaluation requires the midpoint_cells/integrated physical regulator"
+        )
+
+
+def xue2018_regulator_metadata(state: Xue2018HFState) -> dict[str, object]:
+    """Return JSON-ready finite-window and singular-cell provenance."""
+
+    points = np.asarray(state.mesh.points_ab_inv, dtype=np.float64)
+    dx, dy = state.mesh.cell_widths_ab_inv
+    lower = np.min(points, axis=0) - 0.5 * np.asarray([dx, dy])
+    upper = np.max(points, axis=0) + 0.5 * np.asarray([dx, dy])
+    return {
+        "schema": "xue2018-q0-regulator-v1",
+        "mesh_policy": state.mesh_policy,
+        "self_cell_policy": state.self_cell_policy,
+        "self_cell_quadrature_order": state.self_cell_quadrature_order,
+        "q0_kernel_backend": state.q0_kernel_backend,
+        "shape": list(state.mesh.shape),
+        "points": state.nk,
+        "cell_widths_ab_inv": [float(dx), float(dy)],
+        "window_bounds_ab_inv": [lower.tolist(), upper.tolist()],
+        "arbitrary_k_rule": (
+            "fixed_local_source_cell_integrated_with_constant_cell_density; "
+            "all_other_source_cells_use_saved_midpoint_rule"
+        ),
+        "uv_qualification": "requires_separate_fixed_window_and_kmax_convergence",
+    }
+
+
+def xue2018_singular_cell_index_at_k(
+    state: Xue2018HFState,
+    kappa_ab_inv: FloatArray,
+) -> int:
+    """Return the half-open midpoint cell containing one physical query k."""
+
+    _require_xue2018_physical_regulator(state)
+    query = np.asarray(kappa_ab_inv, dtype=np.float64)
+    if query.shape != (2,) or not np.all(np.isfinite(query)):
+        raise ValueError("kappa_ab_inv must be a finite length-two vector")
+    nx, ny = state.mesh.shape
+    dx, dy = state.mesh.cell_widths_ab_inv
+    points = np.asarray(state.mesh.points_ab_inv, dtype=np.float64).reshape(nx, ny, 2)
+    lower = points[0, 0] - 0.5 * np.asarray([dx, dy])
+    upper = points[-1, -1] + 0.5 * np.asarray([dx, dy])
+    tolerance = 1.0e-13 * max(1.0, abs(lower).max(), abs(upper).max())
+    if np.any(query < lower - tolerance) or np.any(query > upper + tolerance):
+        raise ValueError("query momentum lies outside the physical regulator window")
+    indices = np.floor((query - lower) / np.asarray([dx, dy])).astype(int)
+    indices = np.minimum(np.maximum(indices, 0), np.asarray([nx - 1, ny - 1]))
+    return int(indices[0] * ny + indices[1])
+
+
+def xue2018_hamiltonian_at_arbitrary_k(
+    state: Xue2018HFState,
+    density_delta: ComplexArray,
+    kappa_ab_inv: FloatArray,
+    *,
+    singular_cell_index: int | None = None,
+    self_cell_quadrature_order: int | None = None,
+) -> ComplexArray:
+    """Evaluate the physical midpoint/integrated-cell HF Hamiltonian at k.
+
+    The selected source cell is integrated with its density held constant;
+    every other source cell retains the same midpoint rule used by the saved
+    SCF operator. Supplying ``singular_cell_index`` keeps one local-cell
+    extension fixed during bounded minimization.
+    """
+
+    _require_xue2018_physical_regulator(state)
+    density = np.asarray(density_delta, dtype=np.complex128)
+    if density.shape != state.reference_density.shape or not np.all(np.isfinite(density)):
+        raise ValueError("density_delta must be finite and match the Xue state")
+    query = np.asarray(kappa_ab_inv, dtype=np.float64)
+    if query.shape != (2,) or not np.all(np.isfinite(query)):
+        raise ValueError("kappa_ab_inv must be a finite length-two vector")
+    index = (
+        xue2018_singular_cell_index_at_k(state, query)
+        if singular_cell_index is None
+        else int(singular_cell_index)
+    )
+    quadrature_order = (
+        state.self_cell_quadrature_order
+        if self_cell_quadrature_order is None
+        else int(self_cell_quadrature_order)
+    )
+    intra, inter = q0_coulomb_kernel_row_with_integrated_cell(
+        query,
+        mesh=state.mesh,
+        d_over_ab=state.params.d_over_ab,
+        singular_cell_index=index,
+        singular_cell_quadrature_order=quadrature_order,
+    )
+    fock = q0_fock_at_k_from_integrated_cell_row(
+        density,
+        basis=state.basis,
+        mesh=state.mesh,
+        intra_row_ry_ab2=intra,
+        inter_row_ry_ab2=inter,
+    )
+    hartree = zeng2022_hartree_direct(
+        density,
+        basis=state.basis,
+        mesh=state.mesh,
+        params=state.params,
+    )[:, :, 0]
+    h0 = build_zeng2022_folded_h0(query[None, :], state.basis, state.params)[:, :, 0]
+    hamiltonian = h0 + hartree + fock
+    return 0.5 * (hamiltonian + hamiltonian.conj().T)
+
+
+def xue2018_direct_gap_at_arbitrary_k(
+    state: Xue2018HFState,
+    density_delta: ComplexArray,
+    kappa_ab_inv: FloatArray,
+    *,
+    singular_cell_index: int | None = None,
+    self_cell_quadrature_order: int | None = None,
+) -> float:
+    """Return the middle-rank direct gap of the physical arbitrary-k Hamiltonian."""
+
+    hamiltonian = xue2018_hamiltonian_at_arbitrary_k(
+        state,
+        density_delta,
+        kappa_ab_inv,
+        singular_cell_index=singular_cell_index,
+        self_cell_quadrature_order=self_cell_quadrature_order,
+    )
+    values = np.linalg.eigvalsh(hamiltonian)
+    return float(values[2] - values[1])
+
+
+def xue2018_minimize_continuum_gap(
+    state: Xue2018HFState,
+    density_delta: ComplexArray,
+    *,
+    singular_cell_index: int,
+    initial_kappa_ab_inv: FloatArray | None = None,
+    self_cell_quadrature_order: int | None = None,
+    max_iterations: int = 300,
+) -> Xue2018ContinuumGapResult:
+    """Minimize the direct gap inside one explicitly fixed physical mesh cell."""
+
+    _require_xue2018_physical_regulator(state)
+    index = int(singular_cell_index)
+    if index != singular_cell_index or not 0 <= index < state.nk:
+        raise ValueError("singular_cell_index is outside the mesh")
+    center = np.asarray(state.mesh.points_ab_inv[index], dtype=np.float64)
+    half_width = 0.5 * np.asarray(state.mesh.cell_widths_ab_inv, dtype=np.float64)
+    lower = center - half_width
+    upper = center + half_width
+    initial = center if initial_kappa_ab_inv is None else np.asarray(
+        initial_kappa_ab_inv,
+        dtype=np.float64,
+    )
+    if initial.shape != (2,) or np.any(initial < lower) or np.any(initial > upper):
+        raise ValueError("initial_kappa_ab_inv must lie inside the selected cell")
+
+    quadrature_order = (
+        state.self_cell_quadrature_order
+        if self_cell_quadrature_order is None
+        else int(self_cell_quadrature_order)
+    )
+
+    def objective(query: FloatArray) -> float:
+        return xue2018_direct_gap_at_arbitrary_k(
+            state,
+            density_delta,
+            query,
+            singular_cell_index=index,
+            self_cell_quadrature_order=quadrature_order,
+        )
+
+    result = minimize(
+        objective,
+        initial,
+        method="L-BFGS-B",
+        bounds=list(zip(lower, upper, strict=True)),
+        options={"ftol": 1.0e-14, "gtol": 1.0e-10, "maxiter": int(max_iterations)},
+    )
+    return Xue2018ContinuumGapResult(
+        gap_ry=float(result.fun),
+        kappa_ab_inv=np.asarray(result.x, dtype=np.float64),
+        singular_cell_index=index,
+        initial_kappa_ab_inv=np.asarray(initial, dtype=np.float64),
+        optimizer_success=bool(result.success),
+        optimizer_message=str(result.message),
+        optimizer_evaluations=int(result.nfev),
+        self_cell_quadrature_order=quadrature_order,
+    )
 
 
 def _weighted_oda_parameter(state: Xue2018HFState, delta_density: ComplexArray) -> float:
@@ -463,13 +681,19 @@ def run_xue2018_hf(
 
 
 __all__ = [
+    "Xue2018ContinuumGapResult",
     "Xue2018HFResult",
     "Xue2018HFState",
     "build_xue2018_hf_state",
     "run_xue2018_hf",
+    "xue2018_direct_gap_at_arbitrary_k",
     "xue2018_global_neutral_projector",
+    "xue2018_hamiltonian_at_arbitrary_k",
     "xue2018_interaction_action",
+    "xue2018_minimize_continuum_gap",
     "xue2018_reference_relative_energy_density",
+    "xue2018_regulator_metadata",
     "xue2018_seed_hamiltonian",
+    "xue2018_singular_cell_index_at_k",
     "xue2018_square_mesh",
 ]
