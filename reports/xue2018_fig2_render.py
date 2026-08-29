@@ -114,7 +114,7 @@ def main() -> None:
         ms=4.5,
         lw=1.5,
         zorder=5,
-        label="full stationary TRS branch (p21--p26)",
+        label="full stationary TRS branch (p1--p26)",
     )
     axes[2].set_ylabel(r"TR-preserving gap $/Ry^*$")
     axes[2].set_xlabel("Fig. 2 point index")
@@ -142,8 +142,8 @@ def main() -> None:
             paper_gap,
             x,
             paper_trs_gap,
-            "paper digitization",
-            "paper markers digitized from Fig. 2",
+            "paper vector digitization",
+            "official PDF vector markers from Fig. 2",
         ),
         (
             comparison_axes[1],

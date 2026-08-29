@@ -4,7 +4,7 @@
 >
 > **Branch:** `debug/excitonic-reproduction`
 >
-> **Status date:** 2026-08-28
+> **Status date:** 2026-08-29
 
 ## Scope and authority
 
@@ -24,6 +24,44 @@ single q=0 Fock point omitted
 This lane is an inferred historical discretization, not regulator-independent
 continuum authority. The physical lane must instead use midpoint cells,
 cell-integrated singular terms, and explicit momentum-window checks.
+
+## Vector-digitization correction
+
+The earlier marker file used a 600-dpi raster and assigned the right-axis zero
+to `y=900 px`, while the common zero tick is near `y=908 px`. The official
+vector `path.pdf` contains 62 separate black, red, and blue marker paths and a
+shared calibrated zero tick. The paper markers are now extracted directly from
+those vector paths. The previously reported black MAE `0.01907 Ry*`, red
+MAE/RMSE `0.02376 / 0.02993 Ry*`, connected-blue MAE `0.32292 Ry*`, and
+inventory-blue MAE `0.44896 Ry*` are superseded.
+
+With the vector calibration, black `|Phi1|` has MAE/RMSE
+`0.01539 / 0.02877 Ry*`, the red ground gap has MAE/RMSE
+`0.01496 / 0.01851 Ry*`, the connected p1--p26 branch has MAE/RMSE
+`0.31538 / 0.38392 Ry*`, and the 62-root inventory has MAE/RMSE
+`0.44149 / 0.69323 Ry*`. This correction changes only the source comparison,
+not any calculated root, residual, branch identity, or fold.
+
+## Public historical-source recovery
+
+The complete arXiv source archive contains only the TeX, bibliography, and
+seven figure PDFs: there is no code or raw data. A public copy of Fei Xue's
+2018 dissertation, *Interactions and topology in two-dimensional semiconductor
+and semimetal* (DOI `10.15781/t2sb3xh72`), was recovered from the Internet
+Archive and hashed locally. Chapter 3 makes one clue stronger than the rendered
+paper: it states directly that the higher-energy TR-preserving states were
+found by iterating from
+
+\[
+H_{\uparrow\downarrow}^{vc}(0)=-H_{\uparrow\downarrow}^{cv}(0).
+\]
+
+However, the dissertation still gives no main four-band cutoff, grid, endpoint
+rule, `q=0` treatment, mixer/tolerance, seed amplitude/profile, or raw Fig. 3.6
+arrays. The source-motivated Gamma-localized starts tested above therefore cover
+the only newly confirmed initialization clue; they do not reveal a new p27
+root. Public GitHub/data-archive searches and the 2018 MacDonald presentation
+also yielded no numerical implementation.
 
 ## First correction: the old bottom panel was provenance-inconsistent
 
@@ -63,8 +101,9 @@ branch. The solid branch was transported sequentially from p21 through p1 and
 from p21 through p26; it is not spliced with the independent inventory.
 The 62-point certification has maximum full residual RMS / maximum
 `5.68e-10 / 3.41e-9`, zero final TR error, and maximum absolute number
-residual `1.71e-14`. Its comparison with the paper blue markers gives MAE
-`0.44896 Ry*`, RMSE `0.70773 Ry*`, and maximum error `1.84258 Ry*` at p25.
+residual `1.71e-14`. Its vector-calibrated comparison with the paper blue
+markers gives MAE `0.44149 Ry*`, RMSE `0.69323 Ry*`, and maximum error
+`1.81467 Ry*` at p25.
 Bulk job `465032` retained 61 completed point attempts before an engineering
 exception at p40; p40 was recovered from the accepted p39 checkpoint in job
 `465058`, and the sole near-gate p14 case was recovered from p13 in job
@@ -137,7 +176,7 @@ At p24, ODA finds two attractive roots:
 | normal-like | `1.81490554` | `-0.41183921` |
 | strong TR-preserving | `1.01620637` | `-0.38010018` |
 
-The digitized paper blue gap is approximately `0.05279 Ry*`.
+The vector-digitized paper blue gap is approximately `0.08006 Ry*`.
 
 A normal-to-strong density chord contains a low-gap state near
 `t=0.6596748972`, with saved-grid gap `0.0681161 Ry*` and a diagnostic
@@ -222,7 +261,8 @@ point p20--p1 using 83 accepted adaptive parameter steps at `T=0`. All 26
 integer-point roots pass the full gates; the maximum residual RMS/maximum are
 `9.23e-11 / 2.13e-9`, final TR error is zero, and the minimum adjacent
 integer-point density overlap is `0.91384`. The p1--p26 comparison with the
-paper blue markers has MAE `0.32292 Ry*` and RMSE `0.39190 Ry*`. The table below
+vector-calibrated paper blue markers has MAE `0.31538 Ry*` and RMSE
+`0.38392 Ry*`. The table below
 highlights the near-closure p21--p26 segment.
 
 | Fig. 2 point | paper blue / `Ry*` | stationary grid gap / `Ry*` | local-cell off-grid diagnostic / `Ry*` |
@@ -230,9 +270,9 @@ highlights the near-closure p21--p26 segment.
 | 21 | `0.36149` | `0.05747` | `0.04468` |
 | 22 | `0.28576` | `0.08341` | `0.07084` |
 | 23 | `0.16825` | `0.10957` | `0.10679` |
-| 24 | `0.05279` | `0.14986` | `0.14980` |
-| 25 | `0.00842` | `0.20985` | `0.20899` |
-| 26 | `0.13157` | `0.30075` | `0.29637` |
+| 24 | `0.08006` | `0.14986` | `0.14980` |
+| 25 | `0.03632` | `0.20985` | `0.20899` |
+| 26 | `0.15832` | `0.30075` | `0.29637` |
 
 Every listed zero-temperature point has full residual RMS below `3e-11`, full
 residual maximum below `4e-10`, and TR error below `4e-12`. The p24 root is
@@ -345,8 +385,9 @@ Sequential continuation of the historical omitted-`q=0` low branch gives:
 | `101x101` | `0.1919204` | `1.51382` |
 
 All these roots pass the full stationary gates and adjacent transported
-overlaps exceed `0.9993`. The n101 historical gap is still `0.13913 Ry*`
-above the paper blue p24 value `0.05279 Ry*`. A one-step n61->n101 restart
+overlaps exceed `0.9993`. The n101 historical gap is still `0.11186 Ry*`
+above the vector-calibrated paper blue p24 value `0.08006 Ry*`. A one-step
+n61->n101 restart
 instead fell into a strong-like `1.03701 Ry*` root, confirming that direct
 restart is not branch-identity evidence.
 

@@ -22,6 +22,22 @@ def test_xue2018_report_json_png_share_one_manifest_lineage() -> None:
     assert "figures/xue2018_fig2_branch_lineage_audit.png" in result.checked_paths
 
 
+def test_xue2018_paper_markers_use_official_vector_calibration() -> None:
+    path = REPORT_ROOT / "data/xue2018_fig2_digitized_markers.json"
+    payload = json.loads(path.read_text())
+    assert payload["schema"] == "xue2018-fig2-vector-marker-digitization-v3"
+    assert payload["authority"] == "official_paper_figure_vector_digitization_comparison_only"
+    assert payload["extraction"]["marker_counts"] == {"black": 62, "red": 62, "blue": 62}
+    assert payload["calibration"]["phi_y_zero_pdf_pt"] == pytest.approx(
+        payload["calibration"]["gap_y_zero_pdf_pt"], abs=1.0e-12
+    )
+    blue = {row["sequence"]: row["value"] for row in payload["series"]["blue"]}
+    assert [blue[index] for index in (24, 25, 26)] == pytest.approx(
+        [0.08006233284128632, 0.03632043199886309, 0.15831945004137302],
+        abs=1.0e-12,
+    )
+
+
 def test_xue2018_artifact_validator_rejects_mixed_branch_id(tmp_path: Path) -> None:
     root = tmp_path / "reports"
     root.mkdir()

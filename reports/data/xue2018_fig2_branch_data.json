@@ -535,10 +535,10 @@
       ]
     ],
     "paper_blue_comparison": {
-      "mae_ry": 0.4489560447243903,
+      "mae_ry": 0.4414885039848055,
       "max_abs_error_point": 25,
-      "max_abs_error_ry": 1.8425759865835034,
-      "rmse_ry": 0.707734763215477
+      "max_abs_error_ry": 1.8146730630021488,
+      "rmse_ry": 0.693231717121083
     },
     "points": [
       {
@@ -1915,11 +1915,107 @@
     "status": "all_62_points_pass_complete_stationary_gates_but_not_one_connected_branch",
     "warning": "These are independently certified complete-TRS roots. Connecting markers is a point-order visualization, not evidence of one continuous branch; the p21-p26 low stationary branch remains separate."
   },
+  "historical_candidate_vector_comparison": {
+    "authority": "comparison_to_official_figure_vector_markers_not_solver_input",
+    "black_phi1": {
+      "mae_ry": 0.015392121326154794,
+      "max_abs_error_ry": 0.1377061003071015,
+      "rmse_ry": 0.028771657390987963
+    },
+    "red_ground_gap": {
+      "mae_ry": 0.014959133058867266,
+      "max_abs_error_ry": 0.036060130384468536,
+      "rmse_ry": 0.01850807655068461
+    },
+    "warning": "The older raster-calibrated comparison metrics are superseded by the official vector-marker calibration."
+  },
+  "historical_solver_source_forensics": {
+    "authority": "public_source_and_dissertation_forensics",
+    "dissertation": {
+      "author": "Fei Xue",
+      "doi": "10.15781/t2sb3xh72",
+      "handle": "2152/68623",
+      "pdf_path": "/data/home/ziyuzhu/Mean_Field/tmp/pdfs/xue2018_nematic/XUE-DISSERTATION-2018.pdf",
+      "pdf_sha256": "175991bd9f63ac895c4126e053743e192e22f31839f53020149a6ad0ae62619d",
+      "source_attested_details": [
+        "Chapter 3 states actively, rather than only in a TeX comment, that the higher-energy TR-preserving states were found by iterating from H_ud^vc(k=0) = -H_ud^cv(k=0).",
+        "Chapter 3 repeats the unrestricted momentum-dependent Fock equation and the schematic TRS Hamiltonian xi_k s0 tau_z + A kx sz tau_x - A ky s0 tau_y + X sy tau_y.",
+        "Chapter 3 repeats the 62-point Fig. 3.6 curve and the supplemental [-3,3]^2 vortex figure."
+      ],
+      "still_missing": [
+        "main four-band cutoff",
+        "main four-band mesh",
+        "q=0 prescription",
+        "iteration/mixing algorithm",
+        "seed amplitude or finite-k profile",
+        "raw Fig. 3.6 arrays"
+      ],
+      "text_sha256": "6b39c92da6879271117c5b3232502f179c85a7278f7e8dfba57524aa96c5f754",
+      "title": "Interactions and topology in two-dimensional semiconductor and semimetal",
+      "wayback_source": "https://web.archive.org/web/20220126202323id_/https://repositories.lib.utexas.edu/bitstream/handle/2152/68623/XUE-DISSERTATION-2018.pdf;jsessionid=C7C5A445245AA92297C88870F6470169?sequence=1",
+      "year": 2018
+    },
+    "official_figure_vector": {
+      "finding": "The earlier raster gap-axis zero was miscalibrated. The common vector zero tick gives blue p24-p26 values 0.08006233, 0.03632043, and 0.15831945 Ry*. This changes only source-comparison metrics, not calculated roots.",
+      "marker_counts": {
+        "black": 62,
+        "blue": 62,
+        "red": 62
+      },
+      "path": "/data/home/ziyuzhu/Mean_Field/tmp/pdfs/xue2018_nematic/arxiv_source/unpacked/path.pdf",
+      "sha256": "8ffe54ff041719151478ba6d47e8a9930a8248df77d1184360a61fdf20280c63"
+    },
+    "paper": {
+      "archive_inventory": [
+        "QWEXC.tex",
+        "QWEXC.bbl",
+        "Bs.pdf",
+        "circle_twobands.pdf",
+        "path.pdf",
+        "phasediagram_fourbands.pdf",
+        "phasediagram_twobands.pdf",
+        "vortexfigs.pdf",
+        "Wilsonloop.pdf"
+      ],
+      "arxiv": "1710.00410v3",
+      "missing": [
+        "source code",
+        "raw numerical arrays",
+        "main Fig. 2 momentum cutoff",
+        "main Fig. 2 grid size and endpoint rule",
+        "q=0 Coulomb/self-cell prescription",
+        "SCF mixing or convergence tolerance",
+        "seed amplitude or momentum profile"
+      ],
+      "source_archive": "/data/home/ziyuzhu/Mean_Field/tmp/pdfs/xue2018_nematic/arxiv_source/1710.00410_source.tar",
+      "source_archive_sha256": "1d459368170df8c0314db499cfa261cc3c810104995669cd327576977569daee",
+      "tex_sha256": "d2ddc84e0e0e49167fe320bf21e6e44a50b0d42b9506d752a98de94d5d4915c3"
+    },
+    "public_repository_search": {
+      "code_or_data_found": false,
+      "searched_classes": [
+        "arXiv source archive",
+        "author/public GitHub and data archive queries",
+        "Zenodo/Figshare queries",
+        "2018 MacDonald Electronic Structure presentation",
+        "Fei Xue dissertation"
+      ]
+    },
+    "source_sha256": "e2cc723cff5c6a66f9b4a0b28eb692d698759470d7b65b9e6afc179ad02b0062",
+    "verdict": "Public source recovery confirms the Gamma-sign iteration clue but does not recover the historical regulator or solver prescription. The official vector figure corrects target calibration, yet the connected calculated branch still fails and folds before p27. Further untargeted root scans are not justified by newly recovered source evidence."
+  },
   "paper_digitization": {
-    "authority": "comparison_only_not_solver_input",
+    "authority": "official_paper_figure_vector_digitization_comparison_only",
     "paper_pdf_sha256": "012bfbce807fc49f4714e7a92f59e76546c6ab01ffbebe22f03bbfb81c7c2ba2",
+    "schema": "xue2018-fig2-vector-marker-digitization-v3",
+    "source_figure": "/data/home/ziyuzhu/Mean_Field/tmp/pdfs/xue2018_nematic/arxiv_source/unpacked/path.pdf",
+    "source_figure_sha256": "8ffe54ff041719151478ba6d47e8a9930a8248df77d1184360a61fdf20280c63",
     "source_json": "xue2018_fig2_digitized_markers.json",
-    "source_json_sha256": "1647f40d41d9b4de3e0475323ac731e064adcb17059c93e97269644be435013e"
+    "source_json_sha256": "b84a63de5b6ee1a75483cd77be52decc0ad3661bea92b75809bb7aafe3a5753c",
+    "supersedes": {
+      "reason": "The raster gap calibration used y_zero=900 px instead of the shared zero-axis tick near 908 px; vector axes and markers remove that offset and line/marker ambiguity.",
+      "schema": "xue2018-fig2-image-marker-digitization-v2"
+    }
   },
   "physical_regulator_p24_convergence": {
     "approximately_fixed_spacing_window_ladder": [
@@ -2133,7 +2229,8 @@
         "trs_nematic_gamma_abs_ry": 1.5138187226245687
       }
     ],
-    "historical_n101_minus_paper_blue_ry": 0.13913036746238994,
+    "historical_n101_minus_superseded_raster_paper_blue_ry": 0.13913036746238994,
+    "historical_n101_minus_vector_paper_blue_ry": 0.11185803462110362,
     "physical_fixed_window_kmax3": [
       {
         "local_cell_gap_ry": 0.2654547022570942,
@@ -2644,9 +2741,9 @@
       "verdict": "Eight deterministic TRS starts converged only to the normal-like, strong-TRS, or low-gap stationary roots already identified; no additional paper-like near-zero p25 root was found."
     },
     "paper_blue_comparison": {
-      "mae_ry": 0.3229158841336636,
+      "mae_ry": 0.3153842001612801,
       "max_abs_error_point": 17,
-      "max_abs_error_ry": 0.7195930053277038,
+      "max_abs_error_ry": 0.6967092045436609,
       "points": [
         1,
         2,
@@ -2675,7 +2772,7 @@
         25,
         26
       ],
-      "rmse_ry": 0.39190013668224777
+      "rmse_ry": 0.3839238625548702
     },
     "predecessor_branch_id": "xue2018-trs-full-stationary-p21-p26-v1",
     "regulator_authority": "historical_omitted_q0_diagnostic_only",

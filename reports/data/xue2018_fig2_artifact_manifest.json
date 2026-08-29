@@ -2,7 +2,7 @@
   "data": [
     {
       "path": "data/xue2018_fig2_branch_data.json",
-      "sha256": "5d1e00da4e2a9b647fe95a06bab0232a07aa75f3ce8c903d18643cd056b842c9"
+      "sha256": "4656bc259af8450d4c12b05445799b501e19dc5c7a399b03a4385e653a5e66f8"
     },
     {
       "path": "data/xue2018_fig2_stale_postflight.json",
@@ -10,7 +10,7 @@
     },
     {
       "path": "data/xue2018_fig2_digitized_markers.json",
-      "sha256": "1647f40d41d9b4de3e0475323ac731e064adcb17059c93e97269644be435013e"
+      "sha256": "b84a63de5b6ee1a75483cd77be52decc0ad3661bea92b75809bb7aafe3a5753c"
     }
   ],
   "dataset_id": "xue2018-fig2-branch-lineage-audit-v1",
@@ -18,17 +18,17 @@
     {
       "dataset_id": "xue2018-fig2-branch-lineage-audit-v1",
       "path": "figures/xue2018_fig2_branch_lineage_audit.png",
-      "sha256": "8eaeff3d40739ab4b88251003a11b4f048331bfd57981c9923065fce32b08786"
+      "sha256": "cb12d52381d90b4edd286764504788434e7f019e2482ee00ca097cbc5c1c1581"
     },
     {
       "dataset_id": "xue2018-fig2-branch-lineage-audit-v1",
       "path": "figures/xue2018_p24_regulator_convergence_audit.png",
-      "sha256": "7cfcb74604ccdcf2e3811438f757239c5d6c0e3f6c9bfc591de5c0c93e728c9d"
+      "sha256": "838b930725dcb069f1483c76de9c9e3ca3fe55e067cb622ec4182217334e3ea0"
     },
     {
       "dataset_id": "xue2018-fig2-branch-lineage-audit-v1",
       "path": "figures/xue2018_fig2_paper_style_comparison.png",
-      "sha256": "ac561a09f5d62694cf102440ab71674e7011f4608bc1a0561f7a2833c7f8bc98"
+      "sha256": "13dfd21ae366fb0cb5c00addb8f78d9b8d280c09dde5b0191876e1b055556366"
     }
   ],
   "full_path_branch_id": "xue2018-trs-weak-seed-normal-attractor-fullpath-v1",
