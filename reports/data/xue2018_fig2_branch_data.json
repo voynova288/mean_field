@@ -17,6 +17,77 @@
     "source_json": "xue2018_fig2_digitized_markers.json",
     "source_json_sha256": "1647f40d41d9b4de3e0475323ac731e064adcb17059c93e97269644be435013e"
   },
+  "physical_regulator_p24_single_mesh": {
+    "authority": "physical_midpoint_integrated_cell_single_mesh_not_continuum_authority",
+    "eg_ry": -0.5,
+    "execution_sha256": "94e2f263a0156d41d0096c18abc5dfce140e77a982057457d0b342ea0c6e4661",
+    "full_residual_max": 5.0355294366130816e-12,
+    "full_residual_rms": 1.931021529730173e-13,
+    "gap_grid_k_ab_inv": [
+      -0.4918032786885247,
+      1.1803278688524586
+    ],
+    "gap_grid_ry": 0.2942310997869863,
+    "gap_local_cell_offgrid_k_ab_inv": [
+      -0.5409836065573772,
+      1.1436996511303394
+    ],
+    "gap_local_cell_offgrid_ry": 0.2654547022570942,
+    "hybridization_ab_ry": 0.22,
+    "number_residual": -3.3306690738754696e-15,
+    "offgrid_multistart_seed_grid_size": 5,
+    "offgrid_quadrature_converged": true,
+    "offgrid_sha256": "e40b89efcbce1b14c661cd56a29e3af8d1b65ddbc2638e286faf369020cafe5f",
+    "point": 24,
+    "reference_relative_energy_ry_ab2": -0.40456059716616827,
+    "regulator": {
+      "arbitrary_k_rule": "fixed_local_source_cell_integrated_with_constant_cell_density; all_other_source_cells_use_saved_midpoint_rule",
+      "cell_widths_ab_inv": [
+        0.09836065573770492,
+        0.09836065573770492
+      ],
+      "mesh_policy": "midpoint_cells",
+      "points": 3721,
+      "q0_kernel_backend": "toeplitz_fft",
+      "schema": "xue2018-q0-regulator-v1",
+      "self_cell_policy": "integrated",
+      "self_cell_quadrature_order": 96,
+      "shape": [
+        61,
+        61
+      ],
+      "uv_qualification": "requires_separate_fixed_window_and_kmax_convergence",
+      "window_bounds_ab_inv": [
+        [
+          -3.0,
+          -3.0
+        ],
+        [
+          2.9999999999999996,
+          2.9999999999999996
+        ]
+      ]
+    },
+    "state_sha256": "b7dae8497bb015fe541401e2914f8ff08e25ad781dfabf7bd908e37a94cecf9f",
+    "status": "accepted_single_mesh_stationary_root_pending_mesh_fixed_window_and_kmax_convergence",
+    "strong_trs_offgrid_preflight": {
+      "initial_density_trs_error": 7.387677162241962e-11,
+      "offgrid_quadrature_48_96_error": 2.7755575615628914e-17,
+      "offgrid_quadrature_96_160_error": 2.7755575615628914e-17,
+      "offgrid_strong_trs_error": 7.626054603211029e-13,
+      "partner_cell_index": 1741,
+      "query_ab_inv": [
+        0.23,
+        -0.31
+      ],
+      "saved_node_hamiltonian_parity_error": 8.89767689330665e-16,
+      "singular_cell_index": 1979
+    },
+    "summary_sha256": "36b2726f5112650454a8e11a5702d2c51d08edd354bf593623c800e80f56a271",
+    "thermal_energy_ry": 0.0,
+    "trs_error": 0.0,
+    "warning": "This physical single-mesh p24 result must not be joined to the historical omitted-q0 p21-p26 curve."
+  },
   "regulator": {
     "k_bounds_ab_inv": [
       -3.0,

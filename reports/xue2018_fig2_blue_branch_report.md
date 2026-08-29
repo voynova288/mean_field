@@ -194,6 +194,38 @@ of the p24--p26 disagreement.
 The finite-temperature horizontal pseudo-arclength branch folds at
 `A = 0.24844 Ry* a_B*`, before reaching Fig. 2 point 27.
 
+## Physical midpoint/integrated-cell p24 checkpoint
+
+A separate physical-regulator calculation has now produced one accepted p24
+zero-temperature stationary root on a `61x61` midpoint mesh over
+`[-3,3]^2`, with the Coulomb singular source cell integrated at quadrature
+order 96. The initial job reached a valid `T/Ry*=1e-2` checkpoint and then
+stopped on a SciPy Anderson forcing-term overflow. Recovery resumed from that
+exact checkpoint after adding a fail-closed Newton--Krylov fallback; the
+completed temperatures were not rerun.
+
+The final `T=0` result is:
+
+- saved-grid gap: `0.2942310998 Ry*`;
+- full residual RMS / maximum: `1.93e-13 / 5.04e-12`;
+- TR error: `0`;
+- number residual: `-3.33e-15`;
+- reference-relative energy density: `-0.4045605972 Ry*/a_B*^2`;
+- state SHA-256: `b7dae8497bb015fe541401e2914f8ff08e25ad781dfabf7bd908e37a94cecf9f`.
+
+The arbitrary-k evaluator reproduces the saved-node Hamiltonian to
+`8.90e-16` and satisfies strong-TRS covariance at an off-grid pair to
+`7.63e-13`. A deterministic `5x5` multistart search inside the saved-grid
+minimum cell gives a lower local-cell gap of `0.2654547023 Ry*`; quadrature
+orders 48, 96, and 160 agree to below `1e-15`. This is a local-cell candidate,
+not yet a global continuum-gap certificate.
+
+This physical p24 checkpoint must remain separate from the historical
+omitted-`q=0` p21--p26 curve. It is **not continuum authority** until mesh,
+fixed-window, momentum-window, and broader candidate-cell convergence are
+complete, and it is not evidence that the paper blue point has been
+reproduced.
+
 ## Current conclusion
 
 The stationary-root hypothesis was partly correct: ODA missed a real
@@ -256,9 +288,10 @@ Still required:
 1. extend branch enumeration beyond the completed p25 eigenmode/deflation and
    p27 endpoint/fold-sheet searches, especially with additional deterministic
    complete-TRS seeds and symmetry-orbit-aware deflation;
-2. regulator-safe arbitrary-k gap evaluation in the cell-integrated physical
-   lane;
-3. fixed-window and momentum-window continuation of the stationary branch;
+2. extend the accepted physical p24 root through mesh, fixed-window, and
+   momentum-window convergence, and broaden the off-grid search beyond the
+   current saved-grid minimum cell;
+3. continue the physical stationary branch only after that regulator gate;
 4. an energy-Hessian or equivalent thermodynamic stability classification;
 5. author code/data or an explicit historical constrained-solver prescription.
 
