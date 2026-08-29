@@ -96,6 +96,15 @@ def test_shifted_singular_cell_recovers_center_and_offset_symmetry() -> None:
         d_over_ab=0.4,
     )
     assert positive == pytest.approx(reflected, rel=2.0e-14)
+    positive_high_order = rectangular_coulomb_singular_cell_average(
+        delta_kx_ab_inv=0.2,
+        delta_ky_ab_inv=0.3,
+        query_offset_x_ab_inv=0.07,
+        query_offset_y_ab_inv=-0.04,
+        d_over_ab=0.4,
+        quadrature_order=160,
+    )
+    assert positive == pytest.approx(positive_high_order, rel=3.0e-13)
     unscreened = rectangular_coulomb_singular_cell_average(
         delta_kx_ab_inv=0.2,
         delta_ky_ab_inv=0.3,

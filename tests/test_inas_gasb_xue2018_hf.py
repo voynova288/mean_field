@@ -16,6 +16,11 @@ from mean_field.systems.inas_gasb.xue2018_hf import (
     xue2018_singular_cell_index_at_k,
     xue2018_square_mesh,
 )
+from mean_field.systems.inas_gasb.xue2018_symmetry import (
+    project_xue2018_full_trs,
+    xue2018_opposite_k_indices,
+    xue2018_time_reversal_unitary,
+)
 from mean_field.systems.inas_gasb.zeng2022 import ZengSlabBasis
 
 
@@ -150,6 +155,44 @@ def test_xue2018_physical_arbitrary_k_matches_saved_operator_at_node() -> None:
             query,
             singular_cell_index=index,
         ) == pytest.approx(values[2] - values[1], abs=2.0e-14)
+
+
+def test_xue2018_physical_offgrid_hamiltonian_preserves_strong_trs() -> None:
+    state = build_xue2018_hf_state(
+        eg_ry=-0.5,
+        hybridization_ab_ry=0.2,
+        kmax_ab_inv=1.0,
+        points_per_axis=5,
+    )
+    rng = np.random.default_rng(211)
+    raw = rng.normal(size=state.h0.shape) + 1j * rng.normal(size=state.h0.shape)
+    density = project_xue2018_full_trs(
+        raw + np.swapaxes(raw.conj(), 0, 1),
+        state.mesh,
+    )
+    weights = np.asarray(state.mesh.weights_ab2)
+    total = np.einsum("aak,k->", density, weights, optimize=True).real
+    density -= total / (4.0 * np.sum(weights)) * np.eye(4)[:, :, None]
+    query = np.asarray([0.23, -0.31])
+    partner_query = -query
+    index = xue2018_singular_cell_index_at_k(state, query)
+    partner_index = xue2018_singular_cell_index_at_k(state, partner_query)
+    assert partner_index == xue2018_opposite_k_indices(state.mesh)[index]
+    hamiltonian = xue2018_hamiltonian_at_arbitrary_k(
+        state,
+        density,
+        query,
+        singular_cell_index=index,
+    )
+    partner_hamiltonian = xue2018_hamiltonian_at_arbitrary_k(
+        state,
+        density,
+        partner_query,
+        singular_cell_index=partner_index,
+    )
+    unitary = xue2018_time_reversal_unitary()
+    transformed = unitary @ partner_hamiltonian.conj() @ unitary.conj().T
+    assert hamiltonian == pytest.approx(transformed, abs=2.0e-12)
 
 
 def test_xue2018_physical_local_gap_minimizer_is_cell_bound_and_fail_closed() -> None:
