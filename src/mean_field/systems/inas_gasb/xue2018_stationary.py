@@ -28,6 +28,19 @@ from .zeng2022 import build_zeng2022_folded_h0
 
 Array = np.ndarray
 
+_PAULI_0 = np.eye(2, dtype=np.complex128)
+_PAULI_X = np.asarray([[0.0, 1.0], [1.0, 0.0]], dtype=np.complex128)
+_PAULI_Y = np.asarray([[0.0, -1.0j], [1.0j, 0.0]], dtype=np.complex128)
+_PAULI_Z = np.diag([1.0, -1.0]).astype(np.complex128)
+_XUE2018_FOUR_TERM_OPERATORS = np.asarray(
+    [
+        np.kron(_PAULI_0, _PAULI_Z),
+        np.kron(_PAULI_Z, _PAULI_X),
+        np.kron(_PAULI_0, _PAULI_Y),
+        np.kron(_PAULI_Y, _PAULI_Y),
+    ]
+)
+
 
 @dataclass(frozen=True)
 class Xue2018StationaryConfig:
@@ -66,6 +79,22 @@ class Xue2018DensityMap:
 
 
 @dataclass(frozen=True)
+class Xue2018SelfEnergyReleaseMap:
+    trial_self_energy_trs: Array
+    interaction_self_energy_raw: Array
+    interaction_self_energy_trs: Array
+    interaction_self_energy_four_term: Array
+    released_self_energy: Array
+    density_delta: Array
+    absolute_density: Array
+    hamiltonian: Array
+    energies: Array
+    chemical_potential_ry: float
+    number_residual: float
+    full_trs_leakage_max: float
+
+
+@dataclass(frozen=True)
 class Xue2018StationaryResult:
     config: Xue2018StationaryConfig
     density_delta: Array
@@ -97,6 +126,54 @@ def _weighted_field_rms(field: Array, weights: Array) -> float:
     return float(np.sqrt(max(0.0, numerator / denominator)))
 
 
+def _hermitize_xue2018_interaction(interaction_raw: Array) -> tuple[Array, float]:
+    raw = np.asarray(interaction_raw, dtype=np.complex128)
+    error = float(
+        np.max(
+            np.abs(raw - np.swapaxes(raw.conj(), 0, 1)),
+            initial=0.0,
+        )
+    )
+    scale = max(1.0, float(np.max(np.abs(raw), initial=0.0)))
+    if error > 1.0e-10 * scale:
+        raise ValueError(
+            "interaction action has non-roundoff Hermiticity error: "
+            f"{error:.3e} at scale {scale:.3e}"
+        )
+    return 0.5 * (raw + np.swapaxes(raw.conj(), 0, 1)), error
+
+
+def project_xue2018_four_term_self_energy(self_energy: Array) -> Array:
+    """Project onto the literal four Pauli channels used by the paper ansatz.
+
+    The basis ordering is ``(c up, v up, c down, v down)``, so operators are
+    ``spin Pauli ⊗ band Pauli``. This projector acts on a self-energy field,
+    not on a density field.
+    """
+
+    field = np.asarray(self_energy, dtype=np.complex128)
+    if field.ndim != 3 or field.shape[:2] != (4, 4):
+        raise ValueError("self_energy must have shape (4, 4, nk)")
+    hermiticity_error = float(
+        np.max(np.abs(field - np.swapaxes(field.conj(), 0, 1)), initial=0.0)
+    )
+    scale = max(1.0, float(np.max(np.abs(field), initial=0.0)))
+    if hermiticity_error > 1.0e-10 * scale:
+        raise ValueError("self_energy must be Hermitian")
+    coefficients = np.asarray(
+        [
+            np.einsum("ab,bak->k", operator, field, optimize=True).real / 4.0
+            for operator in _XUE2018_FOUR_TERM_OPERATORS
+        ]
+    )
+    return np.einsum(
+        "iab,ik->abk",
+        _XUE2018_FOUR_TERM_OPERATORS,
+        coefficients,
+        optimize=True,
+    )
+
+
 def project_xue2018_neutral_density_delta(
     state: Xue2018HFState,
     density_delta: Array,
@@ -124,21 +201,7 @@ def xue2018_stationary_density_map(
     if density.shape != state.reference_density.shape:
         raise ValueError("density_delta shape does not match the Xue state")
     interaction_raw = xue2018_interaction_action(state, density)
-    interaction_error = float(
-        np.max(
-            np.abs(interaction_raw - np.swapaxes(interaction_raw.conj(), 0, 1)),
-            initial=0.0,
-        )
-    )
-    interaction_scale = max(1.0, float(np.max(np.abs(interaction_raw), initial=0.0)))
-    if interaction_error > 1.0e-10 * interaction_scale:
-        raise ValueError(
-            "interaction action has non-roundoff Hermiticity error: "
-            f"{interaction_error:.3e} at scale {interaction_scale:.3e}"
-        )
-    interaction_h = 0.5 * (
-        interaction_raw + np.swapaxes(interaction_raw.conj(), 0, 1)
-    )
+    interaction_h, interaction_error = _hermitize_xue2018_interaction(interaction_raw)
     hamiltonian = state.h0 + interaction_h
     if thermal_energy_ry > 0.0:
         update = fermi_density_from_hamiltonian(
@@ -182,6 +245,104 @@ def xue2018_stationary_density_map(
         trs_leakage_max=leakage,
         interaction_hermiticity_error=interaction_error,
     )
+
+
+def xue2018_self_energy_release_map(
+    state: Xue2018HFState,
+    self_energy: Array,
+    *,
+    constraint_weight: float,
+    thermal_energy_ry: float,
+) -> Xue2018SelfEnergyReleaseMap:
+    """Release the literal four-term self-energy constraint continuously.
+
+    With ``constraint_weight=1`` this is exactly the paper-ansatz self-energy
+    map ``P4 Sigma_int[D(H0+Sigma)]``. With weight zero it is the complete-TRS
+    self-energy map. Intermediate values define a diagnostic homotopy; they
+    are not an additional physical interaction parameter.
+    """
+
+    weight = float(constraint_weight)
+    temperature = float(thermal_energy_ry)
+    if not np.isfinite(weight) or not 0.0 <= weight <= 1.0:
+        raise ValueError("constraint_weight must lie in [0, 1]")
+    if not np.isfinite(temperature) or temperature < 0.0:
+        raise ValueError("thermal_energy_ry must be finite and nonnegative")
+    trial = np.asarray(self_energy, dtype=np.complex128)
+    if trial.shape != state.h0.shape:
+        raise ValueError("self_energy shape does not match the Xue state")
+    trial_trs = project_xue2018_full_trs(trial, state.mesh)
+    hamiltonian = state.h0 + trial_trs
+    if temperature > 0.0:
+        update = fermi_density_from_hamiltonian(
+            hamiltonian,
+            state.mesh.weights_ab2,
+            thermal_energy=temperature,
+            ensemble=FixedOccupation(occupation_per_k=2.0),
+        )
+        absolute_density = np.asarray(update.density, dtype=np.complex128)
+        density_delta = absolute_density - state.reference_density
+        number_residual = float(update.observables["number_residual"])
+    else:
+        update = xue2018_global_neutral_projector(
+            hamiltonian,
+            reference_density=state.reference_density,
+        )
+        density_delta = np.asarray(update.density, dtype=np.complex128)
+        absolute_density = density_delta + state.reference_density
+        number_residual = float(
+            np.einsum(
+                "aak,k->",
+                absolute_density,
+                state.mesh.weights_ab2,
+                optimize=True,
+            ).real
+            - 2.0 * np.sum(state.mesh.weights_ab2)
+        )
+    interaction_raw = xue2018_interaction_action(state, density_delta)
+    interaction_h, _error = _hermitize_xue2018_interaction(interaction_raw)
+    interaction_trs = project_xue2018_full_trs(interaction_h, state.mesh)
+    interaction_four = project_xue2018_four_term_self_energy(interaction_trs)
+    released = (1.0 - weight) * interaction_trs + weight * interaction_four
+    return Xue2018SelfEnergyReleaseMap(
+        trial_self_energy_trs=trial_trs,
+        interaction_self_energy_raw=interaction_h,
+        interaction_self_energy_trs=interaction_trs,
+        interaction_self_energy_four_term=interaction_four,
+        released_self_energy=released,
+        density_delta=density_delta,
+        absolute_density=absolute_density,
+        hamiltonian=hamiltonian,
+        energies=np.asarray(update.energies, dtype=np.float64),
+        chemical_potential_ry=float(update.mu),
+        number_residual=number_residual,
+        full_trs_leakage_max=float(
+            np.max(np.abs(interaction_h - interaction_trs), initial=0.0)
+        ),
+    )
+
+
+def xue2018_self_energy_release_residual_vector(
+    state: Xue2018HFState,
+    vector: Array,
+    *,
+    constraint_weight: float,
+    thermal_energy_ry: float,
+) -> Array:
+    """Return the packed residual of the four-term-to-full release homotopy."""
+
+    self_energy = unpack_hermitian_matrix_field(
+        vector,
+        dimension=state.h0.shape[0],
+        nk=state.nk,
+    )
+    mapped = xue2018_self_energy_release_map(
+        state,
+        self_energy,
+        constraint_weight=constraint_weight,
+        thermal_energy_ry=thermal_energy_ry,
+    )
+    return pack_hermitian_matrix_field(self_energy - mapped.released_self_energy)
 
 
 def xue2018_state_at_parameters(
@@ -383,11 +544,15 @@ def run_xue2018_temperature_homotopy(
 
 __all__ = [
     "Xue2018DensityMap",
+    "Xue2018SelfEnergyReleaseMap",
     "Xue2018StationaryConfig",
     "Xue2018StationaryResult",
+    "project_xue2018_four_term_self_energy",
     "project_xue2018_neutral_density_delta",
     "run_xue2018_temperature_homotopy",
     "solve_xue2018_stationary_root",
+    "xue2018_self_energy_release_map",
+    "xue2018_self_energy_release_residual_vector",
     "xue2018_state_at_parameters",
     "xue2018_trs_tangent_projector_vector",
     "xue2018_trsb_tangent_projector_vector",

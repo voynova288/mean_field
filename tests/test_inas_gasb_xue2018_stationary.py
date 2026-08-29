@@ -14,8 +14,11 @@ from mean_field.systems.inas_gasb.xue2018_hf import (
 )
 from mean_field.systems.inas_gasb.xue2018_stationary import (
     Xue2018StationaryConfig,
+    project_xue2018_four_term_self_energy,
     project_xue2018_neutral_density_delta,
     solve_xue2018_stationary_root,
+    xue2018_self_energy_release_map,
+    xue2018_self_energy_release_residual_vector,
     xue2018_state_at_parameters,
     xue2018_stationary_density_map,
     xue2018_stationary_residual_vector,
@@ -161,6 +164,64 @@ def test_xue2018_trs_and_trsb_tangent_projectors_decompose_field() -> None:
     assert trs + trsb == pytest.approx(neutral, abs=2.0e-13)
     assert xue2018_trs_tangent_projector_vector(state, trs) == pytest.approx(trs, abs=2.0e-13)
     assert xue2018_trsb_tangent_projector_vector(state, trsb) == pytest.approx(trsb, abs=2.0e-13)
+
+
+def test_xue2018_four_term_self_energy_projector_is_idempotent() -> None:
+    state = _small_state()
+    rng = np.random.default_rng(83)
+    raw = rng.normal(size=state.h0.shape) + 1j * rng.normal(size=state.h0.shape)
+    hermitian = raw + np.swapaxes(raw.conj(), 0, 1)
+    trs = project_xue2018_full_trs(hermitian, state.mesh)
+    projected = project_xue2018_four_term_self_energy(trs)
+    assert project_xue2018_four_term_self_energy(projected) == pytest.approx(
+        projected,
+        abs=2.0e-13,
+    )
+    assert np.swapaxes(projected.conj(), 0, 1) == pytest.approx(projected, abs=2.0e-13)
+    assert xue2018_trs_residual(projected, state.mesh) < 2.0e-13
+
+
+def test_xue2018_self_energy_release_map_has_exact_endpoints() -> None:
+    state = _small_state()
+    trial = project_xue2018_full_trs(0.1 * state.h0, state.mesh)
+    full = xue2018_self_energy_release_map(
+        state,
+        trial,
+        constraint_weight=0.0,
+        thermal_energy_ry=1.0e-2,
+    )
+    constrained = xue2018_self_energy_release_map(
+        state,
+        trial,
+        constraint_weight=1.0,
+        thermal_energy_ry=1.0e-2,
+    )
+    assert full.released_self_energy == pytest.approx(
+        full.interaction_self_energy_trs,
+        abs=2.0e-13,
+    )
+    assert constrained.released_self_energy == pytest.approx(
+        constrained.interaction_self_energy_four_term,
+        abs=2.0e-13,
+    )
+    assert abs(full.number_residual) < 2.0e-13
+    assert full.full_trs_leakage_max < 2.0e-13
+    vector = pack_hermitian_matrix_field(trial)
+    residual = xue2018_self_energy_release_residual_vector(
+        state,
+        vector,
+        constraint_weight=0.5,
+        thermal_energy_ry=1.0e-2,
+    )
+    assert residual.shape == vector.shape
+    assert np.all(np.isfinite(residual))
+    with pytest.raises(ValueError, match="constraint_weight"):
+        xue2018_self_energy_release_map(
+            state,
+            trial,
+            constraint_weight=1.1,
+            thermal_energy_ry=1.0e-2,
+        )
 
 
 def test_xue2018_stationary_map_rejects_negative_temperature() -> None:
