@@ -16,6 +16,7 @@ VectorProjector = Callable[[Array], Array]
 @dataclass(frozen=True)
 class FixedPointMapSpectrum:
     eigenvalues: Array
+    eigenvectors: Array
     spectral_radius: float
     converged: bool
     root_map_residual_max: float
@@ -83,21 +84,30 @@ def leading_fixed_point_map_eigenvalues(
     operator = LinearOperator((root.size, root.size), matvec=matvec, dtype=np.float64)
     converged = True
     try:
-        values = eigs(
+        values, vectors = eigs(
             operator,
             k=int(count),
             which="LM",
             tol=float(tolerance),
             maxiter=int(max_iterations),
-            return_eigenvectors=False,
+            return_eigenvectors=True,
         )
     except ArpackNoConvergence as error:
         converged = False
         values = np.asarray(error.eigenvalues, dtype=np.complex128)
+        if error.eigenvectors is None:
+            vectors = np.zeros((root.size, values.size), dtype=np.complex128)
+        else:
+            vectors = np.asarray(error.eigenvectors, dtype=np.complex128)
     values = np.asarray(values, dtype=np.complex128)
+    vectors = np.asarray(vectors, dtype=np.complex128)
+    order = np.argsort(np.abs(values))[::-1]
+    values = values[order]
+    vectors = vectors[:, order]
     spectral_radius = float(np.max(np.abs(values), initial=0.0))
     return FixedPointMapSpectrum(
         eigenvalues=values,
+        eigenvectors=vectors,
         spectral_radius=spectral_radius,
         converged=converged,
         root_map_residual_max=root_residual,

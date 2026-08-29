@@ -19,6 +19,9 @@ def test_fixed_point_map_spectrum_recovers_leading_linear_eigenvalues() -> None:
     assert spectrum.converged
     assert spectrum.root_map_residual_max == 0.0
     assert np.sort(np.abs(spectrum.eigenvalues)) == pytest.approx([0.8, 1.2], rel=1.0e-9)
+    assert spectrum.eigenvectors.shape == (4, 2)
+    for value, vector in zip(spectrum.eigenvalues, spectrum.eigenvectors.T, strict=True):
+        assert matrix @ vector == pytest.approx(value * vector, abs=1.0e-9)
     assert spectrum.spectral_radius == pytest.approx(1.2, rel=1.0e-9)
 
 
@@ -39,4 +42,6 @@ def test_fixed_point_map_spectrum_respects_tangent_sector_projector() -> None:
         tolerance=1.0e-11,
     )
     assert spectrum.converged
+    assert spectrum.eigenvectors.shape == (4, 1)
+    assert spectrum.eigenvectors[:2, 0] == pytest.approx(0.0, abs=1.0e-10)
     assert spectrum.spectral_radius == pytest.approx(0.5, rel=1.0e-8)
