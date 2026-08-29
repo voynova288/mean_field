@@ -2,7 +2,7 @@
   "data": [
     {
       "path": "data/xue2018_fig2_branch_data.json",
-      "sha256": "4215c3b7c098bbfaac8e65910ca1215e066cea971e9c6fdc1d69e306f55abc6e"
+      "sha256": "9e077a4bd2dd5d1108fe526b72f1d9a1d8dab2e1d0aa99daddbd6cf5a4aec109"
     },
     {
       "path": "data/xue2018_fig2_stale_postflight.json",
@@ -18,7 +18,7 @@
     {
       "dataset_id": "xue2018-fig2-branch-lineage-audit-v1",
       "path": "figures/xue2018_fig2_branch_lineage_audit.png",
-      "sha256": "fd1ddffa6aaff8d06a2229a82fcc8f7a3c2db80331c65069d11d2a1479b41313"
+      "sha256": "8eaeff3d40739ab4b88251003a11b4f048331bfd57981c9923065fce32b08786"
     },
     {
       "dataset_id": "xue2018-fig2-branch-lineage-audit-v1",
@@ -28,13 +28,13 @@
     {
       "dataset_id": "xue2018-fig2-branch-lineage-audit-v1",
       "path": "figures/xue2018_fig2_paper_style_comparison.png",
-      "sha256": "016c228b377f7737c790952167ad0639aa697faa5d43870ef6c67ba5268effd6"
+      "sha256": "ac561a09f5d62694cf102440ab71674e7011f4608bc1a0561f7a2833c7f8bc98"
     }
   ],
   "full_path_branch_id": "xue2018-trs-weak-seed-normal-attractor-fullpath-v1",
   "mixed_branch_curve_forbidden": true,
   "report": "xue2018_fig2_blue_branch_report.md",
   "schema": "xue2018-fig2-artifact-manifest-v1",
-  "stationary_branch_id": "xue2018-trs-full-stationary-p21-p26-v1",
+  "stationary_branch_id": "xue2018-trs-full-stationary-p1-p26-v2",
   "strong_anchor_branch_id": "xue2018-trs-strong-attractor-p24-p26-v1"
 }

@@ -56,11 +56,11 @@ For direct visual comparison with the paper layout, the following figure uses
 the same combined order-parameter/gap presentation. The current-calculation
 panel shows the historical black/red finite-grid candidate, a complete
 62-point inventory of independently certified complete-TRS stationary roots
-as an open dashed diamond line, and the six p21--p26 points of the connected
-low stationary branch as solid blue diamonds. Every open-diamond point passes
-the full residual, TRS, and number gates, but the inventory is not claimed to
-be one connected branch. In particular, it jumps between distinct root sheets
-near p23--p24; it is not spliced with the connected p21--p26 low branch.
+as an open dashed diamond line, and the connected p1--p26 stationary branch
+as solid blue diamonds. Every open-diamond point passes the full residual,
+TRS, and number gates, but the inventory is not claimed to be one connected
+branch. The solid branch was transported sequentially from p21 through p1 and
+from p21 through p26; it is not spliced with the independent inventory.
 The 62-point certification has maximum full residual RMS / maximum
 `5.68e-10 / 3.41e-9`, zero final TR error, and maximum absolute number
 residual `1.71e-14`. Its comparison with the paper blue markers gives MAE
@@ -186,7 +186,15 @@ full unprojected residual checks
 ```
 
 we found a genuine unrestricted stationary branch with branch ID
-`xue2018-trs-full-stationary-p21-p26-v1`.
+`xue2018-trs-full-stationary-p1-p26-v2`.
+
+The branch has now been continued backward from p21 through every exact path
+point p20--p1 using 83 accepted adaptive parameter steps at `T=0`. All 26
+integer-point roots pass the full gates; the maximum residual RMS/maximum are
+`9.23e-11 / 2.13e-9`, final TR error is zero, and the minimum adjacent
+integer-point density overlap is `0.91384`. The p1--p26 comparison with the
+paper blue markers has MAE `0.32292 Ry*` and RMSE `0.39190 Ry*`. The table below
+highlights the near-closure p21--p26 segment.
 
 | Fig. 2 point | paper blue / `Ry*` | stationary grid gap / `Ry*` | local-cell off-grid diagnostic / `Ry*` |
 |---:|---:|---:|---:|
@@ -315,7 +323,7 @@ restart is not branch-identity evidence.
 
 Consequently, neither the source-motivated n≈100 historical resolution nor
 the physical n101 refinement restores the paper blue closure. This physical
-checkpoint must remain separate from the historical omitted-`q=0` p21--p26
+checkpoint must remain separate from the historical omitted-`q=0` p1--p26
 curve. It is **not continuum authority**, and it is not evidence that the
 paper blue point has been reproduced.
 
@@ -325,8 +333,9 @@ paper blue point has been reproduced.
 
 The stationary-root hypothesis was partly correct: ODA missed a real
 higher-energy full-TRS stationary branch. However, the branch found from the
-low-gap initializer is **not the paper blue curve**. Its p21--p26 gap trend is
-opposite to the paper trend, and it folds before point 27 instead of connecting
+low-gap initializer is **not the paper blue curve**. It is now certified from
+p1 through p26, but its near-closure p21--p26 gap trend is opposite to the paper
+trend, and it folds before point 27 instead of connecting
 the displayed NI-like and QSHI-like sides.
 
 A deterministic p25 inventory from eight independent complete-TRS starts

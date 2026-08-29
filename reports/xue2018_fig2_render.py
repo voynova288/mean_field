@@ -152,7 +152,7 @@ def main() -> None:
             stationary_x,
             stationary_gap,
             "current calculation",
-            "62 certified TRS roots + connected low-branch subset",
+            "62 certified TRS roots + connected branch p1--p26",
         ),
     )
     for panel_index, (axis, order_values, ground_values, blue_x, blue_values, title, subtitle) in enumerate(comparison_panels):
@@ -208,9 +208,28 @@ def main() -> None:
                     marker="D",
                     ms=4.0,
                     lw=1.2,
-                    label="certified stationary TRS p21--p26",
+                    label="connected stationary TRS p1--p26",
                 )[0],
             ]
+            fold = branch_data["stationary_trs_branch_dataset"]["continuation"]["horizontal_fold"]
+            fold_x = 22.0 + (float(fold["hybridization_ab_ry"]) - 0.2) / 0.01
+            gap_axis.plot(
+                [fold_x],
+                [float(fold["gap_grid_ry"])],
+                marker="X",
+                color="navy",
+                ms=6,
+                linestyle="none",
+                zorder=6,
+            )
+            gap_axis.annotate(
+                "fold before p27",
+                xy=(fold_x, float(fold["gap_grid_ry"])),
+                xytext=(29.0, 0.82),
+                color="navy",
+                fontsize=8,
+                arrowprops={"arrowstyle": "->", "color": "navy", "lw": 0.8},
+            )
         axis.set_xlim(0, 63)
         axis.set_ylim(-0.05, 2.30)
         gap_axis.set_ylim(-0.05, 2.85)
