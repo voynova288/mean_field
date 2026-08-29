@@ -185,6 +185,12 @@ def solve_stationary_residual(
             anderson_converged = False
             candidate = np.asarray(error.args[0], dtype=np.float64)
             tracked(candidate)
+        except OverflowError:
+            # SciPy's internal forcing-term update can overflow when a trial
+            # residual grows catastrophically. The independently tracked best
+            # finite iterate remains a valid Newton--Krylov fallback.
+            anderson_converged = False
+            candidate = best_vector.copy()
 
     candidate_residual = tracked(candidate)
     candidate_rms = float(np.sqrt(np.mean(candidate_residual**2)))
@@ -211,6 +217,8 @@ def solve_stationary_residual(
         except NoConvergence as error:
             candidate = np.asarray(error.args[0], dtype=np.float64)
             tracked(candidate)
+        except OverflowError:
+            candidate = best_vector.copy()
         tracked(candidate)
 
     final_vector = best_vector.copy()

@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+import mean_field.core.hf.stationary as stationary_module
 from mean_field.core.hf.stationary import (
     StationarySolveConfig,
     finite_difference_jacobian_vector,
@@ -92,6 +93,51 @@ def test_stationary_solver_converges_to_saddle_that_energy_descent_leaves() -> N
     assert result.converged
     assert result.residual_max < 1.0e-12
     assert result.vector == pytest.approx([1.0, -2.0], abs=1.0e-12)
+
+
+def test_stationary_solver_falls_back_after_anderson_internal_overflow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def overflow(*args: object, **kwargs: object) -> np.ndarray:
+        raise OverflowError("synthetic SciPy forcing-term overflow")
+
+    monkeypatch.setattr(stationary_module, "anderson", overflow)
+    result = solve_stationary_residual(
+        lambda vector: vector - np.asarray([1.0, -2.0]),
+        np.zeros(2),
+        config=StationarySolveConfig(
+            residual_rms_tolerance=1.0e-11,
+            residual_max_tolerance=1.0e-11,
+            anderson_max_iterations=4,
+            krylov_max_iterations=20,
+        ),
+    )
+    assert result.converged
+    assert not result.anderson_converged
+    assert result.krylov_attempted
+    assert result.vector == pytest.approx([1.0, -2.0], abs=1.0e-11)
+
+
+def test_stationary_solver_returns_best_finite_iterate_if_both_solvers_overflow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def overflow(*args: object, **kwargs: object) -> np.ndarray:
+        raise OverflowError("synthetic solver overflow")
+
+    monkeypatch.setattr(stationary_module, "anderson", overflow)
+    monkeypatch.setattr(stationary_module, "newton_krylov", overflow)
+    result = solve_stationary_residual(
+        lambda vector: vector - 1.0,
+        np.zeros(2),
+        config=StationarySolveConfig(
+            anderson_max_iterations=4,
+            krylov_max_iterations=4,
+        ),
+    )
+    assert not result.converged
+    assert result.exit_reason == "krylov_exhausted"
+    assert np.all(np.isfinite(result.vector))
+    assert result.vector == pytest.approx(np.zeros(2))
 
 
 def test_finite_difference_jacobian_vector_matches_linear_map() -> None:
