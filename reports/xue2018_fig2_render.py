@@ -149,7 +149,7 @@ def main() -> None:
             stationary_x,
             stationary_gap,
             "current calculation",
-            "historical black/red; certified TRS p21--p26 only",
+            "full weak-seed diagnostic + certified stationary subset",
         ),
     )
     for panel_index, (axis, order_values, ground_values, blue_x, blue_values, title, subtitle) in enumerate(comparison_panels):
@@ -172,15 +172,42 @@ def main() -> None:
             lw=0.8,
             label="ground gap",
         )[0]
-        blue_handle = gap_axis.plot(
-            blue_x,
-            blue_values,
-            color="blue",
-            marker="o" if panel_index == 0 else "D",
-            ms=4.0,
-            lw=0.8 if panel_index == 0 else 1.1,
-            label="TR-preserving gap",
-        )[0]
+        if panel_index == 0:
+            blue_handles = [
+                gap_axis.plot(
+                    blue_x,
+                    blue_values,
+                    color="blue",
+                    marker="o",
+                    ms=4.0,
+                    lw=0.8,
+                    label="TR-preserving gap",
+                )[0]
+            ]
+        else:
+            blue_handles = [
+                gap_axis.plot(
+                    x,
+                    stale_trs_gap,
+                    color="blue",
+                    ls="--",
+                    marker="o",
+                    markerfacecolor="white",
+                    ms=3.3,
+                    lw=1.0,
+                    alpha=0.75,
+                    label="full weak-seed diagnostic (stale)",
+                )[0],
+                gap_axis.plot(
+                    blue_x,
+                    blue_values,
+                    color="blue",
+                    marker="D",
+                    ms=4.0,
+                    lw=1.2,
+                    label="certified stationary TRS p21--p26",
+                )[0],
+            ]
         axis.set_xlim(0, 63)
         axis.set_ylim(-0.05, 2.30)
         gap_axis.set_ylim(-0.05, 2.85)
@@ -190,12 +217,13 @@ def main() -> None:
         gap_axis.tick_params(axis="y", colors="red")
         axis.grid(alpha=0.14)
         axis.set_title(f"{title}\n{subtitle}", fontsize=10)
+        legend_handles = [order_handle, ground_handle, *blue_handles]
         axis.legend(
-            [order_handle, ground_handle, blue_handle],
-            [handle.get_label() for handle in (order_handle, ground_handle, blue_handle)],
+            legend_handles,
+            [handle.get_label() for handle in legend_handles],
             frameon=False,
-            fontsize=8,
-            loc="upper left",
+            fontsize=7.5 if panel_index else 8,
+            loc="lower right" if panel_index else "upper left",
         )
     comparison_fig.suptitle(
         "Xue--MacDonald Fig. 2 paper-style comparison (no fitted scale)"
