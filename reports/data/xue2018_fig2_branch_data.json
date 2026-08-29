@@ -64,6 +64,43 @@
       "source_sha256": "e262b01bc9ade9e741c414742822c2f0c5ecdc2a326e636e8515898922cc8435",
       "warning": "Scalar chord sign changes locate initializers but do not certify full roots."
     },
+    "four_term_self_energy_release": {
+      "authority": "historical_omitted_q0_diagnostic_homotopy_not_physical_parameter",
+      "rows": [
+        {
+          "campaign_sha256": "832281a79b838fb64ab31ab50c554854972e64dd93517c7e17e77fd2b26800fe",
+          "constraint_start_full_residual_rms": 0.025403039568900623,
+          "constraint_start_gap_ry": 0.18835862673055775,
+          "endpoint_state_sha256": "234100b7e7d7d139427bb4d1f5dc06183f85f828257052425e46af1c4141831f",
+          "endpoint_vs_known_low_branch_max": 7.618991602519423e-10,
+          "endpoint_vs_known_low_branch_overlap": 0.9999999999999998,
+          "endpoint_vs_known_low_branch_rms": 2.1485379788323073e-10,
+          "full_endpoint_gap_ry": 0.14985969727709178,
+          "full_endpoint_residual_rms": 1.3625736728850235e-13,
+          "known_low_branch_state_sha256": "281ff67b54fb4fc859d11434f8c7ac0e65d67343d8412cfbe314251bf2f8d911",
+          "minimum_step_overlap": 0.999924903613614,
+          "point": 24,
+          "weights_completed": 14
+        },
+        {
+          "campaign_sha256": "2488011990c07b57fd9fea59a60e7ba0295326f6004a1df787f72f66bb687848",
+          "constraint_start_full_residual_rms": 0.02680250157936762,
+          "constraint_start_gap_ry": 0.2563461064618674,
+          "endpoint_state_sha256": "3d960573a4c67741521e900c833b8431670ef0f310631d4de2472fada26c3cef",
+          "endpoint_vs_known_low_branch_max": 5.054156768714727e-08,
+          "endpoint_vs_known_low_branch_overlap": 0.9999999999999991,
+          "endpoint_vs_known_low_branch_rms": 1.4250110319096152e-08,
+          "full_endpoint_gap_ry": 0.20984958340313137,
+          "full_endpoint_residual_rms": 6.543527402444156e-14,
+          "known_low_branch_state_sha256": "a7d88bf21fee77874622630886367d474ffd34bb2eaf414a6c55339272ceeca9",
+          "minimum_step_overlap": 0.9999085379708764,
+          "point": 25,
+          "weights_completed": 14
+        }
+      ],
+      "source_sha256": "3fff880b58f9304161468c77952a50fb2a518b613b78e6952df46d763d20c256",
+      "verdict": "At p24 and p25, the literal four-term constrained roots release continuously to the already known full low-gap stationary branch. They do not define a separate paper-like branch."
+    },
     "historical_offgrid_diagnostic": {
       "authority": "diagnostic_nonunique_continuous_extension_of_omitted_q0_lane",
       "source_sha256": "f82c5a31419af6a891820cb50bf59180d99fdfe72aca4e364da38559acc571d5",

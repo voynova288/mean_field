@@ -124,8 +124,29 @@ off-grid estimate `0.0619796 Ry*`. However its full residual RMS is about
 
 Within the literal four-term constrained ansatz, Newton--Krylov finds a p24
 root with residual RMS `2.9e-15` and gap `0.18836 Ry*`. A direct full-space
-restart from that constrained root falls into the normal basin; this does not
-prove that the corresponding unrestricted saddle is absent.
+restart from that constrained root falls into the normal basin; this reflects
+the instability and narrow basin rather than the absence of a continuation.
+
+A self-energy constraint-release homotopy now resolves this ambiguity:
+
+\[
+\Sigma=\left[(1-\lambda)\mathcal P_{\rm TRS}
++\lambda\mathcal P_{4}\right]\Sigma_{\rm int}[D(H_0+\Sigma)],
+\qquad \lambda:1\to0.
+\]
+
+Here `lambda=1` exactly reproduces the four-term constrained equation and
+`lambda=0` is the complete-TRS self-energy equation. At both p24 and p25 all
+14 continuation weights converged without a fold, with minimum adjacent-state
+overlap above `0.99990`. The endpoints are the already identified low-gap full
+stationary roots:
+
+| point | constrained gap | released full gap | endpoint overlap with low-gap branch |
+|---:|---:|---:|---:|
+| 24 | `0.18836` | `0.14986` | `0.9999999999999998` |
+| 25 | `0.25635` | `0.20985` | `0.9999999999999991` |
+
+Thus the literal constrained roots do not hide a separate paper-like branch.
 
 ## Full stationary branch now found
 
@@ -181,7 +202,9 @@ found only three already known root classes: one normal-like root, five
 strong-TRS convergences, and two low-gap stationary-branch convergences. A
 full density-chord scan likewise has only the endpoint sign changes and one
 interior initializer interval. This is not an exhaustive nonexistence proof,
-but no additional paper-like near-zero p25 root was found.
+but no additional paper-like near-zero p25 root was found. The exact
+four-term constrained roots have also been excluded as a separate candidate:
+they release continuously into this same low-gap stationary branch.
 
 Therefore the remaining problem is no longer merely “implement a root
 solver.” We must determine whether a disconnected branch exists outside the
@@ -200,7 +223,8 @@ Implemented and validated:
 3. Anderson/Newton--Krylov stationary solving without physical-energy descent;
 4. finite-temperature homotopy to the zero-temperature rank-two map;
 5. pseudo-arclength continuation through a verified fold;
-6. full residual, TR, number, overlap, energy, and local fixed-map stability diagnostics.
+6. full residual, TR, number, overlap, energy, and local fixed-map stability diagnostics;
+7. exact four-term-to-full self-energy constraint release at p24 and p25.
 
 Still required:
 
