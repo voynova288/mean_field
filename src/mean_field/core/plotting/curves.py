@@ -45,12 +45,14 @@ def plot_exact_grid_curve_bundle(
     if comparison is not None:
         raster = comparison.raster
         lineage = comparison.plan.selection_lineage
-        raster_label = (
-            "held-out raster evaluation"
-            if lineage.solver_target_isolated
-            and lineage.raster_evaluation_postfreeze
-            else "plan-bound raster evaluation (held-out status not established)"
-        )
+        if lineage.criterion_lineage_satisfied:
+            raster_label = "held-out raster evaluation"
+        elif lineage.solver_target_isolated and lineage.raster_evaluation_postfreeze:
+            raster_label = (
+                "postfreeze nonblind raster evaluation — evidence only"
+            )
+        else:
+            raster_label = "plan-bound raster evaluation (held-out status not established)"
         ax.errorbar(
             raster.x,
             raster.y,

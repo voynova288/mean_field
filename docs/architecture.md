@@ -207,7 +207,8 @@ indices, observable conventions, and terminal evaluations. The common layer
 then provides immutable all-computed-terminal curves, exact-node features,
 all-curve spread, hash-bound plan-bound raster evaluation, plotting, and full
 artifact roundtrip. Held-out status is reported only when the evaluation plan
-establishes target isolation and post-freeze lineage.
+establishes target isolation, post-freeze evaluation, preregistration, and blind
+contract selection; post-freeze nonblind comparisons remain evidence-only.
 
 This layer does not run HF, define a physical branch universe, select a best
 branch, infer a chemical potential, or grant reproduction/UV/unrestricted/

@@ -706,5 +706,26 @@ def test_plot_accepts_only_bound_comparison_and_labels_value_convention() -> Non
     assert "held-out raster evaluation" in axis.labels
     assert "output" in axis.ylabel
     assert comparison.plan.value_semantics in axis.title
+
+    nonblind_plan = _plan(
+        bundle,
+        raster,
+        lineage=SelectionLineageReceipt(
+            solver_target_isolated=True,
+            raster_evaluation_postfreeze=True,
+            contract_preregistered_before_final_run=True,
+            contract_selected_blind_to_prior_target_comparison=False,
+        ),
+    )
+    nonblind_comparison = compare_raster_to_all_branches(
+        bundle, nonblind_plan, raster
+    )
+    nonblind_axis = _Axis()
+    plot_exact_grid_curve_bundle(
+        bundle, comparison=nonblind_comparison, ax=nonblind_axis
+    )
+    assert "postfreeze nonblind raster evaluation — evidence only" in nonblind_axis.labels
+    assert "held-out raster evaluation" not in nonblind_axis.labels
+
     with pytest.raises(TypeError, match="bound RasterBundleComparison"):
         plot_exact_grid_curve_bundle(bundle, comparison=raster, ax=_Axis())  # type: ignore[arg-type]

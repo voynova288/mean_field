@@ -4,8 +4,10 @@
 
 `mean_field.core.curve_workflow` is the system-independent path from a validated
 solver result to auditable one-dimensional curves and optional plan-bound raster
-comparison. A raster is called held out only when its evaluation plan carries
-matching target-isolation and post-freeze lineage.  A physical system supplies a thin adapter; the common layer owns:
+comparison. A raster is called held out only when its evaluation plan records
+target isolation, post-freeze evaluation, preregistration before the final run,
+and blind contract selection. Post-freeze but nonblind comparisons remain
+explicitly labeled evidence-only.  A physical system supplies a thin adapter; the common layer owns:
 
 - finite supplied-tree structural closure;
 - exactly-once evaluation of every computed terminal;
