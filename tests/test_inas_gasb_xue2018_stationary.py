@@ -14,6 +14,7 @@ from mean_field.systems.inas_gasb.xue2018_hf import (
 )
 from mean_field.systems.inas_gasb.xue2018_stationary import (
     Xue2018StationaryConfig,
+    project_xue2018_exchange_form_self_energy,
     project_xue2018_four_term_self_energy,
     project_xue2018_neutral_density_delta,
     solve_xue2018_stationary_root,
@@ -179,6 +180,30 @@ def test_xue2018_four_term_self_energy_projector_is_idempotent() -> None:
     )
     assert np.swapaxes(projected.conj(), 0, 1) == pytest.approx(projected, abs=2.0e-13)
     assert xue2018_trs_residual(projected, state.mesh) < 2.0e-13
+
+
+def test_xue2018_exchange_form_projector_is_a_two_channel_subset() -> None:
+    state = _small_state()
+    rng = np.random.default_rng(89)
+    raw = rng.normal(size=state.h0.shape) + 1j * rng.normal(size=state.h0.shape)
+    hermitian = raw + np.swapaxes(raw.conj(), 0, 1)
+    trs = project_xue2018_full_trs(hermitian, state.mesh)
+    projected = project_xue2018_exchange_form_self_energy(trs)
+    assert project_xue2018_exchange_form_self_energy(projected) == pytest.approx(
+        projected,
+        abs=2.0e-13,
+    )
+    assert project_xue2018_four_term_self_energy(projected) == pytest.approx(
+        projected,
+        abs=2.0e-13,
+    )
+    assert np.swapaxes(projected.conj(), 0, 1) == pytest.approx(projected, abs=2.0e-13)
+    assert xue2018_trs_residual(projected, state.mesh) < 2.0e-13
+    projected_h0 = project_xue2018_exchange_form_self_energy(state.h0)
+    off_diagonal = projected_h0.copy()
+    for index in range(4):
+        off_diagonal[index, index, :] = 0.0
+    assert np.max(np.abs(off_diagonal)) < 2.0e-13
 
 
 def test_xue2018_self_energy_release_map_has_exact_endpoints() -> None:

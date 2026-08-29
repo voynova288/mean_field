@@ -119,8 +119,10 @@ The mismatch is not explained by:
 - plotting, broadening, smoothing, or coordinate adjustment.
 
 The saved p24 strong solution has time-reversal error approximately
-`1.9e-13 Ry*`. Projecting the interaction to the paper's literal four-term
-ansatz still gives a stable p24 gap near `0.9833 Ry*`.
+`1.9e-13 Ry*`. Projecting the interaction onto the diagnostic four-channel
+support suggested by the paper's displayed Hamiltonian gives a stable p24 gap
+near `0.9833 Ry*`. This pointwise projector is stronger than the source's
+Gamma-point TRS condition and is not the literal paper equation.
 
 ## Why ODA is not decisive for the blue branch
 
@@ -142,8 +144,8 @@ A normal-to-strong density chord contains a low-gap state near
 off-grid estimate `0.0619796 Ry*`. However its full residual RMS is about
 `0.0700`, so it is an initializer, not an HF fixed point.
 
-Within the literal four-term constrained ansatz, Newton--Krylov finds a p24
-root with residual RMS `2.9e-15` and gap `0.18836 Ry*`. A direct full-space
+Within that diagnostic four-channel-support constraint, Newton--Krylov finds
+a p24 root with residual RMS `2.9e-15` and gap `0.18836 Ry*`. A direct full-space
 restart from that constrained root falls into the normal basin; this reflects
 the instability and narrow basin rather than the absence of a continuation.
 
@@ -155,8 +157,8 @@ A self-energy constraint-release homotopy now resolves this ambiguity:
 \qquad \lambda:1\to0.
 \]
 
-Here `lambda=1` exactly reproduces the four-term constrained equation and
-`lambda=0` is the complete-TRS self-energy equation. At both p24 and p25 all
+Here `lambda=1` exactly reproduces the declared diagnostic four-channel
+equation and `lambda=0` is the complete-TRS self-energy equation. At both p24 and p25 all
 14 continuation weights converged without a fold, with minimum adjacent-state
 overlap above `0.99990`. The endpoints are the already identified low-gap full
 stationary roots:
@@ -343,10 +345,11 @@ found only three already known root classes: one normal-like root, five
 strong-TRS convergences, and two low-gap stationary-branch convergences. A
 full density-chord scan likewise has only the endpoint sign changes and one
 interior initializer interval. This is not an exhaustive nonexistence proof,
-but no additional paper-like near-zero p25 root was found. The exact four-term constrained roots have also been excluded as a separate
-candidate: the low constrained root class releases into the low-gap stationary
-branch, while the higher constrained root class releases into the strong-TRS
-branch.
+but no additional paper-like near-zero p25 root was found. The tested
+four-channel-support constrained roots have been classified, but this does not
+exclude every source-compatible constrained branch: the low constrained root
+class releases into the low-gap stationary branch, while the higher constrained
+root class releases into the strong-TRS branch.
 
 A follow-up branch-switching search used the leading complete-TRS fixed-map
 modes of the p25 low branch (`1.79209` twice, `1.41399`, and a near-unit mode).
@@ -385,7 +388,7 @@ Implemented and validated:
 4. finite-temperature homotopy to the zero-temperature rank-two map;
 5. pseudo-arclength continuation through a verified fold;
 6. full residual, TR, number, overlap, energy, and local fixed-map stability diagnostics;
-7. exact four-term-to-full self-energy constraint release at p24 and p25.
+7. exact diagnostic four-channel-to-full self-energy constraint release at p24 and p25.
 
 Still required:
 

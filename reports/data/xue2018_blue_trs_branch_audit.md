@@ -36,9 +36,11 @@ points 24--25 and then reopens.
 
 At p24 the full solution contains the expected `0z`, `zx`, `0y`, and `yy`
 terms, plus finite odd-k `x0` and `yz` components. The Hamiltonian remains
-TR-invariant. Projecting the interaction onto the literal four-term paper
-ansatz removes these terms but gives a converged gap `0.9833 Ry*`, so they are
-not the cause of the missing closure.
+TR-invariant. Projecting the interaction onto a diagnostic four-channel
+support removes these terms but gives a converged gap `0.9833 Ry*`, so they are
+not the cause of the missing closure within that declared constraint. The
+pointwise projector is stronger than the paper's Gamma-point condition and is
+not source-equivalent.
 
 ### 3. Stable-root and source probes
 
@@ -51,7 +53,7 @@ removed to repair the blue curve.
 
 ### 4. Constrained unstable fixed points
 
-The literal four-term ansatz has additional unstable roots. Anderson followed
+The diagnostic four-channel-support constraint has additional unstable roots. Anderson followed
 by Newton--Krylov converged an interior p24 root with
 
 - residual RMS `2.9e-15`;

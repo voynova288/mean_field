@@ -40,6 +40,12 @@ _XUE2018_FOUR_TERM_OPERATORS = np.asarray(
         np.kron(_PAULI_Y, _PAULI_Y),
     ]
 )
+_XUE2018_EXCHANGE_FORM_OPERATORS = np.asarray(
+    [
+        np.kron(_PAULI_0, _PAULI_Z),
+        np.kron(_PAULI_Y, _PAULI_Y),
+    ]
+)
 
 
 @dataclass(frozen=True)
@@ -143,14 +149,7 @@ def _hermitize_xue2018_interaction(interaction_raw: Array) -> tuple[Array, float
     return 0.5 * (raw + np.swapaxes(raw.conj(), 0, 1)), error
 
 
-def project_xue2018_four_term_self_energy(self_energy: Array) -> Array:
-    """Project onto the literal four Pauli channels used by the paper ansatz.
-
-    The basis ordering is ``(c up, v up, c down, v down)``, so operators are
-    ``spin Pauli ⊗ band Pauli``. This projector acts on a self-energy field,
-    not on a density field.
-    """
-
+def _project_xue2018_pauli_support(self_energy: Array, operators: Array) -> Array:
     field = np.asarray(self_energy, dtype=np.complex128)
     if field.ndim != 3 or field.shape[:2] != (4, 4):
         raise ValueError("self_energy must have shape (4, 4, nk)")
@@ -163,14 +162,38 @@ def project_xue2018_four_term_self_energy(self_energy: Array) -> Array:
     coefficients = np.asarray(
         [
             np.einsum("ab,bak->k", operator, field, optimize=True).real / 4.0
-            for operator in _XUE2018_FOUR_TERM_OPERATORS
+            for operator in operators
         ]
     )
-    return np.einsum(
-        "iab,ik->abk",
-        _XUE2018_FOUR_TERM_OPERATORS,
-        coefficients,
-        optimize=True,
+    return np.einsum("iab,ik->abk", operators, coefficients, optimize=True)
+
+
+def project_xue2018_four_term_self_energy(self_energy: Array) -> Array:
+    """Project onto a diagnostic four-channel self-energy support.
+
+    The channels mirror the four terms displayed in the paper's schematic
+    TRS-nematic Hamiltonian, but the pointwise field projection is stronger
+    than the source's Gamma-point condition and does not enforce the displayed
+    radial/angular coefficient forms. It is therefore a constrained diagnostic,
+    not the literal paper equation.
+    """
+
+    return _project_xue2018_pauli_support(self_energy, _XUE2018_FOUR_TERM_OPERATORS)
+
+
+def project_xue2018_exchange_form_self_energy(self_energy: Array) -> Array:
+    """Project interaction self-energy onto ``s0 tau_z`` and ``s_y tau_y``.
+
+    This leaves the paper's displayed ``A k_x s_z tau_x - A k_y s0 tau_y``
+    terms entirely in the bare Hamiltonian while retaining an interaction-
+    renormalized band splitting and antisymmetric opposite-spin exchange.
+    It is a source-shaped constrained diagnostic, not an unrestricted Eq. (5)
+    solution and not a claim that the paper imposed this projection numerically.
+    """
+
+    return _project_xue2018_pauli_support(
+        self_energy,
+        _XUE2018_EXCHANGE_FORM_OPERATORS,
     )
 
 
@@ -254,9 +277,9 @@ def xue2018_self_energy_release_map(
     constraint_weight: float,
     thermal_energy_ry: float,
 ) -> Xue2018SelfEnergyReleaseMap:
-    """Release the literal four-term self-energy constraint continuously.
+    """Release the diagnostic four-channel self-energy constraint continuously.
 
-    With ``constraint_weight=1`` this is exactly the paper-ansatz self-energy
+    With ``constraint_weight=1`` this is the declared diagnostic self-energy
     map ``P4 Sigma_int[D(H0+Sigma)]``. With weight zero it is the complete-TRS
     self-energy map. Intermediate values define a diagnostic homotopy; they
     are not an additional physical interaction parameter.
@@ -329,7 +352,7 @@ def xue2018_self_energy_release_residual_vector(
     constraint_weight: float,
     thermal_energy_ry: float,
 ) -> Array:
-    """Return the packed residual of the four-term-to-full release homotopy."""
+    """Return the packed residual of the four-channel-to-full release homotopy."""
 
     self_energy = unpack_hermitian_matrix_field(
         vector,
@@ -547,6 +570,7 @@ __all__ = [
     "Xue2018SelfEnergyReleaseMap",
     "Xue2018StationaryConfig",
     "Xue2018StationaryResult",
+    "project_xue2018_exchange_form_self_energy",
     "project_xue2018_four_term_self_energy",
     "project_xue2018_neutral_density_delta",
     "run_xue2018_temperature_homotopy",
