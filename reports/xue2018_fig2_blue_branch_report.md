@@ -175,6 +175,33 @@ continuation was also released. Its gap evolves from `0.86651 Ry*` to
 map respectively to the low-gap stationary branch and the strong-TRS branch.
 Neither hides a separate paper-like branch.
 
+## Source-shaped constraint and Gamma-seed follow-up
+
+A renewed source audit narrows the authority of the preceding calculation.
+The paper states the unrestricted momentum-dependent Fock equation and only a
+Gamma-point condition for the higher-energy TRS solution. Therefore the
+pointwise `P4` projector is a four-channel-support diagnostic, not the literal
+paper constraint.
+
+The displayed schematic Hamiltonian nevertheless motivates a distinct `P2`
+diagnostic in which the interaction self-energy retains only `s0 tau_z` and
+`s_y tau_y`, leaving the two `A k` terms entirely in `H0`. Eight p25 starts find
+only a zero-X root (gap `0.59122 Ry*`) and sign-related nonzero-X roots (gap
+`1.52444 Ry*`). These constrained sheets continue through p27, with gaps
+`0.64200 Ry*` and `1.45258 Ry*`, but their unrestricted full residual RMS values
+are `0.13886` and `0.08418`. Continuous release of either P2 root to the full
+TRS equation ends at the same normal p27 root: gap `1.921314 Ry*` and density
+overlap `0.9999999999999828` with the independently converged normal state.
+Thus the schematic exchange-form constraint does not supply the paper branch.
+
+A separate complete-TRS basin test used Gamma-only and Gaussian-localized
+antisymmetric seeds, reflecting the commented source description of iteration
+from the Gamma-point relation. At p25 the accepted endpoints are only the
+known normal root (`1.85099 Ry*`) and known low branch (`0.20985 Ry*`). At p27
+all accepted localized starts reach the normal root. The broadest p27 Gaussian
+stalls near the known fold with gap `0.53005 Ry*` but full residual RMS
+`2.48e-4`, so it is not promoted. No new unrestricted p27 root is found.
+
 ## Full stationary branch now found
 
 Using the low-gap chord only as an initializer, followed by
@@ -388,19 +415,20 @@ Implemented and validated:
 4. finite-temperature homotopy to the zero-temperature rank-two map;
 5. pseudo-arclength continuation through a verified fold;
 6. full residual, TR, number, overlap, energy, and local fixed-map stability diagnostics;
-7. exact diagnostic four-channel-to-full self-energy constraint release at p24 and p25.
+7. exact diagnostic four-channel-to-full self-energy constraint release at p24 and p25;
+8. source-shaped two-channel p25--p27 continuation/release and Gamma-localized
+   complete-TRS basin tests.
 
 Still required:
 
-1. extend branch enumeration beyond the completed p25 eigenmode/deflation and
-   p27 endpoint/fold-sheet searches, especially with additional deterministic
-   complete-TRS seeds and symmetry-orbit-aware deflation;
+1. author code/data or an explicit historical cutoff, self-cell, and
+   constrained-solver prescription; further untargeted seed scans now have low
+   discriminating value;
 2. determine whether a controlled UV/reference closure can remove the
    demonstrated physical-window drift without fitting the paper, and broaden
    the off-grid search beyond the current saved-grid minimum cell;
 3. continue the physical stationary branch only after that regulator gate;
-4. an energy-Hessian or equivalent thermodynamic stability classification;
-5. author code/data or an explicit historical constrained-solver prescription.
+4. an energy-Hessian or equivalent thermodynamic stability classification.
 
 A historical omitted-`q=0` node rule has no unique continuous arbitrary-k
 extension. Its mesh-node gaps must remain labeled historical; continuous gap

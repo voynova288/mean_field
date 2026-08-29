@@ -2166,6 +2166,239 @@
     "source_sha256": "b0b21e677c88d3a806811da0c8f112973c4a3ce0f8f7d370b297f24322f2e3e2",
     "status": "n_approximately_100_does_not_restore_paper_blue_closure"
   },
+  "source_shaped_trs_followup": {
+    "authority": "historical_regulator_stationary_diagnostics",
+    "exchange_form_constraint": {
+      "definition": "Sigma_int -> P_{0z,yy} Sigma_int",
+      "p25_cases": [
+        {
+          "accepted": true,
+          "constrained_residual_rms": 3.3263743148553745e-14,
+          "full_residual_rms": 0.13023541533102392,
+          "gap_ry": 0.5912161370089102,
+          "seed": "constant_X_+0.5",
+          "state_sha256": "f41dba3469c95da9c27e16da53b9b7e05355372164ca1bc9f71037a632a109ab",
+          "x_gamma_ry": -6.2558536489946285e-18
+        },
+        {
+          "accepted": true,
+          "constrained_residual_rms": 5.767560974219243e-10,
+          "full_residual_rms": 0.07723809943104636,
+          "gap_ry": 1.5244438076726023,
+          "seed": "constant_X_+1.5",
+          "state_sha256": "13539ae215143164c0ffe153f4783ffa184b419fb4b61b24f6dee7e5b9533c6d",
+          "x_gamma_ry": 1.1406696229192692
+        },
+        {
+          "accepted": true,
+          "constrained_residual_rms": 3.453477280045919e-14,
+          "full_residual_rms": 0.13023541533102403,
+          "gap_ry": 0.5912161370089112,
+          "seed": "constant_X_-0.5",
+          "state_sha256": "618c554da6166f31dda9f460e7a836900388a86601507759b56b11c2baa96935",
+          "x_gamma_ry": -1.9771048510337206e-16
+        },
+        {
+          "accepted": true,
+          "constrained_residual_rms": 5.767560976954012e-10,
+          "full_residual_rms": 0.07723809943104636,
+          "gap_ry": 1.5244438076726028,
+          "seed": "constant_X_-1.5",
+          "state_sha256": "ed355b60731351111ff73e7b7571d96ce09991824d398c1da8b97a5715dae49e",
+          "x_gamma_ry": -1.1406696229192697
+        },
+        {
+          "accepted": true,
+          "constrained_residual_rms": 3.291397361392491e-14,
+          "full_residual_rms": 0.13023541533102392,
+          "gap_ry": 0.5912161370089097,
+          "seed": "full_low",
+          "state_sha256": "f2b9a5073c72fc08f847424f7c7599377547bbf437707a1f920b1a0a78e1278f",
+          "x_gamma_ry": -2.1075990756920116e-16
+        },
+        {
+          "accepted": true,
+          "constrained_residual_rms": 2.299694390605288e-10,
+          "full_residual_rms": 0.13023541534209845,
+          "gap_ry": 0.5912161372242096,
+          "seed": "normal_oda",
+          "state_sha256": "ae31e6052bd99a816f6924f7205df95061b83bfd05c02d6069dcc22aeac09e96",
+          "x_gamma_ry": 2.1309793107546435e-12
+        },
+        {
+          "accepted": true,
+          "constrained_residual_rms": 2.333699374929844e-11,
+          "full_residual_rms": 0.07723809940116101,
+          "gap_ry": 1.524443810579907,
+          "seed": "p4_high",
+          "state_sha256": "87d7e56e95fbc55906321b768d426054d5d91eb29ccabc69688f3c031a5fc6cf",
+          "x_gamma_ry": -1.140669620813211
+        },
+        {
+          "accepted": true,
+          "constrained_residual_rms": 2.886349689953005e-14,
+          "full_residual_rms": 0.13023541533102365,
+          "gap_ry": 0.5912161370089071,
+          "seed": "p4_low",
+          "state_sha256": "7553db09956ccd2d5fb0be8dd41220c9090b55f89c6085115e6b30b8bcc9d3e6",
+          "x_gamma_ry": -1.3657056398433968e-16
+        }
+      ],
+      "p27_release": [
+        {
+          "class": "zero_X",
+          "constrained_gap_ry": 0.6419973768257343,
+          "constrained_residual_rms": 7.37918564113339e-13,
+          "endpoint_overlap_with_normal_oda": 0.9999999999999828,
+          "endpoint_state_sha256": "985c724ba6cd5de1ee5e035d6a94317e48ffcf4e1fd88041010b3bbcd11cef0a",
+          "minimum_release_overlap": 0.980311416845523,
+          "released_full_residual_rms": 8.410686545466664e-15,
+          "released_gap_ry": 1.9213143621946702,
+          "unrestricted_full_residual_rms_at_constraint": 0.13885753019406766
+        },
+        {
+          "class": "nonzero_X",
+          "constrained_gap_ry": 1.4525760439786342,
+          "constrained_residual_rms": 3.551823389979205e-11,
+          "endpoint_overlap_with_normal_oda": 0.9999999999999828,
+          "endpoint_state_sha256": "7dfc337f352561e3950f9736f712a279634c02710ba3332d6b617975d930c9d3",
+          "minimum_release_overlap": 0.640660100504909,
+          "released_full_residual_rms": 1.320408783307892e-11,
+          "released_gap_ry": 1.921314362137393,
+          "unrestricted_full_residual_rms_at_constraint": 0.08418157187702789
+        }
+      ],
+      "verdict": "P2 has exact constrained roots through p27, but their unrestricted residuals are O(1e-1) and both zero-X and nonzero-X classes release to the known normal p27 root."
+    },
+    "gamma_profile_full_trs_multistart": {
+      "cases": [
+        {
+          "accepted": true,
+          "exit_reason": "full_stationary_tolerance",
+          "full_residual_rms": 3.3156679373833064e-10,
+          "gap_ry": 1.8509934968897095,
+          "point": 25,
+          "seed": "gamma_amp0.5",
+          "state_sha256": "58236f990e3ade9889f97ec2292e7322a460b757cbaf98c61f897422f9f61e3b",
+          "trs_nematic_gamma_abs_ry": 8.535135563461094e-10
+        },
+        {
+          "accepted": false,
+          "exit_reason": "projected_root_has_full_space_residual",
+          "full_residual_rms": 1.3187781936458141e-09,
+          "gap_ry": 1.8509934508724657,
+          "point": 25,
+          "seed": "gamma_amp1.5",
+          "state_sha256": "9b327af7ce30115dba3a10e7cfd59d08a373d1cca8bea066d50ed5dd779feaea",
+          "trs_nematic_gamma_abs_ry": 6.339502107187056e-08
+        },
+        {
+          "accepted": true,
+          "exit_reason": "full_stationary_tolerance",
+          "full_residual_rms": 5.268878277222272e-10,
+          "gap_ry": 1.8509934776615076,
+          "point": 25,
+          "seed": "gamma_amp3.0",
+          "state_sha256": "336cb30456e5ddd8daf5392243985bd5829bb928138c32085e629c1754ecb273",
+          "trs_nematic_gamma_abs_ry": 2.4483198371709777e-08
+        },
+        {
+          "accepted": true,
+          "exit_reason": "full_stationary_tolerance",
+          "full_residual_rms": 3.2316384892385977e-10,
+          "gap_ry": 1.850993496886629,
+          "point": 25,
+          "seed": "gaussian_w0.1_amp1.5",
+          "state_sha256": "1c0b046ac84a1616f263189125aa8d1043cdf4e6342673cecc36f88fb646d73b",
+          "trs_nematic_gamma_abs_ry": 2.1003420059209386e-09
+        },
+        {
+          "accepted": true,
+          "exit_reason": "full_stationary_tolerance",
+          "full_residual_rms": 8.093663666488864e-10,
+          "gap_ry": 1.850993485387559,
+          "point": 25,
+          "seed": "gaussian_w0.3_amp1.5",
+          "state_sha256": "b1eb0f2378e42333f00ae57ccd55a94545a5631915965b7dbb91e0895fa2597a",
+          "trs_nematic_gamma_abs_ry": 1.655182294827583e-08
+        },
+        {
+          "accepted": true,
+          "exit_reason": "full_stationary_tolerance",
+          "full_residual_rms": 4.412767038361381e-13,
+          "gap_ry": 0.20984958339952867,
+          "point": 25,
+          "seed": "gaussian_w0.6_amp1.5",
+          "state_sha256": "18e8e963c964d7e17d6ab1e8472bb28cf064a29b5c2ea61e141b853c8cc5e829",
+          "trs_nematic_gamma_abs_ry": 1.5479096185806676
+        },
+        {
+          "accepted": true,
+          "exit_reason": "full_stationary_tolerance",
+          "full_residual_rms": 7.47600948738743e-14,
+          "gap_ry": 1.921314362194403,
+          "point": 27,
+          "seed": "gamma_amp0.5",
+          "state_sha256": "7effee64560e6267a354ca79337a39d4552224cea313313a9e5040348d1928cb",
+          "trs_nematic_gamma_abs_ry": 7.8564048479222685e-16
+        },
+        {
+          "accepted": true,
+          "exit_reason": "full_stationary_tolerance",
+          "full_residual_rms": 7.482630127507282e-14,
+          "gap_ry": 1.9213143621943987,
+          "point": 27,
+          "seed": "gamma_amp1.5",
+          "state_sha256": "56544c0226d74323dfe31742ec78948d2c7a442ccb24105329f769acf2267127",
+          "trs_nematic_gamma_abs_ry": 8.665420904200894e-16
+        },
+        {
+          "accepted": true,
+          "exit_reason": "full_stationary_tolerance",
+          "full_residual_rms": 4.952872499358726e-10,
+          "gap_ry": 1.9213143564320434,
+          "point": 27,
+          "seed": "gamma_amp3.0",
+          "state_sha256": "26c6f5555655667549c590024b925697f430f174756a737385571e46578d60e5",
+          "trs_nematic_gamma_abs_ry": 8.63816727115567e-09
+        },
+        {
+          "accepted": true,
+          "exit_reason": "full_stationary_tolerance",
+          "full_residual_rms": 7.435747668300761e-14,
+          "gap_ry": 1.92131436219442,
+          "point": 27,
+          "seed": "gaussian_w0.1_amp1.5",
+          "state_sha256": "26bfbece2b34023f21d5a2a0d78cdeaa0863c24afe23aacaca2d73fbe33933ad",
+          "trs_nematic_gamma_abs_ry": 1.7509662880348353e-16
+        },
+        {
+          "accepted": false,
+          "exit_reason": "projected_root_has_full_space_residual",
+          "full_residual_rms": 1.1782803894930519e-09,
+          "gap_ry": 1.9213143533654982,
+          "point": 27,
+          "seed": "gaussian_w0.3_amp1.5",
+          "state_sha256": "49a3b0524297c15e6a1c9bc20aeb5a7ebf4e3c4dff18f49211f394f7381cb161",
+          "trs_nematic_gamma_abs_ry": 7.013468176837456e-09
+        },
+        {
+          "accepted": false,
+          "exit_reason": "krylov_exhausted",
+          "full_residual_rms": 0.00024765046204288017,
+          "gap_ry": 0.5300465165968302,
+          "point": 27,
+          "seed": "gaussian_w0.6_amp1.5",
+          "state_sha256": "704d922df98de5bd63f047f5f0a3898aff7a7c54db0eb63ceca3ca3156fc5e72",
+          "trs_nematic_gamma_abs_ry": 1.8040328743783227
+        }
+      ],
+      "verdict": "Gamma-only and narrow Gaussian seeds converge to the known normal roots. The broad p25 Gaussian reaches the known low branch; the broad p27 Gaussian stalls near the fold with RMS 2.48e-4 and is not promoted."
+    },
+    "overall_verdict": "Neither the source-shaped P2 constraint nor source-motivated Gamma-localized full-TRS seeds reproduce the paper blue branch. No new unrestricted p27 root passes the full residual gates.",
+    "source_correction": "The P4 pointwise four-channel projector is not source-equivalent. Full TRS is the unrestricted paper-equation authority. P2 is a separate source-shaped diagnostic retaining interaction channels s0 tau_z and s_y tau_y while keeping A k terms bare.",
+    "source_sha256": "7a11c7e3849d25bb66f5ae5bd738c665a9cf2b63017f25268aab92c5a3b72d53"
+  },
   "stationary_trs_branch_dataset": {
     "branch_id": "xue2018-trs-full-stationary-p1-p26-v2",
     "continuation": {
