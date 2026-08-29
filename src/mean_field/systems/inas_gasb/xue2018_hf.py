@@ -76,6 +76,8 @@ class Xue2018ContinuumGapResult:
     optimizer_success: bool
     optimizer_message: str
     optimizer_evaluations: int
+    optimizer_starts: int
+    selected_start_kappa_ab_inv: FloatArray
     self_cell_quadrature_order: int
 
 
@@ -500,8 +502,16 @@ def xue2018_minimize_continuum_gap(
     initial_kappa_ab_inv: FloatArray | None = None,
     self_cell_quadrature_order: int | None = None,
     max_iterations: int = 300,
+    seed_grid_size: int = 5,
 ) -> Xue2018ContinuumGapResult:
-    """Minimize the direct gap inside one explicitly fixed physical mesh cell."""
+    """Minimize the direct gap inside one fixed cell from a seed grid.
+
+    A single local L-BFGS-B start is not a sufficient cell-minimum gate: tiny
+    finite-difference differences can send it to distinct boundary/interior
+    basins. Every point of the deterministic ``seed_grid_size`` square grid,
+    plus an optional distinct caller seed, is refined and the lowest result is
+    returned with its selected-start provenance.
+    """
 
     _require_xue2018_physical_regulator(state)
     index = int(singular_cell_index)
@@ -517,6 +527,8 @@ def xue2018_minimize_continuum_gap(
     )
     if initial.shape != (2,) or np.any(initial < lower) or np.any(initial > upper):
         raise ValueError("initial_kappa_ab_inv must lie inside the selected cell")
+    if int(seed_grid_size) != seed_grid_size or seed_grid_size < 2:
+        raise ValueError("seed_grid_size must be an integer >= 2")
 
     quadrature_order = (
         state.self_cell_quadrature_order
@@ -533,13 +545,34 @@ def xue2018_minimize_continuum_gap(
             self_cell_quadrature_order=quadrature_order,
         )
 
-    result = minimize(
-        objective,
-        initial,
-        method="L-BFGS-B",
-        bounds=list(zip(lower, upper, strict=True)),
-        options={"ftol": 1.0e-14, "gtol": 1.0e-10, "maxiter": int(max_iterations)},
-    )
+    axes = [
+        np.linspace(lower[axis], upper[axis], int(seed_grid_size), dtype=np.float64)
+        for axis in range(2)
+    ]
+    grid_x, grid_y = np.meshgrid(axes[0], axes[1], indexing="ij")
+    starts = [np.asarray(point, dtype=np.float64) for point in np.column_stack(
+        [grid_x.ravel(), grid_y.ravel()]
+    )]
+    if not any(np.array_equal(initial, start) for start in starts):
+        starts.insert(0, np.asarray(initial, dtype=np.float64))
+    results = [
+        minimize(
+            objective,
+            start,
+            method="L-BFGS-B",
+            bounds=list(zip(lower, upper, strict=True)),
+            options={
+                "ftol": 1.0e-14,
+                "gtol": 1.0e-10,
+                "maxiter": int(max_iterations),
+            },
+        )
+        for start in starts
+    ]
+    if any(not np.isfinite(result.fun) for result in results):
+        raise ValueError("local gap minimization returned a nonfinite objective")
+    selected_index = int(np.argmin([float(result.fun) for result in results]))
+    result = results[selected_index]
     return Xue2018ContinuumGapResult(
         gap_ry=float(result.fun),
         kappa_ab_inv=np.asarray(result.x, dtype=np.float64),
@@ -547,7 +580,9 @@ def xue2018_minimize_continuum_gap(
         initial_kappa_ab_inv=np.asarray(initial, dtype=np.float64),
         optimizer_success=bool(result.success),
         optimizer_message=str(result.message),
-        optimizer_evaluations=int(result.nfev),
+        optimizer_evaluations=int(sum(item.nfev for item in results)),
+        optimizer_starts=len(starts),
+        selected_start_kappa_ab_inv=np.asarray(starts[selected_index], dtype=np.float64),
         self_cell_quadrature_order=quadrature_order,
     )
 

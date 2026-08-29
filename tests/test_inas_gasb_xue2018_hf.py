@@ -224,6 +224,8 @@ def test_xue2018_physical_local_gap_minimizer_is_cell_bound_and_fail_closed() ->
         max_iterations=40,
     )
     assert result.gap_ry <= center_gap + 1.0e-12
+    assert result.optimizer_starts == 25
+    assert result.optimizer_evaluations >= result.optimizer_starts
     assert np.max(np.abs(result.kappa_ab_inv - state.mesh.points_ab_inv[4])) <= (
         0.5 * state.mesh.cell_widths_ab_inv[0] + 1.0e-12
     )
