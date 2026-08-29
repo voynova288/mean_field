@@ -64,6 +64,134 @@
       "source_sha256": "e262b01bc9ade9e741c414742822c2f0c5ecdc2a326e636e8515898922cc8435",
       "warning": "Scalar chord sign changes locate initializers but do not certify full roots."
     },
+    "disconnected_branch_followup": {
+      "authority": "historical_omitted_q0_stationary_search_not_exhaustive_nonexistence_proof",
+      "data": {
+        "authority": "historical_omitted_q0_stationary_search_not_exhaustive_nonexistence_proof",
+        "p25_deflated_search": {
+          "accepted": [
+            {
+              "deflated_exit_reason": "residual_tolerance",
+              "deflated_residual_max": 4.881137883217216e-09,
+              "deflated_residual_rms": 3.988264980663612e-10,
+              "deflated_solver_converged": true,
+              "distances_rms": {
+                "low": 0.044497925518121074,
+                "normal": 0.09344219723386453,
+                "strong": 0.03606205632575916
+              },
+              "evaluations": 854,
+              "full_converged": true,
+              "full_residual_max": 3.0221070579619653e-09,
+              "full_residual_rms": 3.340985126091994e-10,
+              "gap_grid_ry": 0.9139049865812724,
+              "mode_index": 2,
+              "order": {
+                "phi1_gamma_abs_ry": 1.1102230246251565e-16,
+                "trs_nematic_gamma_abs_ry": 2.0292673579099385
+              },
+              "physical_residual_max_packed": 2.9695445546984445e-09,
+              "physical_residual_rms_packed": 2.426346241261688e-10,
+              "sign": 1,
+              "state_sha256": "ea300103e670b7ba4754e38fd065f4da02572581fca2e88f5cfa5e055501acf5",
+              "trs_error": 0.0
+            }
+          ],
+          "cases": 6,
+          "failed_count": 5,
+          "minimum_failed_physical_residual_rms": 0.00229320030934578,
+          "regular_refinement_all_failed": true,
+          "regular_refinement_residual_rms_range": [
+            0.002130721524045525,
+            0.0025145065454336055
+          ]
+        },
+        "p25_low_branch_trs_modes": [
+          {
+            "multiplicity": 2,
+            "real": 1.7920940024499783
+          },
+          {
+            "multiplicity": 1,
+            "real": 1.4139899238352414
+          },
+          {
+            "multiplicity": 1,
+            "real": 0.9999999709136416
+          }
+        ],
+        "p27_endpoint_fold_search": {
+          "accepted": [
+            {
+              "case": "normal_endpoint",
+              "converged": true,
+              "energy": -0.45575970536882826,
+              "evaluations": 21,
+              "exit_reason": "full_stationary_tolerance",
+              "full_residual_max": 7.385823064254282e-10,
+              "full_residual_rms": 1.490070987898038e-10,
+              "gap_grid_ry": 1.921314363493611,
+              "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/p25_multistart_v1/case_00_t0.10/02_T1em03/stationary_root.npz",
+              "source_sha256": "8864b8cae9b99d4028f402abc35f7418c2505106c3185d8b326be8ea0dd21757",
+              "state_sha256": "6a44bb26d1c7723e8095e0507616e782e56d84848b3e950853dbe0f49cab74de",
+              "trs_error": 6.869341003095018e-12
+            }
+          ],
+          "failed": [
+            {
+              "case": "fold_post",
+              "converged": false,
+              "energy": -0.41074108807032156,
+              "evaluations": 2765,
+              "exit_reason": "krylov_exhausted",
+              "full_residual_max": 0.0011197181128767258,
+              "full_residual_rms": 0.0003341841869095197,
+              "gap_grid_ry": 0.5333528596519519,
+              "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/pseudo_arclength_T1em03_followup_v3/point_027/stationary_root.npz",
+              "source_sha256": "484be223e3a3a6502b3c7aaee6cae9b553f94bf12dc921915969209601ebc7a3",
+              "state_sha256": "21746b74d717c23086d052ca8d6316720e439eb75681cbba22b06de7b6515771",
+              "trs_error": 1.2676119514424659e-07
+            },
+            {
+              "case": "fold_pre",
+              "converged": false,
+              "energy": -0.41075614574169933,
+              "evaluations": 2944,
+              "exit_reason": "krylov_exhausted",
+              "full_residual_max": 0.0011578460679686176,
+              "full_residual_rms": 0.00032945762760249044,
+              "gap_grid_ry": 0.5250368490809326,
+              "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/pseudo_arclength_T1em03_followup_v3/point_024/stationary_root.npz",
+              "source_sha256": "726da2bbe7c50ce9385bc96321cdd8c40b43e17797ea765a4c3673186467593d",
+              "state_sha256": "89683038b9d722923b33ab5893a75bb0ba941868a2be5f2ea01323f477d8146d",
+              "trs_error": 1.3761983052169154e-07
+            },
+            {
+              "case": "strong_endpoint",
+              "converged": false,
+              "energy": -0.41115633784611727,
+              "evaluations": 1169,
+              "exit_reason": "krylov_exhausted",
+              "full_residual_max": 0.00338828125170367,
+              "full_residual_rms": 0.0004681487301107391,
+              "gap_grid_ry": 0.5294276466413725,
+              "source": "/data/home/ziyuzhu/Mean_Field/results/xue2018_nematic_predecessor_reproduction/historical_fig2_full_path_v1/stationary_root_v1/p25_multistart_v1/case_03_t0.55/02_T1em03/stationary_root.npz",
+              "source_sha256": "f9d73610109f2912fcda9ecaa4c259bbf5d7fa365930cc09789c9531cfba611e",
+              "state_sha256": "a578f712bf3fc0bd8b34d56e3628c36a52f6a2249a44b1bedd7f3adf09b2ec21",
+              "trs_error": 2.13396527198509e-08
+            }
+          ]
+        },
+        "schema": "xue2018-disconnected-search-followup-v1",
+        "source_hashes": {
+          "p25_deflated": "249c8289e91292c5d5c43dcbcdfd458d2ee5c30babcefb599c074d6c1a4e9123",
+          "p25_regular_refinement": "9d6ecb7c5063dfb71f4803d7dc8c1999093fe78d23c99ac235e83cd54c9e27ce",
+          "p27_endpoint_fold": "95af751f20aca05ce93765acabbc958b8f4fcd554fe2a6d566def1dedc403272"
+        },
+        "verdict": "The p25 leading-mode deflated search found only a symmetry-rotated representative of the known strong-TRS root; all other candidates remained nonstationary. At p27, the normal endpoint converged, while the strong endpoint and both verified-fold sheets stalled above residual gates. No new paper-like stationary root was accepted."
+      },
+      "source_sha256": "4931b276b2051ecaf35b5b2cf603c8755d73cab0b54e4fbf19c5a869a9296b7f"
+    },
     "four_term_self_energy_release": {
       "authority": "historical_omitted_q0_diagnostic_homotopy_not_physical_parameter",
       "rows": [

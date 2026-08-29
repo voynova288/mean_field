@@ -212,6 +212,25 @@ candidate: the low constrained root class releases into the low-gap stationary
 branch, while the higher constrained root class releases into the strong-TRS
 branch.
 
+A follow-up branch-switching search used the leading complete-TRS fixed-map
+modes of the p25 low branch (`1.79209` twice, `1.41399`, and a near-unit mode).
+Six signed eigenmode starts were solved with the three known p25 roots
+deflated. The only accepted solution was a symmetry-rotated representative of
+the known strong-TRS root: gap `0.913905 Ry*` and Γ nematic amplitude
+`2.029267 Ry*`. The other five candidates remained nonstationary; the best
+full residual RMS was `2.29e-3`, and ordinary Newton--Krylov refinement of the
+four leading stalled candidates also failed (`2.13e-3` to `2.51e-3`).
+
+At p27 (`A=0.25 Ry* a_B*`), four starts from the normal endpoint, strong
+endpoint, and the two sheets adjacent to the verified fold were tested at
+`T/Ry*=1e-3`. Only the normal root converged, with gap `1.92131 Ry*`. The
+strong and two fold-sheet candidates stalled with full residual RMS from
+`3.29e-4` to `4.68e-4`; their apparent gaps near `0.53 Ry*` are therefore not
+stationary results and are not promoted.
+
+This follow-up is stronger basin evidence but still not an exhaustive
+nonexistence proof. No additional paper-like stationary root was accepted.
+
 Therefore the remaining problem is no longer merely “implement a root
 solver.” We must determine whether a disconnected branch exists outside the
 current multistart/chord basins, or whether the paper used an unpublished
@@ -234,8 +253,9 @@ Implemented and validated:
 
 Still required:
 
-1. multi-start branch enumeration on both sides of the fold and from NI/QSHI
-   endpoints, without selecting by paper gap;
+1. extend branch enumeration beyond the completed p25 eigenmode/deflation and
+   p27 endpoint/fold-sheet searches, especially with additional deterministic
+   complete-TRS seeds and symmetry-orbit-aware deflation;
 2. regulator-safe arbitrary-k gap evaluation in the cell-integrated physical
    lane;
 3. fixed-window and momentum-window continuation of the stationary branch;
