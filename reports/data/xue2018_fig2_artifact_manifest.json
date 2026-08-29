@@ -24,6 +24,11 @@
       "dataset_id": "xue2018-fig2-branch-lineage-audit-v1",
       "path": "figures/xue2018_p24_regulator_convergence_audit.png",
       "sha256": "7cfcb74604ccdcf2e3811438f757239c5d6c0e3f6c9bfc591de5c0c93e728c9d"
+    },
+    {
+      "dataset_id": "xue2018-fig2-branch-lineage-audit-v1",
+      "path": "figures/xue2018_fig2_paper_style_comparison.png",
+      "sha256": "9f97aaacbdded4a25c60fb43de4eafc0ca991d8caf7cd808f22ed1771b747626"
     }
   ],
   "full_path_branch_id": "xue2018-trs-weak-seed-normal-attractor-fullpath-v1",

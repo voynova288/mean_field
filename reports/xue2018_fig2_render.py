@@ -15,6 +15,7 @@ STALE_POSTFLIGHT = DATA / "xue2018_fig2_stale_postflight.json"
 PAPER_DIGITIZATION = DATA / "xue2018_fig2_digitized_markers.json"
 OUTPUT = FIGURES / "xue2018_fig2_branch_lineage_audit.png"
 REGULATOR_OUTPUT = FIGURES / "xue2018_p24_regulator_convergence_audit.png"
+PAPER_STYLE_OUTPUT = FIGURES / "xue2018_fig2_paper_style_comparison.png"
 MANIFEST = DATA / "xue2018_fig2_artifact_manifest.json"
 REPORT = ROOT / "xue2018_fig2_blue_branch_report.md"
 
@@ -130,6 +131,87 @@ def main() -> None:
     )
     plt.close(fig)
 
+    comparison_fig, comparison_axes = plt.subplots(1, 2, figsize=(12.0, 4.5), sharex=True)
+    comparison_panels = (
+        (
+            comparison_axes[0],
+            paper_phi,
+            paper_gap,
+            x,
+            paper_trs_gap,
+            "paper digitization",
+            "paper markers digitized from Fig. 2",
+        ),
+        (
+            comparison_axes[1],
+            calc_phi,
+            calc_gap,
+            stationary_x,
+            stationary_gap,
+            "current calculation",
+            "historical black/red; certified TRS p21--p26 only",
+        ),
+    )
+    for panel_index, (axis, order_values, ground_values, blue_x, blue_values, title, subtitle) in enumerate(comparison_panels):
+        gap_axis = axis.twinx()
+        order_handle = axis.plot(
+            x,
+            order_values,
+            color="black",
+            marker="o",
+            ms=3.7,
+            lw=0.8,
+            label=r"$|\Phi_1(\mathbf{k}=0)|$",
+        )[0]
+        ground_handle = gap_axis.plot(
+            x,
+            ground_values,
+            color="red",
+            marker="*",
+            ms=5.3,
+            lw=0.8,
+            label="ground gap",
+        )[0]
+        blue_handle = gap_axis.plot(
+            blue_x,
+            blue_values,
+            color="blue",
+            marker="o" if panel_index == 0 else "D",
+            ms=4.0,
+            lw=0.8 if panel_index == 0 else 1.1,
+            label="TR-preserving gap",
+        )[0]
+        axis.set_xlim(0, 63)
+        axis.set_ylim(-0.05, 2.30)
+        gap_axis.set_ylim(-0.05, 2.85)
+        axis.set_xlabel("Fig. 2 point index")
+        axis.set_ylabel(r"$|\Phi_1|/Ry^*$", color="black")
+        gap_axis.set_ylabel(r"gap $/Ry^*$", color="red")
+        gap_axis.tick_params(axis="y", colors="red")
+        axis.grid(alpha=0.14)
+        axis.set_title(f"{title}\n{subtitle}", fontsize=10)
+        axis.legend(
+            [order_handle, ground_handle, blue_handle],
+            [handle.get_label() for handle in (order_handle, ground_handle, blue_handle)],
+            frameon=False,
+            fontsize=8,
+            loc="upper left",
+        )
+    comparison_fig.suptitle(
+        "Xue--MacDonald Fig. 2 paper-style comparison (no fitted scale)"
+    )
+    comparison_fig.tight_layout()
+    comparison_fig.savefig(
+        PAPER_STYLE_OUTPUT,
+        dpi=180,
+        metadata={
+            "Dataset-ID": dataset_id,
+            "Stationary-Branch-ID": branch_data["stationary_trs_branch_dataset"]["branch_id"],
+            "Mixed-Branch-Curve": "forbidden",
+        },
+    )
+    plt.close(comparison_fig)
+
     source_grid = branch_data["source_motivated_p24_grid_resolution"]
     physical_convergence = branch_data["physical_regulator_p24_convergence"]
     historical_mesh = source_grid["historical_low_branch_mesh_continuation"]
@@ -198,6 +280,11 @@ def main() -> None:
             {
                 "path": str(REGULATOR_OUTPUT.relative_to(ROOT)),
                 "sha256": sha256(REGULATOR_OUTPUT),
+                "dataset_id": dataset_id,
+            },
+            {
+                "path": str(PAPER_STYLE_OUTPUT.relative_to(ROOT)),
+                "sha256": sha256(PAPER_STYLE_OUTPUT),
                 "dataset_id": dataset_id,
             },
         ],

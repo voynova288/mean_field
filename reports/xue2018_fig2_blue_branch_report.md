@@ -52,6 +52,14 @@ generated from one versioned branch-data file and bound by a hash manifest:
 
 ![Xue Fig. 2 branch-lineage audit](figures/xue2018_fig2_branch_lineage_audit.png)
 
+For direct visual comparison with the paper layout, the following figure uses
+the same combined order-parameter/gap presentation. The current-calculation
+panel shows the historical black/red finite-grid candidate and only the six
+certified p21--p26 points of the complete stationary TRS branch. It does not
+extend or splice that partial blue branch through unverified points.
+
+![Xue Fig. 2 paper-style comparison](figures/xue2018_fig2_paper_style_comparison.png)
+
 The bottom panel intentionally shows two different calculated lineages rather
 than presenting either one as the paper branch.
 
