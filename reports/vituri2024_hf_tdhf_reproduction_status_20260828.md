@@ -1,6 +1,6 @@
 # Vituri 2024 ABC 三层石墨烯 HF/TDHF 复现状态
 
-更新时间：2026-08-28
+更新时间：2026-08-30
 
 分支：`debug/vituri-scalar-hessian`
 
@@ -21,9 +21,10 @@ cutoff、UV limit、unrestricted ground state 或 TDHF source authority。**
 
 ## 1. Sealed 计算与证据边界
 
-本报告包含两条互补证据链：job `461276` 是 full cutoff ladder；job
+本报告包含三条互补证据链：job `461276` 是 full cutoff ladder；job
 `462560` 加 zero-science recovery `462719` 是 chosen-contract Fig. 4(c)
-复算与图形发布。
+复算与图形发布；job `466196` 则证明同一 chosen contract 已由新的通用
+exact-grid curve API 完整接管，且与旧胶囊数值输出保持 parity。
 
 Full-ladder 权威计算 job `461276`：
 
@@ -50,15 +51,59 @@ Sentinel、summary、postflight 和 31 个 manifest 文件的 SHA256/size 均已
 - chosen-contract Fig. 4(c)：
   `reports/data/vituri2024_fig4c_chosen_contract_462560_attestation.json`。
 
-最新 Fig. 4(c) 复算使用 source commit
-`09075cd22d47edbb4738229d98b52a9650154ec5` 与公开 fixed-sector BFS API。
+承担 chosen-contract 科学复现 authority 的 Fig. 4(c) 复算使用 source commit
+`09075cd22d47edbb4738229d98b52a9650154ec5` 与公开 fixed-sector BFS API；
+后续 job `466196` 是同一 contract 的 generic-API engineering parity 重跑。
 原 job `462560` 的数值 step 和独立 postflight 均 `COMPLETED 0:0`，batch 仅因
 compute node 缺失 login-node gnuplot target 而在绘图阶段 `FAILED 1:0`；
 zero-science recovery job `462719` 用保存的 raw branch CSV 生成图并完成原子
 发布，没有重跑或修改 SCF。最终 sentinel：
 `/data/home/ziyuzhu/.runs/Mean_Field_09075cd_vituri_fig4c_chosen_contract_v2_20260828/COMPLETE_462560.json`。
 
-两个前序 capsule 均只留下预数值工程失败 provenance；它们不是 job
+### 通用 API 替换闭合（job 466196）
+
+source commit `7f884f81fed8e24c6735dab95133d62320e12345` 上的 job `466196`
+重新执行同一个 N179/Hv769/d369 chosen contract，并只通过公开
+`run_vituri2024_fixed_sector_bfs`、Vituri curve adapter 和
+`mean_field.core.curve_workflow` 生成产物。外部 completion 后的 `sacct`
+观察为 `COMPLETED 0:0`、64 CPU、`regular256/node048`；这些 scheduler
+字段不是 sealed artifact manifest 内的科学证据。完整 runroot：
+
+`/data/home/ziyuzhu/.runs/Mean_Field_7f884f8_vituri_fig4c_generic_api_replacement_v5_20260830`
+
+该执行先写出并完整 reload compute-only JSON/NPZ/CSV，再写入
+`CALCULATION_FREEZE.json`；只有计算冻结后才读取旧 job `462560` 输出和论文
+raster。随后 full-workflow artifact 又经过一次 loader 重建和 comparison
+重算。最终 sentinel SHA256 为
+`dcdf1d7b3e5a791c9dfd2d4af0ee08e52034ee18bfc10410609159e9448e973b`，
+bundle fingerprint 为
+`12f201a6549e4bf6038f65049f26db46bd5eb4008820f4907f58f27513c3aca3`。
+
+与 job `462560` 的四条 branch 逐路径比较得到：
+
+- 所有 transformed-y 数组 exact equal；
+- 最大 x 差 `5.55e-17`，最大 crossing 差 `1.39e-17`；
+- center、maxima energy 和 branch-spread 差均为零；
+- 没有 alignment、fit、rescale 或 branch postselection；
+- 预声明 `1e-10` replacement tolerance 内没有任何超限项。
+
+新的 raster 比较保持 `postfreeze nonblind evidence only`，不是 held-out claim：
+402 samples，RMSE `0.963557800 meV`，MAE `0.656716052 meV`。generic residual
+采用 calculation-minus-paper，因此 mean error `-0.121829872 meV`；旧报告采用
+paper-minus-calculation，所以符号相反但数值一致。机器可读 attestation：
+`reports/data/vituri2024_fig4c_generic_api_replacement_466196_attestation.json`，
+SHA256 `b7d4a5f24743121da3f21d0c7a583b4c6813e6323ea1708706b4edbaed46cc81`。
+
+这关闭了“通用 API 完全替代旧 panel-specific 胶囊”的工程问题，但不改变科学
+权限边界：chosen-contract reproduction 仍由 job `462560/462719` 支持；job
+`466196` 只增加 generic-API replacement/parity authority，不建立作者 cutoff、
+UV plateau、unrestricted ground state、Hessian、TDHF 或 production authority。
+
+前序 v4 job `466166` 在任何数值构造前因只读 source 缺少可写 Numba cache
+locator 而失败；v5 使用 node-local `NUMBA_CACHE_DIR` 修复，v4 没有 output、
+sentinel 或科学结果。
+
+两个更早的 ladder capsule 均只留下预数值工程失败 provenance；它们不是 job
 `461276` 的科学输出：
 
 - job `456071`：`llvmlite/binding/libllvmlite.so` 等 runtime 库未进入 v1
@@ -207,8 +252,10 @@ branch 选择或 visual pass gate，也没有用旧 scientific arrays 或目标 
   `figures/vituri2024_fig4c_chosen_contract_vs_paper_display_20260828.png`。
 
 直接并排检查显示，计算与论文在两个交点、左/右峰位置与高度、中心浅谷及整体
-非对称曲率上均强一致。计算冻结后，又对论文 embedded raster 做了独立 held-out
-像素标定；该步骤没有回流 solver、参数、branch、convergence 或 pass gate。
+非对称曲率上均强一致。计算冻结后，又对论文 embedded raster 做了 postfreeze
+nonblind、evidence-only 像素标定；chosen contract 的历史选择并非 blind，因此
+这里不再使用 held-out claim。该步骤没有回流 solver、参数、branch、convergence
+或 pass gate。
 固定 published axes 后提取 402 个 unsmoothed paper samples，得到：
 
 - 全样本 RMSE `0.964 meV`、MAE `0.657 meV`；

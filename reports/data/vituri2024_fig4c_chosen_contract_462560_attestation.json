@@ -58,7 +58,10 @@
       "sha256": "450c01f00abf4c2b443bfc46ea5054fa99de4135816b15a6ea9ebb9a6246af01"
     }
   },
-  "held_out_quantitative_raster_evaluation": {
+  "postfreeze_nonblind_quantitative_raster_evaluation": {
+    "authority_classification": "evidence_only",
+    "held_out_claim": false,
+    "legacy_heldout_filenames_retained_for_path_stability": true,
     "calculation_frozen_before_extraction": true,
     "center": {
       "calculation_mev": 0.5341260322007102,
@@ -144,7 +147,7 @@
       },
       "evaluation_json": {
         "path": "reports/data/vituri2024_fig4c_heldout_raster_evaluation_20260828.json",
-        "sha256": "d95f59ab9be4838cb3cb80f719a7eaa291cf693a07873a05a31e8be0df234dac"
+        "sha256": "320f2d60f4047b69feaa8bd03575b343ae5eeb1b85bcce80796c61e66c9081af"
       },
       "paper_component_pixels_csv": {
         "path": "reports/data/vituri2024_fig4c_paper_raster_component_pixels_20260828.csv",
@@ -161,7 +164,7 @@
   "interpretation": {
     "author_exact_contract_claimed": false,
     "chosen_contract_fig4c_reproduced": true,
-    "held_out_raster_rmse_mev": 0.9635577996292399,
+    "postfreeze_nonblind_raster_rmse_mev": 0.9635577996292399,
     "local_hessian_stability_established": false,
     "paper_curve_topology_and_energy_scale_agree_strongly_by_direct_visual_inspection": true,
     "paper_raster_digitization_available_for_evaluation_only": true,
@@ -229,7 +232,7 @@
       "repository_path": "reports/reference/vituri2024_SC_fig_4_2408.10309v1.pdf",
       "sha256": "8bc414ca89c47555a86f2b73e93f4b7fe1d2348124cce1adc77c0352df658766"
     },
-    "usage": "direct crop used only for display in the calculation/publication path; after calculation freeze the same hash-bound crop was separately digitized for held-out quantitative evaluation, never for fit, solver input, parameter choice, branch selection, convergence gate, or numerical pass gate"
+    "usage": "direct crop used only for display in the calculation/publication path; after calculation freeze the same hash-bound crop was separately digitized for postfreeze nonblind evidence-only quantitative evaluation, never for fit, solver input, parameter choice, branch selection, convergence gate, or numerical pass gate"
   },
   "schema": "mean_field.vituri2024.fig4c_chosen_contract_attestation.v1",
   "source_commit": "09075cd22d47edbb4738229d98b52a9650154ec5",

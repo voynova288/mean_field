@@ -1,0 +1,127 @@
+{
+  "schema": "mean_field.vituri2024.fig4c_generic_api_replacement_attestation.v1",
+  "status": "PASS_ENGINEERING_REPLACEMENT",
+  "job": {
+    "observation_scope": "external post-completion sacct observation; not part of the sealed artifact manifest",
+    "job_id": "466196",
+    "state": "COMPLETED",
+    "exit_code": "0:0",
+    "partition": "regular256",
+    "node": "node048",
+    "elapsed": "00:02:46",
+    "allocated_cpus": 64,
+    "max_rss_kib": 539708
+  },
+  "source": {
+    "commit": "7f884f81fed8e24c6735dab95133d62320e12345",
+    "tree": "9dafc39e830ba7831a00e359049feb896b2b4d22",
+    "runroot": "/data/home/ziyuzhu/.runs/Mean_Field_7f884f8_vituri_fig4c_generic_api_replacement_v5_20260830",
+    "published_directory": "output/job_466196",
+    "completion_sentinel": "output/COMPLETE_466196.json",
+    "completion_sentinel_sha256": "dcdf1d7b3e5a791c9dfd2d4af0ee08e52034ee18bfc10410609159e9448e973b",
+    "bundle_fingerprint": "12f201a6549e4bf6038f65049f26db46bd5eb4008820f4907f58f27513c3aca3"
+  },
+  "numerical_contract": {
+    "mesh_N": 179,
+    "holes_per_valley": 769,
+    "requested_delta_k_a0": 0.004,
+    "Delta1_ev": 0.028,
+    "gate_distance_angstrom": 369.0,
+    "epsilon_r": 8.0,
+    "precision": 1e-10,
+    "selected_hole_spin": 1,
+    "fft_workers": 64,
+    "generic_flavor_index": 3
+  },
+  "generic_workflow": {
+    "compute_only_artifact_full_roundtrip": true,
+    "calculation_freeze_before_target_or_old_output_read": true,
+    "full_artifact_roundtrip_and_comparison_rederivation": true,
+    "all_computed_terminals_retained": true,
+    "terminal_ids": [
+      "g0_45fd831ed54d",
+      "g1_7cebde7f038c",
+      "g2_9b73c5f2e50a",
+      "g3_3561e00d728e"
+    ],
+    "branch_tree_exhausted": true,
+    "scientific_rejection_count": 0,
+    "unconsumed_frontier_count": 0,
+    "all_endpoints_stationary": true,
+    "fresh_raw_projectors_byte_exact": true,
+    "maximum_fresh_fock_residual_ev": 3.552714102482187e-15,
+    "fresh_fock_tolerance_ev": 1e-10
+  },
+  "observables": {
+    "center_mev": 0.5341260322007102,
+    "crossings_kx_a0": [
+      -0.06845862065022898,
+      0.05928404828849599
+    ],
+    "local_maxima": [
+      {
+        "kx_a0": -0.048,
+        "energy_mev": 5.669600667347119
+      },
+      {
+        "kx_a0": 0.039999999999999994,
+        "energy_mev": 8.338280301741996
+      }
+    ],
+    "maximum_branch_spread_mev": 1.7763568394002505e-12,
+    "common_mu_ev": 4.966436164427063
+  },
+  "old_job462560_parity": {
+    "publication_gate_passed": true,
+    "tolerance_mev_or_x": 1e-10,
+    "all_branch_output_y_values_exact_equal_after_csv_parsing": true,
+    "maximum_absolute_x_difference": 5.551115123125783e-17,
+    "maximum_absolute_crossing_x_difference": 1.3877787807814457e-17,
+    "maximum_absolute_center_difference_mev": 0.0,
+    "maximum_absolute_maxima_energy_difference_mev": 0.0,
+    "maximum_absolute_spread_difference_mev": 0.0,
+    "alignment_fit_rescale_or_postselection_used": false
+  },
+  "raster_evaluation": {
+    "classification": "postfreeze nonblind evidence only",
+    "held_out_claim": false,
+    "decision": "evidence_only",
+    "sample_count": 402,
+    "rmse_mev": 0.9635577996292436,
+    "mae_mev": 0.6567160516019505,
+    "maximum_absolute_error_mev": 3.479483044568255,
+    "mean_error_calculation_minus_paper_mev": -0.12182987234526854,
+    "criterion_declared": false,
+    "used_as_solver_gate": false
+  },
+  "artifact_hashes": {
+    "final_artifact_manifest_json": "98d163b4ffbd445169978043ffd7287087eb49ae8522eadd804fa9310a3c60de",
+    "solver_gate_receipt_json": "38cb8c9ea67a16df3ee134703c0346a8d264d7edbed132a2e63d89e67b61e712",
+    "calculation_analysis_json": "4adf370e15c7ba9c4125a876ab9ff3cac03f3acf2d9fa1303c76c0ab7ca93ff5",
+    "generic_replacement_parity_json": "377f5e09f3b42c3e66bb7ebd89e660434e77594247df5b74d16c9a72b252a420",
+    "runtime_receipt_json": "d660a9e47c52c71a7ac2ebf442e03a008747e7caae892d2ea8256329f206728a",
+    "calculation_workflow_metadata_json": "32f4ad6aa4c9befb2d4c86cd702d8e1c996bd7798028b088056c4f115a73d1ea",
+    "calculation_workflow_arrays_npz": "d85888a725d4d1c8f7a5d49c958890d37d9d3ec4643fd787787c4b583b50e2c4",
+    "calculation_workflow_curves_csv": "6456225bc023872e5d57ff7434a459c92605edc060c51e564e922768b1c7f9ed",
+    "full_workflow_metadata_json": "6a28e0952cf4af26b2f0037e14031a0c6cbea467921ffaf39e251e4d68fe0be4",
+    "full_workflow_arrays_npz": "d4af8fb49b42d9a5015b4dcb8c164e9439ffd2077e26d1c57994fd891927ecae",
+    "full_workflow_curves_csv": "6456225bc023872e5d57ff7434a459c92605edc060c51e564e922768b1c7f9ed"
+  },
+  "authority": {
+    "generic_api_replacement_established": true,
+    "candidate_only": true,
+    "fixed_sector_finite_volume": true,
+    "author_cutoff_identified": false,
+    "uv_plateau_established": false,
+    "unrestricted_ground_state_established": false,
+    "local_hessian_stability_established": false,
+    "full_paper_reproduction_verified": false,
+    "tdhf_authority": false,
+    "production_authority": false,
+    "visual_match_promotes_authority": false
+  },
+  "review_provenance": {
+    "embedded_hash_bound_independent_review_receipt": false,
+    "note": "Review outcomes are reported in the accompanying human status report and are not self-certified by this attestation."
+  }
+}

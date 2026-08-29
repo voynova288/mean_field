@@ -166,6 +166,17 @@ The adapter accepts only a rejection-free, all-stationary, exhausted typed
 search result.  It never converts the in-process candidate receipt into sealed
 independent, paper, UV, unrestricted, Hessian, TDHF, or production authority.
 
+The exact N179/Hv769/d369 chosen contract was rerun through this public path in
+Slurm job `466196`. All four output-y arrays were exactly equal to the values
+parsed from the old job `462560` branch CSVs; the maximum x-coordinate difference was `5.55e-17`, and
+center, extrema-energy, and branch-spread differences were zero. The
+compute-only artifacts passed loader roundtrip reconstruction; the full raster
+artifacts additionally passed comparison rederivation. The
+tracked evidence is
+`reports/data/vituri2024_fig4c_generic_api_replacement_466196_attestation.json`.
+This establishes engineering replacement/parity only; it does not promote the
+scientific authority of the fixed-sector chosen-contract result.
+
 ## Artifacts
 
 `write_curve_workflow_artifacts` writes fixed generic names:

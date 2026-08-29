@@ -33,7 +33,14 @@
     "x_kx_a0": 0.0
   },
   "comparison_definition": "paper per-column samples minus linear interpolation of the independent raw calculated-node polyline at identical published x",
-  "evaluation_type": "held-out quantitative raster evaluation",
+  "evaluation_type": "postfreeze nonblind quantitative raster evaluation; evidence only",
+  "authority_correction_20260830": {
+    "held_out_claim": false,
+    "reason": "The raster was extracted only after calculation freeze, but historical chosen-contract selection was not blind to prior target comparison.",
+    "numerical_arrays_and_metrics_changed": false,
+    "legacy_filename_retained_for_path_stability": true,
+    "supersedes_only": "the former held-out authority label"
+  },
   "extraction": {
     "centerline_rule": "per-column median of raw selected pixels; no smoothing/interpolation",
     "component_stats": [
