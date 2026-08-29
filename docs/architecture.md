@@ -192,6 +192,35 @@ The `-1` sector remains an unsealed generic symmetry-related candidate. The lega
 `vituri2024_hf_scf` global-Aufbau path remains numerically unchanged and is not
 fixed-sector authority.
 
+## Exact saved-grid curve workflow
+
+Reusable post-solver curve mechanics live under:
+
+```text
+src/mean_field/core/curve_workflow/
+```
+
+The public façade is `mean_field.api.curves`. Systems connect through a thin
+`ExactGridCurveAdapter` that supplies a structurally resolved finite branch
+tree, system-owned enumeration and source-authority receipts, exact saved-grid
+indices, observable conventions, and terminal evaluations. The common layer
+then provides immutable all-computed-terminal curves, exact-node features,
+all-curve spread, hash-bound plan-bound raster evaluation, plotting, and full
+artifact roundtrip. Held-out status is reported only when the evaluation plan
+establishes target isolation and post-freeze lineage.
+
+This layer does not run HF, define a physical branch universe, select a best
+branch, infer a chemical potential, or grant reproduction/UV/unrestricted/
+Hessian/TDHF/production authority. `RasterEvaluationPlan` is a separate,
+hash-bound phase; generic comparison outcomes are only `evidence_only`,
+`criterion_satisfied`, or `criterion_not_satisfied`.
+
+Vituri connects through
+`mean_field.systems.abc_trilayer.vituri2024_curves`. That adapter alone owns the
+fixed-half-metal/exact-shell semantics, canonical BFS sibling completeness,
+exact `ky=0` cut, fixed-basis `Re H_ff`, common chemical-potential interval,
+and candidate-only authority. See `docs/curve_workflow.md`.
+
 ## Performance strategy
 
 The right performance target is not "Python everywhere"; it is "Python orchestration with optimized kernels where needed".

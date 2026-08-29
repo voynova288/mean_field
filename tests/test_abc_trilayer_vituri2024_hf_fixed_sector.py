@@ -15,8 +15,14 @@ import numpy as np
 import pytest
 
 import mean_field.systems.abc_trilayer as abc_root
+import mean_field.systems.abc_trilayer.vituri2024_curves as curves
 import mean_field.systems.abc_trilayer.vituri2024_hf_fixed_sector as fixed
 import mean_field.systems.abc_trilayer.vituri2024_hf_scf as legacy
+from mean_field.core.curve_workflow import (
+    ExactGridCurveAdapter,
+    all_branch_pointwise_spread,
+)
+from mean_field.systems.abc_trilayer.vituri2024 import VITURI2024_PARAMETERS
 from mean_field.systems.abc_trilayer.vituri2024_hf import (
     vituri2024_native_density_to_conventional_k_diagonal,
 )
@@ -31,6 +37,12 @@ from mean_field.systems.abc_trilayer.vituri2024_hf_fixed_sector import (
     enumerate_vituri2024_fixed_sector_branch_choices,
     run_vituri2024_fixed_sector_bfs,
     run_vituri2024_fixed_sector_path,
+)
+from mean_field.systems.abc_trilayer.vituri2024_curves import (
+    VITURI2024_FIXED_SECTOR_CURVE_ADAPTER_API_VERSION,
+    Vituri2024FixedSectorCurveAdapter,
+    build_vituri2024_fixed_sector_curve_bundle,
+    make_vituri2024_fixed_sector_curve_adapter,
 )
 from mean_field.systems.abc_trilayer.vituri2024_hf_scf import (
     Vituri2024CartesianHFSpec,
@@ -318,6 +330,189 @@ def test_complete_bfs_stationarity_fresh_raw_and_coalescence(small_bfs_result) -
     assert result.production_authority is False
     assert result.tdhf_authority is False
     assert result.full_paper_reproduction_verified is False
+
+
+def test_fixed_sector_curve_adapter_exact_grid_values_and_authority(
+    prepared, small_bfs_result
+) -> None:
+    adapter = make_vituri2024_fixed_sector_curve_adapter(prepared, small_bfs_result)
+    assert isinstance(adapter, Vituri2024FixedSectorCurveAdapter)
+    assert isinstance(adapter, ExactGridCurveAdapter)
+    assert VITURI2024_FIXED_SECTOR_CURVE_ADAPTER_API_VERSION.endswith(".v1")
+
+    expected_ids = tuple(sorted(endpoint.path.path_id for endpoint in small_bfs_result.endpoints))
+    bundle = build_vituri2024_fixed_sector_curve_bundle(prepared, small_bfs_result)
+    assert bundle.branch_closure.computed_terminal_ids == expected_ids
+    assert tuple(curve.terminal_id for curve in bundle.curves) == expected_ids
+    assert bundle.compute_certificate.callback_count == len(expected_ids)
+    assert bundle.compute_certificate.computed_terminal_ids == expected_ids
+    assert bundle.source_authority == adapter.source_authority
+    authority_payload = json.loads(adapter.source_authority.canonical_payload_json)
+    assert adapter.source_authority.authority_id == (
+        "vituri2024_candidate_only_fixed_sector_source.v1"
+    )
+    assert authority_payload == {
+        "source_scope": small_bfs_result.authority,
+        "in_process_candidate_only": True,
+        "independent_finite_volume_fixed_sector_full_scf_discriminator": False,
+        "local_hessian_stability_established": False,
+        "author_cutoff_identified": False,
+        "uv_plateau_established": False,
+        "unrestricted_ground_state_established": False,
+        "full_paper_reproduction_verified": False,
+        "tdhf_authority": False,
+        "production_authority": False,
+        "visual_match_promotes_authority": False,
+    }
+    evaluation = adapter.evaluate_terminal(expected_ids[0])
+    assert evaluation.branch_source_id == expected_ids[0]
+    assert evaluation.saved_grid is adapter.saved_grid
+    assert evaluation.terminal_payload_sha256 == adapter.enumeration_receipt.payload_hash(
+        expected_ids[0]
+    )
+
+    labels = prepared.integer_mesh_labels
+    cut = np.flatnonzero(labels[:, 1] == 0)
+    cut = cut[np.argsort(labels[cut, 0], kind="stable")]
+    expected_kx = np.arange(
+        -(prepared.spec.mesh_size // 2),
+        prepared.spec.mesh_size // 2 + 1,
+        dtype=np.int64,
+    )
+    np.testing.assert_array_equal(labels[cut, 0], expected_kx)
+    np.testing.assert_array_equal(bundle.point_indices, cut)
+    np.testing.assert_allclose(
+        bundle.x,
+        expected_kx
+        * prepared.spec.delta_k_inverse_angstrom
+        * VITURI2024_PARAMETERS.a0,
+        rtol=0.0,
+        atol=0.0,
+    )
+    assert bundle.domain.topology == "open_interval"
+    assert bundle.curves[0].saved_grid.x_units == "k_x a0"
+
+    endpoint_by_id = {
+        endpoint.path.path_id: endpoint for endpoint in small_bfs_result.endpoints
+    }
+    for curve in bundle.curves:
+        endpoint = endpoint_by_id[curve.terminal_id]
+        manual_raw = np.real(endpoint.fresh_hamiltonian[3, 3, cut])
+        np.testing.assert_array_equal(curve.raw_y, manual_raw)
+        np.testing.assert_allclose(
+            curve.output_y,
+            1000.0 * (manual_raw - adapter.common_mu_ev),
+            rtol=0.0,
+            atol=64.0 * np.finfo(np.float64).eps,
+        )
+        assert curve.observable.kind == "real_diagonal_matrix_element"
+        assert "fixed Vituri internal flavor basis index 3" in curve.observable.basis
+        assert "Re fresh H_ff" in curve.observable.validity
+        assert "discarded imaginary diagonal" in curve.observable.validity
+        assert "neither raw complex H_ff nor an eigenvalue" in curve.observable.validity
+        assert curve.raw_y.flags.writeable is False
+        assert curve.output_y.flags.writeable is False
+
+    transform = bundle.curves[0].value_transform
+    assert transform.input_units == "eV"
+    assert transform.output_units == "meV"
+    assert transform.scale == 1000.0
+    assert transform.offset == -1000.0 * adapter.common_mu_ev
+    assert "common-intersection midpoint" in transform.semantics
+    assert "Re fresh H_ff" in transform.semantics
+    assert "additive gauge" in transform.semantics
+    assert transform.common_across_branches is True
+    assert adapter.common_mu_lower_ev <= adapter.common_mu_ev <= adapter.common_mu_upper_ev
+
+    spread = all_branch_pointwise_spread(bundle)
+    expected_output = np.stack([curve.output_y for curve in bundle.curves])
+    np.testing.assert_allclose(
+        spread.spread,
+        np.max(expected_output, axis=0) - np.min(expected_output, axis=0),
+    )
+    assert spread.transforms_identical
+    assert spread.value_units == "meV"
+
+    receipt = adapter.enumeration_receipt
+    assert "discrete coordinate-shell branch universe" in receipt.algorithm_id
+    assert receipt.system_claims_exhaustive_enumeration is True
+    assert receipt.unconsumed_frontier_count == 0
+    assert adapter.authority == small_bfs_result.authority
+    assert adapter.in_process_candidate_only is small_bfs_result.in_process_candidate_only
+    for name in (
+        "independent_finite_volume_fixed_sector_full_scf_discriminator",
+        "local_hessian_stability_established",
+        "author_cutoff_identified",
+        "uv_plateau_established",
+        "unrestricted_ground_state_established",
+        "full_paper_reproduction_verified",
+        "tdhf_authority",
+        "production_authority",
+        "visual_match_promotes_authority",
+    ):
+        assert getattr(adapter, name) is False
+        assert not hasattr(bundle, name)
+
+
+def test_vituri_expanded_inventory_rejects_an_omitted_canonical_child(
+    exact_prepared, policy
+) -> None:
+    result = run_vituri2024_fixed_sector_bfs(exact_prepared, policy=policy)
+    assert isinstance(result, fixed.Vituri2024FixedSectorSearchResult)
+    parent = next(
+        node
+        for node in result.nodes
+        if node.outcome == "expanded_exact_frontier" and len(node.child_path_ids) > 1
+    )
+    omitted = replace(parent, child_path_ids=parent.child_path_ids[:-1])
+    node_by_id = {node.path.path_id: node for node in result.nodes}
+    with pytest.raises(ValueError, match="canonical_choice_count"):
+        curves._validate_expanded_node_child_inventory(omitted, node_by_id)
+
+
+def test_fixed_sector_curve_adapter_rejects_full_flavor_and_empty_common_mu(
+    prepared, small_bfs_result
+) -> None:
+    full_flavor = small_bfs_result.policy.full_flavors[0]
+    with pytest.raises(ValueError, match="policy partial flavors"):
+        make_vituri2024_fixed_sector_curve_adapter(
+            prepared, small_bfs_result, flavor=full_flavor
+        )
+
+    endpoint = small_bfs_result.endpoints[0]
+    left = replace(
+        endpoint,
+        fresh_map=replace(
+            endpoint.fresh_map,
+            common_mu_lower_ev=0.0,
+            common_mu_upper_ev=1.0,
+            common_mu_width_ev=1.0,
+        ),
+    )
+    right = replace(
+        endpoint,
+        fresh_map=replace(
+            endpoint.fresh_map,
+            common_mu_lower_ev=2.0,
+            common_mu_upper_ev=3.0,
+            common_mu_width_ev=1.0,
+        ),
+    )
+    with pytest.raises(ValueError, match="intersection is empty"):
+        curves._common_reference_interval((left, right))
+
+
+def test_fixed_sector_curve_adapter_public_exports() -> None:
+    public = (
+        "VITURI2024_FIXED_SECTOR_CURVE_ADAPTER_API_VERSION",
+        "Vituri2024FixedSectorCurveAdapter",
+        "build_vituri2024_fixed_sector_curve_bundle",
+        "make_vituri2024_fixed_sector_curve_adapter",
+    )
+    assert curves.__all__ == list(public)
+    for name in public:
+        assert name in abc_root.__all__
+        assert getattr(abc_root, name) is getattr(curves, name)
 
 
 def test_stationary_only_coalescence_excludes_rejected_normal_endpoint(
@@ -903,7 +1098,10 @@ def test_slurm_only_n179_parity_against_job461276_fixture() -> None:
         delta1_ev=case["delta1_ev"],
         precision=case["precision"],
     )
-    prepared = prepare_vituri2024_homogeneous_hf_fft(spec, fft_workers=6)
+    fft_workers = int(os.environ.get("SLURM_CPUS_PER_TASK", "6"))
+    prepared = prepare_vituri2024_homogeneous_hf_fft(
+        spec, fft_workers=fft_workers
+    )
     result = run_vituri2024_fixed_sector_bfs(
         prepared,
         policy=Vituri2024FixedSectorPolicy(selected_hole_spin=1),
@@ -956,3 +1154,23 @@ def test_slurm_only_n179_parity_against_job461276_fixture() -> None:
     assert result.uv_plateau_established is False
     assert result.production_authority is False
     assert result.full_paper_reproduction_verified is False
+
+    curve_bundle = build_vituri2024_fixed_sector_curve_bundle(
+        prepared, result, flavor=3
+    )
+    assert len(curve_bundle.curves) == closure["stationary_endpoint_count"]
+    assert curve_bundle.x.shape == (case["mesh_size"],)
+    assert curve_bundle.branch_closure.enumeration_receipt.system_claims_exhaustive_enumeration
+    assert curve_bundle.source_authority.payload()["in_process_candidate_only"] is True
+    cut = curve_bundle.point_indices
+    endpoint_by_id = {item.path.path_id: item for item in result.endpoints}
+    for curve in curve_bundle.curves:
+        endpoint = endpoint_by_id[curve.terminal_id]
+        manual = np.real(endpoint.fresh_hamiltonian[3, 3, cut])
+        np.testing.assert_array_equal(curve.raw_y, manual)
+        np.testing.assert_allclose(
+            curve.output_y,
+            1000.0 * (manual + curve.value_transform.offset / 1000.0),
+            rtol=0.0,
+            atol=64.0 * np.finfo(np.float64).eps,
+        )

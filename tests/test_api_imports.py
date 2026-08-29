@@ -4,12 +4,18 @@ import numpy as np
 import pytest
 
 from mean_field.api import (
+    ExactSavedGridCurveBundle,
     HFConfig,
+    SavedGridReceipt,
+    SourceAuthorityReceipt,
+    build_exact_grid_curve_bundle,
     component_group_records,
     component_groups,
     compute_bands,
     make_model,
+    make_source_authority_receipt,
     model_record,
+    plot_exact_grid_curve_bundle,
     run_hf,
     validate_fig6_screening_checkpoints,
 )
@@ -17,6 +23,12 @@ from mean_field.api import (
 
 def test_public_api_imports_and_htg_band_smoke() -> None:
     assert callable(validate_fig6_screening_checkpoints)
+    assert callable(build_exact_grid_curve_bundle)
+    assert callable(plot_exact_grid_curve_bundle)
+    assert ExactSavedGridCurveBundle.__name__ == "ExactSavedGridCurveBundle"
+    assert SavedGridReceipt.__name__ == "SavedGridReceipt"
+    assert SourceAuthorityReceipt.__name__ == "SourceAuthorityReceipt"
+    assert callable(make_source_authority_receipt)
 
     model = make_model("htg", theta_deg=1.5, n_shells=0)
     bundle = compute_bands(model, n_bands=2, points_per_segment=2)

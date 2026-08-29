@@ -13,6 +13,7 @@ from .bands import (
     write_kpath_band_tsv,
     write_kpath_nodes_tsv,
 )
+from .curves import plot_exact_grid_curve_bundle
 
 __all__ = [
     "BandStyleCallback",
@@ -22,6 +23,7 @@ __all__ = [
     "kpath_node_ticks",
     "load_plot_backend",
     "plot_band_columns",
+    "plot_exact_grid_curve_bundle",
     "prepare_plot_paths",
     "save_figure_pair",
     "write_kpath_band_tsv",

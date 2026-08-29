@@ -732,3 +732,9 @@ from . import vituri2024_hf_fixed_sector as _vituri2024_hf_fixed_sector
 from .vituri2024_hf_fixed_sector import *  # noqa: F401,F403
 
 __all__ += list(_vituri2024_hf_fixed_sector.__all__)
+
+# Candidate-only exact saved-grid curves through the generic curve workflow.
+from . import vituri2024_curves as _vituri2024_curves
+from .vituri2024_curves import *  # noqa: F401,F403
+
+__all__ += list(_vituri2024_curves.__all__)
