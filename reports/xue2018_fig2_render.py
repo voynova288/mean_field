@@ -14,6 +14,7 @@ BRANCH_DATA = DATA / "xue2018_fig2_branch_data.json"
 STALE_POSTFLIGHT = DATA / "xue2018_fig2_stale_postflight.json"
 PAPER_DIGITIZATION = DATA / "xue2018_fig2_digitized_markers.json"
 OUTPUT = FIGURES / "xue2018_fig2_branch_lineage_audit.png"
+REGULATOR_OUTPUT = FIGURES / "xue2018_p24_regulator_convergence_audit.png"
 MANIFEST = DATA / "xue2018_fig2_artifact_manifest.json"
 REPORT = ROOT / "xue2018_fig2_blue_branch_report.md"
 
@@ -129,6 +130,56 @@ def main() -> None:
     )
     plt.close(fig)
 
+    source_grid = branch_data["source_motivated_p24_grid_resolution"]
+    physical_convergence = branch_data["physical_regulator_p24_convergence"]
+    historical_mesh = source_grid["historical_low_branch_mesh_continuation"]
+    physical_mesh = source_grid["physical_fixed_window_kmax3"]
+    window_ladder = physical_convergence["approximately_fixed_spacing_window_ladder"]
+    paper_p24 = float(paper_trs_gap[23])
+    regulator_fig, regulator_axes = plt.subplots(1, 3, figsize=(11.2, 3.6))
+    panels = (
+        (
+            regulator_axes[0],
+            np.asarray([row["mesh"] for row in historical_mesh]),
+            np.asarray([row["gap_grid_ry"] for row in historical_mesh]),
+            "historical omitted-q=0",
+            "mesh points per axis",
+        ),
+        (
+            regulator_axes[1],
+            np.asarray([row["mesh"] for row in physical_mesh]),
+            np.asarray([row["local_cell_gap_ry"] for row in physical_mesh]),
+            "physical fixed window kmax=3",
+            "mesh points per axis",
+        ),
+        (
+            regulator_axes[2],
+            np.asarray([row["kmax_ab_inv"] for row in window_ladder]),
+            np.asarray([row["local_cell_gap_ry"] for row in window_ladder]),
+            "physical fixed spacing",
+            r"$k_{max}a_B^*$",
+        ),
+    )
+    colors = ("tab:purple", "tab:blue", "tab:red")
+    for (axis, abscissa, gaps, title, xlabel), color in zip(panels, colors, strict=True):
+        axis.plot(abscissa, gaps, marker="o", color=color, lw=1.7)
+        axis.axhline(paper_p24, color="0.2", ls="--", lw=1.3, label="paper blue p24")
+        axis.set_title(title, fontsize=10)
+        axis.set_xlabel(xlabel)
+        axis.set_ylabel(r"p24 gap $/Ry^*$")
+        axis.grid(alpha=0.2)
+        axis.legend(frameon=False, fontsize=8)
+    regulator_fig.suptitle(
+        "Xue--MacDonald p24 regulator audit (separate lanes; no fitted scale)"
+    )
+    regulator_fig.tight_layout()
+    regulator_fig.savefig(
+        REGULATOR_OUTPUT,
+        dpi=180,
+        metadata={"Dataset-ID": dataset_id, "Authority": "finite-regulator-diagnostic"},
+    )
+    plt.close(regulator_fig)
+
     manifest = {
         "schema": "xue2018-fig2-artifact-manifest-v1",
         "dataset_id": dataset_id,
@@ -143,7 +194,12 @@ def main() -> None:
                 "path": str(OUTPUT.relative_to(ROOT)),
                 "sha256": sha256(OUTPUT),
                 "dataset_id": dataset_id,
-            }
+            },
+            {
+                "path": str(REGULATOR_OUTPUT.relative_to(ROOT)),
+                "sha256": sha256(REGULATOR_OUTPUT),
+                "dataset_id": dataset_id,
+            },
         ],
         "full_path_branch_id": branch_data["full_path_dataset"]["branch_id"],
         "strong_anchor_branch_id": branch_data["strong_trs_anchor_dataset"]["branch_id"],
