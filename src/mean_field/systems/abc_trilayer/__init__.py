@@ -727,6 +727,12 @@ from .vituri2024_hf_scf import *  # noqa: F401,F403
 
 __all__ += list(_vituri2024_hf_scf.__all__)
 
+# Candidate-only G=0 finite-q IVC spiral; generic ODA stays in core/hf.
+from . import vituri2024_hf_spiral as _vituri2024_hf_spiral
+from .vituri2024_hf_spiral import *  # noqa: F401,F403
+
+__all__ += list(_vituri2024_hf_spiral.__all__)
+
 # Candidate-only fixed-flavor-rank Vituri BFS; generic ODA stays in core/hf.
 from . import vituri2024_hf_fixed_sector as _vituri2024_hf_fixed_sector
 from .vituri2024_hf_fixed_sector import *  # noqa: F401,F403
