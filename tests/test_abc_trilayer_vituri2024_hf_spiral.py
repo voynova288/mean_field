@@ -10,6 +10,7 @@ import pytest
 
 from mean_field.core.hf import HartreeFockKernel, HartreeFockProblem
 from mean_field.systems import abc_trilayer
+from mean_field.systems.abc_trilayer import vituri2024_hf_spiral as spiral_module
 from mean_field.systems.abc_trilayer.vituri2024 import BASIS
 from mean_field.systems.abc_trilayer.vituri2024_hf import (
     Vituri2024TranslationalHFFunctional,
@@ -28,11 +29,14 @@ from mean_field.systems.abc_trilayer.vituri2024_hf_scf import (
     prepare_vituri2024_homogeneous_hf_fft,
 )
 from mean_field.systems.abc_trilayer.vituri2024_hf_spiral import (
+    SpiralInitializerMode,
+    SpiralMixingMode,
     Vituri2024FiniteQSpiralChoice,
     Vituri2024SpiralOccupationBoundaryError,
     apply_vituri2024_displayed_b3_gauge,
     build_vituri2024_spiral_density_map,
     make_vituri2024_hf_spiral_problem,
+    make_vituri2024_hf_spiral_state,
     make_vituri2024_spiral_initial_density,
     measure_vituri2024_spiral_ivc_order,
     prepare_vituri2024_hf_spiral,
@@ -629,6 +633,8 @@ def test_tiny_spiral_smoke_uses_generic_problem_and_fresh_fock_map() -> None:
     assert callable(problem.initializer)
     assert callable(problem.kernel.interaction_builder)
     assert callable(problem.kernel.density_builder)
+    assert problem.kernel.oda_parameterizer is None
+    assert callable(problem.kernel.oda_delta_interaction_builder)
     # Absence of a system-local iteration loop is a review condition, not a
     # brittle source-string assertion.
 
@@ -651,6 +657,8 @@ def test_tiny_spiral_smoke_uses_generic_problem_and_fresh_fock_map() -> None:
     )
     assert result.run.iterations >= 1
     assert result.prepared_fingerprint == prepared.fingerprint
+    assert result.mixing_mode == "oda"
+    assert len(result.initial_density_sha256) == 64
     assert result.candidate_only is True
     assert result.paper_reproduction_verified is False
     assert result.final_fock_map_diagnostics.selected_rank == prepared.selected_rank
@@ -788,3 +796,208 @@ def test_spiral_requires_positive_max_iter_and_package_api_exports() -> None:
         is Vituri2024FiniteQSpiralChoice
     )
     assert abc_trilayer.run_vituri2024_hf_spiral is run_vituri2024_hf_spiral
+    assert abc_trilayer.SpiralInitializerMode is SpiralInitializerMode
+    assert abc_trilayer.SpiralMixingMode is SpiralMixingMode
+
+
+def test_provided_density_mode_rejects_invalid_combinations_and_arrays() -> None:
+    base = _base()
+    prepared = prepare_vituri2024_hf_spiral(
+        base,
+        Vituri2024FiniteQSpiralChoice(
+            q_inverse_angstrom=np.zeros(2, dtype=np.float64),
+            gauge_mode="displayed_b3",
+        ),
+    )
+    valid = make_vituri2024_spiral_initial_density(
+        prepared, init_mode="ivc_b3"
+    ).copy()
+
+    without_density = make_vituri2024_hf_spiral_problem(prepared)
+    with pytest.raises(ValueError, match="requires initial_density_native"):
+        without_density.initializer(
+            make_vituri2024_hf_spiral_state(prepared),
+            init_mode="provided_density",
+            seed=0,
+        )
+    with_density = make_vituri2024_hf_spiral_problem(
+        prepared, initial_density_native=valid
+    )
+    for generated_mode in ("normal", "ivc_b3"):
+        with pytest.raises(ValueError, match="requires provided_density"):
+            with_density.initializer(
+                make_vituri2024_hf_spiral_state(prepared),
+                init_mode=generated_mode,
+                seed=0,
+            )
+    with pytest.raises(ValueError, match="requires initial_density_native"):
+        run_vituri2024_hf_spiral(prepared, init_mode="provided_density")
+    with pytest.raises(ValueError, match="requires provided_density"):
+        run_vituri2024_hf_spiral(
+            prepared,
+            init_mode="normal",
+            initial_density_native=valid,
+        )
+    with pytest.raises(ValueError, match="mixing_mode"):
+        make_vituri2024_hf_spiral_problem(
+            prepared, mixing_mode="fixed"  # type: ignore[arg-type]
+        )
+    with pytest.raises(ValueError, match="exactly 1.0"):
+        run_vituri2024_hf_spiral(
+            prepared,
+            init_mode="provided_density",
+            initial_density_native=valid,
+            mixing_mode="full_step",
+            max_oda_lambda=0.5,
+        )
+
+    invalid_arrays: list[np.ndarray] = [
+        valid.astype(np.complex64),
+        valid[:, :, :-1].copy(),
+    ]
+    nonfinite = valid.copy()
+    nonfinite.flat[0] = np.nan
+    invalid_arrays.append(nonfinite)
+
+    selected = np.asarray(
+        [
+            index
+            for index, (_valley, spin) in enumerate(INTERNAL_FLAVOR_ORDER)
+            if spin == prepared.choice.selected_spin
+        ],
+        dtype=np.int64,
+    )
+    spectators = np.asarray(
+        [
+            index
+            for index, (_valley, spin) in enumerate(INTERNAL_FLAVOR_ORDER)
+            if spin == -prepared.choice.selected_spin
+        ],
+        dtype=np.int64,
+    )
+    wrong_rank = valid.copy()
+    for row in selected:
+        for column in selected:
+            wrong_rank[row, column, 0] = 0.0
+    invalid_arrays.append(wrong_rank)
+    wrong_spectator = valid.copy()
+    wrong_spectator[spectators[0], spectators[0], 0] = 0.0
+    invalid_arrays.append(wrong_spectator)
+    spin_mixed = valid.copy()
+    spin_mixed[selected[0], spectators[0], 0] = 0.1
+    spin_mixed[spectators[0], selected[0], 0] = 0.1
+    invalid_arrays.append(spin_mixed)
+
+    nonprojector = valid.copy()
+    conventional = vituri2024_native_density_to_conventional_k_diagonal(nonprojector)
+    full_momenta = [
+        momentum
+        for momentum in range(prepared.nk)
+        if np.trace(conventional[np.ix_(selected, selected, [momentum])][:, :, 0]).real
+        > 1.5
+    ]
+    assert full_momenta
+    momentum = full_momenta[0]
+    nonprojector[selected[0], selected[0], momentum] = 0.75
+    nonprojector[selected[1], selected[1], momentum] = 1.25
+    invalid_arrays.append(nonprojector)
+
+    for invalid in invalid_arrays:
+        with pytest.raises(ValueError):
+            make_vituri2024_hf_spiral_problem(
+                prepared, initial_density_native=invalid
+            )
+
+
+def test_provided_density_initializer_is_installed_from_mutation_safe_copy() -> None:
+    base = _base()
+    prepared = prepare_vituri2024_hf_spiral(
+        base,
+        Vituri2024FiniteQSpiralChoice(
+            q_inverse_angstrom=np.zeros(2, dtype=np.float64),
+            gauge_mode="displayed_b3",
+        ),
+    )
+    supplied = make_vituri2024_spiral_initial_density(
+        prepared, init_mode="ivc_b3"
+    ).copy()
+    expected = supplied.copy()
+    problem = make_vituri2024_hf_spiral_problem(
+        prepared,
+        initial_density_native=supplied,
+        mixing_mode="full_step",
+    )
+    supplied.fill(np.nan)
+    state = make_vituri2024_hf_spiral_state(prepared)
+    problem.initializer(state, init_mode="provided_density", seed=0)
+
+    assert np.array_equal(state.density, expected)
+    assert problem.kernel.oda_delta_interaction_builder is None
+    assert problem.kernel.oda_parameterizer is not None
+    assert problem.kernel.oda_parameterizer(state, state.density) == 1.0
+
+
+def test_full_step_tiny_real_run_uses_generic_runner_and_exact_unit_steps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base = _base()
+    prepared = prepare_vituri2024_hf_spiral(
+        base,
+        Vituri2024FiniteQSpiralChoice(
+            q_inverse_angstrom=np.asarray(
+                [0.17 * base.spec.delta_k_inverse_angstrom, 0.0],
+                dtype=np.float64,
+            ),
+            selected_spin=1,
+            gauge_mode="displayed_b3",
+        ),
+    )
+    supplied = make_vituri2024_spiral_initial_density(
+        prepared, init_mode="ivc_b3"
+    ).copy()
+    generic_runner = spiral_module.run_hartree_fock_problem
+    observed: dict[str, object] = {}
+
+    def recording_runner(state: object, problem: object, **kwargs: object):
+        observed["problem"] = problem
+        observed["init_mode"] = kwargs.get("init_mode")
+        return generic_runner(state, problem, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(spiral_module, "run_hartree_fock_problem", recording_runner)
+    result = run_vituri2024_hf_spiral(
+        prepared,
+        init_mode="provided_density",
+        initial_density_native=supplied,
+        mixing_mode="full_step",
+        seed=0,
+        max_iter=2,
+    )
+
+    assert type(observed["problem"]) is HartreeFockProblem
+    assert observed["init_mode"] == "provided_density"
+    assert result.mixing_mode == "full_step"
+    assert len(result.initial_density_sha256) == 64
+    assert np.array_equal(
+        result.run.iter_oda,
+        np.ones(result.run.iterations, dtype=np.float64),
+    )
+    assert result.candidate_only is True
+    assert result.paper_reproduction_verified is False
+    result.validate_live_state(prepared)
+
+    original_mixing_mode = result.mixing_mode
+    object.__setattr__(result, "mixing_mode", "oda")
+    try:
+        with pytest.raises(ValueError, match="metadata snapshot drifted"):
+            result.validate_live_state(prepared)
+    finally:
+        object.__setattr__(result, "mixing_mode", original_mixing_mode)
+
+    original_initial_hash = result.initial_density_sha256
+    object.__setattr__(result, "initial_density_sha256", "0" * 64)
+    try:
+        with pytest.raises(ValueError, match="metadata snapshot drifted"):
+            result.validate_live_state(prepared)
+    finally:
+        object.__setattr__(result, "initial_density_sha256", original_initial_hash)
+    result.validate_live_state(prepared)

@@ -72,13 +72,14 @@ from .vituri2024_hf_scf import (
 
 Array = np.ndarray
 GaugeMode = Literal["identity", "displayed_b3"]
-SpiralInitializerMode = Literal["normal", "ivc_b3"]
+SpiralInitializerMode = Literal["normal", "ivc_b3", "provided_density"]
+SpiralMixingMode = Literal["oda", "full_step"]
 SpiralBackendKind = Literal["dense", "fft"]
 SpiralHFFunctional = (
     Vituri2024TranslationalHFFunctional | Vituri2024TranslationalHFFFTFunctional
 )
 
-VITURI2024_HF_SPIRAL_API_VERSION: Final[str] = "vituri2024_g0_ivc_spiral_candidate.v2"
+VITURI2024_HF_SPIRAL_API_VERSION: Final[str] = "vituri2024_g0_ivc_spiral_candidate.v3"
 VITURI2024_HF_SPIRAL_AUTHORITY: Final[str] = (
     "independent_displayed_b3_gauge_g0_finite_q_candidate_only_not_author_gauge_"
     "not_multig_crystal_production_or_fig2_reproduction"
@@ -1078,6 +1079,35 @@ def _validate_spiral_density_structure(
             raise ValueError("spiral initializer is not a momentum-local projector")
 
 
+def _bind_provided_spiral_density(
+    prepared: Vituri2024PreparedHFSpiral,
+    initial_density_native: object,
+) -> tuple[Array, str]:
+    """Validate, privately copy, and hash one saved native projector."""
+
+    density = np.asarray(initial_density_native)
+    if density.dtype != np.dtype(np.complex128):
+        raise ValueError("initial_density_native must have exact complex128 dtype")
+    if density.shape != prepared.h0_native.shape:
+        raise ValueError(
+            "initial_density_native shape must match the prepared native density shape"
+        )
+    if not np.all(np.isfinite(density)):
+        raise ValueError("initial_density_native must contain only finite values")
+    bound = _readonly(density, np.dtype(np.complex128))
+    conventional = vituri2024_native_density_to_conventional_k_diagonal(bound)
+    if _max_abs(conventional - conventional.swapaxes(0, 1).conj()) > 5.0e-12:
+        raise ValueError("initial_density_native must be Hermitian at every momentum")
+    _validate_spiral_density_structure(
+        bound,
+        selected_spin=prepared.choice.selected_spin,
+        selected_rank=prepared.selected_rank,
+        tolerance=5.0e-12,
+        require_projector=True,
+    )
+    return bound, _array_sha256(bound)
+
+
 def make_vituri2024_spiral_initial_density(
     prepared: Vituri2024PreparedHFSpiral,
     *,
@@ -1168,22 +1198,53 @@ def make_vituri2024_hf_spiral_state(
 
 def make_vituri2024_hf_spiral_problem(
     prepared: Vituri2024PreparedHFSpiral,
+    *,
+    initial_density_native: Array | None = None,
+    mixing_mode: SpiralMixingMode = "oda",
 ) -> HartreeFockProblem:
     """Compose the system adapter exclusively through the generic HF problem API."""
 
     if type(prepared) is not Vituri2024PreparedHFSpiral:
         raise TypeError("prepared must be Vituri2024PreparedHFSpiral")
     prepared.validate_live_state()
+    if type(mixing_mode) is not str or mixing_mode not in ("oda", "full_step"):
+        raise ValueError("mixing_mode must be 'oda' or 'full_step'")
+    provided_binding = (
+        None
+        if initial_density_native is None
+        else _bind_provided_spiral_density(prepared, initial_density_native)
+    )
     interaction_action = prepared.functional.make_validated_interaction_action()
 
     def initializer(state: Vituri2024HFState, *, init_mode: str, seed: int) -> None:
         if _strict_int(seed, "seed") != 0:
             raise ValueError("deterministic first spiral milestone requires seed=0")
-        if init_mode not in ("normal", "ivc_b3"):
+        if type(init_mode) is not str or init_mode not in (
+            "normal",
+            "ivc_b3",
+            "provided_density",
+        ):
             raise ValueError("unsupported spiral init_mode")
-        state.density[:, :, :] = make_vituri2024_spiral_initial_density(
-            prepared, init_mode=init_mode  # type: ignore[arg-type]
-        )
+        if init_mode == "provided_density":
+            if provided_binding is None:
+                raise ValueError(
+                    "provided_density init_mode requires initial_density_native"
+                )
+            initial_density, initial_density_sha256 = provided_binding
+        else:
+            if provided_binding is not None:
+                raise ValueError(
+                    "initial_density_native requires provided_density init_mode"
+                )
+            initial_density = make_vituri2024_spiral_initial_density(
+                prepared, init_mode=init_mode  # type: ignore[arg-type]
+            )
+            initial_density_sha256 = _array_sha256(initial_density)
+        if _array_sha256(initial_density) != initial_density_sha256:
+            raise ValueError("bound spiral initial density drifted before installation")
+        state.density[:, :, :] = initial_density
+        if _array_sha256(state.density) != initial_density_sha256:
+            raise RuntimeError("spiral initial density installation changed its bytes")
         state.hamiltonian[:, :, :] = state.h0
         state.energies[:, :] = np.nan
         state.mu = float("nan")
@@ -1219,13 +1280,21 @@ def make_vituri2024_hf_spiral_problem(
             require_projector=False,
         )
 
+    def full_step_parameterizer(_state: object, _delta_density: Array) -> float:
+        return 1.0
+
     return HartreeFockProblem(
         initializer=initializer,
         kernel=HartreeFockKernel(
             interaction_builder=interaction_action,
             density_builder=density_builder,
             energy_functional=energy_functional,
-            oda_delta_interaction_builder=interaction_action,
+            oda_parameterizer=(
+                full_step_parameterizer if mixing_mode == "full_step" else None
+            ),
+            oda_delta_interaction_builder=(
+                interaction_action if mixing_mode == "oda" else None
+            ),
             hamiltonian_postprocessor=hamiltonian_gate,
             density_postprocessor=density_gate,
             convergence_rule="raw",
@@ -1402,10 +1471,17 @@ def diagnose_vituri2024_hf_spiral_stationarity(
 
 @dataclass(frozen=True, slots=True)
 class Vituri2024HFSpiralRunResult:
-    """Snapshot hashes and fresh diagnostics around a mutable core HF run."""
+    """Snapshot hashes and fresh diagnostics around a mutable core HF run.
+
+    ``full_step`` is a candidate-only fixed-point discriminator. Recording it
+    makes no monotone-energy or convergence guarantee; observed convergence is
+    still subjected to the same fresh stationarity check as ODA.
+    """
 
     prepared_fingerprint: str
     init_mode: SpiralInitializerMode
+    mixing_mode: SpiralMixingMode
+    initial_density_sha256: str
     run: HartreeFockRun
     final_fock_map_diagnostics: Vituri2024SpiralDensityDiagnostics
     stationarity: Vituri2024SpiralStationarityDiagnostics
@@ -1415,6 +1491,23 @@ class Vituri2024HFSpiralRunResult:
     fresh_map_density_sha256: str
     fresh_fock_sha256: str
     run_snapshot_fingerprint: str = field(init=False)
+    metadata_snapshot_fingerprint: str = field(init=False)
+
+    def _current_metadata_fingerprint(self) -> str:
+        return _fingerprint(
+            {
+                "prepared_fingerprint": self.prepared_fingerprint,
+                "init_mode": self.init_mode,
+                "mixing_mode": self.mixing_mode,
+                "initial_density_sha256": self.initial_density_sha256,
+                "final_recomputed_energy_ev": _strict_real(
+                    self.final_recomputed_energy_ev, "final_recomputed_energy_ev"
+                ).hex(),
+                "final_density_sha256": self.final_density_sha256,
+                "fresh_map_density_sha256": self.fresh_map_density_sha256,
+                "fresh_fock_sha256": self.fresh_fock_sha256,
+            }
+        )
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -1422,29 +1515,40 @@ class Vituri2024HFSpiralRunResult:
             "run_snapshot_fingerprint",
             _hartree_fock_run_snapshot_fingerprint(self.run),
         )
+        object.__setattr__(
+            self,
+            "metadata_snapshot_fingerprint",
+            self._current_metadata_fingerprint(),
+        )
+
     candidate_only: bool = field(default=True, init=False)
     production_ready: bool = field(default=False, init=False)
     paper_reproduction_verified: bool = field(default=False, init=False)
 
     def validate_live_state(self, prepared: Vituri2024PreparedHFSpiral) -> None:
+        """Detect stale result claims after mutation of the nested core run."""
+
         if (
             _hartree_fock_run_snapshot_fingerprint(self.run)
             != self.run_snapshot_fingerprint
         ):
             raise ValueError("spiral core HF run snapshot drifted")
-        """Detect stale result claims after mutation of the nested core run."""
+        if self._current_metadata_fingerprint() != self.metadata_snapshot_fingerprint:
+            raise ValueError("spiral run-result metadata snapshot drifted")
 
         if type(prepared) is not Vituri2024PreparedHFSpiral:
             raise TypeError("result validation requires exact spiral preparation")
         prepared.validate_live_state()
         hashes = (
+            self.initial_density_sha256,
             self.final_density_sha256,
             self.fresh_map_density_sha256,
             self.fresh_fock_sha256,
         )
         if (
             self.prepared_fingerprint != prepared.fingerprint
-            or self.init_mode not in ("normal", "ivc_b3")
+            or self.init_mode not in ("normal", "ivc_b3", "provided_density")
+            or self.mixing_mode not in ("oda", "full_step")
             or type(self.run) is not HartreeFockRun
             or self.run.init_mode != self.init_mode
             or any(
@@ -1458,6 +1562,10 @@ class Vituri2024HFSpiralRunResult:
             or self.paper_reproduction_verified is not False
         ):
             raise ValueError("spiral run-result metadata drifted")
+        if self.mixing_mode == "full_step" and not np.array_equal(
+            self.run.iter_oda, np.ones(self.run.iter_oda.shape, dtype=np.float64)
+        ):
+            raise ValueError("full_step spiral run must record exactly unit ODA steps")
         density = np.asarray(self.run.state.density)
         if _array_sha256(density) != self.final_density_sha256:
             raise ValueError("spiral final-density snapshot is stale")
@@ -1503,6 +1611,8 @@ def run_vituri2024_hf_spiral(
     prepared: Vituri2024PreparedHFSpiral,
     *,
     init_mode: SpiralInitializerMode,
+    initial_density_native: Array | None = None,
+    mixing_mode: SpiralMixingMode = "oda",
     seed: int = 0,
     max_iter: int = 300,
     oda_stall_threshold: float = 1.0e-6,
@@ -1513,8 +1623,38 @@ def run_vituri2024_hf_spiral(
     validated_max_iter = _strict_int(max_iter, "max_iter")
     if validated_max_iter <= 0:
         raise ValueError("max_iter must be positive")
+    if type(init_mode) is not str or init_mode not in (
+        "normal",
+        "ivc_b3",
+        "provided_density",
+    ):
+        raise ValueError("unsupported spiral init_mode")
+    if type(mixing_mode) is not str or mixing_mode not in ("oda", "full_step"):
+        raise ValueError("mixing_mode must be 'oda' or 'full_step'")
+    if init_mode == "provided_density":
+        if initial_density_native is None:
+            raise ValueError("provided_density init_mode requires initial_density_native")
+        bound_initial_density, initial_density_sha256 = _bind_provided_spiral_density(
+            prepared, initial_density_native
+        )
+    else:
+        if initial_density_native is not None:
+            raise ValueError("initial_density_native requires provided_density init_mode")
+        bound_initial_density = None
+        initial_density_sha256 = _array_sha256(
+            make_vituri2024_spiral_initial_density(prepared, init_mode=init_mode)
+        )
+    validated_max_oda_lambda = _strict_real(
+        max_oda_lambda, "max_oda_lambda", positive=True
+    )
+    if mixing_mode == "full_step" and validated_max_oda_lambda != 1.0:
+        raise ValueError("full_step mixing requires max_oda_lambda exactly 1.0")
     state = make_vituri2024_hf_spiral_state(prepared)
-    problem = make_vituri2024_hf_spiral_problem(prepared)
+    problem = make_vituri2024_hf_spiral_problem(
+        prepared,
+        initial_density_native=bound_initial_density,
+        mixing_mode=mixing_mode,
+    )
     run = run_hartree_fock_problem(
         state,
         problem,
@@ -1524,8 +1664,12 @@ def run_vituri2024_hf_spiral(
         oda_stall_threshold=_strict_real(
             oda_stall_threshold, "oda_stall_threshold", positive=True
         ),
-        max_oda_lambda=_strict_real(max_oda_lambda, "max_oda_lambda", positive=True),
+        max_oda_lambda=validated_max_oda_lambda,
     )
+    if mixing_mode == "full_step" and not np.array_equal(
+        run.iter_oda, np.ones(run.iter_oda.shape, dtype=np.float64)
+    ):
+        raise RuntimeError("generic HF runner did not preserve exact full steps")
     stationarity, fresh_map = diagnose_vituri2024_hf_spiral_stationarity(prepared, run)
     if run.converged and not stationarity.stationary:
         run = replace(run, converged=False, exit_reason="final_map_not_converged")
@@ -1551,6 +1695,8 @@ def run_vituri2024_hf_spiral(
     result = Vituri2024HFSpiralRunResult(
         prepared_fingerprint=prepared.fingerprint,
         init_mode=init_mode,
+        mixing_mode=mixing_mode,
+        initial_density_sha256=initial_density_sha256,
         run=run,
         final_fock_map_diagnostics=fresh_map.diagnostics,
         stationarity=stationarity,
@@ -1610,6 +1756,8 @@ __all__ = [
     "VITURI2024_B3_COMPONENT_INDEX",
     "VITURI2024_HF_SPIRAL_API_VERSION",
     "VITURI2024_HF_SPIRAL_AUTHORITY",
+    "SpiralInitializerMode",
+    "SpiralMixingMode",
     "Vituri2024DisplayedB3GaugeReceipt",
     "Vituri2024FiniteQSpiralChoice",
     "Vituri2024HFSpiralRunResult",
