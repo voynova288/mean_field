@@ -15,6 +15,9 @@ from mean_field.systems.abc_trilayer.vituri2024_hf import (
     Vituri2024TranslationalHFFunctional,
     vituri2024_native_density_to_conventional_k_diagonal,
 )
+from mean_field.systems.abc_trilayer.vituri2024_hf_fft import (
+    Vituri2024TranslationalHFFFTFunctional,
+)
 from mean_field.systems.abc_trilayer.vituri2024_hf_preflight import (
     ACTIVE_BAND_STATES_VALLEY_ORDER,
     INTERNAL_FLAVOR_ORDER,
@@ -22,6 +25,7 @@ from mean_field.systems.abc_trilayer.vituri2024_hf_preflight import (
 from mean_field.systems.abc_trilayer.vituri2024_hf_scf import (
     Vituri2024CartesianHFSpec,
     prepare_vituri2024_homogeneous_hf,
+    prepare_vituri2024_homogeneous_hf_fft,
 )
 from mean_field.systems.abc_trilayer.vituri2024_hf_spiral import (
     Vituri2024FiniteQSpiralChoice,
@@ -91,6 +95,26 @@ def test_q0_identity_gauge_is_exact_base_functional_reduction() -> None:
         prepared.functional.fock_derivative(density, direction),
         base.functional.fock_derivative(density, direction),
     )
+
+
+def test_q0_identity_gauge_preserves_exact_fft_base_functional() -> None:
+    base = prepare_vituri2024_homogeneous_hf_fft(
+        Vituri2024CartesianHFSpec(mesh_size=3, holes_per_valley=1),
+        fft_workers=2,
+    )
+    prepared = prepare_vituri2024_hf_spiral(
+        base,
+        Vituri2024FiniteQSpiralChoice(
+            q_inverse_angstrom=np.zeros(2, dtype=np.float64),
+            gauge_mode="identity",
+        ),
+    )
+
+    assert prepared.backend_kind == "fft"
+    assert type(prepared.functional) is Vituri2024TranslationalHFFFTFunctional
+    assert prepared.functional is base.functional
+    assert prepared.functional.fft_plan is base.functional.fft_plan
+    assert prepared.functional.fft_workers == 2
 
 
 def test_displayed_b3_gauge_is_positive_real_and_source_phase_covariant() -> None:
@@ -376,6 +400,19 @@ def test_prepared_live_validation_rejects_nested_and_writable_replacements() -> 
         clean.validate_live_state()
 
 
+    backend_clean = prepare_vituri2024_hf_spiral(
+        base,
+        Vituri2024FiniteQSpiralChoice(
+            q_inverse_angstrom=np.asarray([0.01, -0.02], dtype=np.float64)
+        ),
+    )
+    assert backend_clean.backend_kind == "dense"
+    object.__setattr__(backend_clean, "backend_kind", "fft")
+    assert backend_clean._current_fingerprint() != backend_clean.fingerprint
+    with pytest.raises(ValueError, match="backend kind drifted"):
+        backend_clean.validate_live_state()
+
+
 def test_nonzero_q_dense_functional_central_differences() -> None:
     base = _base()
     prepared = prepare_vituri2024_hf_spiral(
@@ -414,6 +451,86 @@ def test_nonzero_q_dense_functional_central_differences() -> None:
         rtol=2.0e-8,
         atol=2.0e-8,
     )
+
+
+def test_nonzero_q_dense_and_fft_energy_fock_df_and_action_parity() -> None:
+    spec = Vituri2024CartesianHFSpec(mesh_size=3, holes_per_valley=1)
+    dense_base = prepare_vituri2024_homogeneous_hf(spec)
+    fft_base = prepare_vituri2024_homogeneous_hf_fft(spec, fft_workers=2)
+    choice = Vituri2024FiniteQSpiralChoice(
+        q_inverse_angstrom=(
+            np.asarray([0.13, -0.07], dtype=np.float64)
+            * spec.delta_k_inverse_angstrom
+        ),
+        gauge_mode="displayed_b3",
+    )
+    dense = prepare_vituri2024_hf_spiral(dense_base, choice)
+    fft = prepare_vituri2024_hf_spiral(fft_base, choice)
+
+    assert dense.backend_kind == "dense"
+    assert fft.backend_kind == "fft"
+    assert type(dense.functional) is Vituri2024TranslationalHFFunctional
+    assert type(fft.functional) is Vituri2024TranslationalHFFFTFunctional
+    assert fft.functional is not fft_base.functional
+    assert np.array_equal(
+        fft.functional.integer_mesh_labels,
+        fft_base.functional.integer_mesh_labels,
+    )
+    assert (
+        fft.functional.delta_k_inverse_angstrom
+        == fft_base.functional.delta_k_inverse_angstrom
+    )
+    assert fft.functional.fft_workers == fft_base.functional.fft_workers == 2
+    assert fft.functional.mesh_receipt is fft_base.functional.mesh_receipt
+    assert (
+        fft.functional.interaction_receipt
+        == fft_base.functional.interaction_receipt
+    )
+    assert (
+        fft.functional.interaction_fingerprint
+        == fft_base.functional.interaction_fingerprint
+    )
+    assert fft.functional.interaction is fft_base.functional.interaction
+    assert np.array_equal(
+        fft.functional.normal_order_reference_native,
+        fft_base.functional.normal_order_reference_native,
+    )
+    assert (
+        fft.functional.normal_order_reference_fingerprint
+        == fft_base.functional.normal_order_reference_fingerprint
+    )
+    assert fft.functional.q0_choice is fft_base.functional.q0_choice
+    assert (
+        fft.functional.fft_plan.fingerprint
+        == fft_base.functional.fft_plan.fingerprint
+    )
+    assert (
+        fft.functional.fft_plan.no_wrap_policy
+        == fft_base.functional.fft_plan.no_wrap_policy
+    )
+    assert np.array_equal(fft.active_band_states, dense.active_band_states)
+    assert np.array_equal(fft.h0_native, dense.h0_native)
+
+    rng = np.random.default_rng(1006)
+    density = _random_hermitian_native(rng, dense.nk)
+    direction = _random_hermitian_native(rng, dense.nk)
+    assert fft.functional.energy(density) == pytest.approx(
+        dense.functional.energy(density), rel=5.0e-11, abs=5.0e-11
+    )
+    for fft_value, dense_value in (
+        (fft.functional.fock(density), dense.functional.fock(density)),
+        (
+            fft.functional.fock_derivative(density, direction),
+            dense.functional.fock_derivative(density, direction),
+        ),
+        (
+            fft.functional.interaction_action(direction),
+            dense.functional.interaction_action(direction),
+        ),
+    ):
+        np.testing.assert_allclose(
+            fft_value, dense_value, rtol=5.0e-11, atol=5.0e-11
+        )
 
 
 def test_ivc_native_orientation_and_total_hole_normalization() -> None:
@@ -617,6 +734,41 @@ def test_tiny_spiral_smoke_uses_generic_problem_and_fresh_fock_map() -> None:
             ),
         )
 
+    result.validate_live_state(prepared)
+
+
+def test_tiny_fft_spiral_problem_smoke() -> None:
+    base = prepare_vituri2024_homogeneous_hf_fft(
+        Vituri2024CartesianHFSpec(mesh_size=3, holes_per_valley=1),
+        fft_workers=1,
+    )
+    prepared = prepare_vituri2024_hf_spiral(
+        base,
+        Vituri2024FiniteQSpiralChoice(
+            q_inverse_angstrom=np.asarray(
+                [0.17 * base.spec.delta_k_inverse_angstrom, 0.0],
+                dtype=np.float64,
+            ),
+            selected_spin=1,
+            gauge_mode="displayed_b3",
+        ),
+    )
+    problem = make_vituri2024_hf_spiral_problem(prepared)
+    assert prepared.backend_kind == "fft"
+    assert type(prepared.functional) is Vituri2024TranslationalHFFFTFunctional
+    assert type(problem) is HartreeFockProblem
+    assert type(problem.kernel) is HartreeFockKernel
+
+    result = run_vituri2024_hf_spiral(
+        prepared,
+        init_mode="ivc_b3",
+        seed=0,
+        max_iter=2,
+        oda_stall_threshold=1.0e-12,
+        max_oda_lambda=1.0,
+    )
+    assert result.run.iterations >= 1
+    assert result.prepared_fingerprint == prepared.fingerprint
     result.validate_live_state(prepared)
 
 

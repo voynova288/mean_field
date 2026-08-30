@@ -60,6 +60,7 @@ from .vituri2024_hf import (
     Vituri2024TranslationalHFFunctional,
     vituri2024_native_density_to_conventional_k_diagonal,
 )
+from .vituri2024_hf_fft import Vituri2024TranslationalHFFFTFunctional
 from .vituri2024_hf_preflight import (
     ACTIVE_BAND_STATES_VALLEY_ORDER,
     INTERNAL_FLAVOR_ORDER,
@@ -72,8 +73,12 @@ from .vituri2024_hf_scf import (
 Array = np.ndarray
 GaugeMode = Literal["identity", "displayed_b3"]
 SpiralInitializerMode = Literal["normal", "ivc_b3"]
+SpiralBackendKind = Literal["dense", "fft"]
+SpiralHFFunctional = (
+    Vituri2024TranslationalHFFunctional | Vituri2024TranslationalHFFFTFunctional
+)
 
-VITURI2024_HF_SPIRAL_API_VERSION: Final[str] = "vituri2024_g0_ivc_spiral_candidate.v1"
+VITURI2024_HF_SPIRAL_API_VERSION: Final[str] = "vituri2024_g0_ivc_spiral_candidate.v2"
 VITURI2024_HF_SPIRAL_AUTHORITY: Final[str] = (
     "independent_displayed_b3_gauge_g0_finite_q_candidate_only_not_author_gauge_"
     "not_multig_crystal_production_or_fig2_reproduction"
@@ -193,6 +198,13 @@ def _flavor_indices(spin: int) -> tuple[int, int]:
         if flavor_spin == spin
     )  # type: ignore[return-value]
 
+
+def _spiral_backend_kind(functional: object) -> SpiralBackendKind:
+    if type(functional) is Vituri2024TranslationalHFFunctional:
+        return "dense"
+    if type(functional) is Vituri2024TranslationalHFFFTFunctional:
+        return "fft"
+    raise TypeError("spiral preparation requires an exact dense or FFT functional")
 
 @dataclass(frozen=True, slots=True)
 class Vituri2024FiniteQSpiralChoice:
@@ -421,7 +433,7 @@ def apply_vituri2024_displayed_b3_gauge(
 
 @dataclass(frozen=True, slots=True)
 class Vituri2024PreparedHFSpiral:
-    """Immutable shifted-state preparation bound to the unchanged dense functional."""
+    """Immutable shifted-state preparation preserving its dense or FFT backend."""
 
     base_prepared_fingerprint: str
     choice: Vituri2024FiniteQSpiralChoice
@@ -432,8 +444,9 @@ class Vituri2024PreparedHFSpiral:
     active_band_states: Array
     active_band_energies_by_valley: Array
     h0_native: Array
-    functional: Vituri2024TranslationalHFFunctional
+    functional: SpiralHFFunctional
     gauge_receipt: Vituri2024DisplayedB3GaugeReceipt | None
+    backend_kind: SpiralBackendKind = field(init=False)
     minimum_lower_gap_ev: float
     minimum_upper_gap_ev: float
     fingerprint: str = field(init=False)
@@ -504,8 +517,8 @@ class Vituri2024PreparedHFSpiral:
         )
         if not np.array_equal(self.shifted_momenta_by_valley, expected_shifted):
             raise ValueError("prepared spiral shifted momenta violate p_tau,k=k+tau*q/2")
-        if type(self.functional) is not Vituri2024TranslationalHFFunctional:
-            raise TypeError("spiral preparation requires the unchanged dense functional")
+        backend_kind = _spiral_backend_kind(self.functional)
+        object.__setattr__(self, "backend_kind", backend_kind)
         if (
             self.functional.nk != nk
             or not np.array_equal(self.functional.ordered_mesh, self.ordered_mesh)
@@ -564,6 +577,7 @@ class Vituri2024PreparedHFSpiral:
                 "states": _array_sha256(self.active_band_states),
                 "energies": _array_sha256(self.active_band_energies_by_valley),
                 "h0": _array_sha256(self.h0_native),
+                "backend_kind": self.backend_kind,
                 "functional": self.functional.fingerprint,
                 "gauge": None if self.gauge_receipt is None else self.gauge_receipt.fingerprint,
                 "minimum_lower_gap_ev": self.minimum_lower_gap_ev,
@@ -649,8 +663,9 @@ class Vituri2024PreparedHFSpiral:
             ]
         if not np.array_equal(self.h0_native, expected_h0):
             raise ValueError("prepared spiral energies/h0 binding drifted")
-        if type(self.functional) is not Vituri2024TranslationalHFFunctional:
-            raise TypeError("prepared spiral functional type drifted")
+        live_backend_kind = _spiral_backend_kind(self.functional)
+        if self.backend_kind != live_backend_kind:
+            raise ValueError("prepared spiral backend kind drifted")
         self.functional.validate_live_state()
         if (
             self.functional.nk != nk
@@ -712,8 +727,7 @@ def prepare_vituri2024_hf_spiral(
         raise TypeError("choice must be Vituri2024FiniteQSpiralChoice")
     base.validate_live_state()
     choice.validate_live_state()
-    if type(base.functional) is not Vituri2024TranslationalHFFunctional:
-        raise TypeError("first spiral milestone requires the dense translational oracle")
+    base_backend_kind = _spiral_backend_kind(base.functional)
     if base.spec.holes_per_valley >= base.spec.nk:
         raise ValueError("first spiral milestone requires an interior selected-spin rank")
 
@@ -762,27 +776,49 @@ def prepare_vituri2024_hf_spiral(
         for flavor, (valley, _spin) in enumerate(INTERNAL_FLAVOR_ORDER):
             h0_mutable[flavor, flavor, :] = energies[valley_to_index[valley], :]
         h0 = _readonly(h0_mutable, np.dtype(np.complex128))
-        functional = Vituri2024TranslationalHFFunctional(
-            ordered_mesh=base.ordered_mesh,
-            active_band_states=states,
-            h0_native=h0,
-            normal_order_reference_native=base.functional.normal_order_reference_native,
-            mesh_receipt=base.functional.mesh_receipt,
-            interaction=base.functional.interaction,
-            normal_order_reference_fingerprint=(
+        common_functional_arguments = {
+            "ordered_mesh": base.ordered_mesh,
+            "active_band_states": states,
+            "h0_native": h0,
+            "normal_order_reference_native": (
+                base.functional.normal_order_reference_native
+            ),
+            "mesh_receipt": base.functional.mesh_receipt,
+            "interaction": base.functional.interaction,
+            "normal_order_reference_fingerprint": (
                 base.functional.normal_order_reference_fingerprint
             ),
-            q0_choice=base.functional.q0_choice,
-            provenance=(
+            "q0_choice": base.functional.q0_choice,
+            "provenance": (
                 "G=0 p_tau,k=k+tau*q/2 IVC-spiral candidate using the original "
-                "finite square, area, kernel choice, reference, and q=0 policy."
+                "finite square, area, kernel choice, reference, q=0 policy, and "
+                "dense-or-exact-no-wrap-FFT backend kind."
             ),
-        )
-        if not np.array_equal(
-            functional.kernel_by_mesh_pair,
-            base.functional.kernel_by_mesh_pair,
-        ):
-            raise RuntimeError("shifted preparation changed the original central-mesh kernel")
+        }
+        if base_backend_kind == "dense":
+            dense_base = base.functional
+            functional = Vituri2024TranslationalHFFunctional(
+                **common_functional_arguments
+            )
+            if not np.array_equal(
+                functional.kernel_by_mesh_pair,
+                dense_base.kernel_by_mesh_pair,
+            ):
+                raise RuntimeError(
+                    "shifted preparation changed the original central-mesh kernel"
+                )
+        else:
+            fft_base = base.functional
+            functional = Vituri2024TranslationalHFFFTFunctional(
+                integer_mesh_labels=fft_base.integer_mesh_labels,
+                delta_k_inverse_angstrom=fft_base.delta_k_inverse_angstrom,
+                fft_workers=fft_base.fft_workers,
+                **common_functional_arguments,
+            )
+            if functional.fft_plan.fingerprint != fft_base.fft_plan.fingerprint:
+                raise RuntimeError(
+                    "shifted preparation changed the exact no-wrap FFT plan"
+                )
         minimum_lower_gap = float(np.min(lower_gaps))
         minimum_upper_gap = float(np.min(upper_gaps))
 
