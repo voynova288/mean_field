@@ -1,0 +1,81 @@
+{
+  "authority": {
+    "all14_saved_ivc_stationary_closure": true,
+    "candidate_g0_spiral_implementation": true,
+    "fig2_reproduction_verified": false,
+    "normal_comparator_closure": false,
+    "optimal_q_established": false,
+    "paper_reproduction_verified": false,
+    "production_ready": false,
+    "unrestricted_ground_state_established": false,
+    "uv_convergence_established": false
+  },
+  "jobs": {
+    "all14_continuation": {
+      "attempts": 14,
+      "commutator_residual_ev_range": [
+        3.383759954315866e-11,
+        5.930300694982118e-11
+      ],
+      "converged_stationary": 14,
+      "exit_code": "0:0",
+      "fresh_raw_norm_range": [
+        3.685307281564576e-09,
+        4.652550567030289e-09
+      ],
+      "idempotency_residual_max": 1.5543214801729046e-15,
+      "iteration_range": [
+        10,
+        63
+      ],
+      "job_id": "468739",
+      "maximum_absolute_phi_ratio_drift": 6.333557367455e-08,
+      "occupation_gap_ev_range": [
+        6.490074695442161e-07,
+        3.534306569996648e-05
+      ],
+      "runroot": "/data/home/ziyuzhu/.runs/Mean_Field_8e96b6e_vituri_fig2_spiral_fullstep_all14_v1_20260831",
+      "scheduler_state": "COMPLETED",
+      "sentinel_kind": "COMPLETE",
+      "sentinel_sha256": "4061892d725547cff3ac4775555f1e9d7fcdd18eef56078f9d6cb6eaecb93858",
+      "summary_sha256": "784f5082063a3b6ae8e6b95ac1a78ee3148d884e464e0cfef2149793a35fa39c"
+    },
+    "initial_q_scout": {
+      "attempt_completed": 20,
+      "attempts": 28,
+      "exit_code": "0:0",
+      "job_id": "468711",
+      "runroot": "/data/home/ziyuzhu/.runs/Mean_Field_4fc36f4_vituri_fig2_spiral_q_scout_v3_20260831",
+      "scheduler_state": "COMPLETED",
+      "sentinel_kind": "DIAGNOSTIC_INCOMPLETE",
+      "sentinel_sha256": "0f3e3ab2ec3a91d427192f2ee354d35628630ca7810dffab72ab6a8d69c44dfd",
+      "stationary_ivc_endpoints_before_continuation": 0,
+      "stationary_normal_endpoints": 6,
+      "summary_sha256": "4a6cf510bfb49f79a6c0f7aa594f11b82cf9d014fe02700c52b41ce37b48a28d",
+      "typed_exact_boundary_rejections": 8
+    },
+    "two_case_discriminator": {
+      "converged_stationary": 2,
+      "exit_code": "0:0",
+      "job_id": "468737",
+      "runroot": "/data/home/ziyuzhu/.runs/Mean_Field_8e96b6e_vituri_fig2_spiral_fullstep_discriminator_v2_20260831",
+      "scheduler_state": "COMPLETED",
+      "sentinel_kind": "COMPLETE",
+      "sentinel_sha256": "f59dfc4a16d2d0ff168bac770e28db53d83de9c44df906c136b4cdd24e6381a2",
+      "summary_sha256": "244ac5fce8c00293b37eb67f6d8e1136d006f98f8f8e73b7a694381a6135ab08"
+    }
+  },
+  "physics_conclusion": "all 14 saved IVC endpoints converge to stationary selected-spin G0 finite-domain candidates under exact full-step continuation; 13 prior exact-lambda-zero ODA stalls were line-search termination artifacts for this declared inventory",
+  "remaining_blockers": [
+    "eight matched normal cases require deterministic exhaustive exact-shell treatment",
+    "cross-q energy ordering remains unauthorized on shifted finite domains",
+    "UV/domain convergence absent",
+    "unrestricted/multi-G crystal/author-gauge/Fig2 reproduction absent"
+  ],
+  "schema": "mean_field.vituri2024.fig2_g0_spiral_candidate_progress.v1",
+  "source_commits": {
+    "fft_backend": "4fc36f4",
+    "initial_spiral_api": "e12486e",
+    "saved_density_full_step": "8e96b6ed04f47aebdbb9735a1a5f10aef13a3c61"
+  }
+}

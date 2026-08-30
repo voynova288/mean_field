@@ -1,6 +1,6 @@
 # Vituri 2024 ABC 三层石墨烯 HF/TDHF 复现状态
 
-更新时间：2026-08-30
+更新时间：2026-08-31
 
 分支：`debug/vituri-scalar-hessian`
 
@@ -280,7 +280,56 @@ line thickness 与边界裁切限制；这限制 `author-exact/full-paper` 标�
 阻塞本次 chosen-contract panel 复现。旧 N101 mismatch 图已从 active reports
 删除，避免继续代表当前最佳结果。
 
-## 7. TDHF/scalar-Hessian authority
+## 7. Fig. 2 单-q IVC spiral 候选进展
+
+在 Fig. 4(c) 闭合之后，本分支新增了体系层
+`vituri2024_hf_spiral.py`。它实现 SM 中 `G=0` 的 shifted-valley 基底
+`p_(tau,k)=k+tau*q/2`，复用既有 exact no-wrap `E/F/dF` 与通用
+`run_hartree_fock_problem`；没有复制 SCF loop。选定自旋的两个 valley 只固定
+总 rank `2*Nk-2*H_v`，允许 valley redistribution 与 IVC coherence；另一自旋
+保持全满。显示基底的 B3 分量被独立固定为正实数，但由于论文 `B3/psi_6`
+文字冲突，它不是 author-gauge authority。`G=0` 也不能表示三-q IVC crystal。
+
+代码里 dense 与 FFT 在非零 q 的 interaction action、energy、Fock 与 dF 已通过
+小网格 parity；q=0 identity gauge 则逐字节退化为旧 homogeneous functional。
+提交 `e12486e`、`4fc36f4` 与 `8e96b6e` 分别加入候选 spiral API、FFT backend
+和 hash-bound saved-density/full-step continuation。相关 focused/API 测试为
+`62 passed`；完整 non-slow suite 另有一个与本改动无关的历史 TBG artifact
+fingerprint mismatch，因此未把该单项失败归因于 Vituri。
+
+首个 N81、`a0*Delta k=0.004`、`d=369 Angstrom`、`Delta1=28 meV` 的 q scout
+job `468711` 覆盖 `H_v=635,747`、`qa0=0,0.02,...,0.07` 和 normal/IVC 两个
+initializer，共 28 次尝试。它按预注册 gate 正确发布
+`DIAGNOSTIC_INCOMPLETE`：6 个 normal endpoint stationary，8 个 normal 尝试在
+全局 selected-spin occupation boundary 的 exact zero gap 上 fail closed；14 个
+IVC 候选保持非零 `|phi|/n_h`，但 13 个因 ODA 选择精确 `lambda=0` 而 stall，
+一个达到 max iteration，故当时没有授权能量比较。
+
+后续 job `468737` 先对每个 density 中 `|phi|` 最大的 exact-lambda-zero 候选做
+两个 preregistered full-step discriminator；两者分别在 34、14 步收敛。随后 job
+`468739` 对全部 14 个保存的 IVC density 做 exact hash-bound continuation，结果
+**14/14 converged 且 fresh-map stationary**：
+
+- full-step iterations：`10--63`；
+- fresh-map max residual：`3.685e-9--4.653e-9`；
+- commutator residual：`3.384e-11--5.930e-11 eV`；
+- idempotency residual 最大约 `1.55e-15`；
+- occupation gap：`6.49e-7--3.53e-5 eV`；
+- `|phi|/n_h` 的最大 absolute drift 约 `6.33e-8`，没有候选塌缩到
+  `phi=0` normal branch。
+
+这说明在本次声明的 14 个有限域候选里，原 ODA `lambda=0` 终止不能解释为
+“没有邻近 IVC fixed point”；强制相同 HF projector map 取 full step 后均闭合。
+它不证明 full-step 一般优于 ODA，也不授予 optimal-q 或能量下降 authority。
+当前最直接的 blocker 是 8 个 matched normal comparator 的 exact-shell
+穷举与 replay closure；在此之前不报告完整 `Delta E_IVC-normal(q)`、最佳 q 或
+Fig. 2 reproduction。cross-q 比较还受 shifted finite-domain UV 边界影响。
+
+机器可读证据：
+`reports/data/vituri2024_fig2_g0_spiral_candidate_progress_468711_468739.json`
+（SHA256 `cee4b03b6d506080d28899d1cc67d4876f08360143b446b7d5781fccce19f773`）。
+
+## 8. TDHF/scalar-Hessian authority
 
 generic/reduced TDHF algebra 与候选 provider/replay 层次来自该分支此前的独立
 测试和 artifact，不是 HF-only jobs `461276` 或 `462560` 的结论，也不授予
@@ -295,7 +344,7 @@ production TDHF authority。这两条 HF 证据链都没有证明：
 因此当前仍是 **Vituri HF/TDHF debug 与资格审计分支**，不是 production
 TDHF 结果分支。
 
-## 8. 当前结论与后续边界
+## 9. 当前结论与后续边界
 
 Fig. 4(c) 的 chosen-contract HF panel 复现已经闭合，不再等待作者 exact
 numerical policy。后续若继续推进 TDHF，才需要独立检查 unrestricted/coherent
@@ -311,6 +360,9 @@ uv_plateau_established = false
 author_cutoff_identified = false
 unrestricted_ground_state_established = false
 full_paper_reproduction_verified = false
+selected_spin_g0_ivc_saved_endpoint_stationary_closure = true
+matched_normal_exact_shell_closure = false
+fig2_reproduction_verified = false
 local_hf_stability_proved = false
 tdhf_authority = false
 production_authority = false
