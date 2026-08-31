@@ -28,9 +28,9 @@ from mean_field.systems.abc_trilayer.vituri2024_hf_spiral_normal_closure import 
 )
 
 
-def _prepared(*, q_a0: float = 0.02, selected_spin: int = 1):
+def _prepared(*, q_a0: float = 0.02, selected_spin: int = 1, holes_per_valley: int = 1):
     base = prepare_vituri2024_homogeneous_hf(
-        Vituri2024CartesianHFSpec(mesh_size=3, holes_per_valley=1)
+        Vituri2024CartesianHFSpec(mesh_size=3, holes_per_valley=holes_per_valley)
     )
     return prepare_vituri2024_hf_spiral(
         base,
@@ -232,6 +232,24 @@ def test_policy_and_initializer_are_immutable_and_hash_bound() -> None:
         policy.max_iter = 1  # type: ignore[misc]
     drifted = replace(policy, max_iter=policy.max_iter + 1)
     assert drifted.fingerprint != policy.fingerprint
+
+
+def test_exact_h0_shell_is_bound_only_as_declared_common_seed() -> None:
+    prepared = _prepared(q_a0=0.06, holes_per_valley=3)
+    initializer = build_vituri2024_spiral_normal_initializer(
+        prepared, policy=Vituri2024SpiralNormalClosurePolicy()
+    )
+    assert initializer.boundary.kind == "exact"
+    assert initializer.h0_boundary_role == "declared_common_seed_exact_shell"
+    assert len(initializer.selected_occupied_flat_indices) == prepared.selected_rank
+    selected = (1, 3)
+    flat = np.concatenate(
+        [prepared.h0_native[flavor, flavor, :].real for flavor in selected]
+    )
+    canonical = np.arange(2 * prepared.nk, dtype=np.int64)
+    holes = np.lexsort((canonical, -flat))[: 2 * prepared.holes_per_valley]
+    expected = tuple(int(value) for value in np.flatnonzero(~np.isin(canonical, holes)))
+    assert initializer.selected_occupied_flat_indices == expected
 
 
 def test_tiny_real_path_uses_only_generic_full_steps_and_closes() -> None:

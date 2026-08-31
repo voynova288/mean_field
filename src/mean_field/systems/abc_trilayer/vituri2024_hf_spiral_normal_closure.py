@@ -256,6 +256,8 @@ class Vituri2024SpiralNormalInitializer:
     prepared_fingerprint: str
     policy_fingerprint: str
     boundary: Vituri2024SpiralNormalBoundary
+    h0_boundary_role: Literal["unique_aufbau", "declared_common_seed_exact_shell"]
+    selected_occupied_flat_indices: tuple[int, ...]
     fingerprint: str = field(init=False)
 
     def __post_init__(self) -> None:
@@ -264,7 +266,31 @@ class Vituri2024SpiralNormalInitializer:
             raise ValueError("normal initializer density shape mismatch")
         if self.density_sha256 != _array_sha256(density):
             raise ValueError("normal initializer density hash mismatch")
+        occupied = tuple(
+            _strict_int(value, "initializer occupied index")
+            for value in self.selected_occupied_flat_indices
+        )
+        if tuple(sorted(set(occupied))) != occupied or len(occupied) != self.boundary.selected_rank:
+            raise ValueError("normal initializer occupied inventory is invalid")
+        if self.h0_boundary_role == "unique_aufbau":
+            valid = self.boundary.kind == "unique" and occupied == self.boundary.occupied_flat_indices
+        elif self.h0_boundary_role == "declared_common_seed_exact_shell":
+            selected_shell = set(occupied) & set(self.boundary.shell_flat_indices)
+            valid = (
+                self.boundary.kind == "exact"
+                and set(self.boundary.strictly_below_flat_indices).issubset(occupied)
+                and set(occupied).issubset(
+                    set(self.boundary.strictly_below_flat_indices)
+                    | set(self.boundary.shell_flat_indices)
+                )
+                and len(selected_shell) == self.boundary.shell_selected_rank
+            )
+        else:
+            raise ValueError("normal initializer h0 boundary role is invalid")
+        if not valid:
+            raise ValueError("normal initializer boundary/occupation receipt is inconsistent")
         object.__setattr__(self, "density_native", density)
+        object.__setattr__(self, "selected_occupied_flat_indices", occupied)
         object.__setattr__(
             self,
             "fingerprint",
@@ -275,6 +301,8 @@ class Vituri2024SpiralNormalInitializer:
                     "prepared_fingerprint": self.prepared_fingerprint,
                     "policy_fingerprint": self.policy_fingerprint,
                     "boundary_fingerprint": self.boundary.fingerprint,
+                    "h0_boundary_role": self.h0_boundary_role,
+                    "selected_occupied_flat_indices": occupied,
                 }
             ),
         )
@@ -699,7 +727,14 @@ def build_vituri2024_spiral_normal_initializer(
     *,
     policy: Vituri2024SpiralNormalClosurePolicy,
 ) -> Vituri2024SpiralNormalInitializer:
-    """Build one open-gap common normal initializer without sorting."""
+    """Bind the one declared common normal seed used by the source scout.
+
+    A unique h0 boundary is independently rebuilt by thresholding. An exact
+    h0 boundary is allowed only as an explicit initializer receipt: the source
+    scout's deterministic coordinate seed is validated against the full exact
+    shell but is not promoted to a physical occupation choice. Exact shells
+    encountered by an applied SCF map are still exhaustively fanned out.
+    """
 
     if _max_abs(prepared.functional.normal_order_reference_conventional) != 0.0:
         raise ValueError(
@@ -708,24 +743,55 @@ def build_vituri2024_spiral_normal_initializer(
     boundary = analyze_vituri2024_spiral_normal_boundary(
         prepared, np.asarray(prepared.h0_native), policy=policy
     )
-    if boundary.kind != "unique":
+    if boundary.kind == "positive_subtolerance":
         raise _ScientificTerminal(
-            "h0_normal_boundary_rejection",
+            "h0_normal_positive_subtolerance_rejection",
             "common_initializer",
-            "common normal h0 boundary is not uniquely open",
+            "common normal h0 boundary has a positive sub-tolerance splitting",
             {"h0": np.asarray(prepared.h0_native).copy()},
         )
-    independent = _density_from_boundary(prepared, boundary, None)
     existing = make_vituri2024_spiral_initial_density(prepared, init_mode="normal")
-    if not np.array_equal(independent, existing):
-        raise RuntimeError("independent threshold initializer disagrees with spiral normal initializer")
+    conventional = vituri2024_native_density_to_conventional_k_diagonal(existing)
+    selected = _selected_flavors(prepared)
+    selected_diagonal = np.concatenate(
+        [conventional[flavor, flavor, :].real for flavor in selected]
+    )
+    if _max_abs(selected_diagonal - np.rint(selected_diagonal)) != 0.0:
+        raise RuntimeError("declared common normal initializer is not an exact coordinate projector")
+    occupied = tuple(int(value) for value in np.flatnonzero(selected_diagonal == 1.0))
+    h0_flat = np.concatenate(
+        [np.asarray(prepared.h0_native[flavor, flavor, :].real) for flavor in selected]
+    )
+    canonical_flat_indices = np.arange(2 * prepared.nk, dtype=np.int64)
+    # Independently reproduce the source scout's declared descending-energy,
+    # canonical-C-order seed rule. The secondary integer key is explicit;
+    # this is an initializer lineage receipt, not a physical shell selector.
+    descending_seed_order = np.lexsort((canonical_flat_indices, -h0_flat))
+    hole_count = 2 * prepared.holes_per_valley
+    expected_occupied = tuple(
+        int(value)
+        for value in np.flatnonzero(
+            ~np.isin(canonical_flat_indices, descending_seed_order[:hole_count])
+        )
+    )
+    if occupied != expected_occupied:
+        raise RuntimeError("declared common normal initializer canonical seed inventory drifted")
+    if boundary.kind == "unique":
+        independent = _density_from_boundary(prepared, boundary, None)
+        if not np.array_equal(independent, existing):
+            raise RuntimeError("independent threshold initializer disagrees with spiral normal initializer")
+        role: Literal["unique_aufbau", "declared_common_seed_exact_shell"] = "unique_aufbau"
+    else:
+        role = "declared_common_seed_exact_shell"
     return Vituri2024SpiralNormalInitializer(
-        density_native=independent,
-        density_sha256=_array_sha256(independent),
+        density_native=existing,
+        density_sha256=_array_sha256(existing),
         h0_sha256=_array_sha256(prepared.h0_native),
         prepared_fingerprint=prepared.fingerprint,
         policy_fingerprint=policy.fingerprint,
         boundary=boundary,
+        h0_boundary_role=role,
+        selected_occupied_flat_indices=occupied,
     )
 
 
