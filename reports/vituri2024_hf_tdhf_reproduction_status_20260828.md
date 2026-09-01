@@ -321,13 +321,53 @@ IVC 候选保持非零 `|phi|/n_h`，但 13 个因 ODA 选择精确 `lambda=0` �
 这说明在本次声明的 14 个有限域候选里，原 ODA `lambda=0` 终止不能解释为
 “没有邻近 IVC fixed point”；强制相同 HF projector map 取 full step 后均闭合。
 它不证明 full-step 一般优于 ODA，也不授予 optimal-q 或能量下降 authority。
-当前最直接的 blocker 是 8 个 matched normal comparator 的 exact-shell
-穷举与 replay closure；在此之前不报告完整 `Delta E_IVC-normal(q)`、最佳 q 或
-Fig. 2 reproduction。cross-q 比较还受 shifted finite-domain UV 边界影响。
+
+随后提交 `2dbb809` 与 `38441da` 加入 normal exact-shell BFS、共同 initializer
+重放和 exact-h0 seed lineage。历史 normal initializer 在部分参数上位于 exact
+noninteracting h0 shell；这里只把其 canonical C-order coordinate choice 绑定为
+job `468711` 的共同 pre-SCF seed，不把它提升成物理 shell selector。任何实际
+applied SCF Fock map 上的 exact frontier 仍穷举全部 coordinate projectors。
+
+Normal closure jobs `469823` 与 recovery `469847` 的 hash-bound merge 已闭合
+全部 8 个预声明执行 inventory：
+
+- 7 个参数点得到共 `1088/1088` 个 fresh-map stationary normal endpoints，全部
+  terminal replay、full-step 和 branch-tree exhaustion 通过；
+- `(H_v,q a0)=(635,0.03)` 的 16 条 exhaustive paths 全部得到 typed
+  `positive_subtolerance_splitting_rejection`，所以本协议没有授权该点的 normal
+  comparator；这不证明协议之外不存在 normal stationary solution；
+- `(747,0.07)` 的扩大-cap recovery 穷举 `2051` 个节点，得到 `1028/1028`
+  stationary endpoints，分成 8 个 density groups。
+
+仅对 7 个具有 normal endpoint 的相同 `(H_v,q)` 对，使用相同
+base/functional/gauge physical-map fingerprints 计算
+`1000*(E_IVC-E_normal)`。以下数值是固定 N81 finite square 的 raw **total**
+scalar-energy difference（meV），没有按 hole、particle、cell 或 area 归一化，
+也不是论文 Fig. 2 的报告尺度：
+
+| holes/valley | q a0 | normal leaves | Delta E range (meV) |
+|---:|---:|---:|---:|
+| 635 | 0.02 | 6 | -660.5420 to -660.4199 |
+| 635 | 0.03 | 0 | unavailable: 16 typed positive-subtolerance rejections |
+| 635 | 0.05 | 2 | -449.4190 to -449.4190 |
+| 635 | 0.06 | 8 | -270.2656 to -269.9346 |
+| 635 | 0.07 | 36 | -147.6193 to 387.2849 |
+| 747 | 0.04 | 2 | -449.2970 to -449.2970 |
+| 747 | 0.05 | 6 | -477.4558 to -477.4314 |
+| 747 | 0.07 | 1028 | -143.7555 to 160.3716 |
+
+所有 normal leaves 都保留，未按能量、symmetry 或 diagnostics postselect；因此
+两个 `q a0=0.07` 点的 sign 是 branch-dependent，而不是唯一 phase-ordering
+结论。由于 `(635,0.03)` 没有合法 comparator、normal branch 也未证明唯一，完整
+Fig. 2 curve、最佳 q、cross-q 排序和 paper reproduction 仍未授权；cross-q 比较
+还受 shifted finite-domain UV 边界影响。
 
 机器可读证据：
-`reports/data/vituri2024_fig2_g0_spiral_candidate_progress_468711_468739.json`
-（SHA256 `cee4b03b6d506080d28899d1cc67d4876f08360143b446b7d5781fccce19f773`）。
+
+- `reports/data/vituri2024_fig2_g0_spiral_candidate_progress_468711_468739.json`
+  （SHA256 `cee4b03b6d506080d28899d1cc67d4876f08360143b446b7d5781fccce19f773`）；
+- `reports/data/vituri2024_fig2_normal_exact_shell_closure_469823_469847_merge_v8.json`
+  （SHA256 `3fa3311c645bd6fa9ab4bc200ce85a15857092533cfeda1c72fabb73599e0ea5`）。
 
 ## 8. TDHF/scalar-Hessian authority
 
@@ -361,7 +401,12 @@ author_cutoff_identified = false
 unrestricted_ground_state_established = false
 full_paper_reproduction_verified = false
 selected_spin_g0_ivc_saved_endpoint_stationary_closure = true
+normal_exact_shell_execution_inventory_closed = true
+stationary_normal_comparator_case_count = 7
+same_q_raw_total_energy_comparison_case_count = 7
+all_eight_stationary_normal_comparators_available = false
 matched_normal_exact_shell_closure = false
+same_q_phase_ordering_established = false
 fig2_reproduction_verified = false
 local_hf_stability_proved = false
 tdhf_authority = false
