@@ -339,6 +339,21 @@ Normal closure jobs `469823` 与 recovery `469847` 的 hash-bound merge 已闭�
 - `(747,0.07)` 的扩大-cap recovery 穷举 `2051` 个节点，得到 `1028/1028`
   stationary endpoints，分成 8 个 density groups。
 
+针对 `(635,0.03)`，job `474291` 又对覆盖全部 16 条 rejection paths 的两个
+unique density classes 做了独立 O(Nk^2) dense-Fock oracle。每个 class 中，保存的
+Hamiltonian 与重新计算的 FFT Fock **逐数组完全相等**；FFT boundary gap 均为
+`2.220446049250313e-16 eV`，在绑定的 `1e-12 eV` roundoff envelope 内，因此被
+原规则分类为 positive-subtolerance。独立 dense action 则在两个 density 上都给出
+逐浮点 exact `gap=0`。dense/FFT 的完整 Fock 最大差仅
+`6.661365969895318e-16 eV`，scalar-energy 差为
+`3.637978807091713e-12 eV`，均通过预注册 parity gate。
+
+所以这里的正 gap 已定位为 **相对 dense float64 oracle 的 FFT-backend-specific
+arithmetic splitting**，不是已证明的物理有限域 lifting。但该 oracle 只诊断原因，
+没有改写已执行的 applied-map 轨迹，因而仍未凭自身恢复 normal comparator。下一步
+必须做 dense-oracle-bound exact-shell replay，或先证明一个 symmetry-preserving FFT
+map correction；不能简单放宽 tolerance 或把该 rejection 后处理成 endpoint。
+
 仅对 7 个具有 normal endpoint 的相同 `(H_v,q)` 对，使用相同
 base/functional/gauge physical-map fingerprints 计算
 `1000*(E_IVC-E_normal)`。以下数值是固定 N81 finite square 的 raw **total**
@@ -367,7 +382,9 @@ Fig. 2 curve、最佳 q、cross-q 排序和 paper reproduction 仍未授权；cr
 - `reports/data/vituri2024_fig2_g0_spiral_candidate_progress_468711_468739.json`
   （SHA256 `cee4b03b6d506080d28899d1cc67d4876f08360143b446b7d5781fccce19f773`）；
 - `reports/data/vituri2024_fig2_normal_exact_shell_closure_469823_469847_merge_v8.json`
-  （SHA256 `3fa3311c645bd6fa9ab4bc200ce85a15857092533cfeda1c72fabb73599e0ea5`）。
+  （SHA256 `3fa3311c645bd6fa9ab4bc200ce85a15857092533cfeda1c72fabb73599e0ea5`）；
+- `reports/data/vituri2024_fig2_q003_dense_boundary_oracle_474291_attestation.json`
+  （SHA256 `09daa514f91246698269a132828add8591fbf4a11e508f81985b0a1b3c13b0e5`）。
 
 ## 8. TDHF/scalar-Hessian authority
 
@@ -405,6 +422,8 @@ normal_exact_shell_execution_inventory_closed = true
 stationary_normal_comparator_case_count = 7
 same_q_raw_total_energy_comparison_case_count = 7
 all_eight_stationary_normal_comparators_available = false
+q003_positive_subtolerance_root_cause_localized_to_fft_backend_arithmetic = true
+q003_normal_comparator_recovered = false
 matched_normal_exact_shell_closure = false
 same_q_phase_ordering_established = false
 fig2_reproduction_verified = false
