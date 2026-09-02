@@ -4,7 +4,12 @@ This module closes only the translation-preserving, valley-incoherent normal
 coordinate sector at one prepared finite-q spiral problem.  The selected spin
 has one global rank across both valleys; the opposite spin is exactly full.
 Every unresolved exact Fock shell is expanded in canonical coordinate order
-and every descendant is replayed from one common normal initializer.
+and every descendant is replayed from one common normal initializer. An
+optional same-physics dense float64 boundary oracle may replace only an FFT
+positive-subtolerance boundary by an independently exact dense shell, after
+same-density FFT recomputation, full-Fock, boundary-gap, scalar-energy, gauge,
+mesh, reference, and interaction lineage gates pass. The old FFT rejection is
+never relabeled and no tolerance is loosened.
 
 The SCF map is always executed by :func:`run_hartree_fock_problem`.  This
 adapter declares exact full steps as a separate fixed-point discriminator.
@@ -47,6 +52,7 @@ from .vituri2024_hf_spiral import (
 Array = NDArray[np.generic]
 BoundaryKind = Literal["unique", "exact", "positive_subtolerance"]
 VITURI2024_SPIRAL_NORMAL_CLOSURE_API_VERSION = "1"
+VITURI2024_SPIRAL_NORMAL_DENSE_BOUNDARY_ORACLE_API_VERSION = "1"
 VITURI2024_SPIRAL_NORMAL_CLOSURE_AUTHORITY = (
     "candidate finite-domain translation-preserving valley-incoherent normal "
     "global-rank coordinate-sector exact-shell closure"
@@ -249,6 +255,71 @@ class Vituri2024SpiralNormalBoundary:
 
 
 @dataclass(frozen=True, slots=True)
+class Vituri2024SpiralNormalDenseBoundaryOracleReceipt:
+    pair_fingerprint: str
+    density_sha256: str
+    applied_fft_fock_sha256: str
+    dense_oracle_fock_sha256: str
+    applied_boundary: Vituri2024SpiralNormalBoundary
+    dense_boundary: Vituri2024SpiralNormalBoundary
+    applied_fft_recompute_exact: bool
+    dense_fft_fock_max_abs_ev: float
+    dense_fft_boundary_gap_abs_difference_ev: float
+    dense_fft_energy_abs_ev: float
+    fock_parity_gate_ev: float
+    energy_parity_gate_ev: float
+    fingerprint: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        if not self.pair_fingerprint or not self.density_sha256:
+            raise ValueError("dense boundary oracle pair/density binding is empty")
+        if (
+            not self.applied_fft_fock_sha256
+            or not self.dense_oracle_fock_sha256
+            or self.applied_boundary.kind != "positive_subtolerance"
+            or self.dense_boundary.kind != "exact"
+            or self.applied_fft_recompute_exact is not True
+        ):
+            raise ValueError("dense boundary oracle map/classification binding is invalid")
+        values = {
+            "dense_fft_fock_max_abs_ev": self.dense_fft_fock_max_abs_ev,
+            "dense_fft_boundary_gap_abs_difference_ev": self.dense_fft_boundary_gap_abs_difference_ev,
+            "dense_fft_energy_abs_ev": self.dense_fft_energy_abs_ev,
+            "fock_parity_gate_ev": self.fock_parity_gate_ev,
+            "energy_parity_gate_ev": self.energy_parity_gate_ev,
+        }
+        for label, value in values.items():
+            if not isinstance(value, Real) or not math.isfinite(float(value)) or float(value) < 0.0:
+                raise ValueError(f"{label} must be finite and nonnegative")
+        if self.fock_parity_gate_ev <= 0.0 or self.energy_parity_gate_ev <= 0.0:
+            raise ValueError("dense boundary oracle parity gates must be positive")
+        if (
+            self.dense_fft_fock_max_abs_ev > self.fock_parity_gate_ev
+            or self.dense_fft_boundary_gap_abs_difference_ev > self.fock_parity_gate_ev
+            or self.dense_fft_energy_abs_ev > self.energy_parity_gate_ev
+        ):
+            raise ValueError("dense boundary oracle parity gate failed")
+        object.__setattr__(
+            self,
+            "fingerprint",
+            _fingerprint(
+                {
+                    "dense_boundary_oracle_api_version": (
+                        VITURI2024_SPIRAL_NORMAL_DENSE_BOUNDARY_ORACLE_API_VERSION
+                    ),
+                    "pair_fingerprint": self.pair_fingerprint,
+                    "density_sha256": self.density_sha256,
+                    "applied_fft_fock_sha256": self.applied_fft_fock_sha256,
+                    "dense_oracle_fock_sha256": self.dense_oracle_fock_sha256,
+                    "applied_boundary_fingerprint": self.applied_boundary.fingerprint,
+                    "dense_boundary_fingerprint": self.dense_boundary.fingerprint,
+                    "applied_fft_recompute_exact": self.applied_fft_recompute_exact,
+                    **values,
+                }
+            ),
+        )
+
+@dataclass(frozen=True, slots=True)
 class Vituri2024SpiralNormalInitializer:
     density_native: Array
     density_sha256: str
@@ -316,6 +387,7 @@ class Vituri2024SpiralNormalBranchTrigger:
     boundary: Vituri2024SpiralNormalBoundary
     shell_previous_populations: tuple[float, ...]
     canonical_choice_count: int
+    dense_boundary_oracle_receipt: Vituri2024SpiralNormalDenseBoundaryOracleReceipt | None = None
     fingerprint: str = field(init=False)
 
     def __post_init__(self) -> None:
@@ -333,6 +405,16 @@ class Vituri2024SpiralNormalBranchTrigger:
             math.isfinite(x) for x in populations
         ):
             raise ValueError("branch trigger overlap inventory invalid")
+        receipt = self.dense_boundary_oracle_receipt
+        if receipt is not None:
+            if type(receipt) is not Vituri2024SpiralNormalDenseBoundaryOracleReceipt:
+                raise TypeError("branch trigger dense boundary oracle receipt must be typed")
+            if (
+                self.exact_fock_sha256 != receipt.dense_oracle_fock_sha256
+                or self.previous_density_sha256 != receipt.density_sha256
+                or self.boundary.fingerprint != receipt.dense_boundary.fingerprint
+            ):
+                raise ValueError("branch trigger dense boundary oracle binding mismatch")
         # Populations are retained as diagnostics, not as a selector.  The
         # declared closure exhausts every coordinate projector in an exact Fock
         # shell even when maximum-overlap continuation would prefer one subset.
@@ -352,6 +434,13 @@ class Vituri2024SpiralNormalBranchTrigger:
                     "boundary_fingerprint": self.boundary.fingerprint,
                     "shell_previous_populations": populations,
                     "canonical_choice_count": count,
+                    **(
+                        {}
+                        if receipt is None
+                        else {
+                            "dense_boundary_oracle_receipt_fingerprint": receipt.fingerprint
+                        }
+                    ),
                     "canonical_order": "selected_valley_slot_times_Nk_plus_k_then_itertools_combinations",
                 }
             ),
@@ -525,6 +614,9 @@ class Vituri2024SpiralNormalClosureResult:
     deterministic_terminal_replay_verified: bool
     all_normal_endpoints_stationary: bool
     all_applied_steps_full_step: bool
+    dense_boundary_oracle_prepared_fingerprint: str | None = None
+    dense_boundary_oracle_pair_fingerprint: str | None = None
+    dense_boundary_oracle_receipt_fingerprints: tuple[str, ...] = ()
     candidate_finite_domain_only: bool = True
     same_q_energy_comparison_authorized: bool = False
     uv_authority: bool = False
@@ -537,6 +629,19 @@ class Vituri2024SpiralNormalClosureResult:
     def __post_init__(self) -> None:
         if not self.branch_tree_exhausted or not self.deterministic_terminal_replay_verified:
             raise ValueError("normal closure result requires exhaustive deterministic replay")
+        receipts = tuple(self.dense_boundary_oracle_receipt_fingerprints)
+        if tuple(sorted(set(receipts))) != receipts:
+            raise ValueError("dense boundary oracle receipt inventory must be sorted and unique")
+        oracle_bound = (
+            self.dense_boundary_oracle_prepared_fingerprint is not None
+            and self.dense_boundary_oracle_pair_fingerprint is not None
+        )
+        if oracle_bound != bool(
+            self.dense_boundary_oracle_prepared_fingerprint
+            or self.dense_boundary_oracle_pair_fingerprint
+        ) or (receipts and not oracle_bound):
+            raise ValueError("normal closure dense boundary oracle result binding is inconsistent")
+        object.__setattr__(self, "dense_boundary_oracle_receipt_fingerprints", receipts)
         if not self.candidate_finite_domain_only:
             raise ValueError("normal closure candidate-only authority was removed")
         if any(
@@ -649,6 +754,239 @@ def analyze_vituri2024_spiral_normal_boundary(
     )
 
 
+def _dense_boundary_oracle_pair_fingerprint(
+    prepared: Vituri2024PreparedHFSpiral,
+    dense_prepared: Vituri2024PreparedHFSpiral,
+) -> str:
+    """Validate one same-physics FFT/dense preparation pair."""
+
+    for value, label in ((prepared, "prepared"), (dense_prepared, "dense_prepared")):
+        if type(value) is not Vituri2024PreparedHFSpiral:
+            raise TypeError(f"{label} must be Vituri2024PreparedHFSpiral")
+        value.validate_live_state()
+    if prepared.backend_kind != "fft" or dense_prepared.backend_kind != "dense":
+        raise ValueError("dense boundary oracle requires primary FFT and oracle dense backends")
+    if (
+        prepared.choice.fingerprint != dense_prepared.choice.fingerprint
+        or prepared.holes_per_valley != dense_prepared.holes_per_valley
+        or prepared.precision != dense_prepared.precision
+        or prepared.nk != dense_prepared.nk
+    ):
+        raise ValueError("dense boundary oracle preparation scalar/choice mismatch")
+    arrays = (
+        (prepared.ordered_mesh, dense_prepared.ordered_mesh, "ordered_mesh"),
+        (
+            prepared.shifted_momenta_by_valley,
+            dense_prepared.shifted_momenta_by_valley,
+            "shifted_momenta_by_valley",
+        ),
+        (
+            prepared.active_band_states,
+            dense_prepared.active_band_states,
+            "active_band_states",
+        ),
+        (
+            prepared.active_band_energies_by_valley,
+            dense_prepared.active_band_energies_by_valley,
+            "active_band_energies_by_valley",
+        ),
+        (prepared.h0_native, dense_prepared.h0_native, "h0_native"),
+        (
+            prepared.functional.normal_order_reference_conventional,
+            dense_prepared.functional.normal_order_reference_conventional,
+            "normal_order_reference_conventional",
+        ),
+    )
+    for left, right, label in arrays:
+        if not np.array_equal(left, right):
+            raise ValueError(f"dense boundary oracle preparation array mismatch: {label}")
+    left_gauge = prepared.gauge_receipt
+    right_gauge = dense_prepared.gauge_receipt
+    if (left_gauge is None) != (right_gauge is None) or (
+        left_gauge is not None
+        and right_gauge is not None
+        and left_gauge.fingerprint != right_gauge.fingerprint
+    ):
+        raise ValueError("dense boundary oracle gauge receipt mismatch")
+    for attribute in (
+        "normal_order_reference_fingerprint",
+        "interaction_fingerprint",
+    ):
+        if getattr(prepared.functional, attribute) != getattr(
+            dense_prepared.functional, attribute
+        ):
+            raise ValueError(f"dense boundary oracle functional {attribute} mismatch")
+    if (
+        prepared.functional.mesh_receipt.fingerprint
+        != dense_prepared.functional.mesh_receipt.fingerprint
+        or prepared.functional.q0_choice.fingerprint
+        != dense_prepared.functional.q0_choice.fingerprint
+    ):
+        raise ValueError("dense boundary oracle mesh/q0 physical-map mismatch")
+    return _fingerprint(
+        {
+            "dense_boundary_oracle_api_version": (
+                VITURI2024_SPIRAL_NORMAL_DENSE_BOUNDARY_ORACLE_API_VERSION
+            ),
+            "primary_prepared_fingerprint": prepared.fingerprint,
+            "dense_prepared_fingerprint": dense_prepared.fingerprint,
+            "choice_fingerprint": prepared.choice.fingerprint,
+            "array_sha256": {
+                label: _array_sha256(left) for left, _right, label in arrays
+            },
+            "gauge_fingerprint": None if left_gauge is None else left_gauge.fingerprint,
+            "mesh_receipt_fingerprint": prepared.functional.mesh_receipt.fingerprint,
+            "interaction_fingerprint": prepared.functional.interaction_fingerprint,
+            "normal_order_reference_fingerprint": (
+                prepared.functional.normal_order_reference_fingerprint
+            ),
+            "q0_choice_fingerprint": prepared.functional.q0_choice.fingerprint,
+            "backend_roles": (prepared.backend_kind, dense_prepared.backend_kind),
+        }
+    )
+
+
+def _build_dense_boundary_oracle_receipt(
+    *,
+    pair_fingerprint: str,
+    density: Array,
+    applied_fft_fock: Array,
+    primary_recomputed_fock: Array,
+    dense_oracle_fock: Array,
+    applied_boundary: Vituri2024SpiralNormalBoundary,
+    dense_boundary: Vituri2024SpiralNormalBoundary,
+    primary_energy_ev: float,
+    dense_energy_ev: float,
+    policy: Vituri2024SpiralNormalClosurePolicy,
+) -> Vituri2024SpiralNormalDenseBoundaryOracleReceipt:
+    """Build a fail-closed same-density dense-oracle qualification receipt."""
+
+    if applied_boundary.kind != "positive_subtolerance":
+        raise ValueError("dense boundary oracle requires an applied positive-subtolerance map")
+    if dense_boundary.kind != "exact":
+        raise _ScientificTerminal(
+            "dense_boundary_oracle_not_exact_rejection",
+            "dense_boundary_oracle",
+            "independent dense Fock does not have an exact selected-spin boundary",
+            {
+                "density": np.asarray(density).copy(),
+                "applied_fft_fock": np.asarray(applied_fft_fock).copy(),
+                "dense_oracle_fock": np.asarray(dense_oracle_fock).copy(),
+            },
+        )
+    if not np.array_equal(applied_fft_fock, primary_recomputed_fock):
+        raise _ScientificTerminal(
+            "dense_boundary_oracle_applied_map_mismatch_rejection",
+            "dense_boundary_oracle",
+            "applied FFT Hamiltonian differs from the same-density FFT recomputation",
+            {
+                "density": np.asarray(density).copy(),
+                "applied_fft_fock": np.asarray(applied_fft_fock).copy(),
+                "primary_recomputed_fock": np.asarray(primary_recomputed_fock).copy(),
+            },
+        )
+    fock_residual = _max_abs(
+        np.asarray(dense_oracle_fock) - np.asarray(applied_fft_fock)
+    )
+    gap_residual = abs(dense_boundary.gap_ev - applied_boundary.gap_ev)
+    energy_residual = abs(float(dense_energy_ev) - float(primary_energy_ev))
+    fock_gate = max(
+        applied_boundary.effective_tolerance_ev,
+        dense_boundary.effective_tolerance_ev,
+    )
+    energy_scale = max(1.0, abs(float(primary_energy_ev)), abs(float(dense_energy_ev)))
+    energy_gate = policy.energy_parity_relative_tolerance * energy_scale
+    if fock_residual > fock_gate or gap_residual > fock_gate or energy_residual > energy_gate:
+        raise _ScientificTerminal(
+            "dense_boundary_oracle_parity_rejection",
+            "dense_boundary_oracle",
+            "dense and FFT same-density maps exceed the bound parity gates",
+            {
+                "density": np.asarray(density).copy(),
+                "applied_fft_fock": np.asarray(applied_fft_fock).copy(),
+                "dense_oracle_fock": np.asarray(dense_oracle_fock).copy(),
+            },
+        )
+    return Vituri2024SpiralNormalDenseBoundaryOracleReceipt(
+        pair_fingerprint=pair_fingerprint,
+        density_sha256=_array_sha256(density),
+        applied_fft_fock_sha256=_array_sha256(applied_fft_fock),
+        dense_oracle_fock_sha256=_array_sha256(dense_oracle_fock),
+        applied_boundary=applied_boundary,
+        dense_boundary=dense_boundary,
+        applied_fft_recompute_exact=True,
+        dense_fft_fock_max_abs_ev=fock_residual,
+        dense_fft_boundary_gap_abs_difference_ev=gap_residual,
+        dense_fft_energy_abs_ev=energy_residual,
+        fock_parity_gate_ev=fock_gate,
+        energy_parity_gate_ev=energy_gate,
+    )
+
+
+def certify_vituri2024_spiral_normal_dense_boundary_oracle(
+    prepared: Vituri2024PreparedHFSpiral,
+    dense_prepared: Vituri2024PreparedHFSpiral,
+    density_native: Array,
+    applied_fft_hamiltonian: Array,
+    *,
+    policy: Vituri2024SpiralNormalClosurePolicy,
+) -> tuple[
+    Array,
+    Vituri2024SpiralNormalBoundary,
+    Vituri2024SpiralNormalDenseBoundaryOracleReceipt,
+]:
+    """Certify one FFT positive-subtolerance map against dense float64 Fock.
+
+    The old FFT rejection is not relabeled.  This function independently
+    rebuilds both same-density maps and returns the exact dense map only after
+    stored/applied FFT identity plus Fock, gap, and scalar-energy parity pass.
+    """
+
+    pair_fingerprint = _dense_boundary_oracle_pair_fingerprint(
+        prepared, dense_prepared
+    )
+    policy.validate_live_state()
+    density = np.asarray(density_native)
+    applied = np.asarray(applied_fft_hamiltonian)
+    expected_shape = (4, 4, prepared.nk)
+    if (
+        density.dtype != np.dtype(np.complex128)
+        or density.shape != expected_shape
+        or applied.dtype != np.dtype(np.complex128)
+        or applied.shape != expected_shape
+        or not np.all(np.isfinite(density))
+        or not np.all(np.isfinite(applied))
+    ):
+        raise ValueError("dense boundary oracle density/applied-map shape or dtype mismatch")
+    applied_boundary = analyze_vituri2024_spiral_normal_boundary(
+        prepared, applied, policy=policy
+    )
+    if applied_boundary.kind != "positive_subtolerance":
+        raise ValueError("dense boundary oracle may only consume positive-subtolerance FFT maps")
+    primary_recomputed = np.asarray(
+        prepared.functional.fock(density), dtype=np.complex128
+    )
+    dense_fock = np.asarray(
+        dense_prepared.functional.fock(density), dtype=np.complex128
+    )
+    dense_boundary = analyze_vituri2024_spiral_normal_boundary(
+        dense_prepared, dense_fock, policy=policy
+    )
+    receipt = _build_dense_boundary_oracle_receipt(
+        pair_fingerprint=pair_fingerprint,
+        density=density,
+        applied_fft_fock=applied,
+        primary_recomputed_fock=primary_recomputed,
+        dense_oracle_fock=dense_fock,
+        applied_boundary=applied_boundary,
+        dense_boundary=dense_boundary,
+        primary_energy_ev=float(prepared.functional.energy(density)),
+        dense_energy_ev=float(dense_prepared.functional.energy(density)),
+        policy=policy,
+    )
+    return _readonly(dense_fock, np.dtype(np.complex128)), dense_boundary, receipt
+
+
 def enumerate_vituri2024_spiral_normal_branch_choices(
     prepared: Vituri2024PreparedHFSpiral,
     hamiltonian: Array,
@@ -657,6 +995,9 @@ def enumerate_vituri2024_spiral_normal_branch_choices(
     *,
     generation: int,
     policy: Vituri2024SpiralNormalClosurePolicy,
+    dense_boundary_oracle_receipt: (
+        Vituri2024SpiralNormalDenseBoundaryOracleReceipt | None
+    ) = None,
 ) -> tuple[Vituri2024SpiralNormalBranchChoice, ...]:
     """Enumerate every canonical coordinate projector in one exact shell."""
 
@@ -684,6 +1025,7 @@ def enumerate_vituri2024_spiral_normal_branch_choices(
         boundary=boundary,
         shell_previous_populations=tuple(populations),
         canonical_choice_count=count,
+        dense_boundary_oracle_receipt=dense_boundary_oracle_receipt,
     )
     inventory = tuple(
         itertools.combinations(boundary.shell_flat_indices, boundary.shell_selected_rank)
@@ -801,6 +1143,16 @@ def _run_path(
     path: Vituri2024SpiralNormalBranchPath,
     *,
     policy: Vituri2024SpiralNormalClosurePolicy,
+    dense_boundary_oracle_prepared: Vituri2024PreparedHFSpiral | None,
+    dense_boundary_oracle_cache: dict[
+        str,
+        tuple[
+            Array,
+            Vituri2024SpiralNormalBoundary,
+            Vituri2024SpiralNormalDenseBoundaryOracleReceipt,
+        ],
+    ],
+    dense_boundary_oracle_receipt_fingerprints: list[str],
 ) -> NormalPathOutcome:
     rebuilt = build_vituri2024_spiral_normal_initializer(prepared, policy=policy)
     if (
@@ -838,22 +1190,60 @@ def _run_path(
             )
         except _ScientificTerminal:
             raise
+        branch_matrix = matrix
+        oracle_receipt: Vituri2024SpiralNormalDenseBoundaryOracleReceipt | None = None
         if boundary.kind == "positive_subtolerance":
-            raise _ScientificTerminal(
-                "positive_subtolerance_splitting_rejection",
-                "density_update",
-                "positive selected-spin splitting lies below the effective tolerance",
-                {"density": previous, "hamiltonian": matrix.copy()},
+            if dense_boundary_oracle_prepared is None:
+                raise _ScientificTerminal(
+                    "positive_subtolerance_splitting_rejection",
+                    "density_update",
+                    "positive selected-spin splitting lies below the effective tolerance",
+                    {"density": previous, "hamiltonian": matrix.copy()},
+                )
+            density_sha256 = _array_sha256(previous)
+            cached = dense_boundary_oracle_cache.get(density_sha256)
+            if cached is None:
+                cached = certify_vituri2024_spiral_normal_dense_boundary_oracle(
+                    prepared,
+                    dense_boundary_oracle_prepared,
+                    previous,
+                    matrix,
+                    policy=policy,
+                )
+                dense_boundary_oracle_cache[density_sha256] = cached
+            else:
+                cached_fock, cached_boundary, cached_receipt = cached
+                if (
+                    cached_receipt.density_sha256 != density_sha256
+                    or cached_receipt.applied_fft_fock_sha256 != _array_sha256(matrix)
+                    or cached_receipt.dense_oracle_fock_sha256
+                    != _array_sha256(cached_fock)
+                    or cached_receipt.dense_boundary.fingerprint
+                    != cached_boundary.fingerprint
+                ):
+                    raise RuntimeError("dense boundary oracle cache binding mismatch")
+            branch_matrix, boundary, oracle_receipt = cached
+            dense_boundary_oracle_receipt_fingerprints.append(
+                oracle_receipt.fingerprint
             )
+        terminal_evidence = {
+            "density": previous,
+            "hamiltonian": matrix.copy(),
+        }
+        if oracle_receipt is not None:
+            terminal_evidence["dense_oracle_hamiltonian"] = np.asarray(
+                branch_matrix
+            ).copy()
         choice: Vituri2024SpiralNormalBranchChoice | None = None
         if boundary.kind == "exact":
             choices = enumerate_vituri2024_spiral_normal_branch_choices(
                 prepared,
-                matrix,
+                branch_matrix,
                 previous,
                 boundary,
                 generation=len(consumed),
                 policy=policy,
+                dense_boundary_oracle_receipt=oracle_receipt,
             )
             if len(consumed) >= len(path.choices):
                 if would_be_final_map():
@@ -861,7 +1251,7 @@ def _run_path(
                         "branch_frontier_in_final_map_rejection",
                         "final_density_recomputation",
                         "an unresolved normal branch frontier appeared only in the final map",
-                        {"density": previous, "hamiltonian": matrix.copy()},
+                        terminal_evidence,
                     )
                 raise _FrontierSignal(
                     Vituri2024SpiralNormalBranchFrontier(path, choices[0].trigger, choices)
@@ -879,11 +1269,11 @@ def _run_path(
                     "branch_choice_in_final_map_rejection",
                     "final_density_recomputation",
                     "a registered normal branch choice would be consumed only by the final map",
-                    {"density": previous, "hamiltonian": matrix.copy()},
+                    terminal_evidence,
                 )
         raw = _density_from_boundary(prepared, boundary, choice)
         energies = np.asarray(
-            np.real(np.diagonal(matrix, axis1=0, axis2=1)).T,
+            np.real(np.diagonal(branch_matrix, axis1=0, axis2=1)).T,
             dtype=np.float64,
         )
         update = DensityUpdateResult(
@@ -894,12 +1284,17 @@ def _run_path(
                 "selected_boundary_gap_ev": boundary.gap_ev,
                 "normal_exact_shell_dimension": float(len(boundary.shell_flat_indices)),
                 "normal_exact_shell_rank": float(boundary.shell_selected_rank),
+                "dense_boundary_oracle_used": float(oracle_receipt is not None),
             },
         )
         pending = {
             "update_id": id(update),
             "raw_sha256": _array_sha256(raw),
-            "fock_sha256": _array_sha256(matrix),
+            "applied_fock_sha256": _array_sha256(matrix),
+            "boundary_fock_sha256": _array_sha256(branch_matrix),
+            "oracle_receipt_fingerprint": (
+                None if oracle_receipt is None else oracle_receipt.fingerprint
+            ),
             "previous_sha256": _array_sha256(previous),
             "choice": choice,
         }
@@ -913,8 +1308,8 @@ def _run_path(
             raise RuntimeError("normal closure update identity binding failed")
         if pending["raw_sha256"] != _array_sha256(step.density_update.density):
             raise RuntimeError("normal closure raw-density binding failed")
-        if pending["fock_sha256"] != _array_sha256(step.total_hamiltonian):
-            raise RuntimeError("normal closure exact-Fock binding failed")
+        if pending["applied_fock_sha256"] != _array_sha256(step.total_hamiltonian):
+            raise RuntimeError("normal closure applied FFT-Fock binding failed")
         if pending["previous_sha256"] != _array_sha256(step.previous_density):
             raise RuntimeError("normal closure previous-density binding failed")
         if step.oda_lambda != 1.0:
@@ -923,6 +1318,13 @@ def _run_path(
             raise RuntimeError("normal closure full step did not install the raw projector exactly")
         choice = pending["choice"]
         if choice is not None:
+            receipt = choice.trigger.dense_boundary_oracle_receipt
+            if (
+                pending["boundary_fock_sha256"] != choice.trigger.exact_fock_sha256
+                or pending["oracle_receipt_fingerprint"]
+                != (None if receipt is None else receipt.fingerprint)
+            ):
+                raise RuntimeError("normal closure branch boundary-Fock binding failed")
             if np.array_equal(step.previous_density, step.mixed_density):
                 lambda_receipts.append(float(step.oda_lambda))
                 raise _ScientificTerminal(
@@ -1160,6 +1562,7 @@ def run_vituri2024_spiral_normal_exact_shell_closure(
     prepared: Vituri2024PreparedHFSpiral,
     *,
     policy: Vituri2024SpiralNormalClosurePolicy | None = None,
+    dense_boundary_oracle_prepared: Vituri2024PreparedHFSpiral | None = None,
 ) -> Vituri2024SpiralNormalClosureResult:
     """Exhaust and byte-replay the declared normal coordinate branch tree."""
 
@@ -1167,6 +1570,13 @@ def run_vituri2024_spiral_normal_exact_shell_closure(
         raise TypeError("prepared must be Vituri2024PreparedHFSpiral")
     active_policy = Vituri2024SpiralNormalClosurePolicy() if policy is None else policy
     active_policy.validate_live_state()
+    oracle_pair_fingerprint = (
+        None
+        if dense_boundary_oracle_prepared is None
+        else _dense_boundary_oracle_pair_fingerprint(
+            prepared, dense_boundary_oracle_prepared
+        )
+    )
     initializer = build_vituri2024_spiral_normal_initializer(
         prepared, policy=active_policy
     )
@@ -1177,11 +1587,28 @@ def run_vituri2024_spiral_normal_exact_shell_closure(
     endpoints: list[Vituri2024SpiralNormalEndpoint] = []
     rejections: list[Vituri2024SpiralNormalScientificRejection] = []
     terminal_outcomes: list[NormalPathOutcome] = []
+    dense_boundary_oracle_cache: dict[
+        str,
+        tuple[
+            Array,
+            Vituri2024SpiralNormalBoundary,
+            Vituri2024SpiralNormalDenseBoundaryOracleReceipt,
+        ],
+    ] = {}
+    dense_boundary_oracle_receipts: list[str] = []
     while queue:
         if len(nodes) >= active_policy.maximum_replayed_paths:
             raise RuntimeError("normal closure replay cap reached with unresolved frontier")
         path = queue.popleft()
-        outcome = _run_path(prepared, initializer, path, policy=active_policy)
+        outcome = _run_path(
+            prepared,
+            initializer,
+            path,
+            policy=active_policy,
+            dense_boundary_oracle_prepared=dense_boundary_oracle_prepared,
+            dense_boundary_oracle_cache=dense_boundary_oracle_cache,
+            dense_boundary_oracle_receipt_fingerprints=dense_boundary_oracle_receipts,
+        )
         if isinstance(outcome, Vituri2024SpiralNormalBranchFrontier):
             children: list[str] = []
             for choice in outcome.choices:
@@ -1205,13 +1632,35 @@ def run_vituri2024_spiral_normal_exact_shell_closure(
             rejections.append(outcome)
             nodes.append(Vituri2024SpiralNormalBFSNode(path, outcome.classification))
     # Every terminal path is recomputed from the independently rebuilt common
-    # initializer.  No parent endpoint or intermediate density is reused.
+    # initializer. No parent endpoint or intermediate density is reused. Dense
+    # oracle maps are recomputed into a separate phase cache, not inherited
+    # from the branch-tree pass.
+    replay_oracle_cache: dict[
+        str,
+        tuple[
+            Array,
+            Vituri2024SpiralNormalBoundary,
+            Vituri2024SpiralNormalDenseBoundaryOracleReceipt,
+        ],
+    ] = {}
+    replay_oracle_receipts: list[str] = []
     for original in terminal_outcomes:
-        replay = _run_path(prepared, initializer, original.path, policy=active_policy)
+        replay = _run_path(
+            prepared,
+            initializer,
+            original.path,
+            policy=active_policy,
+            dense_boundary_oracle_prepared=dense_boundary_oracle_prepared,
+            dense_boundary_oracle_cache=replay_oracle_cache,
+            dense_boundary_oracle_receipt_fingerprints=replay_oracle_receipts,
+        )
         if isinstance(replay, Vituri2024SpiralNormalBranchFrontier):
             raise RuntimeError("closed normal terminal replay reopened a frontier")
         if _outcome_digest(replay) != _outcome_digest(original):
             raise RuntimeError("normal terminal deterministic replay mismatch")
+    unique_oracle_receipts = tuple(sorted(set(dense_boundary_oracle_receipts)))
+    if tuple(sorted(set(replay_oracle_receipts))) != unique_oracle_receipts:
+        raise RuntimeError("normal dense boundary oracle deterministic replay mismatch")
     endpoint_tuple = tuple(endpoints)
     all_terminal_lambdas = tuple(
         value
@@ -1235,19 +1684,29 @@ def run_vituri2024_spiral_normal_exact_shell_closure(
         all_normal_endpoints_stationary=bool(endpoint_tuple) and all(x.stationary for x in endpoint_tuple),
         all_applied_steps_full_step=bool(all_terminal_lambdas)
         and all(value == 1.0 for value in all_terminal_lambdas),
+        dense_boundary_oracle_prepared_fingerprint=(
+            None
+            if dense_boundary_oracle_prepared is None
+            else dense_boundary_oracle_prepared.fingerprint
+        ),
+        dense_boundary_oracle_pair_fingerprint=oracle_pair_fingerprint,
+        dense_boundary_oracle_receipt_fingerprints=unique_oracle_receipts,
     )
 
 
 __all__ = [
     "VITURI2024_SPIRAL_NORMAL_CLOSURE_API_VERSION",
     "VITURI2024_SPIRAL_NORMAL_CLOSURE_AUTHORITY",
+    "VITURI2024_SPIRAL_NORMAL_DENSE_BOUNDARY_ORACLE_API_VERSION",
     "Vituri2024SpiralNormalBoundary",
     "Vituri2024SpiralNormalBranchChoice",
     "Vituri2024SpiralNormalBranchPath",
     "Vituri2024SpiralNormalBranchTrigger",
     "Vituri2024SpiralNormalClosurePolicy",
     "Vituri2024SpiralNormalClosureResult",
+    "Vituri2024SpiralNormalDenseBoundaryOracleReceipt",
     "analyze_vituri2024_spiral_normal_boundary",
+    "certify_vituri2024_spiral_normal_dense_boundary_oracle",
     "build_vituri2024_spiral_normal_initializer",
     "enumerate_vituri2024_spiral_normal_branch_choices",
     "run_vituri2024_spiral_normal_exact_shell_closure",

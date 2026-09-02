@@ -14,11 +14,13 @@ from mean_field.systems.abc_trilayer.vituri2024_hf import (
 from mean_field.systems.abc_trilayer.vituri2024_hf_scf import (
     Vituri2024CartesianHFSpec,
     prepare_vituri2024_homogeneous_hf,
+    prepare_vituri2024_homogeneous_hf_fft,
 )
 from mean_field.systems.abc_trilayer.vituri2024_hf_spiral import (
     Vituri2024FiniteQSpiralChoice,
     prepare_vituri2024_hf_spiral,
 )
+from mean_field.systems.abc_trilayer import vituri2024_hf_spiral_normal_closure as normal_closure
 from mean_field.systems.abc_trilayer.vituri2024_hf_spiral_normal_closure import (
     Vituri2024SpiralNormalClosurePolicy,
     analyze_vituri2024_spiral_normal_boundary,
@@ -43,6 +45,27 @@ def _prepared(*, q_a0: float = 0.02, selected_spin: int = 1, holes_per_valley: i
             occupation_gap_floor_ev=1.0e-12,
         ),
     )
+
+
+def _prepared_pair(*, q_a0: float = 0.02, holes_per_valley: int = 1):
+    spec = Vituri2024CartesianHFSpec(
+        mesh_size=3, holes_per_valley=holes_per_valley
+    )
+    choice = Vituri2024FiniteQSpiralChoice(
+        q_inverse_angstrom=np.asarray(
+            [q_a0 / VITURI2024_PARAMETERS.a0, 0.0], dtype=np.float64
+        ),
+        selected_spin=1,
+        gauge_mode="displayed_b3",
+        occupation_gap_floor_ev=1.0e-12,
+    )
+    fft = prepare_vituri2024_hf_spiral(
+        prepare_vituri2024_homogeneous_hf_fft(spec, fft_workers=1), choice
+    )
+    dense = prepare_vituri2024_hf_spiral(
+        prepare_vituri2024_homogeneous_hf(spec), choice
+    )
+    return fft, dense
 
 
 def _diagonal_hamiltonian(prepared, selected_flat: np.ndarray) -> np.ndarray:
@@ -105,6 +128,10 @@ def test_exact_two_choose_one_inventory_is_canonical_and_hash_bound() -> None:
     assert choices[0].trigger.exact_fock_sha256 == choices[1].trigger.exact_fock_sha256
     assert choices[0].trigger.previous_density_sha256 == choices[1].trigger.previous_density_sha256
     assert choices[0].fingerprint != choices[1].fingerprint
+    # The optional dense-oracle API must not change legacy no-oracle lineage.
+    assert policy.fingerprint == "dbec28f6cfa9cd80e5cfa318a06510d6f224192f15d6ae9e124c21bbdfafe98b"
+    assert choices[0].trigger.fingerprint == "6e7b6230fe0b2014cc9c500bd1acdd8b9534c86c6302d65a782c7d7d5ae038a7"
+    assert choices[0].fingerprint == "34f479d96750550eda00f5030b441e53017e3c728a2b3f830c2f4a6048d60303"
 
 
 def test_exact_four_choose_two_inventory_uses_lexicographic_combinations() -> None:
@@ -219,6 +246,93 @@ def test_positive_subtolerance_and_normal_coherence_fail_closed() -> None:
         )
 
 
+def test_dense_boundary_oracle_receipt_binds_exact_dense_trigger() -> None:
+    prepared, dense_prepared = _prepared_pair()
+    pair_fingerprint = normal_closure._dense_boundary_oracle_pair_fingerprint(
+        prepared, dense_prepared
+    )
+    rank = prepared.selected_rank
+    dense_values = np.arange(2 * prepared.nk, dtype=np.float64)
+    dense_values[rank - 1 : rank + 1] = float(rank - 1)
+    applied_values = dense_values.copy()
+    applied_values[rank] = applied_values[rank - 1] + 0.5e-12
+    applied = _diagonal_hamiltonian(prepared, applied_values)
+    dense = _diagonal_hamiltonian(dense_prepared, dense_values)
+    policy = Vituri2024SpiralNormalClosurePolicy(boundary_floor_ev=1.0e-12)
+    applied_boundary = analyze_vituri2024_spiral_normal_boundary(
+        prepared, applied, policy=policy
+    )
+    dense_boundary = analyze_vituri2024_spiral_normal_boundary(
+        dense_prepared, dense, policy=policy
+    )
+    assert applied_boundary.kind == "positive_subtolerance"
+    assert dense_boundary.kind == "exact"
+    previous = _normal_density(
+        prepared, tuple(range(rank - 1)) + (rank + 1,)
+    )
+    receipt = normal_closure._build_dense_boundary_oracle_receipt(
+        pair_fingerprint=pair_fingerprint,
+        density=previous,
+        applied_fft_fock=applied,
+        primary_recomputed_fock=applied.copy(),
+        dense_oracle_fock=dense,
+        applied_boundary=applied_boundary,
+        dense_boundary=dense_boundary,
+        primary_energy_ev=10.0,
+        dense_energy_ev=10.0 + 1.0e-12,
+        policy=policy,
+    )
+    choices = enumerate_vituri2024_spiral_normal_branch_choices(
+        prepared,
+        dense,
+        previous,
+        dense_boundary,
+        generation=0,
+        policy=policy,
+        dense_boundary_oracle_receipt=receipt,
+    )
+    assert len(choices) == 2
+    assert all(
+        choice.trigger.dense_boundary_oracle_receipt == receipt
+        for choice in choices
+    )
+    assert choices[0].trigger.exact_fock_sha256 == receipt.dense_oracle_fock_sha256
+    assert choices[0].trigger.previous_density_sha256 == receipt.density_sha256
+
+
+def test_dense_boundary_oracle_parity_failure_is_typed_rejection() -> None:
+    prepared, dense_prepared = _prepared_pair()
+    pair_fingerprint = normal_closure._dense_boundary_oracle_pair_fingerprint(
+        prepared, dense_prepared
+    )
+    rank = prepared.selected_rank
+    dense_values = np.arange(2 * prepared.nk, dtype=np.float64)
+    dense_values[rank - 1 : rank + 1] = float(rank - 1)
+    applied_values = dense_values.copy()
+    applied_values[rank] += 0.5e-12
+    applied = _diagonal_hamiltonian(prepared, applied_values)
+    dense = _diagonal_hamiltonian(dense_prepared, dense_values)
+    dense[0, 0, 0] += 2.0e-12
+    policy = Vituri2024SpiralNormalClosurePolicy(boundary_floor_ev=1.0e-12)
+    with pytest.raises(RuntimeError, match="exceed the bound parity gates"):
+        normal_closure._build_dense_boundary_oracle_receipt(
+            pair_fingerprint=pair_fingerprint,
+            density=_normal_density(prepared, tuple(range(rank))),
+            applied_fft_fock=applied,
+            primary_recomputed_fock=applied.copy(),
+            dense_oracle_fock=dense,
+            applied_boundary=analyze_vituri2024_spiral_normal_boundary(
+                prepared, applied, policy=policy
+            ),
+            dense_boundary=analyze_vituri2024_spiral_normal_boundary(
+                dense_prepared, dense, policy=policy
+            ),
+            primary_energy_ev=10.0,
+            dense_energy_ev=10.0,
+            policy=policy,
+        )
+
+
 def test_policy_and_initializer_are_immutable_and_hash_bound() -> None:
     prepared = _prepared()
     policy = Vituri2024SpiralNormalClosurePolicy()
@@ -271,5 +385,8 @@ def test_tiny_real_path_uses_only_generic_full_steps_and_closes() -> None:
     assert result.all_applied_steps_full_step is True
     assert result.candidate_finite_domain_only is True
     assert result.same_q_energy_comparison_authorized is False
+    assert result.dense_boundary_oracle_prepared_fingerprint is None
+    assert result.dense_boundary_oracle_pair_fingerprint is None
+    assert result.dense_boundary_oracle_receipt_fingerprints == ()
     assert result.uv_authority is False
     assert result.fig2_reproduction_authority is False
