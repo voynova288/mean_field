@@ -555,3 +555,11 @@ from . import tdhf_scalar_functional as _tdhf_scalar_functional
 from .tdhf_scalar_functional import *  # noqa: F401,F403
 
 __all__ += list(_tdhf_scalar_functional.__all__)
+
+# Generic fixed-per-block-rank, zero-temperature orbital-Hessian candidate.
+# Separate occupation/Aufbau and same-functional reciprocity evidence is
+# required before any physical local-stability promotion.
+from . import zero_temperature_ragged_stability as _zero_temperature_ragged_stability
+from .zero_temperature_ragged_stability import *  # noqa: F401,F403
+
+__all__ += list(_zero_temperature_ragged_stability.__all__)
