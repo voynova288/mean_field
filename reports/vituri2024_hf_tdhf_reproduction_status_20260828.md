@@ -349,12 +349,21 @@ Hamiltonian 与重新计算的 FFT Fock **逐数组完全相等**；FFT boundary
 `3.637978807091713e-12 eV`，均通过预注册 parity gate。
 
 所以这里的正 gap 已定位为 **相对 dense float64 oracle 的 FFT-backend-specific
-arithmetic splitting**，不是已证明的物理有限域 lifting。但该 oracle 只诊断原因，
-没有改写已执行的 applied-map 轨迹，因而仍未凭自身恢复 normal comparator。下一步
-必须做 dense-oracle-bound exact-shell replay，或先证明一个 symmetry-preserving FFT
-map correction；不能简单放宽 tolerance 或把该 rejection 后处理成 endpoint。
+arithmetic splitting**，不是已证明的物理有限域 lifting。历史 job `469823` 的
+16 条 rejection 保持不变；没有放宽 tolerance，也没有把旧 rejection 后处理成
+endpoint。
 
-仅对 7 个具有 normal endpoint 的相同 `(H_v,q)` 对，使用相同
+随后 source commit `7ec89d6` 加入 hash-bound dense-trigger replay API。新鲜
+namespace 中的 tamper-evident capsule job `477106` 从共同 initializer 重新执行
+`(635,0.03)`：127 个 nodes 中
+63 次 exact-frontier expansion 全部穷举，得到 `64/64` 个 fresh-map stationary
+endpoints、0 rejection、2 个 final-density groups；branch tree exhaustion、所有
+applied full steps 和独立 terminal replay 均通过。两份 dense-oracle receipts 与
+job `474291` 的同字节 density/FFT-Fock/dense-Fock artifacts 逐数组 hash 绑定。一次
+较早的 v2 job `477034` 仅在科学计算后的两种数组 hash 编码比较处失败，没有被提升
+为 endpoint evidence；v3 使用同一不可变数组在两种编码间建立 exact bridge 后闭合。
+
+对 8 个具有 normal endpoint 的相同 `(H_v,q)` 对，使用相同
 base/functional/gauge physical-map fingerprints 计算
 `1000*(E_IVC-E_normal)`。以下数值是固定 N81 finite square 的 raw **total**
 scalar-energy difference（meV），没有按 hole、particle、cell 或 area 归一化，
@@ -363,7 +372,7 @@ scalar-energy difference（meV），没有按 hole、particle、cell 或 area �
 | holes/valley | q a0 | normal leaves | Delta E range (meV) |
 |---:|---:|---:|---:|
 | 635 | 0.02 | 6 | -660.5420 to -660.4199 |
-| 635 | 0.03 | 0 | unavailable: 16 typed positive-subtolerance rejections |
+| 635 | 0.03 | 64 | -234.2267720 to -234.2267720 |
 | 635 | 0.05 | 2 | -449.4190 to -449.4190 |
 | 635 | 0.06 | 8 | -270.2656 to -269.9346 |
 | 635 | 0.07 | 36 | -147.6193 to 387.2849 |
@@ -371,11 +380,12 @@ scalar-energy difference（meV），没有按 hole、particle、cell 或 area �
 | 747 | 0.05 | 6 | -477.4558 to -477.4314 |
 | 747 | 0.07 | 1028 | -143.7555 to 160.3716 |
 
-所有 normal leaves 都保留，未按能量、symmetry 或 diagnostics postselect；因此
-两个 `q a0=0.07` 点的 sign 是 branch-dependent，而不是唯一 phase-ordering
-结论。由于 `(635,0.03)` 没有合法 comparator、normal branch 也未证明唯一，完整
-Fig. 2 curve、最佳 q、cross-q 排序和 paper reproduction 仍未授权；cross-q 比较
-还受 shifted finite-domain UV 边界影响。
+所有 normal leaves 都保留，未按能量、symmetry 或 diagnostics postselect。
+`(635,0.03)` 的 64 个 normal leaves 对同一 stationary IVC endpoint 的 raw-total
+差值全部为负；但两个 `q a0=0.07` 点的 sign 仍是 branch-dependent，而不是唯一
+phase-ordering 结论。Normal branch 尚未证明局部稳定或唯一，且 shifted finite-domain
+UV 边界仍未收敛，所以完整 Fig. 2 curve、最佳 q、cross-q 排序和 paper reproduction
+仍未授权。
 
 机器可读证据：
 
@@ -384,7 +394,9 @@ Fig. 2 curve、最佳 q、cross-q 排序和 paper reproduction 仍未授权；cr
 - `reports/data/vituri2024_fig2_normal_exact_shell_closure_469823_469847_merge_v8.json`
   （SHA256 `3fa3311c645bd6fa9ab4bc200ce85a15857092533cfeda1c72fabb73599e0ea5`）；
 - `reports/data/vituri2024_fig2_q003_dense_boundary_oracle_474291_attestation.json`
-  （SHA256 `09daa514f91246698269a132828add8591fbf4a11e508f81985b0a1b3c13b0e5`）。
+  （SHA256 `09daa514f91246698269a132828add8591fbf4a11e508f81985b0a1b3c13b0e5`）；
+- `reports/data/vituri2024_fig2_q003_dense_oracle_replay_477106_attestation.json`
+  （SHA256 `b2793903720e9b1550855dcaa1c84d60d08a8cebe84970a058e598c5b8880934`）。
 
 ## 8. TDHF/scalar-Hessian authority
 
@@ -419,12 +431,12 @@ unrestricted_ground_state_established = false
 full_paper_reproduction_verified = false
 selected_spin_g0_ivc_saved_endpoint_stationary_closure = true
 normal_exact_shell_execution_inventory_closed = true
-stationary_normal_comparator_case_count = 7
-same_q_raw_total_energy_comparison_case_count = 7
-all_eight_stationary_normal_comparators_available = false
+stationary_normal_comparator_case_count = 8
+same_q_raw_total_energy_comparison_case_count = 8
+all_eight_stationary_normal_comparators_available = true
 q003_positive_subtolerance_root_cause_localized_to_fft_backend_arithmetic = true
-q003_normal_comparator_recovered = false
-matched_normal_exact_shell_closure = false
+q003_normal_comparator_recovered = true
+matched_normal_exact_shell_closure = true
 same_q_phase_ordering_established = false
 fig2_reproduction_verified = false
 local_hf_stability_proved = false

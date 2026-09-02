@@ -1,0 +1,251 @@
+{
+  "all_cases_sha256": "5c101ebf18b914d5597c43c4ce465009032a2380776186b2dac19759f8bd8097",
+  "artifact_bytes_including_manifest": 378708359,
+  "artifact_count_excluding_manifest": 66,
+  "artifact_manifest_exact": true,
+  "authority": {
+    "candidate_finite_domain_only": true,
+    "fig2_reproduction_authority": false,
+    "local_hessian_authority": false,
+    "optimal_q_authority": false,
+    "production_authority": false,
+    "q003_normal_comparator_recovered": true,
+    "same_q_raw_total_energy_comparison_authorized": true,
+    "tdhf_authority": false,
+    "unrestricted_ground_state_authority": false,
+    "uv_domain_authority": false
+  },
+  "capsule": "/data/home/ziyuzhu/.runs/Mean_Field_7ec89d6_vituri_fig2_q003_dense_oracle_replay_v3_20260902",
+  "complete_sentinel_sha256": "25b2a3c64a2c774ae90a0001b780bfdccb8299b4e07f22786f64c6d9b804795b",
+  "dense_boundary_oracle": {
+    "dense_prepared_fingerprint": "223e21204d6e505af52c3ed2af140a39d5f5065403020dc47733ca20183b941e",
+    "no_tolerance_loosening": true,
+    "old_job469823_rejections_relabelled": false,
+    "pair_fingerprint": "66897418b724eff6f1ee1701680119e4c00760d8a4751b048a2e688be4e653c3",
+    "postselection_used": false,
+    "receipt_fingerprints": [
+      "21c73325655a3e7d66f6651b22d070b323d843108bbf82c1a257db494b5bb7f6",
+      "90117d18490243c74b7fea84892c326acae4c94d38b96d971567492d2da83efc"
+    ],
+    "receipts": [
+      {
+        "applied_boundary": {
+          "effective_tolerance_ev": 1e-12,
+          "fingerprint": "5e01446eb2e6792d1f02f71eae18fb090a294158fe95d5ecec0ba36834ed24b6",
+          "gap_ev": 2.220446049250313e-16,
+          "kind": "positive_subtolerance",
+          "shell_selected_rank": 0
+        },
+        "applied_fft_fock_sha256": "939fc4ab551b80c39681d5d79740214962c550833fcaa39098e4a9a560eee33d",
+        "applied_fft_recompute_exact": true,
+        "dense_boundary": {
+          "effective_tolerance_ev": 1e-12,
+          "fingerprint": "6a434fa940612b39d614218c6b85c4202914f69dc9a21c3c2d338443dacafb46",
+          "gap_ev": 0.0,
+          "kind": "exact",
+          "shell_selected_rank": 1
+        },
+        "dense_fft_boundary_gap_abs_difference_ev": 2.220446049250313e-16,
+        "dense_fft_energy_abs_ev": 3.637978807091713e-12,
+        "dense_fft_fock_max_abs_ev": 6.661365969895318e-16,
+        "dense_oracle_fock_sha256": "02ba7994c47bdce8c13835502dc5a18feb86fa134dfc2d1220566064fbd53200",
+        "density_sha256": "f77654e45a5c4d7bd6c025a1dc9f055d6aa9d2a2edcba9a358367168305dc1dd",
+        "energy_parity_gate_ev": 8.834406031575196e-07,
+        "fingerprint": "21c73325655a3e7d66f6651b22d070b323d843108bbf82c1a257db494b5bb7f6",
+        "fock_parity_gate_ev": 1e-12,
+        "pair_fingerprint": "66897418b724eff6f1ee1701680119e4c00760d8a4751b048a2e688be4e653c3"
+      },
+      {
+        "applied_boundary": {
+          "effective_tolerance_ev": 1e-12,
+          "fingerprint": "5e01446eb2e6792d1f02f71eae18fb090a294158fe95d5ecec0ba36834ed24b6",
+          "gap_ev": 2.220446049250313e-16,
+          "kind": "positive_subtolerance",
+          "shell_selected_rank": 0
+        },
+        "applied_fft_fock_sha256": "1b5f205fd5f39c68aaca7f93e920fa49d7fde182583b22b838689e68663e0c6d",
+        "applied_fft_recompute_exact": true,
+        "dense_boundary": {
+          "effective_tolerance_ev": 1e-12,
+          "fingerprint": "6a434fa940612b39d614218c6b85c4202914f69dc9a21c3c2d338443dacafb46",
+          "gap_ev": 0.0,
+          "kind": "exact",
+          "shell_selected_rank": 1
+        },
+        "dense_fft_boundary_gap_abs_difference_ev": 2.220446049250313e-16,
+        "dense_fft_energy_abs_ev": 3.637978807091713e-12,
+        "dense_fft_fock_max_abs_ev": 6.661365969895318e-16,
+        "dense_oracle_fock_sha256": "9201b35c0f38b4bd51839e50394e5c653fa23b03db2e2607e419a6d5d402a014",
+        "density_sha256": "c8530c76c5b4d0bbe1f84177e8d75aeb49a97dec400b1c71477aa7c3b38a2af0",
+        "energy_parity_gate_ev": 8.834406031575185e-07,
+        "fingerprint": "90117d18490243c74b7fea84892c326acae4c94d38b96d971567492d2da83efc",
+        "fock_parity_gate_ev": 1e-12,
+        "pair_fingerprint": "66897418b724eff6f1ee1701680119e4c00760d8a4751b048a2e688be4e653c3"
+      }
+    ],
+    "source_job474291_summary_sha256": "e48bad9239812e2eb4e943ba13cf41d2cc5b16c42fb26dfe3dc7267f602aae09"
+  },
+  "execution": {
+    "all_applied_steps_full_step": true,
+    "all_normal_endpoints_stationary": true,
+    "branch_tree_exhausted": true,
+    "deterministic_terminal_replay_verified": true,
+    "endpoint_count": 64,
+    "exact_frontier_expansion_count": 63,
+    "execution_valid": true,
+    "node_count": 127,
+    "rejection_count": 0,
+    "scientific_closure_passed": true,
+    "stationary_endpoint_count": 64
+  },
+  "final_artifact_manifest_sha256": "b8172e998e574f4b744b31d86c9dea395ca3c96e233b4d683d2c3a7bd5a151da",
+  "matched_ivc": {
+    "all_cases_sha256": "784f5082063a3b6ae8e6b95ac1a78ee3148d884e464e0cfef2149793a35fa39c",
+    "case_id": "h635_qa00p030_ivc_b3_fullstep",
+    "commutator_residual_ev": 5.64063796134335e-11,
+    "complete_sentinel_sha256": "4061892d725547cff3ac4775555f1e9d7fcdd18eef56078f9d6cb6eaecb93858",
+    "converged": true,
+    "converged_stationary": true,
+    "final_raw_norm": 3.775611823186864e-09,
+    "final_recomputed_energy_ev": 8833.738799359977,
+    "final_state_npz_sha256": "6c76938ffd3c3abfde1abf0f7e0f3265006bef35b94fbcdbdfde0c9b7f239b49",
+    "occupation_gap_ev": 3.534306569996648e-05,
+    "rebuilt_base_fingerprint_match": true,
+    "rebuilt_functional_fingerprint_match": true,
+    "rebuilt_gauge_receipt_fingerprint_match": true,
+    "source_job_id": "468739",
+    "stationary": true
+  },
+  "normal_endpoints": {
+    "energy_max_ev": 8833.973026131973,
+    "energy_min_ev": 8833.973026131967,
+    "final_density_sha256_counts": {
+      "3307efd3434cef054b37545d778a23f2a6fb8684f599b9e7d0e0cbea8ee36288": 32,
+      "40fd7da28d7d32ad8034352bbd1171b873ceac9c268f5395f908f9a9f686462d": 32
+    },
+    "fresh_boundary_gap_max_ev": 2.2216705036881557e-05,
+    "fresh_boundary_gap_min_ev": 2.2216705036881557e-05,
+    "groups": [
+      {
+        "energy_max_ev": 8833.973026131973,
+        "energy_min_ev": 8833.973026131973,
+        "final_density_sha256": "3307efd3434cef054b37545d778a23f2a6fb8684f599b9e7d0e0cbea8ee36288",
+        "path_ids": [
+          "g0_0_0_0_0_1_38b984fdb7a3",
+          "g0_0_0_0_1_1_c6604b8acd75",
+          "g0_0_0_1_0_1_becdb6c281ac",
+          "g0_0_0_1_1_1_74dff2b4f230",
+          "g0_0_1_0_0_1_32935e7c7b4a",
+          "g0_0_1_0_1_1_e724d8c458d3",
+          "g0_0_1_1_0_1_dc3274a59a48",
+          "g0_0_1_1_1_1_866f04102d90",
+          "g0_1_0_0_0_1_9c6dc0a0467e",
+          "g0_1_0_0_1_1_77c93acc18ce",
+          "g0_1_0_1_0_1_d5d6b1f6914d",
+          "g0_1_0_1_1_1_58fcab08b692",
+          "g0_1_1_0_0_1_e7b746705fcb",
+          "g0_1_1_0_1_1_d86552889191",
+          "g0_1_1_1_0_1_1ec39369b246",
+          "g0_1_1_1_1_1_a0a15d57cb41",
+          "g1_0_0_0_0_1_5f92cf1a9762",
+          "g1_0_0_0_1_1_f86ce1f89dc1",
+          "g1_0_0_1_0_1_294e0511b3b8",
+          "g1_0_0_1_1_1_07c1c0500549",
+          "g1_0_1_0_0_1_5fad07f387b9",
+          "g1_0_1_0_1_1_833b8507c75b",
+          "g1_0_1_1_0_1_b7535bd9abcb",
+          "g1_0_1_1_1_1_5fbab2465e4e",
+          "g1_1_0_0_0_1_ca17952ae3ff",
+          "g1_1_0_0_1_1_c3e437f2617f",
+          "g1_1_0_1_0_1_268ba6443ffb",
+          "g1_1_0_1_1_1_8ad337091c16",
+          "g1_1_1_0_0_1_d93bd0c3567a",
+          "g1_1_1_0_1_1_d0eadf99192e",
+          "g1_1_1_1_0_1_3a45928780b3",
+          "g1_1_1_1_1_1_7ac1b2e13899"
+        ]
+      },
+      {
+        "energy_max_ev": 8833.973026131967,
+        "energy_min_ev": 8833.973026131967,
+        "final_density_sha256": "40fd7da28d7d32ad8034352bbd1171b873ceac9c268f5395f908f9a9f686462d",
+        "path_ids": [
+          "g0_0_0_0_0_0_73ed6f5bf440",
+          "g0_0_0_0_1_0_d627787551d3",
+          "g0_0_0_1_0_0_c12218ebfbfb",
+          "g0_0_0_1_1_0_a84e661f977e",
+          "g0_0_1_0_0_0_726dff016e4e",
+          "g0_0_1_0_1_0_89deb5926f7d",
+          "g0_0_1_1_0_0_aa27d54d13bd",
+          "g0_0_1_1_1_0_b0c180ac8967",
+          "g0_1_0_0_0_0_ce8d35e797ea",
+          "g0_1_0_0_1_0_aaf6fc636bda",
+          "g0_1_0_1_0_0_69a675c0274a",
+          "g0_1_0_1_1_0_986992593b1b",
+          "g0_1_1_0_0_0_4e658180b7bc",
+          "g0_1_1_0_1_0_d729268afb36",
+          "g0_1_1_1_0_0_bcf4d8b4b825",
+          "g0_1_1_1_1_0_c5d892f6fb5b",
+          "g1_0_0_0_0_0_ffd4e0066d78",
+          "g1_0_0_0_1_0_922e539c810b",
+          "g1_0_0_1_0_0_512c67d02869",
+          "g1_0_0_1_1_0_ab2cb896b645",
+          "g1_0_1_0_0_0_b2372748fd4f",
+          "g1_0_1_0_1_0_b4cc2c7978fe",
+          "g1_0_1_1_0_0_7062e0ff2793",
+          "g1_0_1_1_1_0_9f88c1638a57",
+          "g1_1_0_0_0_0_0ed70445b0d3",
+          "g1_1_0_0_1_0_92ca5e5086c9",
+          "g1_1_0_1_0_0_720c07c58512",
+          "g1_1_0_1_1_0_cca39ae9b4db",
+          "g1_1_1_0_0_0_d73a8fe92762",
+          "g1_1_1_0_1_0_5a8550298153",
+          "g1_1_1_1_0_0_a866cfc9b512",
+          "g1_1_1_1_1_0_bbdece78d052"
+        ]
+      }
+    ],
+    "maximum_commutator_residual_ev": 0.0,
+    "maximum_final_raw_norm": 0.0,
+    "maximum_idempotency_residual": 0.0,
+    "stationary_group_count": 2
+  },
+  "physical_map_lineage": {
+    "ivc_rebuilt_source_map_receipts_all_true": true,
+    "normal_policy_fingerprint": "dbec28f6cfa9cd80e5cfa318a06510d6f224192f15d6ae9e124c21bbdfafe98b",
+    "normal_prepared_fingerprint": "c14a5f08c210231bcecc4da7234db679f5ed1276f3c8328e299bc3ad405c4c94",
+    "source_job468711": {
+      "base": "fe9c330520afdbaee340279808fcee37385bfe8d88c6efc6185c1b368498247a",
+      "functional": "b567d80790b4830e3480eee71ad0fdb4e53b6e37d241e9a7b24498acc5462c2c",
+      "gauge": "f2a6de7c44fc91781961c97e50c008ba1701211cd12a581f57a5570c8cbd2702",
+      "h": 635,
+      "prepared": "0765aa9d1db11a4fb62e9d40796c40ea0a34210045199661b5c348d9e635c83f",
+      "q": 0.03
+    }
+  },
+  "prior_failed_replay": {
+    "capsule": "/data/home/ziyuzhu/.runs/Mean_Field_7ec89d6_vituri_fig2_q003_dense_oracle_replay_v2_20260902",
+    "classification": "engineering post-science hash-encoding comparison failure",
+    "job_id": "477034",
+    "scientific_endpoint_claims_promoted": false,
+    "sentinel_sha256": "686f162b5737cfa15e450aabe5c919c207cee33336be827e62999c42a5e7ed13"
+  },
+  "same_q_raw_total_energy": {
+    "all_retained_normal_leaves_negative": true,
+    "cross_q_comparison_authorized": false,
+    "definition": "1000 * (E_IVC - E_normal) meV on the fixed N81 finite square; no per-hole, per-particle, per-cell, or area normalization",
+    "delta_max_mev": -234.22677199050668,
+    "delta_min_mev": -234.22677199596365,
+    "normal_leaf_count": 64,
+    "same_q_finite_domain_comparison_authorized": true
+  },
+  "scheduler": {
+    "elapsed": "00:36:46",
+    "exit_code": "0:0",
+    "job_id": "477106",
+    "node": "node036",
+    "state": "COMPLETED"
+  },
+  "schema": "mean_field.vituri2024.fig2_q003_dense_oracle_replay_477106_attestation.v1",
+  "source_commit": "7ec89d67855bed06d4f02e671ce9c1469307caac"
+}
