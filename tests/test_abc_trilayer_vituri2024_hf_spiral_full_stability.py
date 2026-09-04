@@ -27,6 +27,15 @@ from mean_field.systems.abc_trilayer.vituri2024_hf_spiral import (
     Vituri2024FiniteQSpiralChoice,
     prepare_vituri2024_hf_spiral,
 )
+from mean_field.systems.abc_trilayer.vituri2024_hf_spiral_full_response import (
+    VITURI2024_HF_SPIRAL_FULL_RESPONSE_API_VERSION,
+    VITURI2024_HF_SPIRAL_FULL_RESPONSE_AUTHORITY,
+    VITURI2024_HF_SPIRAL_FULL_RESPONSE_DENSE_MAX_NK,
+    VITURI2024_HF_SPIRAL_FULL_RESPONSE_KERNEL_CONTRACT,
+    Vituri2024HFSpiralSignedDisplacementResponse,
+    Vituri2024HFSpiralValidatedSignedDisplacementFFTAction,
+    build_vituri2024_hf_spiral_signed_displacement_response,
+)
 from mean_field.systems.abc_trilayer.vituri2024_hf_spiral_full_stability import (
     VITURI2024_HF_SPIRAL_FULL_SECTOR_CHARGES,
     VITURI2024_HF_SPIRAL_FULL_SECTOR_INVENTORY_API_VERSION,
@@ -39,6 +48,9 @@ from mean_field.systems.abc_trilayer.vituri2024_hf_spiral_full_stability import 
 )
 from mean_field.systems.abc_trilayer.vituri2024_hf_spiral_stability import (
     prepare_vituri2024_hf_spiral_stability,
+)
+from mean_field.systems.abc_trilayer.vituri2024_tdhf_full_functional import (
+    vituri2024_full_projected_interaction_action,
 )
 
 
@@ -56,7 +68,7 @@ def _indices(selected_spin: int) -> tuple[tuple[int, int], tuple[int, int]]:
     return selected, spectator  # type: ignore[return-value]
 
 
-def _preparation(*, fft: bool):
+def _preparation(*, fft: bool, selected_spin: int = 1):
     prepare = (
         prepare_vituri2024_homogeneous_hf_fft
         if fft
@@ -67,7 +79,7 @@ def _preparation(*, fft: bool):
         base,
         Vituri2024FiniteQSpiralChoice(
             q_inverse_angstrom=np.zeros(2, dtype=np.float64),
-            selected_spin=1,
+            selected_spin=selected_spin,
             gauge_mode="identity",
         ),
     )
@@ -295,6 +307,294 @@ def test_rejects_dense_source_and_invalid_sector_keys(inventory) -> None:
         inventory.ordered_valley_pair_complex_dimension(
             key, particle_valley=True, hole_valley=-1
         )
+
+
+@pytest.fixture(scope="module")
+def response(inventory) -> Vituri2024HFSpiralSignedDisplacementResponse:
+    return build_vituri2024_hf_spiral_signed_displacement_response(inventory)
+
+
+def _signed_block(response, key, *, seed: int) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    result = np.zeros((2, 2, response.nk), dtype=np.complex128)
+    bases, _targets = response.support_indices(key)
+    if key.valley_charge == 0:
+        result[0, 0, bases] = rng.normal(size=len(bases)) + 1.0j * rng.normal(
+            size=len(bases)
+        )
+        result[1, 1, bases] = rng.normal(size=len(bases)) + 1.0j * rng.normal(
+            size=len(bases)
+        )
+    elif key.valley_charge == 2:
+        result[1, 0, bases] = rng.normal(size=len(bases)) + 1.0j * rng.normal(
+            size=len(bases)
+        )
+    else:
+        result[0, 1, bases] = rng.normal(size=len(bases)) + 1.0j * rng.normal(
+            size=len(bases)
+        )
+    return result
+
+
+@pytest.mark.parametrize(
+    ("key", "seed"),
+    (
+        (Vituri2024HFSpiralFullSectorKey(0, 0, 0), 11),
+        (Vituri2024HFSpiralFullSectorKey(0, 0, 2), 12),
+        (Vituri2024HFSpiralFullSectorKey(1, 0, 0), 13),
+        (Vituri2024HFSpiralFullSectorKey(1, -1, 2), 14),
+        (Vituri2024HFSpiralFullSectorKey(-2, 2, -2), 15),
+    ),
+)
+def test_signed_response_dense_fft_and_conjugate_covariance(response, key, seed) -> None:
+    block = _signed_block(response, key, seed=seed)
+    dense = response.apply_dense(key, block)
+    fft = response.apply_fft(key, block)
+    assert np.max(np.abs(dense - fft), initial=0.0) < 2.0e-13
+
+    partner_key = key.conjugate
+    partner_block = response.conjugate_block(key, block)
+    partner_response = response.apply_fft(partner_key, partner_block)
+    expected_partner = response.conjugate_block(key, fft)
+    assert np.max(
+        np.abs(partner_response - expected_partner), initial=0.0
+    ) < 2.0e-13
+
+
+def _integer_mask_full_projected_h_oracle(response, key, block):
+    inventory = response.inventory
+    preparation = inventory.restricted_preparation
+    prepared = preparation.prepared
+    nk = response.nk
+    labels = inventory.integer_mesh_labels
+    mask = np.all(
+        labels[:, None, None, None, :]
+        + labels[None, :, None, None, :]
+        - labels[None, None, :, None, :]
+        - labels[None, None, None, :, :]
+        == 0,
+        axis=-1,
+    )
+    form_factors = np.empty((4, nk, nk), dtype=np.complex128)
+    valley_to_index = {-1: 0, 1: 1}
+    for flavor, (valley, _spin) in enumerate(INTERNAL_FLAVOR_ORDER):
+        states = prepared.active_band_states[valley_to_index[valley]]
+        form_factors[flavor] = np.einsum(
+            "cm,cn->mn", states.conj(), states, optimize=True
+        )
+    displacement = labels[:, None, :] - labels[None, :, :]
+    offset = inventory.mesh_size - 1
+    kernel_pair = np.asarray(
+        response.fft_plan.kernel_by_signed_displacement[
+            displacement[..., 1] + offset,
+            displacement[..., 0] + offset,
+        ].real,
+        dtype=np.float64,
+    )
+    full_density = np.zeros((4 * nk, 4 * nk), dtype=np.complex128)
+    selected = preparation.receipt.selected_flavor_indices
+    bases, targets = response.support_indices(key)
+    for left in range(2):
+        for right in range(2):
+            full_density[
+                selected[left] * nk + targets,
+                selected[right] * nk + bases,
+            ] = block[left, right, bases]
+    full_density += full_density.conj().T
+    full_response = vituri2024_full_projected_interaction_action(
+        full_density,
+        form_factors_by_flavor=form_factors,
+        interaction_kernel_by_mesh_pair=kernel_pair,
+        exact_local_mask=mask,
+        area_angstrom_squared=response.area_angstrom_squared,
+    )
+    extracted = np.zeros((2, 2, nk), dtype=np.complex128)
+    for left in range(2):
+        for right in range(2):
+            extracted[left, right, bases] = full_response[
+                selected[left] * nk + targets,
+                selected[right] * nk + bases,
+            ]
+    return extracted, full_response, selected, bases, targets
+
+
+@pytest.mark.parametrize(
+    ("key", "seed"),
+    (
+        (Vituri2024HFSpiralFullSectorKey(1, 0, 0), 61),
+        (Vituri2024HFSpiralFullSectorKey(1, -1, 2), 62),
+        (Vituri2024HFSpiralFullSectorKey(-1, 1, -2), 63),
+    ),
+)
+def test_signed_response_matches_integer_mask_full_projected_h_oracle(
+    response, key, seed
+) -> None:
+    block = _signed_block(response, key, seed=seed)
+    expected, full_response, selected, bases, targets = (
+        _integer_mask_full_projected_h_oracle(response, key, block)
+    )
+    actual = response.apply_fft(key, block)
+    assert np.linalg.norm(expected) > 1.0e-8
+    assert np.max(np.abs(actual - expected), initial=0.0) < 2.0e-13
+    if key.valley_charge == 0:
+        spectators = sorted(set(range(4)) - set(selected))
+        spectator_norm = 0.0
+        for spectator in spectators:
+            spectator_norm += np.linalg.norm(
+                full_response[
+                    spectator * response.nk + targets,
+                    spectator * response.nk + bases,
+                ]
+            )
+        assert spectator_norm > 1.0e-8
+    else:
+        spectators = sorted(set(range(4)) - set(selected))
+        for spectator in spectators:
+            assert np.count_nonzero(
+                full_response[
+                    spectator * response.nk + targets,
+                    spectator * response.nk + bases,
+                ]
+            ) == 0
+
+
+def test_zero_displacement_reduces_to_existing_k_diagonal_fft_action(response) -> None:
+    rng = np.random.default_rng(29)
+    selected = np.zeros((2, 2, response.nk), dtype=np.complex128)
+    selected[0, 0] = rng.normal(size=response.nk)
+    selected[1, 1] = rng.normal(size=response.nk)
+    selected[1, 0] = rng.normal(size=response.nk) + 1.0j * rng.normal(
+        size=response.nk
+    )
+    selected[0, 1] = selected[1, 0].conj()
+
+    response_sum = np.zeros_like(selected)
+    for charge in VITURI2024_HF_SPIRAL_FULL_SECTOR_CHARGES:
+        key = Vituri2024HFSpiralFullSectorKey(0, 0, charge)
+        block = np.zeros_like(selected)
+        if charge == 0:
+            block[0, 0] = selected[0, 0]
+            block[1, 1] = selected[1, 1]
+        elif charge == 2:
+            block[1, 0] = selected[1, 0]
+        else:
+            block[0, 1] = selected[0, 1]
+        response_sum += response.apply_fft(key, block)
+
+    preparation = response.inventory.restricted_preparation
+    selected_indices = np.asarray(
+        preparation.receipt.selected_flavor_indices, dtype=np.int64
+    )
+    momenta = np.arange(response.nk, dtype=np.int64)
+    full = np.zeros((4, 4, response.nk), dtype=np.complex128)
+    full[np.ix_(selected_indices, selected_indices, momenta)] = selected
+    existing = preparation.prepared.functional.interaction_action_conventional(full)
+    existing_selected = existing[np.ix_(selected_indices, selected_indices, momenta)]
+    assert np.max(
+        np.abs(response_sum - existing_selected), initial=0.0
+    ) < 2.0e-13
+
+
+def test_signed_response_rejects_support_and_charge_leakage(response) -> None:
+    key = Vituri2024HFSpiralFullSectorKey(1, 0, 2)
+    block = _signed_block(response, key, seed=41)
+    bases, _targets = response.support_indices(key)
+    outside = sorted(set(range(response.nk)) - set(int(value) for value in bases))
+    assert outside
+    block[1, 0, outside[0]] = 1.0
+    with pytest.raises(ValueError, match="outside no-wrap support"):
+        response.apply_fft(key, block)
+
+    block = _signed_block(response, key, seed=42)
+    block[0, 0, bases[0]] = 1.0
+    with pytest.raises(ValueError, match="conserved valley charge"):
+        response.apply_fft(key, block)
+
+
+def test_validate_once_fft_callback_avoids_recursive_source_validation(
+    response, monkeypatch
+) -> None:
+    key = Vituri2024HFSpiralFullSectorKey(1, -1, 2)
+    block = _signed_block(response, key, seed=73)
+    expected = response.apply_fft(key, block)
+    action = response.make_validated_fft_action(key)
+    assert type(action) is Vituri2024HFSpiralValidatedSignedDisplacementFFTAction
+
+    def forbidden_recursive_validation(_self):
+        raise AssertionError("Krylov hot path recursively validated the full source")
+
+    monkeypatch.setattr(
+        Vituri2024HFSpiralFullSectorInventory,
+        "validate_live_state",
+        forbidden_recursive_validation,
+    )
+    actual = action(block)
+    assert np.array_equal(actual, expected)
+    with pytest.raises(AssertionError, match="recursively validated"):
+        response.apply_fft(key, block)
+
+
+def test_response_supports_the_other_selected_spin_without_relabeling_valleys() -> None:
+    inventory = build_vituri2024_hf_spiral_full_sector_inventory(
+        _preparation(fft=True, selected_spin=-1)
+    )
+    response = build_vituri2024_hf_spiral_signed_displacement_response(inventory)
+    assert inventory.restricted_preparation.receipt.selected_flavor_indices == (0, 2)
+    assert inventory.selected_valleys == (-1, 1)
+    key = Vituri2024HFSpiralFullSectorKey(1, 0, -2)
+    block = _signed_block(response, key, seed=79)
+    expected, _full, _selected, _bases, _targets = (
+        _integer_mask_full_projected_h_oracle(response, key, block)
+    )
+    assert np.max(
+        np.abs(response.apply_fft(key, block) - expected), initial=0.0
+    ) < 2.0e-13
+
+
+def test_signed_response_authority_and_public_exports(response) -> None:
+    assert response.api_version == VITURI2024_HF_SPIRAL_FULL_RESPONSE_API_VERSION
+    assert response.authority == VITURI2024_HF_SPIRAL_FULL_RESPONSE_AUTHORITY
+    assert response.dense_max_nk == VITURI2024_HF_SPIRAL_FULL_RESPONSE_DENSE_MAX_NK
+    assert response.candidate_only
+    assert response.no_wrap
+    assert response.dense_reference_available_on_reduced_meshes
+    assert response.fft_linear_convolution
+    assert not response.q_and_minus_q_averaged
+    assert response.selected_output_projection_with_frozen_spectator_input
+    assert response.integer_label_interaction_conservation_convention
+    assert not response.integer_label_interaction_conservation_established
+    assert response.real_even_kernel_verified
+    assert (
+        response.kernel_orientation_contract
+        == VITURI2024_HF_SPIRAL_FULL_RESPONSE_KERNEL_CONTRACT
+    )
+    assert not response.literal_float_full_functional_parity_established
+    assert not response.dense_fft_parity_established
+    assert not response.scalar_curvature_established
+    assert not response.reciprocity_established
+    assert not response.hermitian_eigensolver_authorized
+    assert not response.full_local_stability_established
+    assert not response.production_ready
+    assert not response.paper_reproduction_verified
+    assert len(response.fingerprint) == 64
+
+    expected_exports = {
+        "VITURI2024_HF_SPIRAL_FULL_RESPONSE_API_VERSION",
+        "VITURI2024_HF_SPIRAL_FULL_RESPONSE_AUTHORITY",
+        "VITURI2024_HF_SPIRAL_FULL_RESPONSE_DENSE_MAX_NK",
+        "VITURI2024_HF_SPIRAL_FULL_RESPONSE_KERNEL_CONTRACT",
+        "Vituri2024HFSpiralSignedDisplacementResponse",
+        "Vituri2024HFSpiralValidatedSignedDisplacementFFTAction",
+        "build_vituri2024_hf_spiral_signed_displacement_response",
+    }
+    from mean_field.systems.abc_trilayer import (
+        vituri2024_hf_spiral_full_response as response_module,
+    )
+
+    assert set(response_module.__all__) == expected_exports
+    for name in expected_exports:
+        assert getattr(abc_trilayer, name) is getattr(response_module, name)
+        assert name in abc_trilayer.__all__
 
 
 def test_public_package_exports_inventory_surface(inventory) -> None:
