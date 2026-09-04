@@ -739,6 +739,14 @@ from .vituri2024_hf_spiral_stability import *  # noqa: F401,F403
 
 __all__ += list(_vituri2024_hf_spiral_stability.__all__)
 
+# Complete no-wrap selected-spin transition inventory; response remains pending.
+from . import (
+    vituri2024_hf_spiral_full_stability as _vituri2024_hf_spiral_full_stability,
+)
+from .vituri2024_hf_spiral_full_stability import *  # noqa: F401,F403
+
+__all__ += list(_vituri2024_hf_spiral_full_stability.__all__)
+
 # Candidate-only fixed-flavor-rank Vituri BFS; generic ODA stays in core/hf.
 from . import vituri2024_hf_fixed_sector as _vituri2024_hf_fixed_sector
 from .vituri2024_hf_fixed_sector import *  # noqa: F401,F403
