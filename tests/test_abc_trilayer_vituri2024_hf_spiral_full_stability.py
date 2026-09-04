@@ -41,10 +41,15 @@ from mean_field.systems.abc_trilayer.vituri2024_hf_spiral_full_response import (
     VITURI2024_HF_SPIRAL_FULL_RESPONSE_AUTHORITY,
     VITURI2024_HF_SPIRAL_FULL_RESPONSE_DENSE_MAX_NK,
     VITURI2024_HF_SPIRAL_FULL_RESPONSE_KERNEL_CONTRACT,
+    VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_ARITHMETIC,
+    VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_MAX_MESH_SIZE,
+    VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_SCOPE,
+    Vituri2024HFSpiralLiteralMaskEquivalenceReceipt,
     Vituri2024HFSpiralSignedDisplacementResponse,
     Vituri2024HFSpiralValidatedResponseActionFactory,
     Vituri2024HFSpiralValidatedSignedDisplacementFFTAction,
     build_vituri2024_hf_spiral_signed_displacement_response,
+    certify_vituri2024_hf_spiral_literal_mask_equivalence,
 )
 from mean_field.systems.abc_trilayer.vituri2024_hf_spiral_full_stability import (
     VITURI2024_HF_SPIRAL_FULL_SECTOR_CHARGES,
@@ -60,6 +65,7 @@ from mean_field.systems.abc_trilayer.vituri2024_hf_spiral_stability import (
     prepare_vituri2024_hf_spiral_stability,
 )
 from mean_field.systems.abc_trilayer.vituri2024_tdhf_full_functional import (
+    _exact_local_mask,
     vituri2024_full_projected_interaction_action,
 )
 
@@ -149,6 +155,81 @@ def test_complete_global_rank_dimension_and_restricted_subset(inventory) -> None
     assert inventory.nonempty_sector_count + inventory.zero_dimension_sector_count == (
         inventory.total_sector_count
     )
+
+
+def test_literal_float_quartet_mask_equivalence_is_exhaustively_certified(
+    inventory,
+) -> None:
+    receipt = certify_vituri2024_hf_spiral_literal_mask_equivalence(
+        inventory.integer_mesh_labels,
+        inventory.restricted_preparation.prepared.ordered_mesh,
+    )
+    assert type(receipt) is Vituri2024HFSpiralLiteralMaskEquivalenceReceipt
+    assert receipt.mesh_size == 3
+    assert receipt.nk == 9
+    assert receipt.scalar_quartets_checked_per_axis == 3**4
+    assert receipt.false_positive_counts == (0, 0)
+    assert receipt.false_negative_counts == (0, 0)
+    assert receipt.maximum_conserving_float_residuals == (0.0, 0.0)
+    assert all(value > 0.0 for value in receipt.minimum_nonconserving_float_residuals)
+    assert receipt.arithmetic_contract == (
+        VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_ARITHMETIC
+    )
+    assert receipt.literal_float_quartet_mask_equivalence_established
+    assert receipt.scope == VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_SCOPE
+    assert receipt.mesh_size <= VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_MAX_MESH_SIZE
+    assert not receipt.flavor_resolved_shifted_momentum_mask_equivalence_established
+    assert not receipt.full_functional_action_parity_established
+    assert not receipt.scalar_hessian_authority_established
+    assert not receipt.production_ready
+    receipt.validate_live_state()
+
+    labels = inventory.integer_mesh_labels
+    integer_mask = np.all(
+        labels[:, None, None, None, :]
+        + labels[None, :, None, None, :]
+        - labels[None, None, :, None, :]
+        - labels[None, None, None, :, :]
+        == 0,
+        axis=-1,
+    )
+    assert np.array_equal(
+        _exact_local_mask(inventory.restricted_preparation.prepared.ordered_mesh),
+        integer_mask,
+    )
+
+    with pytest.raises(TypeError, match="factory-only"):
+        Vituri2024HFSpiralLiteralMaskEquivalenceReceipt(
+            _factory_token=object(),
+            mesh_size=receipt.mesh_size,
+            nk=receipt.nk,
+            integer_mesh_labels_sha256=receipt.integer_mesh_labels_sha256,
+            momentum_mesh_inverse_angstrom_sha256=(
+                receipt.momentum_mesh_inverse_angstrom_sha256
+            ),
+            coordinate_table_sha256=receipt.coordinate_table_sha256,
+            scalar_quartets_checked_per_axis=receipt.scalar_quartets_checked_per_axis,
+            false_positive_counts=receipt.false_positive_counts,
+            false_negative_counts=receipt.false_negative_counts,
+            maximum_conserving_float_residuals=(
+                receipt.maximum_conserving_float_residuals
+            ),
+            minimum_nonconserving_float_residuals=(
+                receipt.minimum_nonconserving_float_residuals
+            ),
+            exact_local_mask_source_closure_sha256=(
+                receipt.exact_local_mask_source_closure_sha256
+            ),
+        )
+
+
+def test_literal_float_quartet_mask_certifier_rejects_nonaffine_integer_map(
+    inventory,
+) -> None:
+    labels = inventory.integer_mesh_labels
+    nonaffine = np.asarray(labels, dtype=np.float64) ** 2
+    with pytest.raises(ValueError, match="inequivalent"):
+        certify_vituri2024_hf_spiral_literal_mask_equivalence(labels, nonaffine)
 
 
 def test_every_transition_matches_independent_literal_integer_enumeration(inventory) -> None:
@@ -941,10 +1022,16 @@ def test_signed_response_authority_and_public_exports(response) -> None:
         "VITURI2024_HF_SPIRAL_FULL_RESPONSE_AUTHORITY",
         "VITURI2024_HF_SPIRAL_FULL_RESPONSE_DENSE_MAX_NK",
         "VITURI2024_HF_SPIRAL_FULL_RESPONSE_KERNEL_CONTRACT",
+        "VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_API_VERSION",
+        "VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_ARITHMETIC",
+        "VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_MAX_MESH_SIZE",
+        "VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_SCOPE",
+        "Vituri2024HFSpiralLiteralMaskEquivalenceReceipt",
         "Vituri2024HFSpiralSignedDisplacementResponse",
         "Vituri2024HFSpiralValidatedResponseActionFactory",
         "Vituri2024HFSpiralValidatedSignedDisplacementFFTAction",
         "build_vituri2024_hf_spiral_signed_displacement_response",
+        "certify_vituri2024_hf_spiral_literal_mask_equivalence",
     }
     from mean_field.systems.abc_trilayer import (
         vituri2024_hf_spiral_full_response as response_module,

@@ -31,6 +31,7 @@ from __future__ import annotations
 
 from dataclasses import InitVar, dataclass, field
 from hashlib import sha256
+import inspect
 import json
 import math
 from typing import Final
@@ -41,6 +42,11 @@ from scipy.fft import fft2 as _FFT2, ifft2 as _IFFT2
 from .vituri2024_hf_preflight import (
     ACTIVE_BAND_STATES_VALLEY_ORDER,
     INTERNAL_FLAVOR_ORDER,
+)
+from .vituri2024_tdhf_full_functional import (
+    VITURI2024_FULL_FUNCTIONAL_EXACT_LOCAL_MASK,
+    _bytes_backed,
+    _exact_local_mask,
 )
 from .vituri2024_hf_spiral_full_stability import (
     Vituri2024HFSpiralFullSectorInventory,
@@ -57,12 +63,26 @@ VITURI2024_HF_SPIRAL_FULL_RESPONSE_AUTHORITY: Final[str] = (
     "only_not_scalar_hessian_eigensolver_local_stability_or_paper_authority"
 )
 VITURI2024_HF_SPIRAL_FULL_RESPONSE_DENSE_MAX_NK: Final[int] = 121
+VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_API_VERSION: Final[str] = (
+    "vituri2024_hf_spiral_literal_mask_equivalence.v1"
+)
+VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_MAX_MESH_SIZE: Final[int] = 101
+VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_SCOPE: Final[str] = (
+    "caller_supplied_common_cartesian_mesh_exact_local_mask_only_with_mesh_hash_"
+    "not_flavor_resolved_shifted_momenta_or_full_functional_action_parity"
+)
+VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_ARITHMETIC: Final[str] = (
+    "for_each_cartesian_axis_exhaust_all_scalar_quartets_using_"
+    "((k_alpha+k_beta)-k_gamma)-k_delta_eq_0_exact_float64_and_compare_"
+    "to_identically_ordered_integer_labels"
+)
 VITURI2024_HF_SPIRAL_FULL_RESPONSE_KERNEL_CONTRACT: Final[str] = (
     "projected_h_uses_K_particle_minus_output_while_fft_uses_K_output_minus_"
     "particle_with_source_bound_real_even_kernel_verified"
 )
 
 _RESPONSE_TOKEN = object()
+_LITERAL_MASK_RECEIPT_TOKEN = object()
 
 
 def _array_sha256(value: object) -> str:
@@ -85,6 +105,13 @@ def _fingerprint(value: object) -> str:
     ).hexdigest()
 
 
+def _exact_local_mask_source_closure_sha256() -> str:
+    source = "\n---dependency---\n".join(
+        inspect.getsource(function) for function in (_exact_local_mask, _bytes_backed)
+    )
+    return sha256(source.encode()).hexdigest()
+
+
 def _readonly_complex128(value: object, shape: tuple[int, ...], label: str) -> Array:
     if (
         type(value) is not np.ndarray
@@ -96,6 +123,22 @@ def _readonly_complex128(value: object, shape: tuple[int, ...], label: str) -> A
     contiguous = np.ascontiguousarray(value)
     result = np.frombuffer(
         contiguous.tobytes(order="C"), dtype=np.complex128
+    ).reshape(shape)
+    result.setflags(write=False)
+    return result
+
+
+def _readonly_float64(value: object, shape: tuple[int, ...], label: str) -> Array:
+    if (
+        type(value) is not np.ndarray
+        or value.dtype != np.dtype(np.float64)
+        or value.shape != shape
+        or not np.all(np.isfinite(value))
+    ):
+        raise ValueError(f"{label} must be finite exact float64 {shape}")
+    contiguous = np.ascontiguousarray(value)
+    result = np.frombuffer(
+        contiguous.tobytes(order="C"), dtype=np.float64
     ).reshape(shape)
     result.setflags(write=False)
     return result
@@ -170,6 +213,264 @@ def _allowed_flavor_blocks(key: Vituri2024HFSpiralFullSectorKey) -> tuple[tuple[
     if key.valley_charge == -2:
         return ((0, 1),)
     raise RuntimeError("unreachable valley charge")
+
+
+@dataclass(frozen=True, slots=True)
+class Vituri2024HFSpiralLiteralMaskEquivalenceReceipt:
+    """Factory-only exhaustive proof for the central unshifted mesh mask."""
+
+    _factory_token: InitVar[object]
+    mesh_size: int
+    nk: int
+    integer_mesh_labels_sha256: str
+    momentum_mesh_inverse_angstrom_sha256: str
+    coordinate_table_sha256: tuple[str, str]
+    scalar_quartets_checked_per_axis: int
+    false_positive_counts: tuple[int, int]
+    false_negative_counts: tuple[int, int]
+    maximum_conserving_float_residuals: tuple[float, float]
+    minimum_nonconserving_float_residuals: tuple[float, float]
+    exact_local_mask_source_closure_sha256: str
+    fingerprint: str = field(init=False)
+    api_version: str = field(
+        default=VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_API_VERSION,
+        init=False,
+    )
+    scope: str = field(
+        default=VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_SCOPE,
+        init=False,
+    )
+    arithmetic_contract: str = field(
+        default=VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_ARITHMETIC,
+        init=False,
+    )
+    exact_local_mask_policy: str = field(
+        default=VITURI2024_FULL_FUNCTIONAL_EXACT_LOCAL_MASK,
+        init=False,
+    )
+    cartesian_separability_established: bool = field(default=True, init=False)
+    exhaustive_scalar_quartet_check: bool = field(default=True, init=False)
+    literal_float_quartet_mask_equivalence_established: bool = field(
+        default=True, init=False
+    )
+    flavor_resolved_shifted_momentum_mask_equivalence_established: bool = field(
+        default=False, init=False
+    )
+    full_functional_action_parity_established: bool = field(default=False, init=False)
+    scalar_hessian_authority_established: bool = field(default=False, init=False)
+    production_ready: bool = field(default=False, init=False)
+
+    def __post_init__(self, _factory_token: object) -> None:
+        if _factory_token is not _LITERAL_MASK_RECEIPT_TOKEN:
+            raise TypeError("literal-mask equivalence receipt is factory-only")
+        payload = self._payload()
+        if (
+            type(self.mesh_size) is not int
+            or type(self.nk) is not int
+            or self.mesh_size * self.mesh_size != self.nk
+            or self.mesh_size > VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_MAX_MESH_SIZE
+            or self.scalar_quartets_checked_per_axis != self.mesh_size**4
+        ):
+            raise ValueError("literal-mask receipt dimension inventory is invalid")
+        for digest in (
+            self.integer_mesh_labels_sha256,
+            self.momentum_mesh_inverse_angstrom_sha256,
+            *self.coordinate_table_sha256,
+            self.exact_local_mask_source_closure_sha256,
+        ):
+            if (
+                type(digest) is not str
+                or len(digest) != 64
+                or any(character not in "0123456789abcdef" for character in digest)
+            ):
+                raise ValueError("literal-mask receipt contains an invalid SHA-256")
+        if self.false_positive_counts != (0, 0):
+            raise ValueError("literal-mask receipt contains false positives")
+        if self.false_negative_counts != (0, 0):
+            raise ValueError("literal-mask receipt contains false negatives")
+        if self.maximum_conserving_float_residuals != (0.0, 0.0):
+            raise ValueError("literal-mask receipt conserving residual is nonzero")
+        if any(
+            not math.isfinite(value) or value <= 0.0
+            for value in self.minimum_nonconserving_float_residuals
+        ):
+            raise ValueError("literal-mask receipt nonconserving residual is invalid")
+        object.__setattr__(self, "fingerprint", _fingerprint(payload))
+
+    def _payload(self) -> dict[str, object]:
+        return {
+            "api_version": self.api_version,
+            "scope": self.scope,
+            "arithmetic_contract": self.arithmetic_contract,
+            "exact_local_mask_policy": self.exact_local_mask_policy,
+            "mesh_size": self.mesh_size,
+            "nk": self.nk,
+            "integer_mesh_labels_sha256": self.integer_mesh_labels_sha256,
+            "momentum_mesh_inverse_angstrom_sha256": (
+                self.momentum_mesh_inverse_angstrom_sha256
+            ),
+            "coordinate_table_sha256": self.coordinate_table_sha256,
+            "scalar_quartets_checked_per_axis": self.scalar_quartets_checked_per_axis,
+            "false_positive_counts": self.false_positive_counts,
+            "false_negative_counts": self.false_negative_counts,
+            "maximum_conserving_float_residuals": (
+                self.maximum_conserving_float_residuals
+            ),
+            "minimum_nonconserving_float_residuals": (
+                self.minimum_nonconserving_float_residuals
+            ),
+            "exact_local_mask_source_closure_sha256": (
+                self.exact_local_mask_source_closure_sha256
+            ),
+            "cartesian_separability_established": (
+                self.cartesian_separability_established
+            ),
+            "exhaustive_scalar_quartet_check": self.exhaustive_scalar_quartet_check,
+            "literal_float_quartet_mask_equivalence_established": (
+                self.literal_float_quartet_mask_equivalence_established
+            ),
+            "flavor_resolved_shifted_momentum_mask_equivalence_established": (
+                self.flavor_resolved_shifted_momentum_mask_equivalence_established
+            ),
+            "full_functional_action_parity_established": (
+                self.full_functional_action_parity_established
+            ),
+            "scalar_hessian_authority_established": (
+                self.scalar_hessian_authority_established
+            ),
+            "production_ready": self.production_ready,
+        }
+
+    def validate_live_state(self) -> None:
+        if self.fingerprint != _fingerprint(self._payload()):
+            raise ValueError("literal-mask receipt fingerprint drifted")
+        current_source_sha256 = _exact_local_mask_source_closure_sha256()
+        if current_source_sha256 != self.exact_local_mask_source_closure_sha256:
+            raise ValueError("literal full-functional mask implementation drifted")
+
+
+def certify_vituri2024_hf_spiral_literal_mask_equivalence(
+    integer_mesh_labels: Array,
+    momentum_mesh_inverse_angstrom: Array,
+) -> Vituri2024HFSpiralLiteralMaskEquivalenceReceipt:
+    """Exhaust the exact vertex predicate without allocating an ``Nk^4`` mask."""
+
+    if (
+        type(integer_mesh_labels) is not np.ndarray
+        or integer_mesh_labels.dtype != np.dtype(np.int64)
+        or integer_mesh_labels.ndim != 2
+        or integer_mesh_labels.shape[1] != 2
+    ):
+        raise TypeError("integer mesh labels must be exact int64 (Nk,2)")
+    labels_snapshot = np.frombuffer(
+        np.ascontiguousarray(integer_mesh_labels).tobytes(order="C"), dtype=np.int64
+    ).reshape(integer_mesh_labels.shape)
+    labels_snapshot.setflags(write=False)
+    nk = int(labels_snapshot.shape[0])
+    size = math.isqrt(nk)
+    if size * size != nk or size < 3 or size % 2 != 1:
+        raise ValueError("literal-mask certification requires an odd square mesh")
+    if size > VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_MAX_MESH_SIZE:
+        raise ValueError("literal-mask exhaustive certification exceeds reviewed size cap")
+    if (
+        type(momentum_mesh_inverse_angstrom) is not np.ndarray
+        or momentum_mesh_inverse_angstrom.dtype != np.dtype(np.float64)
+        or momentum_mesh_inverse_angstrom.shape != (nk, 2)
+        or not np.all(np.isfinite(momentum_mesh_inverse_angstrom))
+    ):
+        raise TypeError("momentum mesh must be finite exact float64 (Nk,2)")
+    mesh_snapshot = np.frombuffer(
+        np.ascontiguousarray(momentum_mesh_inverse_angstrom).tobytes(order="C"),
+        dtype=np.float64,
+    ).reshape(momentum_mesh_inverse_angstrom.shape)
+    mesh_snapshot.setflags(write=False)
+    half = size // 2
+    expected_labels = np.asarray(
+        [(ix, iy) for iy in range(-half, half + 1) for ix in range(-half, half + 1)],
+        dtype=np.int64,
+    )
+    if not np.array_equal(labels_snapshot, expected_labels):
+        raise ValueError("integer mesh labels are not the complete centered square")
+
+    coordinate_tables: list[Array] = []
+    false_positive_counts: list[int] = []
+    false_negative_counts: list[int] = []
+    maximum_conserving_residuals: list[float] = []
+    minimum_nonconserving_residuals: list[float] = []
+    integer_coordinates = np.arange(-half, half + 1, dtype=np.int64)
+    for axis in range(2):
+        table = np.empty(size, dtype=np.float64)
+        for offset, label in enumerate(integer_coordinates):
+            values = mesh_snapshot[
+                labels_snapshot[:, axis] == label, axis
+            ]
+            if values.shape != (size,) or not np.all(values == values[0]):
+                raise ValueError("momentum mesh is not exactly Cartesian-separable")
+            table[offset] = values[0]
+        reconstructed = table[labels_snapshot[:, axis] + half]
+        if not np.array_equal(reconstructed, mesh_snapshot[:, axis]):
+            raise ValueError("Cartesian coordinate-table reconstruction failed")
+        false_positive = 0
+        false_negative = 0
+        maximum_conserving = 0.0
+        minimum_nonconserving = math.inf
+        for alpha in range(size):
+            for beta in range(size):
+                float_residual = (
+                    (table[alpha] + table[beta])
+                    - table[:, None]
+                    - table[None, :]
+                )
+                integer_residual = (
+                    (integer_coordinates[alpha] + integer_coordinates[beta])
+                    - integer_coordinates[:, None]
+                    - integer_coordinates[None, :]
+                )
+                literal = float_residual == 0.0
+                integer = integer_residual == 0
+                false_positive += int(np.count_nonzero(literal & ~integer))
+                false_negative += int(np.count_nonzero(~literal & integer))
+                if np.any(integer):
+                    maximum_conserving = max(
+                        maximum_conserving,
+                        float(np.max(np.abs(float_residual[integer]), initial=0.0)),
+                    )
+                if np.any(~integer):
+                    minimum_nonconserving = min(
+                        minimum_nonconserving,
+                        float(np.min(np.abs(float_residual[~integer]), initial=math.inf)),
+                    )
+        if false_positive or false_negative or maximum_conserving != 0.0:
+            raise ValueError(
+                "integer labels and literal float64 vertex arithmetic are inequivalent"
+            )
+        coordinate_tables.append(_readonly_float64(table, (size,), "coordinate table"))
+        false_positive_counts.append(false_positive)
+        false_negative_counts.append(false_negative)
+        maximum_conserving_residuals.append(maximum_conserving)
+        minimum_nonconserving_residuals.append(minimum_nonconserving)
+
+    payload = {
+        "mesh_size": size,
+        "nk": nk,
+        "integer_mesh_labels_sha256": _array_sha256(labels_snapshot),
+        "momentum_mesh_inverse_angstrom_sha256": _array_sha256(mesh_snapshot),
+        "coordinate_table_sha256": tuple(_array_sha256(table) for table in coordinate_tables),
+        "scalar_quartets_checked_per_axis": size**4,
+        "false_positive_counts": tuple(false_positive_counts),
+        "false_negative_counts": tuple(false_negative_counts),
+        "maximum_conserving_float_residuals": tuple(maximum_conserving_residuals),
+        "minimum_nonconserving_float_residuals": tuple(minimum_nonconserving_residuals),
+        "exact_local_mask_source_closure_sha256": (
+            _exact_local_mask_source_closure_sha256()
+        ),
+    }
+    receipt = Vituri2024HFSpiralLiteralMaskEquivalenceReceipt(
+        _factory_token=_LITERAL_MASK_RECEIPT_TOKEN,
+        **payload,
+    )
+    receipt.validate_live_state()
+    return receipt
 
 
 @dataclass(frozen=True, slots=True)
@@ -698,8 +999,14 @@ __all__ = [
     "VITURI2024_HF_SPIRAL_FULL_RESPONSE_AUTHORITY",
     "VITURI2024_HF_SPIRAL_FULL_RESPONSE_DENSE_MAX_NK",
     "VITURI2024_HF_SPIRAL_FULL_RESPONSE_KERNEL_CONTRACT",
+    "VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_API_VERSION",
+    "VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_ARITHMETIC",
+    "VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_MAX_MESH_SIZE",
+    "VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_SCOPE",
+    "Vituri2024HFSpiralLiteralMaskEquivalenceReceipt",
     "Vituri2024HFSpiralSignedDisplacementResponse",
     "Vituri2024HFSpiralValidatedResponseActionFactory",
     "Vituri2024HFSpiralValidatedSignedDisplacementFFTAction",
     "build_vituri2024_hf_spiral_signed_displacement_response",
+    "certify_vituri2024_hf_spiral_literal_mask_equivalence",
 ]
