@@ -44,12 +44,14 @@ from mean_field.systems.abc_trilayer.vituri2024_hf_spiral_full_response import (
     VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_ARITHMETIC,
     VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_MAX_MESH_SIZE,
     VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_SCOPE,
+    Vituri2024HFSpiralLiteralMaskComparisonReceipt,
     Vituri2024HFSpiralLiteralMaskEquivalenceReceipt,
     Vituri2024HFSpiralSignedDisplacementResponse,
     Vituri2024HFSpiralValidatedResponseActionFactory,
     Vituri2024HFSpiralValidatedSignedDisplacementFFTAction,
     build_vituri2024_hf_spiral_signed_displacement_response,
     certify_vituri2024_hf_spiral_literal_mask_equivalence,
+    compare_vituri2024_hf_spiral_literal_mask_equivalence,
 )
 from mean_field.systems.abc_trilayer.vituri2024_hf_spiral_full_stability import (
     VITURI2024_HF_SPIRAL_FULL_SECTOR_CHARGES,
@@ -220,6 +222,7 @@ def test_literal_float_quartet_mask_equivalence_is_exhaustively_certified(
             exact_local_mask_source_closure_sha256=(
                 receipt.exact_local_mask_source_closure_sha256
             ),
+            certifier_source_sha256=receipt.certifier_source_sha256,
         )
 
 
@@ -228,6 +231,13 @@ def test_literal_float_quartet_mask_certifier_rejects_nonaffine_integer_map(
 ) -> None:
     labels = inventory.integer_mesh_labels
     nonaffine = np.asarray(labels, dtype=np.float64) ** 2
+    receipt = compare_vituri2024_hf_spiral_literal_mask_equivalence(
+        labels, nonaffine
+    )
+    assert not receipt.literal_float_quartet_mask_equivalence_established
+    assert any(receipt.false_positive_counts)
+    assert any(receipt.false_negative_counts)
+    receipt.validate_live_state()
     with pytest.raises(ValueError, match="inequivalent"):
         certify_vituri2024_hf_spiral_literal_mask_equivalence(labels, nonaffine)
 
@@ -1026,12 +1036,14 @@ def test_signed_response_authority_and_public_exports(response) -> None:
         "VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_ARITHMETIC",
         "VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_MAX_MESH_SIZE",
         "VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_SCOPE",
+        "Vituri2024HFSpiralLiteralMaskComparisonReceipt",
         "Vituri2024HFSpiralLiteralMaskEquivalenceReceipt",
         "Vituri2024HFSpiralSignedDisplacementResponse",
         "Vituri2024HFSpiralValidatedResponseActionFactory",
         "Vituri2024HFSpiralValidatedSignedDisplacementFFTAction",
         "build_vituri2024_hf_spiral_signed_displacement_response",
         "certify_vituri2024_hf_spiral_literal_mask_equivalence",
+        "compare_vituri2024_hf_spiral_literal_mask_equivalence",
     }
     from mean_field.systems.abc_trilayer import (
         vituri2024_hf_spiral_full_response as response_module,

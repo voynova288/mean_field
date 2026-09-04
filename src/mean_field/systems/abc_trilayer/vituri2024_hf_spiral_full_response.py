@@ -64,7 +64,7 @@ VITURI2024_HF_SPIRAL_FULL_RESPONSE_AUTHORITY: Final[str] = (
 )
 VITURI2024_HF_SPIRAL_FULL_RESPONSE_DENSE_MAX_NK: Final[int] = 121
 VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_API_VERSION: Final[str] = (
-    "vituri2024_hf_spiral_literal_mask_equivalence.v1"
+    "vituri2024_hf_spiral_literal_mask_comparison.v2"
 )
 VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_MAX_MESH_SIZE: Final[int] = 101
 VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_SCOPE: Final[str] = (
@@ -108,6 +108,18 @@ def _fingerprint(value: object) -> str:
 def _exact_local_mask_source_closure_sha256() -> str:
     source = "\n---dependency---\n".join(
         inspect.getsource(function) for function in (_exact_local_mask, _bytes_backed)
+    )
+    return sha256(source.encode()).hexdigest()
+
+
+def _literal_mask_comparison_source_sha256() -> str:
+    source = "\n---certifier-dependency---\n".join(
+        inspect.getsource(item)
+        for item in (
+            Vituri2024HFSpiralLiteralMaskComparisonReceipt,
+            compare_vituri2024_hf_spiral_literal_mask_equivalence,
+            certify_vituri2024_hf_spiral_literal_mask_equivalence,
+        )
     )
     return sha256(source.encode()).hexdigest()
 
@@ -216,8 +228,8 @@ def _allowed_flavor_blocks(key: Vituri2024HFSpiralFullSectorKey) -> tuple[tuple[
 
 
 @dataclass(frozen=True, slots=True)
-class Vituri2024HFSpiralLiteralMaskEquivalenceReceipt:
-    """Factory-only exhaustive proof for the central unshifted mesh mask."""
+class Vituri2024HFSpiralLiteralMaskComparisonReceipt:
+    """Factory-only exhaustive positive-or-negative mask comparison."""
 
     _factory_token: InitVar[object]
     mesh_size: int
@@ -231,6 +243,7 @@ class Vituri2024HFSpiralLiteralMaskEquivalenceReceipt:
     maximum_conserving_float_residuals: tuple[float, float]
     minimum_nonconserving_float_residuals: tuple[float, float]
     exact_local_mask_source_closure_sha256: str
+    certifier_source_sha256: str
     fingerprint: str = field(init=False)
     api_version: str = field(
         default=VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_API_VERSION,
@@ -251,7 +264,7 @@ class Vituri2024HFSpiralLiteralMaskEquivalenceReceipt:
     cartesian_separability_established: bool = field(default=True, init=False)
     exhaustive_scalar_quartet_check: bool = field(default=True, init=False)
     literal_float_quartet_mask_equivalence_established: bool = field(
-        default=True, init=False
+        default=False, init=False
     )
     flavor_resolved_shifted_momentum_mask_equivalence_established: bool = field(
         default=False, init=False
@@ -263,6 +276,16 @@ class Vituri2024HFSpiralLiteralMaskEquivalenceReceipt:
     def __post_init__(self, _factory_token: object) -> None:
         if _factory_token is not _LITERAL_MASK_RECEIPT_TOKEN:
             raise TypeError("literal-mask equivalence receipt is factory-only")
+        equivalent = (
+            self.false_positive_counts == (0, 0)
+            and self.false_negative_counts == (0, 0)
+            and self.maximum_conserving_float_residuals == (0.0, 0.0)
+        )
+        object.__setattr__(
+            self,
+            "literal_float_quartet_mask_equivalence_established",
+            equivalent,
+        )
         payload = self._payload()
         if (
             type(self.mesh_size) is not int
@@ -277,6 +300,7 @@ class Vituri2024HFSpiralLiteralMaskEquivalenceReceipt:
             self.momentum_mesh_inverse_angstrom_sha256,
             *self.coordinate_table_sha256,
             self.exact_local_mask_source_closure_sha256,
+            self.certifier_source_sha256,
         ):
             if (
                 type(digest) is not str
@@ -284,15 +308,17 @@ class Vituri2024HFSpiralLiteralMaskEquivalenceReceipt:
                 or any(character not in "0123456789abcdef" for character in digest)
             ):
                 raise ValueError("literal-mask receipt contains an invalid SHA-256")
-        if self.false_positive_counts != (0, 0):
-            raise ValueError("literal-mask receipt contains false positives")
-        if self.false_negative_counts != (0, 0):
-            raise ValueError("literal-mask receipt contains false negatives")
-        if self.maximum_conserving_float_residuals != (0.0, 0.0):
-            raise ValueError("literal-mask receipt conserving residual is nonzero")
         if any(
-            not math.isfinite(value) or value <= 0.0
-            for value in self.minimum_nonconserving_float_residuals
+            type(value) is not int or value < 0
+            for value in (*self.false_positive_counts, *self.false_negative_counts)
+        ):
+            raise ValueError("literal-mask receipt mismatch count is invalid")
+        if any(
+            not math.isfinite(value) or value < 0.0
+            for value in (
+                *self.maximum_conserving_float_residuals,
+                *self.minimum_nonconserving_float_residuals,
+            )
         ):
             raise ValueError("literal-mask receipt nonconserving residual is invalid")
         object.__setattr__(self, "fingerprint", _fingerprint(payload))
@@ -322,6 +348,7 @@ class Vituri2024HFSpiralLiteralMaskEquivalenceReceipt:
             "exact_local_mask_source_closure_sha256": (
                 self.exact_local_mask_source_closure_sha256
             ),
+            "certifier_source_sha256": self.certifier_source_sha256,
             "cartesian_separability_established": (
                 self.cartesian_separability_established
             ),
@@ -347,13 +374,15 @@ class Vituri2024HFSpiralLiteralMaskEquivalenceReceipt:
         current_source_sha256 = _exact_local_mask_source_closure_sha256()
         if current_source_sha256 != self.exact_local_mask_source_closure_sha256:
             raise ValueError("literal full-functional mask implementation drifted")
+        if self.certifier_source_sha256 != _literal_mask_comparison_source_sha256():
+            raise ValueError("literal-mask comparison implementation drifted")
 
 
-def certify_vituri2024_hf_spiral_literal_mask_equivalence(
+def compare_vituri2024_hf_spiral_literal_mask_equivalence(
     integer_mesh_labels: Array,
     momentum_mesh_inverse_angstrom: Array,
-) -> Vituri2024HFSpiralLiteralMaskEquivalenceReceipt:
-    """Exhaust the exact vertex predicate without allocating an ``Nk^4`` mask."""
+) -> Vituri2024HFSpiralLiteralMaskComparisonReceipt:
+    """Exhaust and report the exact predicate without allocating an ``Nk^4`` mask."""
 
     if (
         type(integer_mesh_labels) is not np.ndarray
@@ -440,10 +469,6 @@ def certify_vituri2024_hf_spiral_literal_mask_equivalence(
                         minimum_nonconserving,
                         float(np.min(np.abs(float_residual[~integer]), initial=math.inf)),
                     )
-        if false_positive or false_negative or maximum_conserving != 0.0:
-            raise ValueError(
-                "integer labels and literal float64 vertex arithmetic are inequivalent"
-            )
         coordinate_tables.append(_readonly_float64(table, (size,), "coordinate table"))
         false_positive_counts.append(false_positive)
         false_negative_counts.append(false_negative)
@@ -464,12 +489,35 @@ def certify_vituri2024_hf_spiral_literal_mask_equivalence(
         "exact_local_mask_source_closure_sha256": (
             _exact_local_mask_source_closure_sha256()
         ),
+        "certifier_source_sha256": _literal_mask_comparison_source_sha256(),
     }
-    receipt = Vituri2024HFSpiralLiteralMaskEquivalenceReceipt(
+    receipt = Vituri2024HFSpiralLiteralMaskComparisonReceipt(
         _factory_token=_LITERAL_MASK_RECEIPT_TOKEN,
         **payload,
     )
     receipt.validate_live_state()
+    return receipt
+
+
+Vituri2024HFSpiralLiteralMaskEquivalenceReceipt = (
+    Vituri2024HFSpiralLiteralMaskComparisonReceipt
+)
+
+
+def certify_vituri2024_hf_spiral_literal_mask_equivalence(
+    integer_mesh_labels: Array,
+    momentum_mesh_inverse_angstrom: Array,
+) -> Vituri2024HFSpiralLiteralMaskComparisonReceipt:
+    """Return only a positive comparison; preserve the v1 fail-closed behavior."""
+
+    receipt = compare_vituri2024_hf_spiral_literal_mask_equivalence(
+        integer_mesh_labels,
+        momentum_mesh_inverse_angstrom,
+    )
+    if not receipt.literal_float_quartet_mask_equivalence_established:
+        raise ValueError(
+            "integer labels and literal float64 vertex arithmetic are inequivalent"
+        )
     return receipt
 
 
@@ -1003,10 +1051,12 @@ __all__ = [
     "VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_ARITHMETIC",
     "VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_MAX_MESH_SIZE",
     "VITURI2024_HF_SPIRAL_LITERAL_MASK_EQUIVALENCE_SCOPE",
+    "Vituri2024HFSpiralLiteralMaskComparisonReceipt",
     "Vituri2024HFSpiralLiteralMaskEquivalenceReceipt",
     "Vituri2024HFSpiralSignedDisplacementResponse",
     "Vituri2024HFSpiralValidatedResponseActionFactory",
     "Vituri2024HFSpiralValidatedSignedDisplacementFFTAction",
     "build_vituri2024_hf_spiral_signed_displacement_response",
     "certify_vituri2024_hf_spiral_literal_mask_equivalence",
+    "compare_vituri2024_hf_spiral_literal_mask_equivalence",
 ]
