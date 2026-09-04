@@ -36,6 +36,7 @@ import math
 from typing import Final
 
 import numpy as np
+from scipy.fft import fft2 as _FFT2, ifft2 as _IFFT2
 
 from .vituri2024_hf_preflight import (
     ACTIVE_BAND_STATES_VALLEY_ORDER,
@@ -151,6 +152,14 @@ def _support_indices(
     readonly_bases.setflags(write=False)
     readonly_targets.setflags(write=False)
     return readonly_bases, readonly_targets
+
+
+def _shifted_spinors(
+    selected_spinors: Array, bases: Array, targets: Array
+) -> Array:
+    shifted = np.zeros_like(selected_spinors)
+    shifted[:, :, bases] = selected_spinors[:, :, targets]
+    return _readonly_complex128(shifted, shifted.shape, "shifted selected spinors")
 
 
 def _allowed_flavor_blocks(key: Vituri2024HFSpiralFullSectorKey) -> tuple[tuple[int, int], ...]:
@@ -361,12 +370,9 @@ class Vituri2024HFSpiralSignedDisplacementResponse:
                     raise ValueError("signed density violates its conserved valley charge")
         return block, bases, targets
 
-    def make_validated_fft_action(
+    def _make_validated_fft_action_unchecked(
         self, key: Vituri2024HFSpiralFullSectorKey
     ) -> "Vituri2024HFSpiralValidatedSignedDisplacementFFTAction":
-        """Validate the complete source once and return a hot-path callback."""
-
-        self.validate_live_state()
         bases, targets = _support_indices(self.inventory, key)
         return Vituri2024HFSpiralValidatedSignedDisplacementFFTAction(
             _factory_token=_RESPONSE_TOKEN,
@@ -374,8 +380,28 @@ class Vituri2024HFSpiralSignedDisplacementResponse:
             key=key,
             bases=bases,
             targets=targets,
+            shifted_spinors=_shifted_spinors(self.selected_spinors, bases, targets),
             expected_response_fingerprint=self.response_fingerprint,
         )
+
+    def make_validated_action_factory(
+        self,
+    ) -> "Vituri2024HFSpiralValidatedResponseActionFactory":
+        """Validate the complete source once for repeated sector preparation."""
+
+        self.validate_live_state()
+        return Vituri2024HFSpiralValidatedResponseActionFactory(
+            _factory_token=_RESPONSE_TOKEN,
+            response=self,
+            expected_response_fingerprint=self.response_fingerprint,
+        )
+
+    def make_validated_fft_action(
+        self, key: Vituri2024HFSpiralFullSectorKey
+    ) -> "Vituri2024HFSpiralValidatedSignedDisplacementFFTAction":
+        """Validate the complete source once and return one hot-path callback."""
+
+        return self.make_validated_action_factory().prepare_fft_action(key)
 
     def conjugate_block(
         self,
@@ -490,13 +516,12 @@ class Vituri2024HFSpiralSignedDisplacementResponse:
         block: Array,
         bases: Array,
         targets: Array,
+        shifted_spinors: Array,
     ) -> Array:
         """Hot path after complete source and signed-block validation."""
 
         result = self._direct_response(key, block, bases, targets)
         size = self.mesh_size
-        shifted_spinors = np.zeros((2, 6, self.nk), dtype=np.complex128)
-        shifted_spinors[:, :, bases] = self.selected_spinors[:, :, targets]
         spinors_grid = self.selected_spinors.reshape(2, 6, size, size)
         shifted_grid = shifted_spinors.reshape(2, 6, size, size)
         for left, right in _allowed_flavor_blocks(key):
@@ -504,18 +529,38 @@ class Vituri2024HFSpiralSignedDisplacementResponse:
             if np.count_nonzero(values) == 0:
                 continue
             output = result[left, right].reshape(size, size)
-            for left_component in range(6):
-                left_shifted = shifted_grid[left, left_component]
-                for right_component in range(6):
-                    right_base = spinors_grid[right, right_component]
-                    source = np.asarray(
-                        left_shifted * right_base.conj() * values,
-                        dtype=np.complex128,
-                    )
-                    convolution = self.fft_plan._convolve_validated(source)
-                    output -= (
-                        left_shifted.conj() * right_base * convolution
-                    )
+            left_shifted = shifted_grid[left]
+            right_base = spinors_grid[right]
+            sources = (
+                left_shifted[:, None, :, :]
+                * right_base[None, :, :, :].conj()
+                * values[None, None, :, :]
+            )
+            padded = np.zeros(
+                (
+                    6,
+                    6,
+                    self.fft_plan.padding_size,
+                    self.fft_plan.padding_size,
+                ),
+                dtype=np.complex128,
+            )
+            padded[:, :, :size, :size] = sources
+            transformed = _FFT2(
+                padded, axes=(-2, -1), workers=self.fft_plan.fft_workers
+            )
+            convolution = _IFFT2(
+                self.fft_plan.kernel_fft[None, None, :, :] * transformed,
+                axes=(-2, -1),
+                workers=self.fft_plan.fft_workers,
+            )[:, :, :size, :size]
+            output -= np.einsum(
+                "cxy,exy,cexy->xy",
+                left_shifted.conj(),
+                right_base,
+                convolution,
+                optimize=True,
+            )
         result /= self.area_angstrom_squared
         support = np.zeros(self.nk, dtype=np.bool_)
         support[bases] = True
@@ -533,7 +578,37 @@ class Vituri2024HFSpiralSignedDisplacementResponse:
         block, bases, targets = self._validate_signed_block(
             key, signed_density_block
         )
-        return self._apply_fft_validated(key, block, bases, targets)
+        return self._apply_fft_validated(
+            key,
+            block,
+            bases,
+            targets,
+            _shifted_spinors(self.selected_spinors, bases, targets),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class Vituri2024HFSpiralValidatedResponseActionFactory:
+    """Public validate-once factory for many signed-sector FFT actions."""
+
+    _factory_token: InitVar[object]
+    response: Vituri2024HFSpiralSignedDisplacementResponse
+    expected_response_fingerprint: str
+
+    def __post_init__(self, _factory_token: object) -> None:
+        if _factory_token is not _RESPONSE_TOKEN:
+            raise TypeError("validated response action factory is factory-only")
+        if type(self.response) is not Vituri2024HFSpiralSignedDisplacementResponse:
+            raise TypeError("validated response action factory type drifted")
+        if self.expected_response_fingerprint != self.response.response_fingerprint:
+            raise ValueError("validated response action factory fingerprint drifted")
+
+    def prepare_fft_action(
+        self, key: Vituri2024HFSpiralFullSectorKey
+    ) -> "Vituri2024HFSpiralValidatedSignedDisplacementFFTAction":
+        if self.expected_response_fingerprint != self.response.response_fingerprint:
+            raise ValueError("validated response action factory became stale")
+        return self.response._make_validated_fft_action_unchecked(key)
 
 
 @dataclass(frozen=True, slots=True)
@@ -545,6 +620,7 @@ class Vituri2024HFSpiralValidatedSignedDisplacementFFTAction:
     key: Vituri2024HFSpiralFullSectorKey
     bases: Array
     targets: Array
+    shifted_spinors: Array
     expected_response_fingerprint: str
 
     def __post_init__(self, _factory_token: object) -> None:
@@ -568,6 +644,17 @@ class Vituri2024HFSpiralValidatedSignedDisplacementFFTAction:
                 or not np.array_equal(value, expected)
             ):
                 raise ValueError(f"validated FFT action {label} drifted")
+        expected_shifted = _shifted_spinors(
+            self.response.selected_spinors, self.bases, self.targets
+        )
+        if (
+            type(self.shifted_spinors) is not np.ndarray
+            or self.shifted_spinors.dtype != np.dtype(np.complex128)
+            or self.shifted_spinors.shape != (2, 6, self.response.nk)
+            or self.shifted_spinors.flags.writeable
+            or not np.array_equal(self.shifted_spinors, expected_shifted)
+        ):
+            raise ValueError("validated FFT action shifted spinors drifted")
         if self.expected_response_fingerprint != self.response.response_fingerprint:
             raise ValueError("validated FFT action fingerprint drifted")
 
@@ -583,7 +670,11 @@ class Vituri2024HFSpiralValidatedSignedDisplacementFFTAction:
         ):
             raise ValueError("validated FFT action support became stale")
         return self.response._apply_fft_validated(
-            self.key, block, self.bases, self.targets
+            self.key,
+            block,
+            self.bases,
+            self.targets,
+            self.shifted_spinors,
         )
 
 
@@ -608,6 +699,7 @@ __all__ = [
     "VITURI2024_HF_SPIRAL_FULL_RESPONSE_DENSE_MAX_NK",
     "VITURI2024_HF_SPIRAL_FULL_RESPONSE_KERNEL_CONTRACT",
     "Vituri2024HFSpiralSignedDisplacementResponse",
+    "Vituri2024HFSpiralValidatedResponseActionFactory",
     "Vituri2024HFSpiralValidatedSignedDisplacementFFTAction",
     "build_vituri2024_hf_spiral_signed_displacement_response",
 ]

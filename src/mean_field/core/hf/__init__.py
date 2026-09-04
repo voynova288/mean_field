@@ -563,3 +563,10 @@ from . import zero_temperature_ragged_stability as _zero_temperature_ragged_stab
 from .zero_temperature_ragged_stability import *  # noqa: F401,F403
 
 __all__ += list(_zero_temperature_ragged_stability.__all__)
+
+# Generic paired-conjugate-sector fixed-global-rank orbital-Hessian plumbing.
+# Physical sector labels and interaction contractions remain system-owned.
+from . import zero_temperature_sector_stability as _zero_temperature_sector_stability
+from .zero_temperature_sector_stability import *  # noqa: F401,F403
+
+__all__ += list(_zero_temperature_sector_stability.__all__)

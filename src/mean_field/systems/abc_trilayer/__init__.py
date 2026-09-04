@@ -753,6 +753,12 @@ from .vituri2024_hf_spiral_full_response import *  # noqa: F401,F403
 
 __all__ += list(_vituri2024_hf_spiral_full_response.__all__)
 
+# Paired {q,-q} selected-spin global-rank orbital-Hessian candidate adapter.
+from . import vituri2024_hf_spiral_full_hessian as _vituri2024_hf_spiral_full_hessian
+from .vituri2024_hf_spiral_full_hessian import *  # noqa: F401,F403
+
+__all__ += list(_vituri2024_hf_spiral_full_hessian.__all__)
+
 # Candidate-only fixed-flavor-rank Vituri BFS; generic ODA stays in core/hf.
 from . import vituri2024_hf_fixed_sector as _vituri2024_hf_fixed_sector
 from .vituri2024_hf_fixed_sector import *  # noqa: F401,F403

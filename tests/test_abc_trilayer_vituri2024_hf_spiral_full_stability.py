@@ -6,6 +6,7 @@ from collections import Counter
 
 import numpy as np
 import pytest
+from scipy.linalg import expm
 
 from mean_field.core.hf import build_momentum_sector_particle_hole_pairs
 from mean_field.systems import abc_trilayer
@@ -27,12 +28,21 @@ from mean_field.systems.abc_trilayer.vituri2024_hf_spiral import (
     Vituri2024FiniteQSpiralChoice,
     prepare_vituri2024_hf_spiral,
 )
+from mean_field.systems.abc_trilayer.vituri2024_hf_spiral_full_hessian import (
+    VITURI2024_HF_SPIRAL_FULL_HESSIAN_API_VERSION,
+    VITURI2024_HF_SPIRAL_FULL_HESSIAN_AUTHORITY,
+    Vituri2024HFSpiralFullHessianContext,
+    Vituri2024HFSpiralFullHessianOrbit,
+    Vituri2024HFSpiralTransitionLaneEmbedding,
+    build_vituri2024_hf_spiral_full_hessian_context,
+)
 from mean_field.systems.abc_trilayer.vituri2024_hf_spiral_full_response import (
     VITURI2024_HF_SPIRAL_FULL_RESPONSE_API_VERSION,
     VITURI2024_HF_SPIRAL_FULL_RESPONSE_AUTHORITY,
     VITURI2024_HF_SPIRAL_FULL_RESPONSE_DENSE_MAX_NK,
     VITURI2024_HF_SPIRAL_FULL_RESPONSE_KERNEL_CONTRACT,
     Vituri2024HFSpiralSignedDisplacementResponse,
+    Vituri2024HFSpiralValidatedResponseActionFactory,
     Vituri2024HFSpiralValidatedSignedDisplacementFFTAction,
     build_vituri2024_hf_spiral_signed_displacement_response,
 )
@@ -551,6 +561,354 @@ def test_response_supports_the_other_selected_spin_without_relabeling_valleys() 
     ) < 2.0e-13
 
 
+@pytest.fixture(scope="module")
+def hessian_context(response) -> Vituri2024HFSpiralFullHessianContext:
+    return build_vituri2024_hf_spiral_full_hessian_context(response)
+
+
+def _apply_full_integer_oracle(response, density):
+    inventory = response.inventory
+    prepared = inventory.restricted_preparation.prepared
+    labels = inventory.integer_mesh_labels
+    nk = response.nk
+    mask = np.all(
+        labels[:, None, None, None, :]
+        + labels[None, :, None, None, :]
+        - labels[None, None, :, None, :]
+        - labels[None, None, None, :, :]
+        == 0,
+        axis=-1,
+    )
+    form_factors = np.empty((4, nk, nk), dtype=np.complex128)
+    valley_to_index = {-1: 0, 1: 1}
+    for flavor, (valley, _spin) in enumerate(INTERNAL_FLAVOR_ORDER):
+        states = prepared.active_band_states[valley_to_index[valley]]
+        form_factors[flavor] = np.einsum(
+            "cm,cn->mn", states.conj(), states, optimize=True
+        )
+    displacement = labels[:, None, :] - labels[None, :, :]
+    offset = inventory.mesh_size - 1
+    kernel_pair = np.asarray(
+        response.fft_plan.kernel_by_signed_displacement[
+            displacement[..., 1] + offset,
+            displacement[..., 0] + offset,
+        ].real,
+        dtype=np.float64,
+    )
+    return vituri2024_full_projected_interaction_action(
+        density,
+        form_factors_by_flavor=form_factors,
+        interaction_kernel_by_mesh_pair=kernel_pair,
+        exact_local_mask=mask,
+        area_angstrom_squared=response.area_angstrom_squared,
+    )
+
+
+def _literal_transition_tuples(inventory, key):
+    label_to_index = {
+        tuple(int(component) for component in label): index
+        for index, label in enumerate(inventory.integer_mesh_labels)
+    }
+    if key.valley_charge == 0:
+        flavor_pairs = ((0, 0), (1, 1))
+    elif key.valley_charge == 2:
+        flavor_pairs = ((1, 0),)
+    else:
+        flavor_pairs = ((0, 1),)
+    result = []
+    occupations = inventory.selected_occupations
+    for particle_flavor, hole_flavor in flavor_pairs:
+        for hole_k, label in enumerate(inventory.integer_mesh_labels):
+            particle_label = (
+                int(label[0]) + key.displacement_x,
+                int(label[1]) + key.displacement_y,
+            )
+            particle_k = label_to_index.get(particle_label)
+            if (
+                particle_k is not None
+                and occupations[hole_flavor, hole_k]
+                and not occupations[particle_flavor, particle_k]
+            ):
+                result.append(
+                    (particle_flavor, particle_k, hole_flavor, hole_k)
+                )
+    return tuple(result)
+
+
+def _global_selected_tangent(prepared_orbit, first, second):
+    response = prepared_orbit.context.response
+    nk = response.nk
+    selected = response.inventory.restricted_preparation.receipt.selected_flavor_indices
+    density = np.zeros((4 * nk, 4 * nk), dtype=np.complex128)
+    for embedding, values in (
+        (prepared_orbit.first_embedding, first),
+        (prepared_orbit.second_embedding, second),
+    ):
+        rows = (
+            np.asarray(selected)[embedding.particle_valley_slots] * nk
+            + embedding.particle_k_indices
+        )
+        columns = (
+            np.asarray(selected)[embedding.hole_valley_slots] * nk
+            + embedding.hole_k_indices
+        )
+        density[rows, columns] = values
+    density += density.conj().T
+    return density
+
+
+def test_paired_orbit_action_matches_integer_mask_full_projected_h_oracle(
+    hessian_context,
+) -> None:
+    key = Vituri2024HFSpiralFullSectorKey(1, 0, 0)
+    prepared_orbit = hessian_context.build_orbit_hessian(key)
+    assert type(prepared_orbit) is Vituri2024HFSpiralFullHessianOrbit
+    assert type(prepared_orbit.first_embedding) is Vituri2024HFSpiralTransitionLaneEmbedding
+    assert prepared_orbit.complex_dimension == (
+        prepared_orbit.orbit.first_complex_dimension
+        + prepared_orbit.orbit.second_complex_dimension
+    )
+    for embedding, lane_key in (
+        (prepared_orbit.first_embedding, prepared_orbit.orbit.first),
+        (prepared_orbit.second_embedding, prepared_orbit.orbit.second),
+    ):
+        actual_tuples = tuple(
+            zip(
+                embedding.particle_valley_slots.tolist(),
+                embedding.particle_k_indices.tolist(),
+                embedding.hole_valley_slots.tolist(),
+                embedding.hole_k_indices.tolist(),
+                strict=True,
+            )
+        )
+        assert actual_tuples == _literal_transition_tuples(
+            hessian_context.inventory, lane_key
+        )
+    rng = np.random.default_rng(83)
+    first = rng.normal(size=prepared_orbit.orbit.first_complex_dimension) + 1.0j * rng.normal(
+        size=prepared_orbit.orbit.first_complex_dimension
+    )
+    second = rng.normal(size=prepared_orbit.orbit.second_complex_dimension) + 1.0j * rng.normal(
+        size=prepared_orbit.orbit.second_complex_dimension
+    )
+    density = _global_selected_tangent(prepared_orbit, first, second)
+    sigma = _apply_full_integer_oracle(hessian_context.response, density)
+    selected = np.asarray(
+        hessian_context.inventory.restricted_preparation.receipt.selected_flavor_indices
+    )
+    expected = []
+    for embedding, values, lane in (
+        (
+            prepared_orbit.first_embedding,
+            first,
+            prepared_orbit.hessian.frame.first,
+        ),
+        (
+            prepared_orbit.second_embedding,
+            second,
+            prepared_orbit.hessian.frame.second,
+        ),
+    ):
+        rows = selected[embedding.particle_valley_slots] * hessian_context.nk + embedding.particle_k_indices
+        columns = selected[embedding.hole_valley_slots] * hessian_context.nk + embedding.hole_k_indices
+        expected.append(lane.one_body_gaps_ev * values + sigma[rows, columns])
+    actual = prepared_orbit.hessian.complex_gradient_jacobian_action(first, second)
+    assert np.max(np.abs(actual[0] - expected[0]), initial=0.0) < 3.0e-13
+    assert np.max(np.abs(actual[1] - expected[1]), initial=0.0) < 3.0e-13
+    vector = prepared_orbit.hessian.frame.pack_complex(first, second)
+    expected_real = prepared_orbit.hessian.frame.pack_complex(
+        expected[0], expected[1], factor=2.0
+    )
+    assert np.max(
+        np.abs(prepared_orbit.hessian.matvec(vector) - expected_real), initial=0.0
+    ) < 3.0e-13
+    diagnostic = prepared_orbit.hessian.check_bilinear_symmetry(
+        seed=89, probe_count=8, atol=2.0e-12, rtol=2.0e-12
+    )
+    assert diagnostic.all_evaluated_pairs_symmetric
+
+
+def test_paired_orbit_matches_exact_unitary_relative_scalar_curvature(
+    hessian_context,
+) -> None:
+    prepared_orbit = hessian_context.build_orbit_hessian(
+        Vituri2024HFSpiralFullSectorKey(1, -1, 2)
+    )
+    rng = np.random.default_rng(97)
+    direction = rng.normal(size=prepared_orbit.real_dimension)
+    direction /= np.linalg.norm(direction)
+    first, second = prepared_orbit.hessian.frame.unpack_real(direction)
+    tangent = _global_selected_tangent(prepared_orbit, first, second)
+    selected = np.asarray(
+        hessian_context.inventory.restricted_preparation.receipt.selected_flavor_indices
+    )
+    nk = hessian_context.nk
+    selected_global = np.concatenate(
+        (selected[0] * nk + np.arange(nk), selected[1] * nk + np.arange(nk))
+    )
+    tangent_selected = tangent[np.ix_(selected_global, selected_global)]
+    occupations = hessian_context.inventory.selected_occupations.reshape(-1)
+    projector0 = np.diag(occupations.astype(np.complex128))
+    generator = np.zeros_like(projector0)
+    for lane_key, values in (
+        (prepared_orbit.orbit.first, first),
+        (prepared_orbit.orbit.second, second),
+    ):
+        literal = _literal_transition_tuples(hessian_context.inventory, lane_key)
+        assert len(literal) == len(values)
+        for (particle_flavor, particle_k, hole_flavor, hole_k), value in zip(
+            literal, values, strict=True
+        ):
+            particle_orbital = particle_flavor * nk + particle_k
+            hole_orbital = hole_flavor * nk + hole_k
+            generator[particle_orbital, hole_orbital] = value
+            generator[hole_orbital, particle_orbital] = -value.conjugate()
+    assert np.max(
+        np.abs(generator @ projector0 - projector0 @ generator - tangent_selected),
+        initial=0.0,
+    ) < 2.0e-15
+    source_hamiltonians = (
+        hessian_context.inventory.restricted_preparation.selected_hamiltonians_conventional
+    )
+    independently_selected_diagonal = np.stack(
+        (source_hamiltonians[0, 0].real, source_hamiltonians[1, 1].real)
+    )
+    assert np.array_equal(
+        independently_selected_diagonal,
+        hessian_context.selected_fock_diagonal_ev,
+    )
+    source_fock = np.diag(independently_selected_diagonal.reshape(-1))
+
+    def relative_energy(parameter):
+        unitary = expm(parameter * generator)
+        projector = unitary @ projector0 @ unitary.conj().T
+        delta_selected = projector - projector0
+        delta_full = np.zeros((4 * nk, 4 * nk), dtype=np.complex128)
+        delta_full[np.ix_(selected_global, selected_global)] = delta_selected
+        sigma = _apply_full_integer_oracle(hessian_context.response, delta_full)
+        sigma_selected = sigma[np.ix_(selected_global, selected_global)]
+        return float(
+            (
+                np.trace(source_fock @ delta_selected)
+                + 0.5 * np.trace(delta_selected @ sigma_selected)
+            ).real
+        )
+
+    h = 0.01
+    em2, em1, e0, ep1, ep2 = (
+        relative_energy(multiplier * h)
+        for multiplier in (-2.0, -1.0, 0.0, 1.0, 2.0)
+    )
+    stationarity = (em2 - 8.0 * em1 + 8.0 * ep1 - ep2) / (12.0 * h)
+    finite_difference = (
+        -ep2 + 16.0 * ep1 - 30.0 * e0 + 16.0 * em1 - em2
+    ) / (12.0 * h * h)
+    predicted = float(direction @ prepared_orbit.hessian.matvec(direction))
+    assert abs(stationarity) < 2.0e-10
+    assert abs(finite_difference - predicted) < 2.0e-8
+    assert abs(finite_difference - 0.5 * predicted) > 1.0e-5
+    assert abs(finite_difference - predicted / hessian_context.nk) > 1.0e-5
+
+
+def test_unequal_and_one_empty_conjugate_lanes_are_not_padded_or_dropped(
+    hessian_context,
+) -> None:
+    orbit = next(
+        candidate
+        for candidate in hessian_context.inventory.iter_conjugate_orbits(
+            include_zero_dimension=False
+        )
+        if candidate.first_complex_dimension > 0
+        and candidate.second_complex_dimension == 0
+    )
+    prepared_orbit = hessian_context.build_orbit_hessian(orbit.second)
+    assert prepared_orbit.orbit == orbit
+    assert prepared_orbit.hessian.frame.first_complex_dimension == orbit.first_complex_dimension
+    assert prepared_orbit.hessian.frame.second_complex_dimension == 0
+    assert prepared_orbit.complex_dimension == orbit.first_complex_dimension
+    rng = np.random.default_rng(101)
+    vector = rng.normal(size=prepared_orbit.real_dimension)
+    first, second = prepared_orbit.hessian.frame.unpack_real(vector)
+    assert second.shape == (0,)
+    density = _global_selected_tangent(prepared_orbit, first, second)
+    sigma = _apply_full_integer_oracle(hessian_context.response, density)
+    selected = np.asarray(
+        hessian_context.inventory.restricted_preparation.receipt.selected_flavor_indices
+    )
+    embedding = prepared_orbit.first_embedding
+    rows = selected[embedding.particle_valley_slots] * hessian_context.nk + embedding.particle_k_indices
+    columns = selected[embedding.hole_valley_slots] * hessian_context.nk + embedding.hole_k_indices
+    expected_first = (
+        prepared_orbit.hessian.frame.first.one_body_gaps_ev * first
+        + sigma[rows, columns]
+    )
+    actual_first, actual_second = prepared_orbit.hessian.complex_gradient_jacobian_action(
+        first, second
+    )
+    assert np.linalg.norm(expected_first) > 1.0e-8
+    assert np.max(np.abs(actual_first - expected_first), initial=0.0) < 3.0e-13
+    assert actual_second.shape == (0,)
+    output = prepared_orbit.hessian.matvec(vector)
+    expected_output = prepared_orbit.hessian.frame.pack_complex(
+        expected_first, actual_second, factor=2.0
+    )
+    assert np.max(np.abs(output - expected_output), initial=0.0) < 3.0e-13
+
+
+def test_hessian_context_builds_orbits_without_recursive_source_validation(
+    hessian_context, monkeypatch
+) -> None:
+    def forbidden_recursive_validation(_self):
+        raise AssertionError("per-orbit build recursively validated the full source")
+
+    monkeypatch.setattr(
+        Vituri2024HFSpiralFullSectorInventory,
+        "validate_live_state",
+        forbidden_recursive_validation,
+    )
+    prepared_orbit = hessian_context.build_orbit_hessian(
+        Vituri2024HFSpiralFullSectorKey(1, 1, -2)
+    )
+    vector = np.zeros(prepared_orbit.real_dimension)
+    assert np.array_equal(prepared_orbit.hessian.matvec(vector), vector)
+
+
+def test_full_hessian_authority_and_exports(hessian_context) -> None:
+    assert hessian_context.api_version == VITURI2024_HF_SPIRAL_FULL_HESSIAN_API_VERSION
+    assert hessian_context.authority == VITURI2024_HF_SPIRAL_FULL_HESSIAN_AUTHORITY
+    assert hessian_context.candidate_only
+    assert hessian_context.selected_spin_only
+    assert hessian_context.spectator_frozen_to_identity
+    assert hessian_context.global_selected_rank
+    assert hessian_context.all_occupation_transfers_in_inventory
+    assert hessian_context.all_nonempty_inventory_orbits_buildable
+    assert hessian_context.self_conjugate_sector_dimension_zero
+    assert not hessian_context.q_and_minus_q_averaged
+    assert not hessian_context.literal_float_full_functional_parity_established
+    assert not hessian_context.scalar_curvature_established
+    assert not hessian_context.reciprocity_established
+    assert not hessian_context.hermitian_eigensolver_authorized
+    assert not hessian_context.full_local_stability_established
+    assert not hessian_context.production_ready
+    assert not hessian_context.paper_reproduction_verified
+    expected_exports = {
+        "VITURI2024_HF_SPIRAL_FULL_HESSIAN_API_VERSION",
+        "VITURI2024_HF_SPIRAL_FULL_HESSIAN_AUTHORITY",
+        "Vituri2024HFSpiralFullHessianContext",
+        "Vituri2024HFSpiralFullHessianOrbit",
+        "Vituri2024HFSpiralTransitionLaneEmbedding",
+        "build_vituri2024_hf_spiral_full_hessian_context",
+    }
+    from mean_field.systems.abc_trilayer import (
+        vituri2024_hf_spiral_full_hessian as hessian_module,
+    )
+
+    assert set(hessian_module.__all__) == expected_exports
+    for name in expected_exports:
+        assert getattr(abc_trilayer, name) is getattr(hessian_module, name)
+        assert name in abc_trilayer.__all__
+
+
 def test_signed_response_authority_and_public_exports(response) -> None:
     assert response.api_version == VITURI2024_HF_SPIRAL_FULL_RESPONSE_API_VERSION
     assert response.authority == VITURI2024_HF_SPIRAL_FULL_RESPONSE_AUTHORITY
@@ -584,6 +942,7 @@ def test_signed_response_authority_and_public_exports(response) -> None:
         "VITURI2024_HF_SPIRAL_FULL_RESPONSE_DENSE_MAX_NK",
         "VITURI2024_HF_SPIRAL_FULL_RESPONSE_KERNEL_CONTRACT",
         "Vituri2024HFSpiralSignedDisplacementResponse",
+        "Vituri2024HFSpiralValidatedResponseActionFactory",
         "Vituri2024HFSpiralValidatedSignedDisplacementFFTAction",
         "build_vituri2024_hf_spiral_signed_displacement_response",
     }
