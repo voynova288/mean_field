@@ -1,0 +1,121 @@
+{
+  "schema": "mean_field.vituri2024.fig2_q003_paired_sector_qualifier_attestation.v1",
+  "review_date_utc": "2026-09-04",
+  "source_commit": "b8257cd856a79c2adf1027e8c115064732e06a07",
+  "job": {
+    "job_id": "483695",
+    "state": "COMPLETED",
+    "exit_code": "0:0",
+    "elapsed": "00:01:14",
+    "node": "node026",
+    "partition": "regular6430",
+    "cpus": 64,
+    "capsule": "/data/home/ziyuzhu/.runs/Mean_Field_b8257cd_vituri_fig2_q003_paired_sector_qualifier_v6_20260903",
+    "capsule_manifest_sha256": "816747f5658de49810e2d993f17cfbd6617f6c13a7518a0dbdae0185a9e62393",
+    "complete_sha256": "a4f291121214d2d42ebcc8084032a09a20f94bde50e35033e62e878a244e436e",
+    "result_sha256": "876da82b1517f473e7316044902ce35281ff896419885f32c05bfd6f7e7417aa"
+  },
+  "focused_tests": {
+    "passed": 130,
+    "failed": 0,
+    "warning_count": 1,
+    "warning_scope": "read-only source tree prevented pytest cache creation"
+  },
+  "inventory": {
+    "selected_hilbert_dimension": 13122,
+    "selected_occupied_count": 11852,
+    "selected_virtual_count": 1270,
+    "complex_tangent_dimension": 15052040,
+    "real_tangent_dimension": 30104080,
+    "conjugate_orbit_complex_dimension_sum": 15052040,
+    "spectator_spin_frozen": true,
+    "global_selected_rank": true,
+    "no_wrap": true
+  },
+  "groups": [
+    {
+      "label": "40fd",
+      "density_sha256_job477106": "40fd7da28d7d32ad8034352bbd1171b873ceac9c268f5395f908f9a9f686462d",
+      "inventory_fingerprint": "cabe46cabf875a3f69701c524867f520799ec03ba13f3631576f0d691819c06d",
+      "response_fingerprint": "8ec4a0c46804b004e147fe7c7001104f6f2d2138515a49d801114748ef7e0d80",
+      "context_fingerprint": "046649ea1d2f4f84c92e1fc1c302e6e40e7c8ceb14719ff02c125e5e6b8870ac",
+      "maximum_sampled_bilinear_residual": 3.7947076036992655e-19
+    },
+    {
+      "label": "3307",
+      "density_sha256_job477106": "3307efd3434cef054b37545d778a23f2a6fb8684f599b9e7d0e0cbea8ee36288",
+      "inventory_fingerprint": "6abe52a017f918446dc0bee56a9b1eefcc69293ea2315a8a80f7ae406404db07",
+      "response_fingerprint": "8459fcc275b7805024b98a4a3be0fa6eec29b0761bc6158a88db95fb0f167852",
+      "context_fingerprint": "1bf41cdf9107a01f56ea566c256a502732e60a59fb1eaff8b381bcd3bd8617bf",
+      "maximum_sampled_bilinear_residual": 4.336808689942018e-19
+    }
+  ],
+  "fixed_probe_contract": {
+    "keys": [
+      [0, 0, 2],
+      [1, 0, 0],
+      [1, 0, 2],
+      [0, 1, -2],
+      [1, 1, 0]
+    ],
+    "seeds": [1101, 1102, 1103, 1104, 1105],
+    "groups_evaluated": 2,
+    "probes_per_group": 5,
+    "total_probes": 10,
+    "passed": 10,
+    "postselection": false,
+    "unequal_lane_dimension_pairs_observed": [
+      [1081, 135],
+      [1089, 143],
+      [134, 1080]
+    ]
+  },
+  "postrun_review": {
+    "execution_and_lineage": "pass",
+    "candidate_paired_sector_dimension_and_sampled_bilinear_evidence": "pass",
+    "sampled_bilinear_symmetry_not_reciprocity_proof": true,
+    "fraction_of_full_complex_inventory_in_fixed_orbits_approximately": 0.000263,
+    "scientific_authority_promoted": false
+  },
+  "authority": {
+    "candidate_only": true,
+    "literal_float_full_functional_parity_established": false,
+    "scalar_curvature_authority_established": false,
+    "reciprocity_established": false,
+    "hermitian_eigensolver_authorized": false,
+    "full_local_stability_established": false,
+    "production_ready": false,
+    "paper_reproduction_verified": false
+  },
+  "prior_namespaces": [
+    {
+      "version": "v1",
+      "classification": "cancelled_after_regular256_queueing_before_execution",
+      "scientific_evidence": false
+    },
+    {
+      "version": "v2",
+      "job_id": "483670",
+      "classification": "preflight_failure_missing_source_commit_record",
+      "scientific_evidence": false
+    },
+    {
+      "version": "v3",
+      "job_id": "483673",
+      "classification": "release_verification_wait_failure_before_numerics",
+      "scientific_evidence": false
+    },
+    {
+      "version": "v4",
+      "job_id": "483674",
+      "classification": "release_verification_wait_failure_before_numerics",
+      "scientific_evidence": false
+    },
+    {
+      "version": "v5",
+      "job_id": "483691",
+      "classification": "runner_api_attribute_failure_after_tests_before_sector_actions",
+      "scientific_evidence": false
+    }
+  ]
+}
