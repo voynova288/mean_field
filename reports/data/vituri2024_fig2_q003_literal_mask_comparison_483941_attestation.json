@@ -1,0 +1,82 @@
+{
+  "schema": "mean_field.vituri2024.fig2_q003_literal_mask_comparison_attestation.v1",
+  "review_date_utc": "2026-09-04",
+  "source_commit": "e3d6d8d489dd0984d971ad3fd1edef896050bf66",
+  "job": {
+    "job_id": "483941",
+    "state": "COMPLETED",
+    "exit_code": "0:0",
+    "elapsed": "00:01:28",
+    "node": "node026",
+    "partition": "regular6430",
+    "capsule": "/data/home/ziyuzhu/.runs/Mean_Field_e3d6d8d_vituri_fig2_q003_paired_sector_qualifier_v8_20260904",
+    "capsule_manifest_sha256": "2118ab620934f730a5b44b8a31ad243440c75e523f61b7ab0a1850cf4a5c16c9",
+    "complete_sha256": "39665ee565fc0f41dc254896901d3caa4dd29ac58442ab1fcfaeb45f5d402e74",
+    "result_sha256": "3e7eb9936cfa17f1471e2f2e4654f7e6e1fa9cc75f3b73bdc23690737e13d213"
+  },
+  "focused_tests": {
+    "passed": 132,
+    "failed": 0,
+    "warning_count": 1,
+    "warning_scope": "read-only source tree prevented pytest cache creation"
+  },
+  "literal_mask_comparison": {
+    "receipt_fingerprint": "17d7365b6a55e87053bfbcdda7b0f94ac89fb365bbc9f4b71fc8a6df3d8c4317",
+    "mesh_size": 81,
+    "nk": 6561,
+    "scope": "caller_supplied_common_cartesian_mesh_exact_local_mask_only_with_mesh_hash_not_flavor_resolved_shifted_momenta_or_full_functional_action_parity",
+    "scalar_quartets_checked_per_axis": 43046721,
+    "integer_conserving_quartets_per_axis": 354321,
+    "literal_retained_integer_conserving_quartets_per_axis": 166887,
+    "false_positive_counts_by_axis": [0, 0],
+    "false_negative_counts_by_axis": [187434, 187434],
+    "maximum_integer_conserving_float_residual_by_axis": [
+      2.7755575615628914e-17,
+      2.7755575615628914e-17
+    ],
+    "minimum_integer_nonconserving_float_residual_by_axis": [
+      0.00162601626016258,
+      0.00162601626016258
+    ],
+    "one_dimensional_retained_fraction": 0.4710051055398918,
+    "two_dimensional_integer_conserving_quartets": 125543371041,
+    "two_dimensional_literal_retained_quartets": 27851270769,
+    "two_dimensional_omitted_integer_conserving_quartets": 97692100272,
+    "two_dimensional_retained_fraction": 0.2218458094446446,
+    "two_dimensional_omitted_fraction": 0.7781541905553554,
+    "literal_float_quartet_mask_equivalence_established": false
+  },
+  "interpretation": {
+    "classification": "deterministic_literal_float64_cancellation_order_mask_loss",
+    "roundoff_is_not_a_safe_tolerance_selection_basis": true,
+    "zero_false_positives_means_literal_mask_is_a_strict_subset": true,
+    "current_literal_float_full_functional_blocked_as_q003_scalar_oracle": true,
+    "safe_candidate_replacement_direction": "exact_integer_label_conservation_in_a_distinct_versioned_scalar_functional",
+    "flavor_resolved_shifted_momentum_weighted_action_error_quantified": false
+  },
+  "paired_sector_replay": {
+    "groups": 2,
+    "fixed_sectors_per_group": 5,
+    "sampled_bilinear_probes_passed": 10,
+    "maximum_residual": 4.336808689942018e-19,
+    "deterministic_replay_of_job_483695_not_independent_probe_coverage": true,
+    "postselection": false
+  },
+  "authority": {
+    "candidate_only": true,
+    "literal_float_full_functional_parity_established": false,
+    "scalar_curvature_authority_established": false,
+    "reciprocity_established": false,
+    "hermitian_eigensolver_authorized": false,
+    "full_local_stability_established": false,
+    "production_ready": false,
+    "paper_reproduction_verified": false,
+    "scientific_authority_promoted": false
+  },
+  "prior_failed_diagnostic": {
+    "job_id": "483884",
+    "classification": "positive_only_certifier_rejected_n81_inequivalence_before_result_publication",
+    "scientific_authority": false,
+    "negative_clue_preserved": true
+  }
+}
