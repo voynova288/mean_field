@@ -753,6 +753,12 @@ from .vituri2024_hf_spiral_full_response import *  # noqa: F401,F403
 
 __all__ += list(_vituri2024_hf_spiral_full_response.__all__)
 
+# Distinct reduced exact-integer E/F/dF reference; never aliases literal-float v1.
+from . import vituri2024_tdhf_exact_integer_functional as _vituri2024_tdhf_exact_integer_functional
+from .vituri2024_tdhf_exact_integer_functional import *  # noqa: F401,F403
+
+__all__ += list(_vituri2024_tdhf_exact_integer_functional.__all__)
+
 # Paired {q,-q} selected-spin global-rank orbital-Hessian candidate adapter.
 from . import vituri2024_hf_spiral_full_hessian as _vituri2024_hf_spiral_full_hessian
 from .vituri2024_hf_spiral_full_hessian import *  # noqa: F401,F403
