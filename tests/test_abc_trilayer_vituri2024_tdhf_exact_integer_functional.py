@@ -2,10 +2,20 @@
 
 from __future__ import annotations
 
+from hashlib import sha256
+
 import numpy as np
 import pytest
 from scipy.linalg import expm
 
+from mean_field.core.hf.tdhf_scalar_functional import (
+    TDHFFullProjectorDirection,
+    TDHFFullProjectorSpace,
+    TDHFFullProjectorValidationPlan,
+    TDHFFullProjectorValidationTolerances,
+    make_tdhf_full_projector_functional_approval,
+    validate_tdhf_full_projector_functional,
+)
 from mean_field.systems import abc_trilayer as abc
 from mean_field.systems.abc_trilayer.vituri2024_hf_spiral_full_response import (
     compare_vituri2024_hf_spiral_literal_mask_equivalence,
@@ -19,6 +29,8 @@ from mean_field.systems.abc_trilayer.vituri2024_tdhf_exact_integer_functional im
     VITURI2024_EXACT_INTEGER_FUNCTIONAL_CONVENTION,
     VITURI2024_EXACT_INTEGER_FUNCTIONAL_MAX_NK,
     Vituri2024ExactIntegerFunctionalKernel,
+    bind_vituri2024_exact_integer_scalar_functional,
+    make_vituri2024_exact_integer_scalar_inputs,
     vituri2024_exact_integer_projected_interaction_action,
 )
 from mean_field.systems.abc_trilayer.vituri2024_tdhf_full_functional import (
@@ -457,6 +469,104 @@ def test_integer_labels_expose_a_mesh_where_literal_equality_drops_channels() ->
     assert receipt.false_positive_counts == (0, 0)
     assert all(value > 0 for value in receipt.false_negative_counts)
     assert not receipt.literal_float_quartet_mask_equivalence_established
+
+
+def test_exact_integer_callbacks_match_the_bound_reference_kernel() -> None:
+    kernel = _kernel(reference_scale=0.2)
+    inputs = make_vituri2024_exact_integer_scalar_inputs(
+        kernel,
+        source_fingerprint=sha256(b"synthetic-exact-integer-source").hexdigest(),
+        provenance="Synthetic generic scalar-callback binding test.",
+    )
+    binding = bind_vituri2024_exact_integer_scalar_functional()
+    rng = np.random.default_rng(85)
+    density = _hermitian(rng, kernel.dimension)
+    direction = _hermitian(rng, kernel.dimension)
+    assert binding.energy.callback(inputs, density) == pytest.approx(
+        kernel.energy(density), abs=2.0e-12
+    )
+    assert np.max(
+        np.abs(binding.fock.callback(inputs, density) - kernel.fock(density))
+    ) < 2.0e-12
+    assert np.max(
+        np.abs(
+            binding.fock_derivative.callback(inputs, density, direction)
+            - kernel.differential_fock(direction)
+        )
+    ) < 2.0e-12
+    inputs.validate_live_state()
+    binding.validate_live_state()
+
+
+def test_exact_integer_callbacks_pass_registered_generic_scalar_probes() -> None:
+    kernel = _kernel()
+    inputs = make_vituri2024_exact_integer_scalar_inputs(
+        kernel,
+        source_fingerprint=sha256(b"registered-exact-integer-source").hexdigest(),
+        provenance="Registered reduced exact-integer generic ABI test.",
+    )
+    binding = bind_vituri2024_exact_integer_scalar_functional()
+    dimension = kernel.dimension
+    source = np.zeros((dimension, dimension), dtype=np.complex128)
+    first = np.zeros_like(source)
+    second = np.zeros_like(source)
+    first[0, 0] = 1.0
+    second[1, 1] = 1.0
+    directions = (
+        TDHFFullProjectorDirection(label="diag_0", matrix=first),
+        TDHFFullProjectorDirection(label="diag_1", matrix=second),
+    )
+    space = TDHFFullProjectorSpace(
+        dimension=dimension,
+        axis_sizes=(len(INTERNAL_FLAVOR_ORDER), kernel.nk),
+        axis_order=("flavor", "k"),
+        orbital_order_fingerprint=sha256(b"flavor-major-then-k").hexdigest(),
+        layout_adapter_fingerprint=sha256(b"identity-dense-layout").hexdigest(),
+    )
+    plan = TDHFFullProjectorValidationPlan(
+        space=space,
+        source_projector=source,
+        directions=directions,
+        steps=(2.0e-3, 1.0e-3),
+        tolerances=TDHFFullProjectorValidationTolerances(
+            gradient_absolute=2.0e-8,
+            gradient_relative=2.0e-8,
+            derivative_absolute=2.0e-8,
+            derivative_relative=2.0e-8,
+            exact_absolute=2.0e-9,
+            exact_relative=2.0e-9,
+            stationarity_absolute=2.0e-9,
+            stationarity_relative=2.0e-9,
+            self_adjoint_absolute=2.0e-9,
+            self_adjoint_relative=2.0e-9,
+        ),
+        registration_label="vituri-exact-integer-two-diagonal-probes-v1",
+        probe_scope="explicit_bound_probes",
+    )
+    approval = make_tdhf_full_projector_functional_approval(
+        space=space,
+        inputs=inputs,
+        binding=binding,
+        plan=plan,
+        provenance="Detached approval for reduced registered probes.",
+    )
+    receipt = validate_tdhf_full_projector_functional(
+        approval=approval,
+        space=space,
+        inputs=inputs,
+        binding=binding,
+        plan=plan,
+    )
+    assert receipt.registered_probe_functional_consistency
+    assert receipt.source_stationarity_verified
+    assert receipt.dF_anchor_independence_verified
+    assert receipt.dF_real_self_adjoint_verified
+    assert receipt.callback_trace_verified
+    assert receipt.callback_source_code_dependency_stable
+    assert not receipt.directions_are_complete
+    assert not receipt.full_projector_functional_consistency
+    assert not receipt.tdhf_hessian_match
+    assert not receipt.production_ready
 
 
 def test_exact_integer_kernel_authority_and_public_exports() -> None:

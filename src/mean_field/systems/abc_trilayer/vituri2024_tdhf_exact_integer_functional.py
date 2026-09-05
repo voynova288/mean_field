@@ -28,6 +28,13 @@ from typing import Final
 
 import numpy as np
 
+from mean_field.core.hf.tdhf_scalar_functional import (
+    TDHFFullProjectorFunctionalBinding,
+    TDHFScalarFunctionalInputsManifest,
+    bind_tdhf_scalar_kernel,
+    make_tdhf_scalar_functional_inputs_manifest,
+)
+
 from .vituri2024_hf_preflight import INTERNAL_FLAVOR_ORDER
 
 Array = np.ndarray
@@ -45,6 +52,17 @@ VITURI2024_EXACT_INTEGER_FUNCTIONAL_CONVENTION: Final[str] = (
 )
 VITURI2024_EXACT_INTEGER_FUNCTIONAL_MAX_NK: Final[int] = 121
 VITURI2024_EXACT_INTEGER_FUNCTIONAL_STRUCTURE_TOLERANCE: Final[float] = 5.0e-11
+VITURI2024_EXACT_INTEGER_FUNCTIONAL_INPUT_NAMES: Final[tuple[str, ...]] = (
+    "area_angstrom_squared",
+    "form_factors_by_flavor",
+    "functional_api_version",
+    "h0_full",
+    "integer_mesh_labels",
+    "interaction_kernel_by_mesh_pair",
+    "kernel_fingerprint",
+    "normal_order_reference",
+    "ordered_mesh",
+)
 
 
 def _array_sha256(value: object) -> str:
@@ -548,12 +566,170 @@ class Vituri2024ExactIntegerFunctionalKernel:
         return self.interaction_action(clean)
 
 
+def _exact_integer_manifest_components(
+    inputs: TDHFScalarFunctionalInputsManifest,
+) -> tuple[Array, Array, Array, Array, Array, float]:
+    if type(inputs) is not TDHFScalarFunctionalInputsManifest:
+        raise TypeError("exact-integer callbacks require the exact generic input manifest")
+    inputs.validate_live_state()
+    names = tuple(item.name for item in inputs.entries)
+    if names != VITURI2024_EXACT_INTEGER_FUNCTIONAL_INPUT_NAMES:
+        raise ValueError("exact-integer callback input inventory drifted")
+    if inputs.value("functional_api_version") != (
+        VITURI2024_EXACT_INTEGER_FUNCTIONAL_API_VERSION
+    ):
+        raise ValueError("exact-integer callback API binding drifted")
+    fingerprint = inputs.value("kernel_fingerprint")
+    if (
+        type(fingerprint) is not str
+        or len(fingerprint) != 64
+        or any(character not in "0123456789abcdef" for character in fingerprint)
+    ):
+        raise ValueError("exact-integer callback kernel fingerprint is invalid")
+    area_value = inputs.value("area_angstrom_squared")
+    if isinstance(area_value, (bool, np.bool_)):
+        raise TypeError("exact-integer callback area must be a strict real scalar")
+    area = float(area_value)
+    if not math.isfinite(area) or area <= 0.0:
+        raise ValueError("exact-integer callback area must be positive")
+    return (
+        inputs.array("integer_mesh_labels"),
+        inputs.array("form_factors_by_flavor"),
+        inputs.array("interaction_kernel_by_mesh_pair"),
+        inputs.array("h0_full"),
+        inputs.array("normal_order_reference"),
+        area,
+    )
+
+
+def vituri2024_exact_integer_energy_callback(inputs, P):
+    labels, form_factors, interaction, h0, reference, area = (
+        _exact_integer_manifest_components(inputs)
+    )
+    dimension = int(h0.shape[0])
+    clean = _readonly_hermitian(P, dimension, "callback density")
+    q = clean - reference
+    sigma = vituri2024_exact_integer_projected_interaction_action(
+        q,
+        integer_mesh_labels=labels,
+        form_factors_by_flavor=form_factors,
+        interaction_kernel_by_mesh_pair=interaction,
+        area_angstrom_squared=area,
+    )
+    value = np.trace(h0 @ clean) + 0.5 * np.trace(q @ sigma)
+    scale = max(1.0, abs(value))
+    if abs(value.imag) > VITURI2024_EXACT_INTEGER_FUNCTIONAL_STRUCTURE_TOLERANCE * scale:
+        raise ValueError("exact-integer callback energy is not real")
+    return float(value.real)
+
+
+def vituri2024_exact_integer_fock_callback(inputs, P):
+    labels, form_factors, interaction, h0, reference, area = (
+        _exact_integer_manifest_components(inputs)
+    )
+    dimension = int(h0.shape[0])
+    clean = _readonly_hermitian(P, dimension, "callback density")
+    sigma = vituri2024_exact_integer_projected_interaction_action(
+        clean - reference,
+        integer_mesh_labels=labels,
+        form_factors_by_flavor=form_factors,
+        interaction_kernel_by_mesh_pair=interaction,
+        area_angstrom_squared=area,
+    )
+    return _readonly_hermitian(
+        np.asarray(h0 + sigma, dtype=np.complex128),
+        dimension,
+        "callback Fock",
+    )
+
+
+def vituri2024_exact_integer_fock_derivative_callback(inputs, P, D):
+    labels, form_factors, interaction, h0, _reference, area = (
+        _exact_integer_manifest_components(inputs)
+    )
+    dimension = int(h0.shape[0])
+    _readonly_hermitian(P, dimension, "callback anchor density")
+    direction = _readonly_hermitian(D, dimension, "callback direction")
+    return vituri2024_exact_integer_projected_interaction_action(
+        direction,
+        integer_mesh_labels=labels,
+        form_factors_by_flavor=form_factors,
+        interaction_kernel_by_mesh_pair=interaction,
+        area_angstrom_squared=area,
+    )
+
+
+def make_vituri2024_exact_integer_scalar_inputs(
+    kernel: Vituri2024ExactIntegerFunctionalKernel,
+    *,
+    source_fingerprint: str,
+    provenance: str,
+) -> TDHFScalarFunctionalInputsManifest:
+    """Copy a validated reduced kernel into the generic scalar ABI."""
+
+    if type(kernel) is not Vituri2024ExactIntegerFunctionalKernel:
+        raise TypeError("scalar inputs require the exact Vituri integer kernel")
+    kernel.validate_live_state()
+    return make_tdhf_scalar_functional_inputs_manifest(
+        {
+            "area_angstrom_squared": kernel.area_angstrom_squared,
+            "form_factors_by_flavor": kernel.form_factors_by_flavor,
+            "functional_api_version": kernel.api_version,
+            "h0_full": kernel.h0_full,
+            "integer_mesh_labels": kernel.integer_mesh_labels,
+            "interaction_kernel_by_mesh_pair": kernel.interaction_kernel_by_mesh_pair,
+            "kernel_fingerprint": kernel.kernel_fingerprint,
+            "normal_order_reference": kernel.normal_order_reference,
+            "ordered_mesh": kernel.ordered_mesh,
+        },
+        source_fingerprint=source_fingerprint,
+        provenance=provenance,
+    )
+
+
+def bind_vituri2024_exact_integer_scalar_functional() -> (
+    TDHFFullProjectorFunctionalBinding
+):
+    """Bind three distinct callbacks and their exact-integer implementation closure."""
+
+    dependencies = (
+        vituri2024_exact_integer_projected_interaction_action,
+        _exact_integer_manifest_components,
+    )
+    return TDHFFullProjectorFunctionalBinding(
+        energy=bind_tdhf_scalar_kernel(
+            role="energy",
+            callback=vituri2024_exact_integer_energy_callback,
+            dependencies=dependencies,
+            provenance="Vituri exact-integer reduced scalar energy callback.",
+        ),
+        fock=bind_tdhf_scalar_kernel(
+            role="fock",
+            callback=vituri2024_exact_integer_fock_callback,
+            dependencies=dependencies,
+            provenance="Vituri exact-integer reduced scalar Fock callback.",
+        ),
+        fock_derivative=bind_tdhf_scalar_kernel(
+            role="fock_derivative",
+            callback=vituri2024_exact_integer_fock_derivative_callback,
+            dependencies=dependencies,
+            provenance="Vituri exact-integer reduced scalar dF callback.",
+        ),
+    )
+
+
 __all__ = [
     "VITURI2024_EXACT_INTEGER_FUNCTIONAL_API_VERSION",
     "VITURI2024_EXACT_INTEGER_FUNCTIONAL_AUTHORITY",
     "VITURI2024_EXACT_INTEGER_FUNCTIONAL_CONVENTION",
     "VITURI2024_EXACT_INTEGER_FUNCTIONAL_MAX_NK",
     "VITURI2024_EXACT_INTEGER_FUNCTIONAL_STRUCTURE_TOLERANCE",
+    "VITURI2024_EXACT_INTEGER_FUNCTIONAL_INPUT_NAMES",
     "Vituri2024ExactIntegerFunctionalKernel",
+    "bind_vituri2024_exact_integer_scalar_functional",
+    "make_vituri2024_exact_integer_scalar_inputs",
+    "vituri2024_exact_integer_energy_callback",
+    "vituri2024_exact_integer_fock_callback",
+    "vituri2024_exact_integer_fock_derivative_callback",
     "vituri2024_exact_integer_projected_interaction_action",
 ]
