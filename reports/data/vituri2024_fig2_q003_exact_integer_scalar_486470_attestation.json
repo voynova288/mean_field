@@ -1,0 +1,109 @@
+{
+  "schema": "mean_field.vituri2024.fig2_q003_exact_integer_scalar_attestation.v1",
+  "source_commit": "c1e1a7f10baa5cde2112ca458a850826d7b185f0",
+  "job_id": "486470",
+  "scheduler": {
+    "state": "COMPLETED",
+    "exit_code": "0:0",
+    "elapsed": "00:02:26",
+    "node": "node012",
+    "allocated_cpus": 56,
+    "requested_memory": "250G",
+    "partition": "regular",
+    "account": "hmt03"
+  },
+  "capsule": {
+    "path": "/data/home/ziyuzhu/.runs/Mean_Field_c1e1a7f_vituri_fig2_q003_exact_integer_scalar_qualifier_v13_20260905",
+    "preparation_record_sha256": "266028c85d118f99a0ea49cf3d00829fa7d49978de13c3ff7d5e7907aca3c249",
+    "capsule_manifest_sha256": "f6c00542bacaa66959b9335db64538e5ebe6f7d76b842f1e70ebc1f928018400",
+    "launch_authorization_sha256": "756beac6b1f535bb223923c34a045a60f110e0ed044498a4853a0416080ccaff",
+    "result_sha256": "29e1fe147ccbd73523cae6811a0fa8d02aaf707064c6b98d6a12311ce6b48eb7",
+    "ready_sha256": "0bab40711320f4ee1a40fadbeec662ac2d41e6306c00af9c0666d8303713fb30",
+    "srun_success_evidence_sha256": "41f263dd9d8223e121c5b2e75968f7a00232724d0078baa6d56ae1e84865a5e3",
+    "complete_sha256": "3747140272185ce63a2008ed68e9ad66fffb1602f95d7013217ebd22f19ace07",
+    "postrun_attestation_sha256": "0a7317eaf2e1560ade98b06afa9292cac2f06b22c16c05ef8f6caac5d255a6b2",
+    "terminal_sacct_stdout_sha256": "721f5dcbce25ae906dadf888e5c7e9ad5581b967a167e392dfc99853bea37bcf"
+  },
+  "focused_tests": {
+    "passed": 153,
+    "warnings": 1,
+    "warning_scope": "pytest cache could not create a cache file inside the immutable source snapshot",
+    "scientific_test_failure": false
+  },
+  "inventory": {
+    "density_groups": [
+      {
+        "label": "40fd",
+        "source_density_group_sha256": "40fd7da28d7d32ad8034352bbd1171b873ceac9c268f5395f908f9a9f686462d",
+        "inventory_fingerprint": "cabe46cabf875a3f69701c524867f520799ec03ba13f3631576f0d691819c06d"
+      },
+      {
+        "label": "3307",
+        "source_density_group_sha256": "3307efd3434cef054b37545d778a23f2a6fb8684f599b9e7d0e0cbea8ee36288",
+        "inventory_fingerprint": "6abe52a017f918446dc0bee56a9b1eefcc69293ea2315a8a80f7ae406404db07"
+      }
+    ],
+    "selected_occupied_count": 11852,
+    "selected_virtual_count": 1270,
+    "complex_dimension": 15052040,
+    "real_dimension": 30104080,
+    "fixed_sector_keys_per_group": [
+      [0, 0, 2],
+      [1, 0, 0],
+      [1, 0, 2],
+      [0, 1, -2],
+      [1, 1, 0]
+    ],
+    "probe_count": 10,
+    "all_evaluated_without_postselection": true
+  },
+  "fixed_probe_results": {
+    "independent_signed_scalar_implementation_fingerprint": "6704bf1e5c2a30050079a10974e3347b28995d7ef5e271d10cefc64d62155897",
+    "maximum_action_abs_residual": 0.0,
+    "maximum_interaction_curvature_abs_residual_ev": 1.1262150066693177e-17,
+    "comparison_bound_ev": 2.2000000000000003e-09,
+    "minimum_action_output_frobenius_norm": 0.00040850691190017234,
+    "minimum_interaction_curvature_scale_ev": 0.000041755503857918356,
+    "minimum_factor_two_canary_abs_residual_ev": 0.00002087775192895928,
+    "raw_total_no_nk_normalization": true,
+    "all_fixed_signed_scalar_probes_match": true
+  },
+  "narrow_verdict": {
+    "independent_exact_integer_signed_action_fixed_probe_parity": true,
+    "paired_interaction_scalar_trace_fixed_probe_parity": true,
+    "factor_two_raw_total_fixed_probe_parity": true,
+    "two_density_groups_evaluated": true,
+    "full_scalar_exact_unitary_curvature_established": false,
+    "whole_inventory_reciprocity_established": false,
+    "hermitian_eigensolver_authorized": false,
+    "full_local_stability_established": false,
+    "scientific_authority_promoted": false,
+    "production_ready": false,
+    "paper_reproduction_verified": false
+  },
+  "interpretation": "The new exact-integer signed scalar implementation independently matches the candidate response action and the paired Hessian interaction contribution for ten preregistered, nonvacuous q003 probes. It shares the source-bound FFT plan and physical inputs, tests one deterministic direction per sector/group, and does not evaluate an exact-unitary full scalar energy. Therefore this is fixed-probe candidate evidence only, not full scalar-Hessian or reciprocity authority.",
+  "immutable_failures": [
+    {
+      "capsule_version": 9,
+      "job_submitted": false,
+      "reason": "static capsule-manifest schema mismatch"
+    },
+    {
+      "capsule_version": 10,
+      "job_submitted": false,
+      "reason": "static launch/resource/nonvacuity review rejection"
+    },
+    {
+      "capsule_version": 11,
+      "job_submitted": false,
+      "reason": "static memory/allocation and nonvacuity review rejection"
+    },
+    {
+      "capsule_version": 12,
+      "job_id": "486468",
+      "released": false,
+      "cancelled": true,
+      "reason": "held candidate rejected because pending NumNodes was rendered as 1-1 rather than 1"
+    }
+  ]
+}
