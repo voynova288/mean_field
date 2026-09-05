@@ -67,6 +67,7 @@ from mean_field.systems.abc_trilayer.vituri2024_hf_spiral_stability import (
     prepare_vituri2024_hf_spiral_stability,
 )
 from mean_field.systems.abc_trilayer.vituri2024_tdhf_exact_integer_signed_scalar import (
+    vituri2024_exact_integer_paired_interaction_trace,
     vituri2024_exact_integer_signed_scalar_fft_action,
 )
 from mean_field.systems.abc_trilayer.vituri2024_tdhf_full_functional import (
@@ -911,6 +912,62 @@ def test_paired_orbit_matches_exact_unitary_relative_scalar_curvature(
     assert abs(finite_difference - predicted) < 2.0e-8
     assert abs(finite_difference - 0.5 * predicted) > 1.0e-5
     assert abs(finite_difference - predicted / hessian_context.nk) > 1.0e-5
+
+
+def test_paired_hessian_interaction_curvature_matches_independent_signed_scalar(
+ hessian_context,
+) -> None:
+ prepared_orbit = hessian_context.build_orbit_hessian(
+  Vituri2024HFSpiralFullSectorKey(1, -1, 2)
+ )
+ rng = np.random.default_rng(971)
+ direction = rng.normal(size=prepared_orbit.real_dimension)
+ direction /= np.linalg.norm(direction)
+ first, second = prepared_orbit.hessian.frame.unpack_real(direction)
+ tangent = _global_selected_tangent(prepared_orbit, first, second)
+ selected = np.asarray(
+  hessian_context.inventory.restricted_preparation.receipt.selected_flavor_indices
+ )
+ nk = hessian_context.nk
+
+ def extract(key):
+  block = np.zeros((2, 2, nk), dtype=np.complex128)
+  bases, targets = hessian_context.response.support_indices(key)
+  if key.valley_charge == 0:
+   allowed = ((0, 0), (1, 1))
+  elif key.valley_charge == 2:
+   allowed = ((1, 0),)
+  else:
+   allowed = ((0, 1),)
+  for left, right in allowed:
+   rows = selected[left] * nk + targets
+   columns = selected[right] * nk + bases
+   block[left, right, bases] = tangent[rows, columns]
+  return block
+
+ key = prepared_orbit.orbit.first
+ positive = extract(key)
+ negative = extract(key.conjugate)
+ scalar_interaction = vituri2024_exact_integer_paired_interaction_trace(
+  hessian_context.response.selected_spinors,
+  hessian_context.response.fft_plan,
+  hessian_context.response.area_angstrom_squared,
+  (key.displacement_x, key.displacement_y),
+  key.valley_charge,
+  positive,
+  negative,
+ )
+ total_curvature = float(direction @ prepared_orbit.hessian.matvec(direction))
+ one_body_curvature = 2.0 * float(
+  np.sum(prepared_orbit.hessian.frame.first.one_body_gaps_ev * np.abs(first) ** 2)
+  + np.sum(
+   prepared_orbit.hessian.frame.second.one_body_gaps_ev * np.abs(second) ** 2
+  )
+ )
+ interaction_curvature = total_curvature - one_body_curvature
+ assert abs(scalar_interaction) > 1.0e-8
+ assert scalar_interaction == pytest.approx(interaction_curvature, abs=3.0e-12)
+ assert abs(scalar_interaction - 0.5 * interaction_curvature) > 1.0e-7
 
 
 def test_unequal_and_one_empty_conjugate_lanes_are_not_padded_or_dropped(
