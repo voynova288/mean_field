@@ -67,6 +67,7 @@ from mean_field.systems.abc_trilayer.vituri2024_hf_spiral_stability import (
     prepare_vituri2024_hf_spiral_stability,
 )
 from mean_field.systems.abc_trilayer.vituri2024_tdhf_exact_integer_signed_scalar import (
+    vituri2024_exact_integer_orbital_scalar_curvature,
     vituri2024_exact_integer_paired_interaction_trace,
     vituri2024_exact_integer_signed_scalar_fft_action,
 )
@@ -908,6 +909,45 @@ def test_paired_orbit_matches_exact_unitary_relative_scalar_curvature(
         -ep2 + 16.0 * ep1 - 30.0 * e0 + 16.0 * em1 - em2
     ) / (12.0 * h * h)
     predicted = float(direction @ prepared_orbit.hessian.matvec(direction))
+
+    def extract_signed_block(key):
+        block = np.zeros((2, 2, nk), dtype=np.complex128)
+        bases, targets = hessian_context.response.support_indices(key)
+        if key.valley_charge == 0:
+            allowed = ((0, 0), (1, 1))
+        elif key.valley_charge == 2:
+            allowed = ((1, 0),)
+        else:
+            allowed = ((0, 1),)
+        for left, right in allowed:
+            rows = selected[left] * nk + targets
+            columns = selected[right] * nk + bases
+            block[left, right, bases] = tangent[rows, columns]
+        return block
+
+    scalar_key = prepared_orbit.orbit.first
+    positive_block = extract_signed_block(scalar_key)
+    negative_block = extract_signed_block(scalar_key.conjugate)
+    embeddings = (prepared_orbit.first_embedding, prepared_orbit.second_embedding)
+    scalar_receipt = vituri2024_exact_integer_orbital_scalar_curvature(
+        np.asarray(independently_selected_diagonal, dtype=np.float64),
+        np.asarray(hessian_context.inventory.selected_occupations, dtype=np.bool_),
+        np.concatenate(tuple(item.particle_valley_slots for item in embeddings)),
+        np.concatenate(tuple(item.particle_k_indices for item in embeddings)),
+        np.concatenate(tuple(item.hole_valley_slots for item in embeddings)),
+        np.concatenate(tuple(item.hole_k_indices for item in embeddings)),
+        np.concatenate((first, second)),
+        hessian_context.response.selected_spinors,
+        hessian_context.response.fft_plan,
+        hessian_context.response.area_angstrom_squared,
+        (scalar_key.displacement_x, scalar_key.displacement_y),
+        scalar_key.valley_charge,
+        positive_block,
+        negative_block,
+    )
+    assert scalar_receipt.total_scalar_curvature_ev == pytest.approx(
+        predicted, abs=3.0e-13
+    )
     assert abs(stationarity) < 2.0e-10
     assert abs(finite_difference - predicted) < 2.0e-8
     assert abs(finite_difference - 0.5 * predicted) > 1.0e-5

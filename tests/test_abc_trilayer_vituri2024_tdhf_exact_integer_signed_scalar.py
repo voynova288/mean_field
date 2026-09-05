@@ -10,8 +10,11 @@ from mean_field.systems.abc_trilayer.vituri2024_hf_fft import (
     make_vituri2024_square_cartesian_fft_plan,
 )
 from mean_field.systems.abc_trilayer.vituri2024_tdhf_exact_integer_signed_scalar import (
+    VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_AUTHORITY,
     VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_API_VERSION,
     VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_AUTHORITY,
+    Vituri2024ExactIntegerOrbitalScalarCurvatureReceipt,
+    vituri2024_exact_integer_orbital_scalar_curvature,
     vituri2024_exact_integer_paired_interaction_trace,
     vituri2024_exact_integer_signed_scalar_fft_action,
     vituri2024_exact_integer_signed_scalar_implementation_fingerprint,
@@ -255,11 +258,177 @@ def test_signed_scalar_size9_execution_keeps_finite_no_wrap_shape() -> None:
     assert np.count_nonzero(result[:, :, np.setdiff1d(np.arange(plan.nk), bases)]) == 0
 
 
+def test_orbital_scalar_curvature_reconstructs_explicit_double_commutator() -> None:
+    plan, spinors, area = _fixture()
+    nk = plan.nk
+    source_fock = np.stack(
+        (
+            np.linspace(-0.7, 0.2, nk, dtype=np.float64),
+            np.linspace(-0.1, 0.8, nk, dtype=np.float64),
+        )
+    )
+    occupations = np.zeros((2, nk), dtype=np.bool_)
+    occupations[0, 0] = True
+    occupations[1, 1] = True
+    particle_slots = np.asarray([0, 1], dtype=np.int64)
+    particle_k = np.asarray([1, 0], dtype=np.int64)
+    hole_slots = np.asarray([0, 1], dtype=np.int64)
+    hole_k = np.asarray([0, 1], dtype=np.int64)
+    amplitudes = np.asarray([0.3 + 0.2j, -0.1 + 0.4j], dtype=np.complex128)
+    positive = np.zeros((2, 2, nk), dtype=np.complex128)
+    negative = np.zeros_like(positive)
+    positive[0, 0, 0] = amplitudes[0]
+    negative[0, 0, 1] = amplitudes[0].conjugate()
+    negative[1, 1, 1] = amplitudes[1]
+    positive[1, 1, 0] = amplitudes[1].conjugate()
+    receipt = vituri2024_exact_integer_orbital_scalar_curvature(
+        source_fock,
+        occupations,
+        particle_slots,
+        particle_k,
+        hole_slots,
+        hole_k,
+        amplitudes,
+        spinors,
+        plan,
+        area,
+        (1, 0),
+        0,
+        positive,
+        negative,
+    )
+    dimension = 2 * nk
+    projector = np.diag(occupations.reshape(-1).astype(np.complex128))
+    generator = np.zeros((dimension, dimension), dtype=np.complex128)
+    for ps, pk, hs, hk, value in zip(
+        particle_slots,
+        particle_k,
+        hole_slots,
+        hole_k,
+        amplitudes,
+        strict=True,
+    ):
+        particle = int(ps) * nk + int(pk)
+        hole = int(hs) * nk + int(hk)
+        generator[particle, hole] = value
+        generator[hole, particle] = -value.conjugate()
+    tangent = generator @ projector - projector @ generator
+    second = generator @ tangent - tangent @ generator
+    explicit_one_body = np.trace(np.diag(source_fock.reshape(-1)) @ second)
+    assert type(receipt) is Vituri2024ExactIntegerOrbitalScalarCurvatureReceipt
+    assert abs(explicit_one_body.imag) < 1.0e-15
+    assert receipt.one_body_curvature_ev == pytest.approx(
+        explicit_one_body.real, abs=1.0e-15
+    )
+    assert receipt.total_scalar_curvature_ev == pytest.approx(
+        explicit_one_body.real + receipt.interaction_curvature_ev, abs=1.0e-15
+    )
+    assert receipt.raw_total_no_nk_normalization
+    assert receipt.authority == VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_AUTHORITY
+    assert receipt.implementation_fingerprint == (
+        vituri2024_exact_integer_signed_scalar_implementation_fingerprint()
+    )
+    assert not receipt.source_functional_fock_closure_established
+    assert not receipt.full_exact_unitary_scalar_curvature_established
+
+
+def test_orbital_scalar_curvature_rejects_bad_occupation_and_duplicates() -> None:
+    plan, spinors, area = _fixture()
+    source_fock = np.zeros((2, plan.nk), dtype=np.float64)
+    occupations = np.zeros((2, plan.nk), dtype=np.bool_)
+    occupations[0, 0] = True
+    occupations[1, 1] = True
+    particle_slots = np.asarray([0], dtype=np.int64)
+    particle_k = np.asarray([0], dtype=np.int64)
+    hole_slots = np.asarray([1], dtype=np.int64)
+    hole_k = np.asarray([1], dtype=np.int64)
+    amplitudes = np.ones(1, dtype=np.complex128)
+    positive = np.zeros((2, 2, plan.nk), dtype=np.complex128)
+    negative = np.zeros_like(positive)
+    with pytest.raises(ValueError, match="occupied holes to virtual particles"):
+        vituri2024_exact_integer_orbital_scalar_curvature(
+            source_fock,
+            occupations,
+            particle_slots,
+            particle_k,
+            hole_slots,
+            hole_k,
+            amplitudes,
+            spinors,
+            plan,
+            area,
+            (1, 0),
+            0,
+            positive,
+            negative,
+        )
+    with pytest.raises(ValueError, match="duplicate particle-hole transition"):
+        vituri2024_exact_integer_orbital_scalar_curvature(
+            source_fock,
+            occupations,
+            np.asarray([0, 0], dtype=np.int64),
+            np.asarray([1, 1], dtype=np.int64),
+            np.asarray([0, 0], dtype=np.int64),
+            np.asarray([0, 0], dtype=np.int64),
+            np.ones(2, dtype=np.complex128),
+            spinors,
+            plan,
+            area,
+            (1, 0),
+            0,
+            positive,
+            negative,
+        )
+    bad_positive = positive.copy()
+    bad_positive[0, 0, 0] = 1.0
+    with pytest.raises(ValueError, match="signed blocks do not match"):
+        vituri2024_exact_integer_orbital_scalar_curvature(
+            source_fock,
+            occupations,
+            np.asarray([0], dtype=np.int64),
+            np.asarray([1], dtype=np.int64),
+            np.asarray([0], dtype=np.int64),
+            np.asarray([0], dtype=np.int64),
+            amplitudes,
+            spinors,
+            plan,
+            area,
+            (1, 0),
+            0,
+            bad_positive,
+            negative,
+        )
+    with pytest.raises(TypeError, match="strict real scalar"):
+        vituri2024_exact_integer_orbital_scalar_curvature(
+            source_fock,
+            occupations,
+            np.asarray([0], dtype=np.int64),
+            np.asarray([1], dtype=np.int64),
+            np.asarray([0], dtype=np.int64),
+            np.asarray([0], dtype=np.int64),
+            amplitudes,
+            spinors,
+            plan,
+            "1.0",
+            (1, 0),
+            0,
+            positive,
+            negative,
+        )
+
+
 def test_signed_scalar_api_is_public_and_candidate_only() -> None:
     assert VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_API_VERSION.endswith(".v1")
     assert "candidate" in VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_AUTHORITY
     assert "not_scalar_hessian" in VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_AUTHORITY
+    assert "candidate" in VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_AUTHORITY
     assert len(vituri2024_exact_integer_signed_scalar_implementation_fingerprint()) == 64
     assert abc.vituri2024_exact_integer_signed_scalar_fft_action is (
         vituri2024_exact_integer_signed_scalar_fft_action
+    )
+    assert abc.vituri2024_exact_integer_orbital_scalar_curvature is (
+        vituri2024_exact_integer_orbital_scalar_curvature
+    )
+    assert abc.Vituri2024ExactIntegerOrbitalScalarCurvatureReceipt is (
+        Vituri2024ExactIntegerOrbitalScalarCurvatureReceipt
     )

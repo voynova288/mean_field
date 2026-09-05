@@ -9,10 +9,12 @@ stability, production, or paper authority.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field, InitVar
 from hashlib import sha256
 import inspect
 import json
 import math
+from numbers import Real
 from pathlib import Path
 from typing import Final
 
@@ -28,10 +30,31 @@ _IMPORT_IFFT2 = _IFFT2
 VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_API_VERSION: Final[str] = (
     "vituri2024_exact_integer_selected_spin_signed_scalar_fft.v1"
 )
+VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_API_VERSION: Final[str] = (
+    "vituri2024_exact_integer_selected_spin_orbital_scalar_curvature.v1"
+)
 VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_AUTHORITY: Final[str] = (
     "independent_candidate_signed_channel_action_not_scalar_hessian_reciprocity_"
     "eigensolver_stability_production_or_paper_authority"
 )
+VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_AUTHORITY: Final[str] = (
+    "bound_candidate_analytic_orbital_scalar_curvature_without_source_functional_"
+    "fock_closure_full_exact_unitary_reciprocity_stability_or_production_authority"
+)
+
+
+_CURVATURE_TOKEN = object()
+
+
+def _array_sha256(value: Array) -> str:
+    array = np.ascontiguousarray(value)
+    return sha256(
+        str(array.dtype).encode()
+        + b"\0"
+        + json.dumps(array.shape).encode()
+        + b"\0"
+        + array.view(np.uint8).tobytes()
+    ).hexdigest()
 
 
 def _callable_dependency_fingerprint(value: object) -> dict[str, str]:
@@ -228,6 +251,279 @@ def vituri2024_exact_integer_signed_scalar_fft_action(
     return _readonly_complex(result, result.shape, "signed scalar response")
 
 
+def _readonly_exact_array(
+ value: object,
+ dtype: np.dtype,
+ shape: tuple[int, ...],
+ label: str,
+) -> Array:
+ if (
+  type(value) is not np.ndarray
+  or value.dtype != dtype
+  or value.shape != shape
+  or not np.all(np.isfinite(value))
+ ):
+  raise ValueError(f"{label} must be finite exact {dtype} {shape}")
+ result = np.frombuffer(value.tobytes(order="C"), dtype=dtype).reshape(shape)
+ result.setflags(write=False)
+ return result
+
+
+@dataclass(frozen=True, slots=True)
+class Vituri2024ExactIntegerOrbitalScalarCurvatureReceipt:
+ """Input- and implementation-bound candidate analytic ``E''(0)``."""
+
+ _factory_token: InitVar[object]
+ transition_count: int
+ displacement: tuple[int, int]
+ valley_charge: int
+ area_angstrom_squared: float
+ fft_plan_fingerprint: str
+ selected_spinors_sha256: str
+ positive_block_sha256: str
+ negative_block_sha256: str
+ source_fock_diagonal_sha256: str
+ source_occupations_sha256: str
+ transition_inventory_sha256: str
+ amplitudes_sha256: str
+ one_body_curvature_ev: float
+ interaction_curvature_ev: float
+ total_scalar_curvature_ev: float
+ implementation_fingerprint: str
+ api_version: str = field(
+  default=VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_API_VERSION,
+  init=False,
+ )
+ authority: str = field(
+  default=VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_AUTHORITY,
+  init=False,
+ )
+ raw_total_no_nk_normalization: bool = field(default=True, init=False)
+ source_functional_fock_closure_established: bool = field(default=False, init=False)
+ full_exact_unitary_scalar_curvature_established: bool = field(
+  default=False, init=False
+ )
+ reciprocity_established: bool = field(default=False, init=False)
+ production_ready: bool = field(default=False, init=False)
+ fingerprint: str = field(init=False)
+
+ def __post_init__(self, _factory_token: object) -> None:
+  if _factory_token is not _CURVATURE_TOKEN:
+   raise TypeError("orbital scalar-curvature receipts are factory-only")
+  if type(self.transition_count) is not int or self.transition_count <= 0:
+   raise ValueError("orbital scalar curvature requires transitions")
+  _strict_displacement(self.displacement)
+  _allowed_blocks(self.valley_charge)
+  if (
+   type(self.area_angstrom_squared) is not float
+   or not math.isfinite(self.area_angstrom_squared)
+   or self.area_angstrom_squared <= 0.0
+  ):
+   raise ValueError("receipt area is invalid")
+  digest_names = (
+   "fft_plan_fingerprint",
+   "selected_spinors_sha256",
+   "positive_block_sha256",
+   "negative_block_sha256",
+   "source_fock_diagonal_sha256",
+   "source_occupations_sha256",
+   "transition_inventory_sha256",
+   "amplitudes_sha256",
+   "implementation_fingerprint",
+  )
+  if any(
+   type(getattr(self, name)) is not str
+   or len(getattr(self, name)) != 64
+   or any(
+    character not in "0123456789abcdef"
+    for character in getattr(self, name)
+   )
+   for name in digest_names
+  ):
+   raise ValueError("orbital scalar-curvature digest is invalid")
+  for value in (
+   self.one_body_curvature_ev,
+   self.interaction_curvature_ev,
+   self.total_scalar_curvature_ev,
+  ):
+   if type(value) is not float or not math.isfinite(value):
+    raise ValueError("orbital scalar curvature must be finite float")
+  if self.total_scalar_curvature_ev != (
+   self.one_body_curvature_ev + self.interaction_curvature_ev
+  ):
+   raise ValueError("orbital scalar-curvature decomposition drifted")
+  if (
+   self.api_version
+   != VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_API_VERSION
+   or self.authority
+   != VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_AUTHORITY
+   or self.raw_total_no_nk_normalization is not True
+   or self.source_functional_fock_closure_established is not False
+   or self.full_exact_unitary_scalar_curvature_established is not False
+   or self.reciprocity_established is not False
+   or self.production_ready is not False
+  ):
+   raise ValueError("orbital scalar-curvature authority drifted")
+  payload = {
+   name: getattr(self, name)
+   for name in self.__dataclass_fields__
+   if name not in {"_factory_token", "fingerprint"}
+  }
+  object.__setattr__(
+   self,
+   "fingerprint",
+   sha256(
+    json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+   ).hexdigest(),
+  )
+
+
+def vituri2024_exact_integer_orbital_scalar_curvature(
+ source_fock_diagonal_ev: Array,
+ source_occupations: Array,
+ particle_valley_slots: Array,
+ particle_k_indices: Array,
+ hole_valley_slots: Array,
+ hole_k_indices: Array,
+ amplitudes: Array,
+ selected_spinors: Array,
+ fft_plan: Vituri2024SquareCartesianFFTPlan,
+ area_angstrom_squared: Real,
+ displacement: tuple[int, int],
+ valley_charge: int,
+ positive_block: Array,
+ negative_block: Array,
+) -> Vituri2024ExactIntegerOrbitalScalarCurvatureReceipt:
+ """Bind ``Tr(F[K,[K,P]]) + Tr(W Sigma[W])`` for one paired tangent.
+
+ For ``K_ph=X`` and ``P_hh=1, P_pp=0``, the first term is
+ ``2 sum_ph (F_p-F_h)|X_ph|^2``. The signed blocks are reconstructed
+ independently from the transition coordinates and must match exactly before
+ their interaction trace is evaluated.
+ """
+
+ _validate_import_bindings()
+ implementation = _current_implementation_fingerprint()
+ if implementation != _IMPORT_IMPLEMENTATION_FINGERPRINT:
+  raise RuntimeError("signed scalar implementation source drifted")
+ if type(fft_plan) is not Vituri2024SquareCartesianFFTPlan:
+  raise TypeError("orbital scalar curvature requires the exact FFT plan type")
+ fft_plan.validate_live_state()
+ displacement = _strict_displacement(displacement)
+ _allowed_blocks(valley_charge)
+ if isinstance(area_angstrom_squared, (bool, np.bool_)) or not isinstance(
+  area_angstrom_squared, Real
+ ):
+  raise TypeError("orbital scalar-curvature area must be a strict real scalar")
+ area = float(area_angstrom_squared)
+ if not math.isfinite(area) or area <= 0.0:
+  raise ValueError("orbital scalar-curvature area must be positive")
+ nk = fft_plan.nk
+ fock = _readonly_exact_array(
+  source_fock_diagonal_ev,
+  np.dtype(np.float64),
+  (2, nk),
+  "source Fock diagonal",
+ )
+ occupations = _readonly_exact_array(
+  source_occupations,
+  np.dtype(np.bool_),
+  (2, nk),
+  "source occupations",
+ )
+ if type(particle_valley_slots) is not np.ndarray or particle_valley_slots.ndim != 1:
+  raise ValueError("particle valley slots must be an exact vector")
+ count = int(particle_valley_slots.size)
+ if count <= 0:
+  raise ValueError("orbital scalar curvature requires transitions")
+ particle_slots = _readonly_exact_array(
+  particle_valley_slots, np.dtype(np.int64), (count,), "particle valley slots"
+ )
+ particle_k = _readonly_exact_array(
+  particle_k_indices, np.dtype(np.int64), (count,), "particle k indices"
+ )
+ hole_slots = _readonly_exact_array(
+  hole_valley_slots, np.dtype(np.int64), (count,), "hole valley slots"
+ )
+ hole_k = _readonly_exact_array(
+  hole_k_indices, np.dtype(np.int64), (count,), "hole k indices"
+ )
+ values = _readonly_exact_array(
+  amplitudes, np.dtype(np.complex128), (count,), "transition amplitudes"
+ )
+ spinors = _readonly_complex(selected_spinors, (2, 6, nk), "selected spinors")
+ positive = _readonly_complex(positive_block, (2, 2, nk), "positive signed block")
+ negative = _readonly_complex(negative_block, (2, 2, nk), "negative signed block")
+ if (
+  np.any(particle_slots < 0)
+  or np.any(particle_slots >= 2)
+  or np.any(hole_slots < 0)
+  or np.any(hole_slots >= 2)
+  or np.any(particle_k < 0)
+  or np.any(particle_k >= nk)
+  or np.any(hole_k < 0)
+  or np.any(hole_k >= nk)
+ ):
+  raise ValueError("transition coordinate lies outside selected source space")
+ if np.any(occupations[particle_slots, particle_k]) or not np.all(
+  occupations[hole_slots, hole_k]
+ ):
+  raise ValueError("transition does not map occupied holes to virtual particles")
+ inventory = np.stack((particle_slots, particle_k, hole_slots, hole_k), axis=1)
+ if np.unique(inventory, axis=0).shape[0] != count:
+  raise ValueError("duplicate particle-hole transition")
+ labels = fft_plan.integer_mesh_labels
+ expected_positive = np.zeros((2, 2, nk), dtype=np.complex128)
+ expected_negative = np.zeros_like(expected_positive)
+ opposite = (-displacement[0], -displacement[1])
+ for ps, pk, hs, hk, value in zip(
+  particle_slots, particle_k, hole_slots, hole_k, values, strict=True
+ ):
+  signed_displacement = tuple((labels[pk] - labels[hk]).tolist())
+  signed_charge = 2 * (int(ps) - int(hs))
+  if signed_displacement == displacement and signed_charge == valley_charge:
+   expected_positive[ps, hs, hk] += value
+   expected_negative[hs, ps, pk] += value.conjugate()
+  elif signed_displacement == opposite and signed_charge == -valley_charge:
+   expected_negative[ps, hs, hk] += value
+   expected_positive[hs, ps, pk] += value.conjugate()
+  else:
+   raise ValueError("transition lies outside the declared paired sector")
+ if not np.array_equal(positive, expected_positive) or not np.array_equal(
+  negative, expected_negative
+ ):
+  raise ValueError("signed blocks do not match the explicit transition tangent")
+ gaps = fock[particle_slots, particle_k] - fock[hole_slots, hole_k]
+ one_body = float(2.0 * np.sum(gaps * np.abs(values) ** 2))
+ interaction = vituri2024_exact_integer_paired_interaction_trace(
+  spinors,
+  fft_plan,
+  area,
+  displacement,
+  valley_charge,
+  positive,
+  negative,
+ )
+ return Vituri2024ExactIntegerOrbitalScalarCurvatureReceipt(
+  _factory_token=_CURVATURE_TOKEN,
+  transition_count=count,
+  displacement=displacement,
+  valley_charge=valley_charge,
+  area_angstrom_squared=area,
+  fft_plan_fingerprint=fft_plan.fingerprint,
+  selected_spinors_sha256=_array_sha256(spinors),
+  positive_block_sha256=_array_sha256(positive),
+  negative_block_sha256=_array_sha256(negative),
+  source_fock_diagonal_sha256=_array_sha256(fock),
+  source_occupations_sha256=_array_sha256(occupations),
+  transition_inventory_sha256=_array_sha256(inventory),
+  amplitudes_sha256=_array_sha256(values),
+  one_body_curvature_ev=one_body,
+  interaction_curvature_ev=interaction,
+  total_scalar_curvature_ev=float(one_body + interaction),
+  implementation_fingerprint=implementation,
+ )
+
 def vituri2024_exact_integer_paired_interaction_trace(
     selected_spinors: Array,
     fft_plan: Vituri2024SquareCartesianFFTPlan,
@@ -286,15 +582,23 @@ def _current_implementation_fingerprint() -> str:
     payload = {
         "api_version": VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_API_VERSION,
         "authority": VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_AUTHORITY,
+        "curvature_api_version": (
+            VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_API_VERSION
+        ),
+        "curvature_authority": VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_AUTHORITY,
         "sources": tuple(
             (item.__name__, sha256(inspect.getsource(item).encode()).hexdigest())
             for item in (
                 vituri2024_exact_integer_signed_scalar_fft_action,
                 vituri2024_exact_integer_paired_interaction_trace,
+                vituri2024_exact_integer_orbital_scalar_curvature,
+                Vituri2024ExactIntegerOrbitalScalarCurvatureReceipt,
+                _array_sha256,
                 _support,
                 _allowed_blocks,
                 _strict_displacement,
                 _readonly_complex,
+                _readonly_exact_array,
                 _validate_import_bindings,
                 _callable_dependency_fingerprint,
             )
@@ -320,8 +624,12 @@ def vituri2024_exact_integer_signed_scalar_implementation_fingerprint() -> str:
 
 
 __all__ = [
+    "VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_API_VERSION",
+    "VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_AUTHORITY",
     "VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_API_VERSION",
     "VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_AUTHORITY",
+    "Vituri2024ExactIntegerOrbitalScalarCurvatureReceipt",
+    "vituri2024_exact_integer_orbital_scalar_curvature",
     "vituri2024_exact_integer_paired_interaction_trace",
     "vituri2024_exact_integer_signed_scalar_fft_action",
     "vituri2024_exact_integer_signed_scalar_implementation_fingerprint",
