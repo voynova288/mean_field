@@ -9,6 +9,12 @@ from mean_field.systems import abc_trilayer as abc
 from mean_field.systems.abc_trilayer.vituri2024_hf_fft import (
     make_vituri2024_square_cartesian_fft_plan,
 )
+from mean_field.systems.abc_trilayer import (
+    vituri2024_tdhf_exact_integer_signed_scalar as signed_scalar_module,
+)
+from mean_field.systems.abc_trilayer.vituri2024_tdhf_exact_integer_functional import (
+    vituri2024_exact_integer_projected_interaction_action,
+)
 from mean_field.systems.abc_trilayer.vituri2024_tdhf_exact_integer_signed_scalar import (
     VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_AUTHORITY,
     VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_API_VERSION,
@@ -17,6 +23,7 @@ from mean_field.systems.abc_trilayer.vituri2024_tdhf_exact_integer_signed_scalar
     vituri2024_exact_integer_orbital_scalar_curvature,
     vituri2024_exact_integer_paired_interaction_trace,
     vituri2024_exact_integer_signed_scalar_fft_action,
+    vituri2024_exact_integer_source_fock_fft,
     vituri2024_exact_integer_signed_scalar_implementation_fingerprint,
 )
 
@@ -243,6 +250,28 @@ def test_signed_scalar_requires_the_reviewed_real_even_kernel_orientation() -> N
         vituri2024_exact_integer_signed_scalar_fft_action(
             spinors, plan, area, (1, 0), 2, block
         )
+    source = np.zeros((4, 4, plan.nk), dtype=np.complex128)
+    with pytest.raises(ValueError, match="real-even kernel contract"):
+        vituri2024_exact_integer_source_fock_fft(
+            spinors, plan, area, source, source, source
+        )
+
+
+def test_signed_scalar_rejects_fft_plan_type_rebinding(monkeypatch) -> None:
+    plan, spinors, area = _fixture()
+    block = np.zeros((2, 2, plan.nk), dtype=np.complex128)
+
+    class SubstitutePlan:
+        def validate_live_state(self):
+            return None
+
+    monkeypatch.setattr(
+        signed_scalar_module, "Vituri2024SquareCartesianFFTPlan", SubstitutePlan
+    )
+    with pytest.raises(RuntimeError, match="runtime binding drifted"):
+        vituri2024_exact_integer_signed_scalar_fft_action(
+            spinors, plan, area, (1, 0), 2, block
+        )
 
 
 def test_signed_scalar_size9_execution_keeps_finite_no_wrap_shape() -> None:
@@ -256,6 +285,81 @@ def test_signed_scalar_size9_execution_keeps_finite_no_wrap_shape() -> None:
     assert result.shape == block.shape
     assert np.all(np.isfinite(result))
     assert np.count_nonzero(result[:, :, np.setdiff1d(np.arange(plan.nk), bases)]) == 0
+
+
+def test_source_fock_matches_reduced_exact_integer_full_projector_oracle() -> None:
+    plan, valley_spinors, area = _fixture()
+    nk = plan.nk
+    flavor_spinors = np.stack(
+        (valley_spinors[0], valley_spinors[0], valley_spinors[1], valley_spinors[1])
+    )
+    rng = np.random.default_rng(20260906)
+    h0 = np.empty((4, 4, nk), dtype=np.complex128)
+    density = np.empty_like(h0)
+    reference = np.empty_like(h0)
+    for momentum in range(nk):
+        raw = rng.normal(size=(4, 4)) + 1.0j * rng.normal(size=(4, 4))
+        h0[:, :, momentum] = 0.5 * (raw + raw.conj().T)
+        raw = rng.normal(size=(4, 4)) + 1.0j * rng.normal(size=(4, 4))
+        density[:, :, momentum] = 0.5 * (raw + raw.conj().T)
+        raw = rng.normal(size=(4, 4)) + 1.0j * rng.normal(size=(4, 4))
+        reference[:, :, momentum] = 0.5 * (raw + raw.conj().T)
+    actual = vituri2024_exact_integer_source_fock_fft(
+        valley_spinors,
+        plan,
+        area,
+        h0,
+        density,
+        reference,
+    )
+    form_factors = np.einsum(
+        "fck,fcp->fkp", flavor_spinors.conj(), flavor_spinors, optimize=True
+    )
+    labels = plan.integer_mesh_labels
+    offset = plan.mesh_size - 1
+    kernel = np.empty((nk, nk), dtype=np.float64)
+    for left in range(nk):
+        for right in range(nk):
+            dx, dy = labels[left] - labels[right]
+            kernel[left, right] = plan.kernel_by_signed_displacement[
+                dy + offset, dx + offset
+            ].real
+    dimension = 4 * nk
+    difference = np.zeros((dimension, dimension), dtype=np.complex128)
+    h0_full = np.zeros_like(difference)
+    for momentum in range(nk):
+        indices = np.arange(4) * nk + momentum
+        difference[np.ix_(indices, indices)] = (
+            density[:, :, momentum] - reference[:, :, momentum]
+        )
+        h0_full[np.ix_(indices, indices)] = h0[:, :, momentum]
+    expected_full = h0_full + vituri2024_exact_integer_projected_interaction_action(
+        difference,
+        integer_mesh_labels=labels,
+        form_factors_by_flavor=np.asarray(form_factors, dtype=np.complex128),
+        interaction_kernel_by_mesh_pair=kernel,
+        area_angstrom_squared=area,
+    )
+    expected = np.empty_like(actual)
+    off_k_max = 0.0
+    for left in range(nk):
+        left_indices = np.arange(4) * nk + left
+        expected[:, :, left] = expected_full[np.ix_(left_indices, left_indices)]
+        for right in range(nk):
+            if right == left:
+                continue
+            right_indices = np.arange(4) * nk + right
+            off_k_max = max(
+                off_k_max,
+                float(np.max(np.abs(expected_full[np.ix_(left_indices, right_indices)]))),
+            )
+    assert off_k_max < 2.0e-13
+    assert np.max(np.abs(actual - expected)) < 3.0e-13
+    assert not actual.flags.writeable
+    assert not actual.flags.owndata
+    assert np.max(
+        np.abs((actual - h0) - (expected - h0) / nk)
+    ) > 1.0e-4
 
 
 def test_orbital_scalar_curvature_reconstructs_explicit_double_commutator() -> None:
@@ -425,6 +529,9 @@ def test_signed_scalar_api_is_public_and_candidate_only() -> None:
     assert len(vituri2024_exact_integer_signed_scalar_implementation_fingerprint()) == 64
     assert abc.vituri2024_exact_integer_signed_scalar_fft_action is (
         vituri2024_exact_integer_signed_scalar_fft_action
+    )
+    assert abc.vituri2024_exact_integer_source_fock_fft is (
+        vituri2024_exact_integer_source_fock_fft
     )
     assert abc.vituri2024_exact_integer_orbital_scalar_curvature is (
         vituri2024_exact_integer_orbital_scalar_curvature

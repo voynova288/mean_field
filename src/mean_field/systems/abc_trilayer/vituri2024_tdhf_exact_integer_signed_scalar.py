@@ -22,13 +22,21 @@ import numpy as np
 from scipy.fft import fft2 as _FFT2, ifft2 as _IFFT2
 
 from .vituri2024_hf_fft import Vituri2024SquareCartesianFFTPlan
+from .vituri2024_hf_preflight import (
+    ACTIVE_BAND_STATES_VALLEY_ORDER,
+    INTERNAL_FLAVOR_ORDER,
+)
 
 Array = np.ndarray
 _IMPORT_FFT2 = _FFT2
 _IMPORT_IFFT2 = _IFFT2
+_IMPORT_FFT_PLAN_TYPE = Vituri2024SquareCartesianFFTPlan
 
 VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_API_VERSION: Final[str] = (
     "vituri2024_exact_integer_selected_spin_signed_scalar_fft.v1"
+)
+VITURI2024_EXACT_INTEGER_SOURCE_FOCK_API_VERSION: Final[str] = (
+    "vituri2024_exact_integer_k_diagonal_source_fock_fft.v1"
 )
 VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_API_VERSION: Final[str] = (
     "vituri2024_exact_integer_selected_spin_orbital_scalar_curvature.v1"
@@ -36,6 +44,10 @@ VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_API_VERSION: Final[str] = (
 VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_AUTHORITY: Final[str] = (
     "independent_candidate_signed_channel_action_not_scalar_hessian_reciprocity_"
     "eigensolver_stability_production_or_paper_authority"
+)
+VITURI2024_EXACT_INTEGER_SOURCE_FOCK_AUTHORITY: Final[str] = (
+    "independent_candidate_k_diagonal_exact_integer_fock_evaluation_without_"
+    "source_comparison_stationarity_scalar_hessian_or_production_authority"
 )
 VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_AUTHORITY: Final[str] = (
     "bound_candidate_analytic_orbital_scalar_curvature_without_source_functional_"
@@ -72,7 +84,11 @@ def _callable_dependency_fingerprint(value: object) -> dict[str, str]:
 
 
 def _validate_import_bindings() -> None:
-    if _FFT2 is not _IMPORT_FFT2 or _IFFT2 is not _IMPORT_IFFT2:
+    if (
+        _FFT2 is not _IMPORT_FFT2
+        or _IFFT2 is not _IMPORT_IFFT2
+        or Vituri2024SquareCartesianFFTPlan is not _IMPORT_FFT_PLAN_TYPE
+    ):
         raise RuntimeError("signed scalar FFT runtime binding drifted")
 
 
@@ -249,6 +265,119 @@ def vituri2024_exact_integer_signed_scalar_fft_action(
     result /= area
     result[:, :, ~support] = 0.0
     return _readonly_complex(result, result.shape, "signed scalar response")
+
+
+def vituri2024_exact_integer_source_fock_fft(
+ active_band_states: Array,
+ fft_plan: Vituri2024SquareCartesianFFTPlan,
+ area_angstrom_squared: Real,
+ h0_conventional: Array,
+ density_conventional: Array,
+ normal_order_reference_conventional: Array,
+) -> Array:
+ """Evaluate a four-flavor k-diagonal exact-integer ``F[P]`` independently."""
+
+ _validate_import_bindings()
+ implementation = _current_implementation_fingerprint()
+ if implementation != _IMPORT_IMPLEMENTATION_FINGERPRINT:
+  raise RuntimeError("signed scalar implementation source drifted")
+ if type(fft_plan) is not Vituri2024SquareCartesianFFTPlan:
+  raise TypeError("source Fock requires the exact FFT plan type")
+ fft_plan.validate_live_state()
+ if isinstance(area_angstrom_squared, (bool, np.bool_)) or not isinstance(
+  area_angstrom_squared, Real
+ ):
+  raise TypeError("source Fock area must be a strict real scalar")
+ area = float(area_angstrom_squared)
+ if not math.isfinite(area) or area <= 0.0:
+  raise ValueError("source Fock area must be positive")
+ nk = fft_plan.nk
+ size = fft_plan.mesh_size
+ valley_spinors = _readonly_complex(
+  active_band_states, (2, 6, nk), "active-band valley spinors"
+ )
+ valley_to_index = {
+  valley: index for index, valley in enumerate(ACTIVE_BAND_STATES_VALLEY_ORDER)
+ }
+ spinors = _readonly_complex(
+  np.stack(
+   tuple(valley_spinors[valley_to_index[valley]] for valley, _spin in INTERNAL_FLAVOR_ORDER)
+  ),
+  (4, 6, nk),
+  "internally ordered flavor spinors",
+ )
+ h0 = _readonly_complex(h0_conventional, (4, 4, nk), "source h0")
+ density = _readonly_complex(
+  density_conventional, (4, 4, nk), "source conventional density"
+ )
+ reference = _readonly_complex(
+  normal_order_reference_conventional,
+  (4, 4, nk),
+  "source normal-order reference",
+ )
+ for value, label in ((h0, "source h0"), (density, "source density"), (reference, "source reference")):
+  scale = max(1.0, float(np.max(np.abs(value))))
+  if float(np.max(np.abs(value - value.swapaxes(0, 1).conj()))) > (
+   64.0 * np.finfo(np.float64).eps * scale
+  ):
+   raise ValueError(f"{label} must be k-local Hermitian")
+ norms = np.sum(np.abs(spinors) ** 2, axis=1)
+ if float(np.max(np.abs(norms - 1.0))) > 5.0e-12:
+  raise ValueError("source Fock flavor spinors are not normalized")
+ signed_kernel = fft_plan.kernel_by_signed_displacement
+ kernel_scale = max(1.0, float(np.max(np.abs(signed_kernel))))
+ kernel_tolerance = 64.0 * np.finfo(np.float64).eps * kernel_scale
+ if (
+  float(np.max(np.abs(signed_kernel.imag))) > kernel_tolerance
+  or float(np.max(np.abs(signed_kernel - signed_kernel[::-1, ::-1])))
+  > kernel_tolerance
+ ):
+  raise ValueError("source Fock requires the source-bound real-even kernel contract")
+ block = density - reference
+ sigma = np.zeros((4, 4, nk), dtype=np.complex128)
+ kernel_zero = signed_kernel[size - 1, size - 1]
+ charge = 0.0 + 0.0j
+ for flavor in range(4):
+  charge += np.sum(norms[flavor] * block[flavor, flavor])
+ # Apply the common Hartree charge only after its complete flavor sum is known.
+ for flavor in range(4):
+  sigma[flavor, flavor] += norms[flavor] * kernel_zero * charge
+ spinors_grid = spinors.reshape(4, 6, size, size)
+ for left in range(4):
+  for right in range(4):
+   values = block[left, right].reshape(size, size)
+   if np.count_nonzero(values) == 0:
+    continue
+   sources = (
+    spinors_grid[left][:, None, :, :]
+    * spinors_grid[right][None, :, :, :].conj()
+    * values[None, None, :, :]
+   )
+   padded = np.zeros(
+    (6, 6, fft_plan.padding_size, fft_plan.padding_size),
+    dtype=np.complex128,
+   )
+   padded[:, :, :size, :size] = sources
+   transformed = _FFT2(padded, axes=(-2, -1), workers=fft_plan.fft_workers)
+   convolution = _IFFT2(
+    fft_plan.kernel_fft[None, None, :, :] * transformed,
+    axes=(-2, -1),
+    workers=fft_plan.fft_workers,
+   )[:, :, :size, :size]
+   sigma[left, right] -= np.einsum(
+    "cxy,exy,cexy->xy",
+    spinors_grid[left].conj(),
+    spinors_grid[right],
+    convolution,
+    optimize=True,
+   ).reshape(-1)
+ result = h0 + sigma / area
+ scale = max(1.0, float(np.max(np.abs(result))))
+ if float(np.max(np.abs(result - result.swapaxes(0, 1).conj()))) > (
+  5.0e-11 * scale
+ ):
+  raise ValueError("independent exact-integer source Fock is not Hermitian")
+ return _readonly_complex(result, result.shape, "independent source Fock")
 
 
 def _readonly_exact_array(
@@ -582,6 +711,10 @@ def _current_implementation_fingerprint() -> str:
     payload = {
         "api_version": VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_API_VERSION,
         "authority": VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_AUTHORITY,
+        "source_fock_api_version": VITURI2024_EXACT_INTEGER_SOURCE_FOCK_API_VERSION,
+        "source_fock_authority": VITURI2024_EXACT_INTEGER_SOURCE_FOCK_AUTHORITY,
+        "active_band_states_valley_order": ACTIVE_BAND_STATES_VALLEY_ORDER,
+        "internal_flavor_order": INTERNAL_FLAVOR_ORDER,
         "curvature_api_version": (
             VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_API_VERSION
         ),
@@ -590,6 +723,7 @@ def _current_implementation_fingerprint() -> str:
             (item.__name__, sha256(inspect.getsource(item).encode()).hexdigest())
             for item in (
                 vituri2024_exact_integer_signed_scalar_fft_action,
+                vituri2024_exact_integer_source_fock_fft,
                 vituri2024_exact_integer_paired_interaction_trace,
                 vituri2024_exact_integer_orbital_scalar_curvature,
                 Vituri2024ExactIntegerOrbitalScalarCurvatureReceipt,
@@ -602,6 +736,9 @@ def _current_implementation_fingerprint() -> str:
                 _validate_import_bindings,
                 _callable_dependency_fingerprint,
             )
+        ),
+        "fft_plan_type_binding": _callable_dependency_fingerprint(
+            Vituri2024SquareCartesianFFTPlan
         ),
         "fft2_binding": _callable_dependency_fingerprint(_FFT2),
         "ifft2_binding": _callable_dependency_fingerprint(_IFFT2),
@@ -626,11 +763,14 @@ def vituri2024_exact_integer_signed_scalar_implementation_fingerprint() -> str:
 __all__ = [
     "VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_API_VERSION",
     "VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_AUTHORITY",
+    "VITURI2024_EXACT_INTEGER_SOURCE_FOCK_API_VERSION",
+    "VITURI2024_EXACT_INTEGER_SOURCE_FOCK_AUTHORITY",
     "VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_API_VERSION",
     "VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_AUTHORITY",
     "Vituri2024ExactIntegerOrbitalScalarCurvatureReceipt",
     "vituri2024_exact_integer_orbital_scalar_curvature",
     "vituri2024_exact_integer_paired_interaction_trace",
+    "vituri2024_exact_integer_source_fock_fft",
     "vituri2024_exact_integer_signed_scalar_fft_action",
     "vituri2024_exact_integer_signed_scalar_implementation_fingerprint",
 ]
