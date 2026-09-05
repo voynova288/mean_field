@@ -13,6 +13,7 @@ from mean_field.systems.abc_trilayer import (
     vituri2024_tdhf_exact_integer_signed_scalar as signed_scalar_module,
 )
 from mean_field.systems.abc_trilayer.vituri2024_tdhf_exact_integer_functional import (
+    Vituri2024ExactIntegerFunctionalKernel,
     vituri2024_exact_integer_projected_interaction_action,
 )
 from mean_field.systems.abc_trilayer.vituri2024_tdhf_exact_integer_signed_scalar import (
@@ -24,6 +25,7 @@ from mean_field.systems.abc_trilayer.vituri2024_tdhf_exact_integer_signed_scalar
     vituri2024_exact_integer_paired_interaction_trace,
     vituri2024_exact_integer_signed_scalar_fft_action,
     vituri2024_exact_integer_source_fock_fft,
+    vituri2024_exact_integer_unitary_relative_energy,
     vituri2024_exact_integer_signed_scalar_implementation_fingerprint,
 )
 
@@ -539,3 +541,353 @@ def test_signed_scalar_api_is_public_and_candidate_only() -> None:
     assert abc.Vituri2024ExactIntegerOrbitalScalarCurvatureReceipt is (
         Vituri2024ExactIntegerOrbitalScalarCurvatureReceipt
     )
+
+
+def test_unitary_relative_energy_matches_reduced_full_functional_and_curvature() -> None:
+    from scipy.linalg import expm
+
+    plan, valley_spinors, area = _fixture()
+    nk = plan.nk
+    labels = plan.integer_mesh_labels
+    offset = plan.mesh_size - 1
+    flavor_spinors = np.stack(
+        (valley_spinors[0], valley_spinors[0], valley_spinors[1], valley_spinors[1])
+    )
+    form_factors = np.einsum(
+        "fcm,fcp->fmp", flavor_spinors.conj(), flavor_spinors, optimize=True
+    )
+    kernel_pair = np.empty((nk, nk), dtype=np.float64)
+    for m in range(nk):
+        for p in range(nk):
+            dx, dy = (labels[p] - labels[m]).tolist()
+            kernel_pair[m, p] = plan.kernel_by_signed_displacement[
+                dy + offset, dx + offset
+            ].real
+    dimension = 4 * nk
+    h0 = np.zeros((dimension, dimension), dtype=np.complex128)
+    for flavor in range(4):
+        for k in range(nk):
+            h0[flavor * nk + k, flavor * nk + k] = (
+                -0.13 + 0.041 * flavor + 0.007 * k
+            )
+    reference = np.zeros_like(h0)
+    selected_flavors = (1, 3)
+    selected_occupations = np.ones((2, nk), dtype=np.bool_)
+    base = int(np.flatnonzero(np.all(labels == (0, 0), axis=1))[0])
+    target = int(np.flatnonzero(np.all(labels == (1, 0), axis=1))[0])
+    selected_occupations[0, target] = False
+    full_occupations = np.ones((4, nk), dtype=np.bool_)
+    full_occupations[selected_flavors[0]] = selected_occupations[0]
+    full_occupations[selected_flavors[1]] = selected_occupations[1]
+    density0 = np.diag(full_occupations.reshape(dimension).astype(np.complex128))
+    functional = Vituri2024ExactIntegerFunctionalKernel(
+        integer_mesh_labels=labels,
+        ordered_mesh=plan.ordered_mesh,
+        form_factors_by_flavor=form_factors,
+        interaction_kernel_by_mesh_pair=kernel_pair,
+        h0_full=h0,
+        normal_order_reference=reference,
+        area_angstrom_squared=area,
+        provenance="independent unitary relative-energy reduced oracle",
+    )
+    source_fock_full = functional.fock(density0)
+    source_fock = np.empty((2, 2, nk), dtype=np.complex128)
+    for left, flavor_left in enumerate(selected_flavors):
+        for right, flavor_right in enumerate(selected_flavors):
+            source_fock[left, right] = np.asarray(
+                [
+                    source_fock_full[flavor_left * nk + k, flavor_right * nk + k]
+                    for k in range(nk)
+                ]
+            )
+    particle_slots = np.asarray([0], dtype=np.int64)
+    particle_k = np.asarray([target], dtype=np.int64)
+    hole_slots = np.asarray([0], dtype=np.int64)
+    hole_k = np.asarray([base], dtype=np.int64)
+    amplitudes = np.asarray([0.37 - 0.21j], dtype=np.complex128)
+
+    def relative(parameter: float):
+        return vituri2024_exact_integer_unitary_relative_energy(
+            source_fock,
+            selected_occupations,
+            particle_slots,
+            particle_k,
+            hole_slots,
+            hole_k,
+            amplitudes,
+            parameter,
+            valley_spinors,
+            plan,
+            area,
+        )
+
+    parameter = 0.037
+    receipt = relative(parameter)
+    generator = np.zeros((dimension, dimension), dtype=np.complex128)
+    particle = selected_flavors[0] * nk + target
+    hole = selected_flavors[0] * nk + base
+    generator[particle, hole] = amplitudes[0]
+    generator[hole, particle] = -amplitudes[0].conjugate()
+    source_energy = functional.energy(density0)
+
+    def full_relative(value: float) -> float:
+        unitary = expm(value * generator)
+        density_t = unitary @ density0 @ unitary.conj().T
+        return functional.energy(density_t) - source_energy
+
+    expected_relative = full_relative(parameter)
+    assert receipt.relative_energy_ev == pytest.approx(expected_relative, abs=2.0e-13)
+    assert receipt.maximum_unitarity_residual < 2.0e-15
+    assert receipt.maximum_projector_residual < 2.0e-15
+    assert receipt.maximum_hermiticity_residual < 2.0e-15
+    assert receipt.external_source_fock_closure_established is False
+    assert receipt.scalar_curvature_established is False
+    zero = relative(0.0)
+    assert zero.relative_energy_ev == 0.0
+    assert zero.one_body_relative_energy_ev == 0.0
+    assert zero.interaction_trace_ev == 0.0
+    assert zero.signed_block_count == 0
+    zero_direction = vituri2024_exact_integer_unitary_relative_energy(
+        source_fock,
+        selected_occupations,
+        particle_slots,
+        particle_k,
+        hole_slots,
+        hole_k,
+        np.zeros(1, dtype=np.complex128),
+        parameter,
+        valley_spinors,
+        plan,
+        area,
+    )
+    assert zero_direction.active_orbital_count == 0
+    assert zero_direction.connected_component_count == 0
+    assert zero_direction.signed_block_count == 0
+    assert zero_direction.relative_energy_ev == 0.0
+    nonhermitian_fock = source_fock.copy()
+    nonhermitian_fock[0, 1, 0] = 1.0
+    with pytest.raises(ValueError, match="k-local Hermitian"):
+        vituri2024_exact_integer_unitary_relative_energy(
+            nonhermitian_fock,
+            selected_occupations,
+            particle_slots,
+            particle_k,
+            hole_slots,
+            hole_k,
+            amplitudes,
+            parameter,
+            valley_spinors,
+            plan,
+            area,
+        )
+    unnormalized_spinors = valley_spinors.copy()
+    unnormalized_spinors[0, :, 0] *= 1.1
+    with pytest.raises(ValueError, match="must be normalized"):
+        vituri2024_exact_integer_unitary_relative_energy(
+            source_fock,
+            selected_occupations,
+            particle_slots,
+            particle_k,
+            hole_slots,
+            hole_k,
+            amplitudes,
+            parameter,
+            unnormalized_spinors,
+            plan,
+            area,
+        )
+
+    positive = np.zeros((2, 2, nk), dtype=np.complex128)
+    negative = np.zeros_like(positive)
+    positive[0, 0, base] = amplitudes[0]
+    negative[0, 0, target] = amplitudes[0].conjugate()
+    interaction = vituri2024_exact_integer_paired_interaction_trace(
+        valley_spinors, plan, area, (1, 0), 0, positive, negative
+    )
+    analytic = vituri2024_exact_integer_orbital_scalar_curvature(
+        np.stack((source_fock[0, 0].real, source_fock[1, 1].real)),
+        selected_occupations,
+        particle_slots,
+        particle_k,
+        hole_slots,
+        hole_k,
+        amplitudes,
+        valley_spinors,
+        plan,
+        area,
+        displacement=(1, 0),
+        valley_charge=0,
+        positive_block=positive,
+        negative_block=negative,
+    )
+    assert analytic.interaction_curvature_ev == pytest.approx(interaction, abs=2.0e-14)
+    step = 3.0e-3
+    candidate_values = {
+        value: relative(value).relative_energy_ev
+        for value in (-2.0 * step, -step, 0.0, step, 2.0 * step)
+    }
+    oracle_values = {
+        value: full_relative(value)
+        for value in (-2.0 * step, -step, 0.0, step, 2.0 * step)
+    }
+    for value in oracle_values:
+        assert candidate_values[value] == pytest.approx(oracle_values[value], abs=2.0e-13)
+    finite_difference = (
+        -oracle_values[2.0 * step]
+        + 16.0 * oracle_values[step]
+        - 30.0 * oracle_values[0.0]
+        + 16.0 * oracle_values[-step]
+        - oracle_values[-2.0 * step]
+    ) / (12.0 * step**2)
+    assert finite_difference == pytest.approx(
+        analytic.total_scalar_curvature_ev, rel=2.0e-8, abs=2.0e-10
+    )
+
+
+def test_unitary_relative_energy_multi_component_intervalley_dense_oracle() -> None:
+    from scipy.linalg import expm
+
+    plan, valley_spinors, area = _fixture()
+    nk = plan.nk
+    labels = plan.integer_mesh_labels
+    offset = plan.mesh_size - 1
+    flavor_spinors = np.stack(
+        (valley_spinors[0], valley_spinors[0], valley_spinors[1], valley_spinors[1])
+    )
+    form_factors = np.einsum(
+        "fcm,fcp->fmp", flavor_spinors.conj(), flavor_spinors, optimize=True
+    )
+    kernel_pair = np.empty((nk, nk), dtype=np.float64)
+    for m in range(nk):
+        for p in range(nk):
+            dx, dy = (labels[p] - labels[m]).tolist()
+            kernel_pair[m, p] = plan.kernel_by_signed_displacement[
+                dy + offset, dx + offset
+            ].real
+    selected_flavors = (1, 3)
+    selected_occupations = np.ones((2, nk), dtype=np.bool_)
+    index = {
+        tuple(label): int(position) for position, label in enumerate(labels.tolist())
+    }
+    center = index[(0, 0)]
+    right, up, left, down = (
+        index[(1, 0)], index[(0, 1)], index[(-1, 0)], index[(0, -1)]
+    )
+    particle_slots = np.asarray([0, 1, 1, 0], dtype=np.int64)
+    particle_k = np.asarray([right, up, left, down], dtype=np.int64)
+    hole_slots = np.asarray([0, 0, 1, 1], dtype=np.int64)
+    hole_k = np.asarray([center, center, center, center], dtype=np.int64)
+    amplitudes = np.asarray(
+        [0.31 + 0.17j, -0.23 + 0.29j, 0.19 - 0.27j, -0.33 - 0.11j],
+        dtype=np.complex128,
+    )
+    selected_occupations[particle_slots, particle_k] = False
+    dimension = 4 * nk
+    full_occupations = np.ones((4, nk), dtype=np.bool_)
+    for slot, flavor in enumerate(selected_flavors):
+        full_occupations[flavor] = selected_occupations[slot]
+    density0 = np.diag(full_occupations.reshape(dimension).astype(np.complex128))
+    h0 = np.diag(np.linspace(-0.21, 0.17, dimension, dtype=np.float64)).astype(
+        np.complex128
+    )
+    functional = Vituri2024ExactIntegerFunctionalKernel(
+        integer_mesh_labels=labels,
+        ordered_mesh=plan.ordered_mesh,
+        form_factors_by_flavor=form_factors,
+        interaction_kernel_by_mesh_pair=kernel_pair,
+        h0_full=h0,
+        normal_order_reference=np.zeros_like(h0),
+        area_angstrom_squared=area,
+        provenance="multi-component intervalley exact-unitary oracle",
+    )
+    source_fock_full = functional.fock(density0)
+    source_fock = np.empty((2, 2, nk), dtype=np.complex128)
+    for left_slot, left_flavor in enumerate(selected_flavors):
+        for right_slot, right_flavor in enumerate(selected_flavors):
+            source_fock[left_slot, right_slot] = np.asarray(
+                [
+                    source_fock_full[left_flavor * nk + k, right_flavor * nk + k]
+                    for k in range(nk)
+                ]
+            )
+    generator = np.zeros((dimension, dimension), dtype=np.complex128)
+    for ps, pk, hs, hk, value in zip(
+        particle_slots, particle_k, hole_slots, hole_k, amplitudes, strict=True
+    ):
+        particle = selected_flavors[int(ps)] * nk + int(pk)
+        hole = selected_flavors[int(hs)] * nk + int(hk)
+        generator[particle, hole] = value
+        generator[hole, particle] = -value.conjugate()
+    source_energy = functional.energy(density0)
+
+    def oracle(parameter: float) -> float:
+        unitary = expm(parameter * generator)
+        density = unitary @ density0 @ unitary.conj().T
+        return functional.energy(density) - source_energy
+
+    values = (-0.04, -0.02, 0.0, 0.02, 0.04)
+    receipts = {}
+    for parameter in values:
+        receipt = vituri2024_exact_integer_unitary_relative_energy(
+            source_fock,
+            selected_occupations,
+            particle_slots,
+            particle_k,
+            hole_slots,
+            hole_k,
+            amplitudes,
+            parameter,
+            valley_spinors,
+            plan,
+            area,
+        )
+        receipts[parameter] = receipt
+        assert receipt.relative_energy_ev == pytest.approx(
+            oracle(parameter), abs=3.0e-13
+        )
+        assert receipt.maximum_unitarity_residual < 3.0e-15
+        assert receipt.maximum_projector_residual < 3.0e-15
+        assert receipt.maximum_hermiticity_residual < 3.0e-15
+        assert receipt.maximum_trace_residual < 3.0e-15
+    assert receipts[0.02].connected_component_count == 2
+    assert receipts[0.02].active_orbital_count == 6
+    assert receipts[0.02].signed_block_count >= 7
+    assert receipts[0.0].relative_energy_ev == 0.0
+    assert receipts[0.0].signed_block_count == 0
+
+
+def test_unitary_relative_energy_fails_closed_on_invalid_exponential(monkeypatch) -> None:
+    plan, spinors, area = _fixture()
+    nk = plan.nk
+    labels = plan.integer_mesh_labels
+    base = int(np.flatnonzero(np.all(labels == (0, 0), axis=1))[0])
+    target = int(np.flatnonzero(np.all(labels == (1, 0), axis=1))[0])
+    occupations = np.ones((2, nk), dtype=np.bool_)
+    occupations[0, target] = False
+    source_fock = np.zeros((2, 2, nk), dtype=np.complex128)
+    original_fingerprint = signed_scalar_module._IMPORT_IMPLEMENTATION_FINGERPRINT
+
+    def invalid_expm(generator):
+        return 2.0 * np.eye(generator.shape[0], dtype=np.complex128)
+
+    monkeypatch.setattr(signed_scalar_module, "_EXPM", invalid_expm)
+    monkeypatch.setattr(signed_scalar_module, "_IMPORT_EXPM", invalid_expm)
+    monkeypatch.setattr(
+        signed_scalar_module,
+        "_current_implementation_fingerprint",
+        lambda: original_fingerprint,
+    )
+    with pytest.raises(ValueError, match="projector geometry failed"):
+        vituri2024_exact_integer_unitary_relative_energy(
+            source_fock,
+            occupations,
+            np.asarray([0], dtype=np.int64),
+            np.asarray([target], dtype=np.int64),
+            np.asarray([0], dtype=np.int64),
+            np.asarray([base], dtype=np.int64),
+            np.asarray([0.2 + 0.1j], dtype=np.complex128),
+            0.03,
+            spinors,
+            plan,
+            area,
+        )

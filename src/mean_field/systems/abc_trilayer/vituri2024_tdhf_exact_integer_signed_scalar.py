@@ -20,6 +20,7 @@ from typing import Final
 
 import numpy as np
 from scipy.fft import fft2 as _FFT2, ifft2 as _IFFT2
+from scipy.linalg import expm as _EXPM
 
 from .vituri2024_hf_fft import Vituri2024SquareCartesianFFTPlan
 from .vituri2024_hf_preflight import (
@@ -30,6 +31,7 @@ from .vituri2024_hf_preflight import (
 Array = np.ndarray
 _IMPORT_FFT2 = _FFT2
 _IMPORT_IFFT2 = _IFFT2
+_IMPORT_EXPM = _EXPM
 _IMPORT_FFT_PLAN_TYPE = Vituri2024SquareCartesianFFTPlan
 
 VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_API_VERSION: Final[str] = (
@@ -37,6 +39,9 @@ VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_API_VERSION: Final[str] = (
 )
 VITURI2024_EXACT_INTEGER_SOURCE_FOCK_API_VERSION: Final[str] = (
     "vituri2024_exact_integer_k_diagonal_source_fock_fft.v1"
+)
+VITURI2024_EXACT_INTEGER_UNITARY_RELATIVE_ENERGY_API_VERSION: Final[str] = (
+    "vituri2024_exact_integer_selected_spin_unitary_relative_energy.v1"
 )
 VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_API_VERSION: Final[str] = (
     "vituri2024_exact_integer_selected_spin_orbital_scalar_curvature.v1"
@@ -49,6 +54,10 @@ VITURI2024_EXACT_INTEGER_SOURCE_FOCK_AUTHORITY: Final[str] = (
     "independent_candidate_k_diagonal_exact_integer_fock_evaluation_without_"
     "source_comparison_stationarity_scalar_hessian_or_production_authority"
 )
+VITURI2024_EXACT_INTEGER_UNITARY_RELATIVE_ENERGY_AUTHORITY: Final[str] = (
+    "candidate_exact_unitary_relative_energy_without_external_source_fock_closure_"
+    "curvature_reciprocity_stability_or_production_authority"
+)
 VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_AUTHORITY: Final[str] = (
     "bound_candidate_analytic_orbital_scalar_curvature_without_source_functional_"
     "fock_closure_full_exact_unitary_reciprocity_stability_or_production_authority"
@@ -56,6 +65,7 @@ VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_AUTHORITY: Final[str] = (
 
 
 _CURVATURE_TOKEN = object()
+_UNITARY_ENERGY_TOKEN = object()
 
 
 def _array_sha256(value: Array) -> str:
@@ -87,6 +97,7 @@ def _validate_import_bindings() -> None:
     if (
         _FFT2 is not _IMPORT_FFT2
         or _IFFT2 is not _IMPORT_IFFT2
+        or _EXPM is not _IMPORT_EXPM
         or Vituri2024SquareCartesianFFTPlan is not _IMPORT_FFT_PLAN_TYPE
     ):
         raise RuntimeError("signed scalar FFT runtime binding drifted")
@@ -396,6 +407,343 @@ def _readonly_exact_array(
  result = np.frombuffer(value.tobytes(order="C"), dtype=dtype).reshape(shape)
  result.setflags(write=False)
  return result
+
+
+@dataclass(frozen=True, slots=True)
+class Vituri2024ExactIntegerUnitaryRelativeEnergyReceipt:
+ """Immutable candidate receipt for one exact-unitary relative energy."""
+
+ _factory_token: InitVar[object]
+ parameter: float
+ transition_count: int
+ active_orbital_count: int
+ connected_component_count: int
+ signed_block_count: int
+ source_fock_sha256: str
+ source_occupations_sha256: str
+ transition_inventory_sha256: str
+ amplitudes_sha256: str
+ selected_spinors_sha256: str
+ fft_plan_fingerprint: str
+ area_angstrom_squared: float
+ one_body_relative_energy_ev: float
+ interaction_trace_ev: float
+ relative_energy_ev: float
+ maximum_unitarity_residual: float
+ maximum_projector_residual: float
+ maximum_hermiticity_residual: float
+ maximum_trace_residual: float
+ implementation_fingerprint: str
+ api_version: str = field(
+  default=VITURI2024_EXACT_INTEGER_UNITARY_RELATIVE_ENERGY_API_VERSION,
+  init=False,
+ )
+ authority: str = field(
+  default=VITURI2024_EXACT_INTEGER_UNITARY_RELATIVE_ENERGY_AUTHORITY,
+  init=False,
+ )
+ exact_unitary_projector_path_evaluated: bool = field(default=True, init=False)
+ raw_total_no_nk_normalization: bool = field(default=True, init=False)
+ external_source_fock_closure_established: bool = field(default=False, init=False)
+ scalar_curvature_established: bool = field(default=False, init=False)
+ reciprocity_established: bool = field(default=False, init=False)
+ production_ready: bool = field(default=False, init=False)
+ fingerprint: str = field(init=False)
+
+ def __post_init__(self, _factory_token: object) -> None:
+  if _factory_token is not _UNITARY_ENERGY_TOKEN:
+   raise TypeError("unitary relative-energy receipts are factory-only")
+  for value in (
+   self.parameter,
+   self.area_angstrom_squared,
+   self.one_body_relative_energy_ev,
+   self.interaction_trace_ev,
+   self.relative_energy_ev,
+   self.maximum_unitarity_residual,
+   self.maximum_projector_residual,
+   self.maximum_hermiticity_residual,
+   self.maximum_trace_residual,
+  ):
+   if type(value) is not float or not math.isfinite(value):
+    raise ValueError("unitary relative-energy receipt has a nonfinite scalar")
+  if self.area_angstrom_squared <= 0.0:
+   raise ValueError("unitary relative-energy receipt area is invalid")
+  if type(self.transition_count) is not int or self.transition_count <= 0:
+   raise ValueError("unitary relative-energy transition count is invalid")
+  for value in (
+   self.active_orbital_count,
+   self.connected_component_count,
+   self.signed_block_count,
+  ):
+   if type(value) is not int or value < 0:
+    raise ValueError("unitary relative-energy structural count is invalid")
+  for name in (
+   "source_fock_sha256",
+   "source_occupations_sha256",
+   "transition_inventory_sha256",
+   "amplitudes_sha256",
+   "selected_spinors_sha256",
+   "fft_plan_fingerprint",
+   "implementation_fingerprint",
+  ):
+   value = getattr(self, name)
+   if (
+    type(value) is not str
+    or len(value) != 64
+    or any(character not in "0123456789abcdef" for character in value)
+   ):
+    raise ValueError("unitary relative-energy digest is invalid")
+  if self.relative_energy_ev != (
+   self.one_body_relative_energy_ev + 0.5 * self.interaction_trace_ev
+  ):
+   raise ValueError("unitary relative-energy decomposition drifted")
+  if (
+   self.api_version
+   != VITURI2024_EXACT_INTEGER_UNITARY_RELATIVE_ENERGY_API_VERSION
+   or self.authority
+   != VITURI2024_EXACT_INTEGER_UNITARY_RELATIVE_ENERGY_AUTHORITY
+   or self.exact_unitary_projector_path_evaluated is not True
+   or self.raw_total_no_nk_normalization is not True
+   or self.external_source_fock_closure_established is not False
+   or self.scalar_curvature_established is not False
+   or self.reciprocity_established is not False
+   or self.production_ready is not False
+  ):
+   raise ValueError("unitary relative-energy authority drifted")
+  payload = {
+   name: getattr(self, name)
+   for name in self.__dataclass_fields__
+   if name not in {"_factory_token", "fingerprint"}
+  }
+  object.__setattr__(
+   self,
+   "fingerprint",
+   sha256(
+    json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+   ).hexdigest(),
+  )
+
+
+def vituri2024_exact_integer_unitary_relative_energy(
+ source_fock_conventional: Array,
+ source_occupations: Array,
+ particle_valley_slots: Array,
+ particle_k_indices: Array,
+ hole_valley_slots: Array,
+ hole_k_indices: Array,
+ amplitudes: Array,
+ parameter: Real,
+ selected_spinors: Array,
+ fft_plan: Vituri2024SquareCartesianFFTPlan,
+ area_angstrom_squared: Real,
+) -> Vituri2024ExactIntegerUnitaryRelativeEnergyReceipt:
+ """Evaluate ``E[exp(tK)P0exp(-tK)]-E[P0]`` for a paired generator."""
+
+ _validate_import_bindings()
+ implementation = _current_implementation_fingerprint()
+ if implementation != _IMPORT_IMPLEMENTATION_FINGERPRINT:
+  raise RuntimeError("signed scalar implementation source drifted")
+ if type(fft_plan) is not Vituri2024SquareCartesianFFTPlan:
+  raise TypeError("unitary relative energy requires the exact FFT plan type")
+ fft_plan.validate_live_state()
+ for value, label in (
+  (parameter, "unitary parameter"),
+  (area_angstrom_squared, "unitary relative-energy area"),
+ ):
+  if isinstance(value, (bool, np.bool_)) or not isinstance(value, Real):
+   raise TypeError(f"{label} must be a strict real scalar")
+ t = float(parameter)
+ area = float(area_angstrom_squared)
+ if not math.isfinite(t) or not math.isfinite(area) or area <= 0.0:
+  raise ValueError("unitary parameter/area is invalid")
+ nk = fft_plan.nk
+ fock = _readonly_complex(
+  source_fock_conventional, (2, 2, nk), "selected source Fock"
+ )
+ fock_residual = float(
+  np.max(np.abs(fock - fock.transpose(1, 0, 2).conj()), initial=0.0)
+ )
+ if fock_residual > 5.0e-12 * max(
+  1.0, float(np.max(np.abs(fock), initial=0.0))
+ ):
+  raise ValueError("selected source Fock must be k-local Hermitian")
+ occupations = _readonly_exact_array(
+  source_occupations, np.dtype(np.bool_), (2, nk), "source occupations"
+ )
+ if type(particle_valley_slots) is not np.ndarray or particle_valley_slots.ndim != 1:
+  raise ValueError("particle valley slots must be an exact vector")
+ count = int(particle_valley_slots.size)
+ if count <= 0:
+  raise ValueError("unitary relative energy requires transitions")
+ particle_slots = _readonly_exact_array(
+  particle_valley_slots, np.dtype(np.int64), (count,), "particle valley slots"
+ )
+ particle_k = _readonly_exact_array(
+  particle_k_indices, np.dtype(np.int64), (count,), "particle k indices"
+ )
+ hole_slots = _readonly_exact_array(
+  hole_valley_slots, np.dtype(np.int64), (count,), "hole valley slots"
+ )
+ hole_k = _readonly_exact_array(
+  hole_k_indices, np.dtype(np.int64), (count,), "hole k indices"
+ )
+ values = _readonly_exact_array(
+  amplitudes, np.dtype(np.complex128), (count,), "transition amplitudes"
+ )
+ spinors = _readonly_complex(selected_spinors, (2, 6, nk), "selected spinors")
+ spinor_norm_residual = float(
+  np.max(
+   np.abs(np.sum(np.abs(spinors) ** 2, axis=1) - 1.0), initial=0.0
+  )
+ )
+ if spinor_norm_residual > 5.0e-12:
+  raise ValueError("selected spinors must be normalized")
+ if (
+  np.any(particle_slots < 0)
+  or np.any(particle_slots >= 2)
+  or np.any(hole_slots < 0)
+  or np.any(hole_slots >= 2)
+  or np.any(particle_k < 0)
+  or np.any(particle_k >= nk)
+  or np.any(hole_k < 0)
+  or np.any(hole_k >= nk)
+ ):
+  raise ValueError("unitary transition lies outside selected source space")
+ if np.any(occupations[particle_slots, particle_k]) or not np.all(
+  occupations[hole_slots, hole_k]
+ ):
+  raise ValueError("unitary transition does not map occupied holes to virtual particles")
+ inventory = np.stack((particle_slots, particle_k, hole_slots, hole_k), axis=1)
+ if np.unique(inventory, axis=0).shape[0] != count:
+  raise ValueError("duplicate particle-hole transition")
+ dimension = 2 * nk
+ adjacency: dict[int, set[int]] = {}
+ edges: dict[tuple[int, int], complex] = {}
+ for ps, pk, hs, hk, value in zip(
+  particle_slots, particle_k, hole_slots, hole_k, values, strict=True
+ ):
+  particle = int(ps) * nk + int(pk)
+  hole = int(hs) * nk + int(hk)
+  if value == 0.0:
+   continue
+  edges[(particle, hole)] = complex(value)
+  adjacency.setdefault(particle, set()).add(hole)
+  adjacency.setdefault(hole, set()).add(particle)
+ active = sorted(adjacency)
+ components: list[tuple[int, ...]] = []
+ unseen = set(active)
+ while unseen:
+  root = min(unseen)
+  stack = [root]
+  component: list[int] = []
+  unseen.remove(root)
+  while stack:
+   current = stack.pop()
+   component.append(current)
+   for neighbor in sorted(adjacency[current], reverse=True):
+    if neighbor in unseen:
+     unseen.remove(neighbor)
+     stack.append(neighbor)
+  components.append(tuple(sorted(component)))
+ orbital_to_component = {
+  orbital: component_index
+  for component_index, component in enumerate(components)
+  for orbital in component
+ }
+ component_edges: list[list[tuple[int, int, complex]]] = [
+  [] for _component in components
+ ]
+ for (particle, hole), value in edges.items():
+  component_index = orbital_to_component[particle]
+  if orbital_to_component[hole] != component_index:
+   raise RuntimeError("unitary generator edge crosses connected components")
+  component_edges[component_index].append((particle, hole, value))
+ labels = fft_plan.integer_mesh_labels
+ blocks: dict[tuple[int, int, int], Array] = {}
+ one_body = 0.0 + 0.0j
+ max_unitarity = 0.0
+ max_projector = 0.0
+ max_hermiticity = 0.0
+ max_trace = 0.0
+ occupation_flat = occupations.reshape(dimension)
+ for component, local_edges in zip(components, component_edges, strict=True):
+  local = {orbital: index for index, orbital in enumerate(component)}
+  generator = np.zeros((len(component), len(component)), dtype=np.complex128)
+  for particle, hole, value in local_edges:
+   generator[local[particle], local[hole]] = value
+   generator[local[hole], local[particle]] = -value.conjugate()
+  unitary = _EXPM(t * generator)
+  projector0 = np.diag(occupation_flat[np.asarray(component)].astype(np.complex128))
+  projector = unitary @ projector0 @ unitary.conj().T
+  difference = projector - projector0
+  identity = np.eye(len(component), dtype=np.complex128)
+  max_unitarity = max(
+   max_unitarity, float(np.max(np.abs(unitary.conj().T @ unitary - identity)))
+  )
+  max_projector = max(
+   max_projector, float(np.max(np.abs(projector @ projector - projector)))
+  )
+  max_hermiticity = max(
+   max_hermiticity, float(np.max(np.abs(difference - difference.conj().T)))
+  )
+  max_trace = max(
+   max_trace, float(abs(np.trace(projector) - np.trace(projector0)))
+  )
+  for local_row, global_row in enumerate(component):
+   left, target_k = divmod(global_row, nk)
+   for local_column, global_column in enumerate(component):
+    value = difference[local_row, local_column]
+    if value == 0.0:
+     continue
+    right, base_k = divmod(global_column, nk)
+    dx, dy = (labels[target_k] - labels[base_k]).tolist()
+    key = (int(dx), int(dy), 2 * (left - right))
+    block = blocks.setdefault(key, np.zeros((2, 2, nk), dtype=np.complex128))
+    if block[left, right, base_k] != 0.0:
+     raise RuntimeError("unitary density block received duplicate matrix elements")
+    block[left, right, base_k] = value
+    if target_k == base_k:
+     one_body += fock[right, left, base_k] * value
+ geometry_tolerance = 5.0e-11
+ if max(max_unitarity, max_projector, max_hermiticity, max_trace) > geometry_tolerance:
+  raise ValueError("exact-unitary projector geometry failed")
+ interaction = 0.0 + 0.0j
+ for (dx, dy, charge), block in sorted(blocks.items()):
+  action = vituri2024_exact_integer_signed_scalar_fft_action(
+   spinors, fft_plan, area, (dx, dy), charge, block
+  )
+  interaction += np.vdot(block, action)
+ scale = max(1.0, abs(one_body), abs(interaction))
+ if (
+  abs(one_body.imag) > 5.0e-11 * scale
+  or abs(interaction.imag) > 5.0e-11 * scale
+ ):
+  raise ValueError("unitary relative-energy decomposition is not real")
+ one_body_real = float(one_body.real)
+ interaction_real = float(interaction.real)
+ return Vituri2024ExactIntegerUnitaryRelativeEnergyReceipt(
+  _factory_token=_UNITARY_ENERGY_TOKEN,
+  parameter=t,
+  transition_count=count,
+  active_orbital_count=len(active),
+  connected_component_count=len(components),
+  signed_block_count=len(blocks),
+  source_fock_sha256=_array_sha256(fock),
+  source_occupations_sha256=_array_sha256(occupations),
+  transition_inventory_sha256=_array_sha256(inventory),
+  amplitudes_sha256=_array_sha256(values),
+  selected_spinors_sha256=_array_sha256(spinors),
+  fft_plan_fingerprint=fft_plan.fingerprint,
+  area_angstrom_squared=area,
+  one_body_relative_energy_ev=one_body_real,
+  interaction_trace_ev=interaction_real,
+  relative_energy_ev=float(one_body_real + 0.5 * interaction_real),
+  maximum_unitarity_residual=max_unitarity,
+  maximum_projector_residual=max_projector,
+  maximum_hermiticity_residual=max_hermiticity,
+  maximum_trace_residual=max_trace,
+  implementation_fingerprint=implementation,
+ )
 
 
 @dataclass(frozen=True, slots=True)
@@ -715,6 +1063,12 @@ def _current_implementation_fingerprint() -> str:
         "source_fock_authority": VITURI2024_EXACT_INTEGER_SOURCE_FOCK_AUTHORITY,
         "active_band_states_valley_order": ACTIVE_BAND_STATES_VALLEY_ORDER,
         "internal_flavor_order": INTERNAL_FLAVOR_ORDER,
+        "unitary_relative_energy_api_version": (
+            VITURI2024_EXACT_INTEGER_UNITARY_RELATIVE_ENERGY_API_VERSION
+        ),
+        "unitary_relative_energy_authority": (
+            VITURI2024_EXACT_INTEGER_UNITARY_RELATIVE_ENERGY_AUTHORITY
+        ),
         "curvature_api_version": (
             VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_API_VERSION
         ),
@@ -725,6 +1079,8 @@ def _current_implementation_fingerprint() -> str:
                 vituri2024_exact_integer_signed_scalar_fft_action,
                 vituri2024_exact_integer_source_fock_fft,
                 vituri2024_exact_integer_paired_interaction_trace,
+                vituri2024_exact_integer_unitary_relative_energy,
+                Vituri2024ExactIntegerUnitaryRelativeEnergyReceipt,
                 vituri2024_exact_integer_orbital_scalar_curvature,
                 Vituri2024ExactIntegerOrbitalScalarCurvatureReceipt,
                 _array_sha256,
@@ -740,6 +1096,7 @@ def _current_implementation_fingerprint() -> str:
         "fft_plan_type_binding": _callable_dependency_fingerprint(
             Vituri2024SquareCartesianFFTPlan
         ),
+        "expm_binding": _callable_dependency_fingerprint(_EXPM),
         "fft2_binding": _callable_dependency_fingerprint(_FFT2),
         "ifft2_binding": _callable_dependency_fingerprint(_IFFT2),
         "numpy_version": np.__version__,
@@ -765,12 +1122,16 @@ __all__ = [
     "VITURI2024_EXACT_INTEGER_ORBITAL_CURVATURE_AUTHORITY",
     "VITURI2024_EXACT_INTEGER_SOURCE_FOCK_API_VERSION",
     "VITURI2024_EXACT_INTEGER_SOURCE_FOCK_AUTHORITY",
+    "VITURI2024_EXACT_INTEGER_UNITARY_RELATIVE_ENERGY_API_VERSION",
+    "VITURI2024_EXACT_INTEGER_UNITARY_RELATIVE_ENERGY_AUTHORITY",
     "VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_API_VERSION",
     "VITURI2024_EXACT_INTEGER_SIGNED_SCALAR_AUTHORITY",
     "Vituri2024ExactIntegerOrbitalScalarCurvatureReceipt",
+    "Vituri2024ExactIntegerUnitaryRelativeEnergyReceipt",
     "vituri2024_exact_integer_orbital_scalar_curvature",
     "vituri2024_exact_integer_paired_interaction_trace",
     "vituri2024_exact_integer_source_fock_fft",
+    "vituri2024_exact_integer_unitary_relative_energy",
     "vituri2024_exact_integer_signed_scalar_fft_action",
     "vituri2024_exact_integer_signed_scalar_implementation_fingerprint",
 ]
