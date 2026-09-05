@@ -759,6 +759,12 @@ from .vituri2024_tdhf_exact_integer_functional import *  # noqa: F401,F403
 
 __all__ += list(_vituri2024_tdhf_exact_integer_functional.__all__)
 
+# Independent scalable signed-channel scalar interaction reference.
+from . import vituri2024_tdhf_exact_integer_signed_scalar as _vituri2024_tdhf_exact_integer_signed_scalar
+from .vituri2024_tdhf_exact_integer_signed_scalar import *  # noqa: F401,F403
+
+__all__ += list(_vituri2024_tdhf_exact_integer_signed_scalar.__all__)
+
 # Paired {q,-q} selected-spin global-rank orbital-Hessian candidate adapter.
 from . import vituri2024_hf_spiral_full_hessian as _vituri2024_hf_spiral_full_hessian
 from .vituri2024_hf_spiral_full_hessian import *  # noqa: F401,F403

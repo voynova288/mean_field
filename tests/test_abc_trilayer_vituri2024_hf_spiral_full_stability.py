@@ -66,6 +66,9 @@ from mean_field.systems.abc_trilayer.vituri2024_hf_spiral_full_stability import 
 from mean_field.systems.abc_trilayer.vituri2024_hf_spiral_stability import (
     prepare_vituri2024_hf_spiral_stability,
 )
+from mean_field.systems.abc_trilayer.vituri2024_tdhf_exact_integer_signed_scalar import (
+    vituri2024_exact_integer_signed_scalar_fft_action,
+)
 from mean_field.systems.abc_trilayer.vituri2024_tdhf_full_functional import (
     _exact_local_mask,
     vituri2024_full_projected_interaction_action,
@@ -452,6 +455,15 @@ def test_signed_response_dense_fft_and_conjugate_covariance(response, key, seed)
     dense = response.apply_dense(key, block)
     fft = response.apply_fft(key, block)
     assert np.max(np.abs(dense - fft), initial=0.0) < 2.0e-13
+    independent_scalar = vituri2024_exact_integer_signed_scalar_fft_action(
+        response.selected_spinors,
+        response.fft_plan,
+        response.area_angstrom_squared,
+        (key.displacement_x, key.displacement_y),
+        key.valley_charge,
+        block,
+    )
+    assert np.max(np.abs(independent_scalar - fft), initial=0.0) < 2.0e-13
 
     partner_key = key.conjugate
     partner_block = response.conjugate_block(key, block)
