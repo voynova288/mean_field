@@ -1,0 +1,90 @@
+{
+  "schema": "mean_field.vituri2024.fig2_q003_analytic_scalar_attestation.v1",
+  "source_commit": "2c62584f1a46713406fee0477dddfc128affbd29",
+  "job_id": "486782",
+  "scheduler": {
+    "state": "COMPLETED",
+    "exit_code": "0:0",
+    "elapsed": "00:02:42",
+    "node": "node010",
+    "allocated_cpus": 56,
+    "requested_memory": "250G",
+    "partition": "regular",
+    "account": "hmt03"
+  },
+  "capsule": {
+    "path": "/data/home/ziyuzhu/.runs/Mean_Field_2c62584_vituri_fig2_q003_analytic_scalar_qualifier_v14_20260905",
+    "preparation_record_sha256": "0e8512b439f91e7a0ca4b285782f854df34e9f9bd8f5a4f8519bfd566cf63c50b6",
+    "capsule_manifest_sha256": "0b07c4c64e524e0189c31f0695fc515a5520296627342b8b53842e83d2960893",
+    "launch_authorization_sha256": "54f3021a28ca8454dc11dd5ad927bc2bb261aa71c15415cbafbe87fb0643a97f",
+    "result_sha256": "659d64cec269f349543b4020ada67e0b01ee0f3abf0a815c3ad63cb370e26bf4",
+    "ready_sha256": "a8217e8dd92f760b77881035c255ebc383e15f997a92be12617d4d93170ffec1",
+    "srun_success_evidence_sha256": "999decd4a3b6b304621b7f1e77d2090c3dd4e96813a7efdedd24c5b9d8666c02",
+    "complete_sha256": "250cd46aebd984b03d77a3304de088f8c57c319c5eef5f0ea43880c085ce875f",
+    "postrun_attestation_sha256": "38d82768e8d576b48bab7cf32b22e83e9619cfda017d7e52c17860ed51ee46c9",
+    "terminal_sacct_stdout_sha256": "0814add60e9a6c4e11fd8fe132f5e218ab36e2d333c6d324e8a3ae0a3a25c81f"
+  },
+  "focused_tests": {
+    "passed": 155,
+    "warnings": 1,
+    "warning_scope": "pytest cache could not create a cache file inside the immutable source snapshot",
+    "scientific_test_failure": false
+  },
+  "inventory": {
+    "density_groups": [
+      {
+        "label": "40fd",
+        "source_density_group_sha256": "40fd7da28d7d32ad8034352bbd1171b873ceac9c268f5395f908f9a9f686462d",
+        "inventory_fingerprint": "cabe46cabf875a3f69701c524867f520799ec03ba13f3631576f0d691819c06d"
+      },
+      {
+        "label": "3307",
+        "source_density_group_sha256": "3307efd3434cef054b37545d778a23f2a6fb8684f599b9e7d0e0cbea8ee36288",
+        "inventory_fingerprint": "6abe52a017f918446dc0bee56a9b1eefcc69293ea2315a8a80f7ae406404db07"
+      }
+    ],
+    "selected_occupied_count": 11852,
+    "selected_virtual_count": 1270,
+    "complex_dimension": 15052040,
+    "real_dimension": 30104080,
+    "fixed_sector_keys_per_group": [
+      [0, 0, 2],
+      [1, 0, 0],
+      [1, 0, 2],
+      [0, 1, -2],
+      [1, 1, 0]
+    ],
+    "probe_count": 10,
+    "all_evaluated_without_postselection": true
+  },
+  "analytic_scalar_results": {
+    "api_version": "vituri2024_exact_integer_selected_spin_orbital_scalar_curvature.v1",
+    "implementation_fingerprint": "acaa31874cd23f3a125c0c0a9314762a4fa11bfea2c81ac849dc70c26e29f5a8",
+    "maximum_signed_action_abs_residual": 0.0,
+    "maximum_interaction_curvature_abs_residual_ev": 1.1262150066693177e-17,
+    "maximum_one_body_curvature_abs_residual_ev": 6.938893903907228e-18,
+    "maximum_total_scalar_curvature_abs_residual_ev": 6.938893903907228e-18,
+    "maximum_source_fock_offdiagonal_or_diagonal_imag_residual_ev": 5.324534492967517e-18,
+    "comparison_bound_ev": 2.2000000000000003e-09,
+    "minimum_total_scalar_curvature_abs_ev": 0.004050187280719963,
+    "maximum_total_scalar_curvature_abs_ev": 0.046836743056049984,
+    "minimum_factor_two_canary_abs_residual_ev": 0.00002087775192895928,
+    "raw_total_no_nk_normalization": true,
+    "all_fixed_bound_analytic_orbital_scalar_probes_match": true
+  },
+  "narrow_verdict": {
+    "independent_exact_integer_signed_action_fixed_probe_parity": true,
+    "bound_analytic_one_body_interaction_total_fixed_probe_parity": true,
+    "source_fock_diagonal_transition_basis_established_for_fixed_sources": true,
+    "two_density_groups_evaluated": true,
+    "source_functional_fock_closure_established": false,
+    "full_q003_exact_unitary_scalar_curvature_established": false,
+    "whole_inventory_reciprocity_established": false,
+    "hermitian_eigensolver_authorized": false,
+    "full_local_stability_established": false,
+    "scientific_authority_promoted": false,
+    "production_ready": false,
+    "paper_reproduction_verified": false
+  },
+  "interpretation": "For ten preregistered nonvacuous q003 directions, the input-bound analytic expression Tr(F[K,[K,P]]) + Tr(W Sigma[W]) matches the candidate paired Hessian, including independently reconstructed source-Fock one-body gaps, both signed interaction blocks, factor two, and raw-total normalization. This does not prove that the saved source Fock is F[P0] from a complete exact-integer scalar functional, does not evaluate q003 exact-unitary energies, and samples only five conjugate orbits per density group."
+}
