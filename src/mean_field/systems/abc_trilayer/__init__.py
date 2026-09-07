@@ -771,6 +771,12 @@ from .vituri2024_hf_spiral_full_hessian import *  # noqa: F401,F403
 
 __all__ += list(_vituri2024_hf_spiral_full_hessian.__all__)
 
+# Candidate exact-integer whole-inventory paired-Hessian reciprocity comparison.
+from . import vituri2024_hf_spiral_full_reciprocity as _vituri2024_hf_spiral_full_reciprocity
+from .vituri2024_hf_spiral_full_reciprocity import *  # noqa: F401,F403
+
+__all__ += list(_vituri2024_hf_spiral_full_reciprocity.__all__)
+
 # Candidate-only fixed-flavor-rank Vituri BFS; generic ODA stays in core/hf.
 from . import vituri2024_hf_fixed_sector as _vituri2024_hf_fixed_sector
 from .vituri2024_hf_fixed_sector import *  # noqa: F401,F403

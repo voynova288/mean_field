@@ -54,6 +54,8 @@ from .vituri2024_hf_spiral_full_stability import (
 )
 
 Array = np.ndarray
+_IMPORT_FFT2 = _FFT2
+_IMPORT_IFFT2 = _IFFT2
 
 VITURI2024_HF_SPIRAL_FULL_RESPONSE_API_VERSION: Final[str] = (
     "vituri2024_hf_spiral_full_selected_spin_signed_displacement_response.v1"
@@ -225,6 +227,92 @@ def _allowed_flavor_blocks(key: Vituri2024HFSpiralFullSectorKey) -> tuple[tuple[
     if key.valley_charge == -2:
         return ((0, 1),)
     raise RuntimeError("unreachable valley charge")
+
+
+def _direct_rank_one_numerator(
+ selected_spinors: Array,
+ fft_plan: Vituri2024SquareCartesianFFTPlan,
+ key: Vituri2024HFSpiralFullSectorKey,
+ block: Array,
+ bases: Array,
+ targets: Array,
+) -> Array:
+ """Return the unnormalized Hermitian direct rank-one signed action."""
+
+ result = np.zeros_like(block)
+ if key.valley_charge != 0:
+  return result
+ displacement_kernel = fft_plan.kernel_by_signed_displacement[
+  -key.displacement_y + fft_plan.mesh_size - 1,
+  -key.displacement_x + fft_plan.mesh_size - 1,
+ ]
+ charge = 0.0 + 0.0j
+ for flavor in range(2):
+  source_form_factor = np.einsum(
+   "cp,cp->p",
+   selected_spinors[flavor][:, bases].conj(),
+   selected_spinors[flavor][:, targets],
+   optimize=True,
+  )
+  charge += np.sum(source_form_factor * block[flavor, flavor, bases])
+ for flavor in range(2):
+  target_form_factor = np.einsum(
+   "cm,cm->m",
+   selected_spinors[flavor][:, targets].conj(),
+   selected_spinors[flavor][:, bases],
+   optimize=True,
+  )
+  result[flavor, flavor, bases] = (
+   target_form_factor * displacement_kernel * charge
+  )
+ return result
+
+
+def _accumulate_exchange_mdagger_ck_m_numerator(
+ result: Array,
+ selected_spinors: Array,
+ fft_plan: Vituri2024SquareCartesianFFTPlan,
+ key: Vituri2024HFSpiralFullSectorKey,
+ block: Array,
+ shifted_spinors: Array,
+) -> None:
+ """Accumulate ``-sum_s M_s^dagger C_K M_s`` without area division."""
+
+ size = fft_plan.mesh_size
+ spinors_grid = selected_spinors.reshape(2, 6, size, size)
+ shifted_grid = shifted_spinors.reshape(2, 6, size, size)
+ for left, right in _allowed_flavor_blocks(key):
+  values = block[left, right].reshape(size, size)
+  if np.count_nonzero(values) == 0:
+   continue
+  output = result[left, right].reshape(size, size)
+  left_shifted = shifted_grid[left]
+  right_base = spinors_grid[right]
+  sources = (
+   left_shifted[:, None, :, :]
+   * right_base[None, :, :, :].conj()
+   * values[None, None, :, :]
+  )
+  padded = np.zeros(
+   (6, 6, fft_plan.padding_size, fft_plan.padding_size),
+   dtype=np.complex128,
+  )
+  padded[:, :, :size, :size] = sources
+  transformed = _FFT2(
+   padded, axes=(-2, -1), workers=fft_plan.fft_workers
+  )
+  convolution = _IFFT2(
+   fft_plan.kernel_fft[None, None, :, :] * transformed,
+   axes=(-2, -1),
+   workers=fft_plan.fft_workers,
+  )[:, :, :size, :size]
+  output -= np.einsum(
+   "cxy,exy,cexy->xy",
+   left_shifted.conj(),
+   right_base,
+   convolution,
+   optimize=True,
+  )
 
 
 @dataclass(frozen=True, slots=True)
@@ -661,6 +749,8 @@ class Vituri2024HFSpiralSignedDisplacementResponse:
             <= kernel_tolerance
         )
         locked = (
+            _FFT2 is _IMPORT_FFT2,
+            _IFFT2 is _IMPORT_IFFT2,
             self.api_version == VITURI2024_HF_SPIRAL_FULL_RESPONSE_API_VERSION,
             self.authority == VITURI2024_HF_SPIRAL_FULL_RESPONSE_AUTHORITY,
             self.dense_max_nk == VITURI2024_HF_SPIRAL_FULL_RESPONSE_DENSE_MAX_NK,
@@ -776,38 +866,14 @@ class Vituri2024HFSpiralSignedDisplacementResponse:
         bases: Array,
         targets: Array,
     ) -> Array:
-        result = np.zeros_like(block)
-        if key.valley_charge != 0:
-            return result
-        # The projected-H contraction carries K(p-(p+d))=K(-d).
-        # The source-bound kernel is verified real-even, but the explicit minus
-        # sign keeps the defining orientation visible and regression-testable.
-        displacement_kernel = self.fft_plan.kernel_by_signed_displacement[
-            -key.displacement_y + self.mesh_size - 1,
-            -key.displacement_x + self.mesh_size - 1,
-        ]
-        charge = 0.0 + 0.0j
-        for flavor in range(2):
-            source_form_factor = np.einsum(
-                "cp,cp->p",
-                self.selected_spinors[flavor][:, bases].conj(),
-                self.selected_spinors[flavor][:, targets],
-                optimize=True,
-            )
-            charge += np.sum(
-                source_form_factor * block[flavor, flavor, bases]
-            )
-        for flavor in range(2):
-            target_form_factor = np.einsum(
-                "cm,cm->m",
-                self.selected_spinors[flavor][:, targets].conj(),
-                self.selected_spinors[flavor][:, bases],
-                optimize=True,
-            )
-            result[flavor, flavor, bases] = (
-                target_form_factor * displacement_kernel * charge
-            )
-        return result
+        return _direct_rank_one_numerator(
+            self.selected_spinors,
+            self.fft_plan,
+            key,
+            block,
+            bases,
+            targets,
+        )
 
     def apply_dense(
         self,
@@ -870,46 +936,14 @@ class Vituri2024HFSpiralSignedDisplacementResponse:
         """Hot path after complete source and signed-block validation."""
 
         result = self._direct_response(key, block, bases, targets)
-        size = self.mesh_size
-        spinors_grid = self.selected_spinors.reshape(2, 6, size, size)
-        shifted_grid = shifted_spinors.reshape(2, 6, size, size)
-        for left, right in _allowed_flavor_blocks(key):
-            values = block[left, right].reshape(size, size)
-            if np.count_nonzero(values) == 0:
-                continue
-            output = result[left, right].reshape(size, size)
-            left_shifted = shifted_grid[left]
-            right_base = spinors_grid[right]
-            sources = (
-                left_shifted[:, None, :, :]
-                * right_base[None, :, :, :].conj()
-                * values[None, None, :, :]
-            )
-            padded = np.zeros(
-                (
-                    6,
-                    6,
-                    self.fft_plan.padding_size,
-                    self.fft_plan.padding_size,
-                ),
-                dtype=np.complex128,
-            )
-            padded[:, :, :size, :size] = sources
-            transformed = _FFT2(
-                padded, axes=(-2, -1), workers=self.fft_plan.fft_workers
-            )
-            convolution = _IFFT2(
-                self.fft_plan.kernel_fft[None, None, :, :] * transformed,
-                axes=(-2, -1),
-                workers=self.fft_plan.fft_workers,
-            )[:, :, :size, :size]
-            output -= np.einsum(
-                "cxy,exy,cexy->xy",
-                left_shifted.conj(),
-                right_base,
-                convolution,
-                optimize=True,
-            )
+        _accumulate_exchange_mdagger_ck_m_numerator(
+            result,
+            self.selected_spinors,
+            self.fft_plan,
+            key,
+            block,
+            shifted_spinors,
+        )
         result /= self.area_angstrom_squared
         support = np.zeros(self.nk, dtype=np.bool_)
         support[bases] = True

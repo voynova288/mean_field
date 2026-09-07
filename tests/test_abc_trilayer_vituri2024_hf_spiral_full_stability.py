@@ -11,6 +11,8 @@ from scipy.linalg import expm
 from mean_field.core.hf import build_momentum_sector_particle_hole_pairs
 from mean_field.systems import abc_trilayer
 from mean_field.systems.abc_trilayer import (
+    vituri2024_hf_spiral_full_reciprocity as full_reciprocity,
+    vituri2024_hf_spiral_full_response as full_response,
     vituri2024_hf_spiral_full_stability as full_stability,
 )
 from mean_field.systems.abc_trilayer.vituri2024_hf import (
@@ -52,6 +54,14 @@ from mean_field.systems.abc_trilayer.vituri2024_hf_spiral_full_response import (
     build_vituri2024_hf_spiral_signed_displacement_response,
     certify_vituri2024_hf_spiral_literal_mask_equivalence,
     compare_vituri2024_hf_spiral_literal_mask_equivalence,
+)
+from mean_field.systems.abc_trilayer.vituri2024_hf_spiral_full_reciprocity import (
+    VITURI2024_WHOLE_INVENTORY_RECIPROCITY_API_VERSION,
+    VITURI2024_WHOLE_INVENTORY_RECIPROCITY_SCOPE,
+    Vituri2024WholeInventoryReciprocityApproval,
+    Vituri2024WholeInventoryReciprocityComparisonReceipt,
+    approve_vituri2024_whole_inventory_reciprocity,
+    compare_vituri2024_whole_inventory_reciprocity,
 )
 from mean_field.systems.abc_trilayer.vituri2024_hf_spiral_full_stability import (
     VITURI2024_HF_SPIRAL_FULL_SECTOR_CHARGES,
@@ -145,6 +155,11 @@ def inventory() -> Vituri2024HFSpiralFullSectorInventory:
         _preparation(fft=True)
     )
 
+
+@pytest.fixture(scope="module")
+def full_hessian_context(inventory) -> Vituri2024HFSpiralFullHessianContext:
+    response = build_vituri2024_hf_spiral_signed_displacement_response(inventory)
+    return build_vituri2024_hf_spiral_full_hessian_context(response)
 
 def test_complete_global_rank_dimension_and_restricted_subset(inventory) -> None:
     assert inventory.mesh_size == 3
@@ -1180,3 +1195,203 @@ def test_public_package_exports_inventory_surface(inventory) -> None:
         assert getattr(abc_trilayer, name) is getattr(full_stability, name)
         assert name in abc_trilayer.__all__
     assert type(inventory) is abc_trilayer.Vituri2024HFSpiralFullSectorInventory
+
+
+def _synthetic_reciprocity_approval() -> Vituri2024WholeInventoryReciprocityApproval:
+    """Unit-test approval only; production must pin external immutable records."""
+
+    implementation = (
+        full_reciprocity.vituri2024_whole_inventory_reciprocity_implementation_fingerprint()
+    )
+    return approve_vituri2024_whole_inventory_reciprocity(
+        expected_implementation_fingerprint=implementation,
+        source_commit="1" * 40,
+        review_record_sha256="2" * 64,
+        reduced_exhaustive_qualification_sha256="3" * 64,
+        approval_record_sha256="4" * 64,
+        rationale="synthetic reduced-fixture API qualification",
+    )
+
+
+def test_whole_inventory_reciprocity_comparison_covers_reduced_source(
+    full_hessian_context,
+) -> None:
+    approval = _synthetic_reciprocity_approval()
+    comparison = compare_vituri2024_whole_inventory_reciprocity(
+        full_hessian_context,
+        approval,
+    )
+    assert type(comparison) is Vituri2024WholeInventoryReciprocityComparisonReceipt
+    assert comparison.passed, comparison.failed_gates
+    assert comparison.failed_gates == ()
+    assert comparison.api_version == VITURI2024_WHOLE_INVENTORY_RECIPROCITY_API_VERSION
+    assert comparison.scope == VITURI2024_WHOLE_INVENTORY_RECIPROCITY_SCOPE
+    assert comparison.mesh_size == 3
+    assert comparison.nk == 9
+    assert comparison.signed_sector_count_checked == 75
+    assert comparison.displacement_count_checked == 25
+    assert comparison.ordered_mesh_pair_count_covered == 81
+    assert comparison.independently_recomputed_complex_dimension == 72
+    assert comparison.inventory_complex_dimension == 72
+    assert comparison.inventory_real_dimension == 144
+    assert comparison.canonical_orbit_complex_dimension_sum == 72
+    assert comparison.support_mismatch_count == 0
+    assert comparison.conjugation_structure_mismatch_count == 0
+    assert comparison.paired_lane_overlap_count == 0
+    assert comparison.sector_dimension_mismatch_count == 0
+    assert comparison.canonical_orbit_mismatch_count == 0
+    assert comparison.direct_rank_one_identity_bound
+    assert comparison.exchange_mdagger_ck_m_identity_bound
+    assert comparison.signed_conjugation_covariance_derived
+    assert comparison.transition_injection_extraction_adjoint_derived
+    assert comparison.one_body_real_diagonal
+    assert comparison.factor_two_real_packing_bound
+    assert not comparison.scalar_hessian_authority_established
+    assert not comparison.hermitian_eigensolver_authorized
+    comparison.validate_live_state()
+
+    assert comparison.candidate_only
+    assert not comparison.whole_inventory_reciprocity_established
+
+
+def test_every_reduced_signed_action_is_hermitian_and_conjugation_covariant(
+    full_hessian_context,
+) -> None:
+    response = full_hessian_context.response
+    inventory = full_hessian_context.inventory
+    factory = response.make_validated_action_factory()
+    maximum_adjoint_residual = 0.0
+    maximum_covariance_residual = 0.0
+    checked_complex_dimensions = 0
+    for key in inventory.iter_sector_keys(include_zero_dimension=True):
+        bases, _targets = response.support_indices(key)
+        entries = [
+            (left, right, int(base))
+            for left, right in full_response._allowed_flavor_blocks(key)
+            for base in bases
+        ]
+        dimension = len(entries)
+        checked_complex_dimensions += dimension
+        action = factory.prepare_fft_action(key)
+        partner_action = factory.prepare_fft_action(key.conjugate)
+        matrix = np.empty((dimension, dimension), dtype=np.complex128)
+        for column, (left, right, base) in enumerate(entries):
+            block = np.zeros((2, 2, inventory.nk), dtype=np.complex128)
+            block[left, right, base] = 1.0
+            output = action(block)
+            matrix[:, column] = np.asarray(
+                [output[a, b, k] for a, b, k in entries],
+                dtype=np.complex128,
+            )
+            conjugate_input = response.conjugate_block(key, block)
+            conjugate_output = partner_action(conjugate_input)
+            expected = response.conjugate_block(key, output)
+            maximum_covariance_residual = max(
+                maximum_covariance_residual,
+                float(np.max(np.abs(conjugate_output - expected), initial=0.0)),
+            )
+        maximum_adjoint_residual = max(
+            maximum_adjoint_residual,
+            float(np.max(np.abs(matrix - matrix.conj().T), initial=0.0)),
+        )
+    assert checked_complex_dimensions == 4 * inventory.nk**2
+    assert maximum_adjoint_residual < 2.0e-12
+    assert maximum_covariance_residual < 2.0e-12
+
+
+def test_every_reduced_paired_orbit_real_matrix_is_symmetric(
+    full_hessian_context,
+) -> None:
+    inventory = full_hessian_context.inventory
+    complex_dimension_sum = 0
+    maximum_residual = 0.0
+    orbit_count = 0
+    for orbit_record in inventory.iter_conjugate_orbits(include_zero_dimension=False):
+        orbit_count += 1
+        prepared = full_hessian_context.build_orbit_hessian(orbit_record.first)
+        complex_dimension_sum += prepared.complex_dimension
+        identity = np.eye(prepared.real_dimension, dtype=np.float64)
+        matrix = np.column_stack(
+            tuple(prepared.hessian.matvec(identity[:, column])
+                  for column in range(prepared.real_dimension))
+        )
+        maximum_residual = max(
+            maximum_residual,
+            float(np.max(np.abs(matrix - matrix.T), initial=0.0)),
+        )
+    assert orbit_count == inventory.nonempty_conjugate_orbit_count
+    assert complex_dimension_sum == inventory.complex_dimension
+    assert maximum_residual < 2.0e-12
+
+
+def test_whole_inventory_reciprocity_rejects_runtime_primitive_drift(
+    full_hessian_context, monkeypatch
+) -> None:
+    approval = _synthetic_reciprocity_approval()
+    original = full_response._direct_rank_one_numerator
+
+    def drifted(*args, **kwargs):
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(full_response, "_direct_rank_one_numerator", drifted)
+    with pytest.raises(RuntimeError, match="drifted"):
+        compare_vituri2024_whole_inventory_reciprocity(
+            full_hessian_context,
+            approval,
+        )
+
+
+def test_whole_inventory_reciprocity_rejects_sector_dimension_method_drift(
+    full_hessian_context, monkeypatch
+) -> None:
+    approval = _synthetic_reciprocity_approval()
+    original = Vituri2024HFSpiralFullSectorInventory.sector_complex_dimension
+
+    def drifted(self, key):
+        return original(self, key)
+
+    monkeypatch.setattr(
+        Vituri2024HFSpiralFullSectorInventory,
+        "sector_complex_dimension",
+        drifted,
+    )
+    with pytest.raises(RuntimeError, match="class callable drifted"):
+        compare_vituri2024_whole_inventory_reciprocity(
+            full_hessian_context,
+            approval,
+        )
+
+
+def test_whole_inventory_reciprocity_rejects_key_index_method_drift(
+    full_hessian_context, monkeypatch
+) -> None:
+    approval = _synthetic_reciprocity_approval()
+    original = Vituri2024HFSpiralFullSectorInventory._key_indices
+
+    def drifted(self, key):
+        return original(self, key)
+
+    monkeypatch.setattr(Vituri2024HFSpiralFullSectorInventory, "_key_indices", drifted)
+    with pytest.raises(RuntimeError, match="class callable drifted"):
+        compare_vituri2024_whole_inventory_reciprocity(
+            full_hessian_context,
+            approval,
+        )
+
+
+def test_whole_inventory_reciprocity_requires_preapproved_implementation(
+    full_hessian_context,
+) -> None:
+    with pytest.raises(ValueError, match="does not match"):
+        invalid = approve_vituri2024_whole_inventory_reciprocity(
+            expected_implementation_fingerprint="0" * 64,
+            source_commit="1" * 40,
+            review_record_sha256="2" * 64,
+            reduced_exhaustive_qualification_sha256="3" * 64,
+            approval_record_sha256="4" * 64,
+            rationale="intentional mismatch canary",
+        )
+        compare_vituri2024_whole_inventory_reciprocity(
+            full_hessian_context,
+            invalid,
+        )

@@ -503,3 +503,40 @@ loaded synthetic fixture is explicitly not a provider candidate.  Even a
 candidate saved-array parity: source generation/closure/stationarity,
 normal-order and q0-background authority, TDHF/Hessian parity, Slurm
 eligibility, production readiness, and paper reproduction remain false.
+
+## Vituri exact-integer whole-inventory reciprocity
+
+`vituri2024_hf_spiral_full_reciprocity` is a separate proof-structured,
+candidate-only system adapter. It does not change the candidate authority of the generic paired
+orbital Hessian. For each exact signed sector it binds the implemented direct
+and exchange actions to
+
+\[
+L_H=c\,|g^*\rangle\langle g^*|,
+\qquad
+L_F=-\sum_s M_s^\dagger C_K M_s.
+\]
+
+The current comparison requires an exactly real-even finite-square kernel,
+exact no-wrap `d <-> -d` support bijections, independently recomputed
+dimensions for every signed displacement/charge sector, complete canonical
+conjugate-orbit coverage, transition-lane disjointness, a real diagonal
+one-body term, and the generic factor-two real packing. Its implementation
+fingerprint binds complete authority-bearing bytes for the response, inventory,
+Hessian adapter, generic packing/action, and comparison modules, together with
+owner-module callable and FFT/IFFT identities. A detached pre-execution
+approval records the expected fingerprint, full source commit, review-record
+hash, reduced exhaustive qualification hash, and approval-record hash. The
+factory token and those caller-supplied hashes are provenance conventions, not
+proof that the referenced records exist or passed.
+
+A positive comparison is therefore candidate structural evidence only. It
+keeps `whole_inventory_reciprocity_established=False` and does not expose a
+certificate or Hermitian operator. Production promotion requires separate
+immutable q003 outputs for both density groups, independent postrun review of
+the referenced approval/qualification records and module hashes, and a later
+source-bound certification layer. Complete exact-unitary scalar curvature,
+real stationarity, literal-float full-functional parity, eigensolver
+authorization, positivity/local stability, production readiness, and paper
+reproduction remain false. Random bilinear probes are regression evidence only
+and do not enter the comparison verdict.
