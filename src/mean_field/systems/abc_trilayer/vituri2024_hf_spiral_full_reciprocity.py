@@ -38,10 +38,6 @@ from .vituri2024_hf_spiral_full_stability import (
  Vituri2024HFSpiralFullSectorInventory,
  Vituri2024HFSpiralFullSectorKey,
 )
-from .vituri2024_tdhf_exact_integer_signed_scalar import (
- vituri2024_exact_integer_signed_scalar_implementation_fingerprint,
-)
-
 Array = np.ndarray
 
 VITURI2024_WHOLE_INVENTORY_RECIPROCITY_API_VERSION: Final[str] = (
@@ -365,9 +361,6 @@ def _current_implementation_fingerprint() -> str:
    ),
    "fft2": _source_sha256(_response_module._FFT2),
    "ifft2": _source_sha256(_response_module._IFFT2),
-   "exact_integer_scalar_implementation": (
-    vituri2024_exact_integer_signed_scalar_implementation_fingerprint()
-   ),
    "numpy_version": np.__version__,
   }
  )
