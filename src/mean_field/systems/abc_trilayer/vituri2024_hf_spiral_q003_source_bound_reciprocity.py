@@ -20,6 +20,10 @@ from .vituri2024_hf_spiral_q003_reciprocity_trust import (
     PINNED_Q003_RECIPROCITY_CERTIFIER_SHA256,
 )
 
+
+_JSON_LOADS = json.loads
+_SHA256 = sha256
+
 VITURI2024_Q003_SOURCE_BOUND_RECIPROCITY_API_VERSION: Final[str] = (
     "vituri2024_q003_source_bound_whole_inventory_reciprocity.v1"
 )
@@ -161,7 +165,7 @@ def _expected_artifact_sha256() -> tuple[tuple[str, str], ...]:
 
 
 def _sha256_bytes(value: bytes) -> str:
-    return sha256(value).hexdigest()
+    return _SHA256(value).hexdigest()
 
 
 def _canonical(value: object) -> bytes:
@@ -189,7 +193,7 @@ def _load_json(data: bytes, role: str) -> dict[str, object]:
     if type(data) is not bytes:
         raise TypeError(f"{role} must be exact bytes")
     try:
-        value = json.loads(
+        value = _JSON_LOADS(
             data.decode("utf-8"),
             object_pairs_hook=_unique_object,
             parse_constant=_reject_constant,
@@ -522,7 +526,7 @@ def _validate_comparison(comparison: dict[str, object], label: str) -> None:
         _strict_sha256(comparison.get(name), f"comparison.{name}")
 
 
-def certify_vituri2024_q003_source_bound_reciprocity(
+def _certify_vituri2024_q003_source_bound_reciprocity_impl(
     *,
     artifacts: Mapping[str, bytes],
     reviewed_capsule_members: Mapping[str, bytes],
@@ -542,6 +546,13 @@ def certify_vituri2024_q003_source_bound_reciprocity(
         raise TypeError("certification artifacts must be exact bytes")
     if any(type(value) is not bytes for value in reviewed_capsule_members.values()):
         raise TypeError("reviewed capsule members must be exact bytes")
+    # Snapshot caller-owned mappings before hashing. Subsequent validation reads
+    # only these local inventories; replacement of caller keys cannot cross the
+    # pinned-hash boundary after verification.
+    artifacts = {role: artifacts[role] for role in ARTIFACT_ROLES}
+    reviewed_capsule_members = {
+        path: reviewed_capsule_members[path] for path in REVIEWED_CAPSULE_MEMBERS
+    }
     artifact_hashes = {role: _sha256_bytes(artifacts[role]) for role in ARTIFACT_ROLES}
     member_hashes = {
         path: _sha256_bytes(reviewed_capsule_members[path])
@@ -1050,6 +1061,12 @@ def _validate_live_bindings() -> None:
     for name, expected in _IMPORT_BINDINGS:
         if globals().get(name) is not expected:
             raise RuntimeError(f"q003 reciprocity certifier binding drifted: {name}")
+    if globals().get("certify_vituri2024_q003_source_bound_reciprocity") is not (
+        _IMPORT_PUBLIC_CERTIFIER
+    ):
+        raise RuntimeError("q003 reciprocity public certifier binding drifted")
+    if json.loads is not _JSON_LOADS or sha256 is not _SHA256:
+        raise RuntimeError("q003 reciprocity certifier primitive binding drifted")
     if (
         ARTIFACT_ROLES != _IMPORT_ARTIFACT_ROLES
         or REVIEWED_CAPSULE_MEMBERS != _IMPORT_REVIEWED_CAPSULE_MEMBERS
@@ -1070,11 +1087,14 @@ def _validate_live_bindings() -> None:
 _IMPORT_BINDINGS = tuple(
     (name, globals()[name])
     for name in (
-        "_expected_artifact_sha256", "_sha256_bytes", "_canonical",
-        "_fingerprint", "_load_json",
+        "_JSON_LOADS", "_SHA256", "_expected_artifact_sha256",
+        "_sha256_bytes", "_canonical", "_fingerprint", "_reject_constant",
+        "_unique_object", "_load_json", "_strict_sha256", "_exact_bool",
+        "_exact_int", "_zero_number", "_module_sha256",
         "_parse_source_manifest", "_parse_capsule_manifest",
         "_validate_false_authorities", "_validate_comparison",
-        "certify_vituri2024_q003_source_bound_reciprocity",
+        "_validate_live_bindings",
+        "_certify_vituri2024_q003_source_bound_reciprocity_impl",
         "vituri2024_q003_source_bound_reciprocity_implementation_fingerprint",
         "Vituri2024Q003SourceBoundReciprocityGroup",
         "Vituri2024Q003SourceBoundReciprocityCertificate",
@@ -1095,6 +1115,54 @@ _IMPORT_EXTERNAL_CERTIFIER_REVIEW_SHA256 = (
     PINNED_Q003_RECIPROCITY_CERTIFIER_REVIEW_SHA256
 )
 _IMPORT_IMPLEMENTATION_FINGERPRINT = _module_sha256()
+
+
+def _make_public_certifier(
+    implementation: object,
+    guard: object,
+    binding_snapshot: tuple[tuple[str, object], ...],
+    namespace: dict[str, object],
+):
+    if not callable(implementation) or not callable(guard):
+        raise TypeError("q003 certifier closure inputs must be callable")
+    if type(binding_snapshot) is not tuple:
+        raise TypeError("q003 certifier binding snapshot must be a tuple")
+    if type(namespace) is not dict:
+        raise TypeError("q003 certifier namespace snapshot must be a dict")
+
+    def immutable_guard() -> None:
+        if "globals" in namespace:
+            raise RuntimeError("q003 reciprocity module shadows the globals builtin")
+        if namespace.get("_IMPORT_BINDINGS") != binding_snapshot:
+            raise RuntimeError("q003 reciprocity import binding table drifted")
+        for name, expected in binding_snapshot:
+            if namespace.get(name) is not expected:
+                raise RuntimeError(f"q003 reciprocity certifier binding drifted: {name}")
+        guard()
+
+    def public_certifier(
+        *,
+        artifacts: Mapping[str, bytes],
+        reviewed_capsule_members: Mapping[str, bytes],
+    ) -> Vituri2024Q003SourceBoundReciprocityCertificate:
+        immutable_guard()
+        certificate = implementation(
+            artifacts=artifacts,
+            reviewed_capsule_members=reviewed_capsule_members,
+        )
+        immutable_guard()
+        return certificate
+
+    return public_certifier
+
+
+certify_vituri2024_q003_source_bound_reciprocity = _make_public_certifier(
+    _certify_vituri2024_q003_source_bound_reciprocity_impl,
+    _validate_live_bindings,
+    _IMPORT_BINDINGS,
+    globals(),
+)
+_IMPORT_PUBLIC_CERTIFIER = certify_vituri2024_q003_source_bound_reciprocity
 
 __all__ = [
     "ARTIFACT_ROLES",

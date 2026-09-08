@@ -225,6 +225,29 @@ def test_missing_extra_and_nonbytes_evidence_fail_closed() -> None:
 
 def test_live_binding_and_constant_drift_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     artifacts, members = _evidence()
+    original_bindings = certification._IMPORT_BINDINGS
+    monkeypatch.setattr(certification, "_IMPORT_BINDINGS", ())
+    with pytest.raises(RuntimeError, match="binding table drifted"):
+        certify_vituri2024_q003_source_bound_reciprocity(
+            artifacts=artifacts,
+            reviewed_capsule_members=members,
+        )
+    monkeypatch.setattr(certification, "_IMPORT_BINDINGS", original_bindings)
+    monkeypatch.setattr(certification, "globals", lambda: {}, raising=False)
+    with pytest.raises(RuntimeError, match="shadows the globals builtin"):
+        certify_vituri2024_q003_source_bound_reciprocity(
+            artifacts=artifacts,
+            reviewed_capsule_members=members,
+        )
+    monkeypatch.delattr(certification, "globals")
+    original_guard = certification._validate_live_bindings
+    monkeypatch.setattr(certification, "_validate_live_bindings", lambda: None)
+    with pytest.raises(RuntimeError, match="binding drifted"):
+        certify_vituri2024_q003_source_bound_reciprocity(
+            artifacts=artifacts,
+            reviewed_capsule_members=members,
+        )
+    monkeypatch.setattr(certification, "_validate_live_bindings", original_guard)
     original = certification._validate_comparison
     monkeypatch.setattr(certification, "_validate_comparison", lambda *_args: None)
     with pytest.raises(RuntimeError, match="binding drifted"):
@@ -235,6 +258,25 @@ def test_live_binding_and_constant_drift_fail_closed(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(certification, "_validate_comparison", original)
     monkeypatch.setattr(certification, "_REVIEW_GATES", certification._REVIEW_GATES[:-1])
     with pytest.raises(RuntimeError, match="constant drifted"):
+        certify_vituri2024_q003_source_bound_reciprocity(
+            artifacts=artifacts,
+            reviewed_capsule_members=members,
+        )
+
+
+def test_hash_and_json_primitive_rebinding_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    artifacts, members = _evidence()
+    monkeypatch.setattr(certification, "_SHA256", lambda _value: None)
+    with pytest.raises(RuntimeError, match="binding drifted"):
+        certify_vituri2024_q003_source_bound_reciprocity(
+            artifacts=artifacts,
+            reviewed_capsule_members=members,
+        )
+    monkeypatch.undo()
+    monkeypatch.setattr(certification.json, "loads", lambda *_args, **_kwargs: {})
+    with pytest.raises(RuntimeError, match="primitive binding drifted"):
         certify_vituri2024_q003_source_bound_reciprocity(
             artifacts=artifacts,
             reviewed_capsule_members=members,
