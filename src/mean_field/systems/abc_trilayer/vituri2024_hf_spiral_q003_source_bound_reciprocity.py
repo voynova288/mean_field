@@ -53,7 +53,12 @@ ARTIFACT_ROLES: Final[tuple[str, ...]] = (
     "theorem_review",
 )
 REVIEWED_CAPSULE_MEMBERS: Final[tuple[str, ...]] = (
+    "bin/control_common.py",
+    "bin/finalize_after_srun.py",
+    "bin/publish_wrapper_failure.py",
+    "bin/release_held.py",
     "bin/run_qualifier.py",
+    "bin/submit_held.py",
     "source/src/mean_field/core/hf/zero_temperature_sector_stability.py",
     "source/src/mean_field/systems/abc_trilayer/vituri2024_hf_fft.py",
     "source/src/mean_field/systems/abc_trilayer/vituri2024_hf_spiral_full_hessian.py",
@@ -77,10 +82,15 @@ _PINNED_ARTIFACT_SHA256: Final[tuple[tuple[str, str], ...]] = (
     ("postrun_attestation", "8971432f18f60237199ceafa983a385b2f1aad27266bab57cf6e69d2fdb670ce"),
     ("recovery_complete", "c72701e537c24ac1b18a84dc3a877f3d2299194e191fbc9273861b21713e12e7"),
     ("recovery_summary", "54be6dc934c36aa66cc8e5cb2e64039ab91fe3b63b97b7e39ff241013f9822aa"),
-    ("theorem_review", "58436c3ca1c8c5a2d8089be97aaa6784769567a57071b59368fe862755c58409"),
+    ("theorem_review", "e4fac5c79a2154cf8de1048b51f8cd21b2317b30cb4250a527e9a8cb924f2af2"),
 )
 _PINNED_MEMBER_SHA256: Final[tuple[tuple[str, str], ...]] = (
+    ("bin/control_common.py", "1e06b1bc38ddb66d792c23857e80f5a4b536c1c719ab32a730cf198296b789b5"),
+    ("bin/finalize_after_srun.py", "b044b3964aaab54734c7718e43f25458011d844b93715b7b36e6a0b88e570577"),
+    ("bin/publish_wrapper_failure.py", "41cbb29b87409f9b5066b559bb6963b4b6f5f7d1c308b104f44a964f521bc319"),
+    ("bin/release_held.py", "e09572917a531f89f45fa45eebbf1b575e911636f79c6d8b2278ed873f102d6d"),
     ("bin/run_qualifier.py", "73b6117e07e620e5c9d48c27b85cecd143535221c8f0cdd255320e8dc7749902"),
+    ("bin/submit_held.py", "3c9815df4f2566228b642fce0ba6d11035ee299955063e34c82437e457a0f8c4"),
     ("source/src/mean_field/core/hf/zero_temperature_sector_stability.py", "e8c9e5b21d132807ddad6c1b7884bba29bec0b10600a4b1ebf0a3aacb7d2a0eb"),
     ("source/src/mean_field/systems/abc_trilayer/vituri2024_hf_fft.py", "dac25398f5e776bde242ed1e3edd627dc8f0569f7b9b51b1376b05dab0ed8854"),
     ("source/src/mean_field/systems/abc_trilayer/vituri2024_hf_spiral_full_hessian.py", "82a30f77a643a2867508905745aba85bfd7ebd4d73f4b5e44f387341ca343afc"),
@@ -106,6 +116,9 @@ _PINNED_CERTIFICATE_GROUP_FINGERPRINTS: Final[tuple[tuple[str, str], ...]] = (
     ("40fd", "55dabcd5cb7f082008ba4060da193838f004487af79084b33f45d491b4ddf66d"),
 )
 _FALSE_AUTHORITIES: Final[tuple[str, ...]] = (
+    "stationarity_established",
+    "literal_float_full_functional_parity_established",
+    "scientific_authority_promoted",
     "full_inventory_exact_unitary_scalar_curvature_established",
     "scalar_hessian_authority_established",
     "hermitian_eigensolver_authorized",
@@ -297,6 +310,11 @@ class Vituri2024Q003SourceBoundReciprocityCertificate:
     artifact_only: bool = field(default=True, init=False)
     algebraic_reciprocity_only: bool = field(default=True, init=False)
     runtime_bitwise_reciprocity_established: bool = field(default=False, init=False)
+    stationarity_established: bool = field(default=False, init=False)
+    literal_float_full_functional_parity_established: bool = field(
+        default=False, init=False
+    )
+    scientific_authority_promoted: bool = field(default=False, init=False)
     both_groups_certified: bool = field(default=True, init=False)
     no_postselection: bool = field(default=True, init=False)
     source_bound_q003_reciprocity_established: bool = field(default=True, init=False)
@@ -377,6 +395,9 @@ class Vituri2024Q003SourceBoundReciprocityCertificate:
         )
         false_flags = (
             self.runtime_bitwise_reciprocity_established,
+            self.stationarity_established,
+            self.literal_float_full_functional_parity_established,
+            self.scientific_authority_promoted,
             self.full_inventory_exact_unitary_scalar_curvature_established,
             self.scalar_hessian_authority_established, self.linear_operator_authorized,
             self.hermitian_eigensolver_authorized, self.full_local_stability_established,

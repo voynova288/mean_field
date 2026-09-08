@@ -44,7 +44,13 @@ def _evidence() -> tuple[dict[str, bytes], dict[str, bytes]]:
         / "reports/data/vituri2024_fig2_q003_reciprocity_theorem_review_20260907.json",
     }
     member_paths = {
+        "bin/control_common.py": FIXTURE / "historical_control_common.py",
+        "bin/finalize_after_srun.py": FIXTURE / "historical_finalize_after_srun.py",
+        "bin/publish_wrapper_failure.py": FIXTURE
+        / "historical_publish_wrapper_failure.py",
+        "bin/release_held.py": FIXTURE / "historical_release_held.py",
         "bin/run_qualifier.py": FIXTURE / "historical_run_qualifier.py",
+        "bin/submit_held.py": FIXTURE / "historical_submit_held.py",
         "submit.sbatch": FIXTURE / "historical_submit.sbatch",
     }
     for path in REVIEWED_CAPSULE_MEMBERS:
@@ -76,6 +82,9 @@ def test_exact_pinned_evidence_establishes_only_algebraic_reciprocity() -> None:
     assert certificate.both_groups_certified
     assert certificate.no_postselection
     assert not certificate.runtime_bitwise_reciprocity_established
+    assert not certificate.stationarity_established
+    assert not certificate.literal_float_full_functional_parity_established
+    assert not certificate.scientific_authority_promoted
     assert not certificate.full_inventory_exact_unitary_scalar_curvature_established
     assert not certificate.scalar_hessian_authority_established
     assert not certificate.linear_operator_authorized
