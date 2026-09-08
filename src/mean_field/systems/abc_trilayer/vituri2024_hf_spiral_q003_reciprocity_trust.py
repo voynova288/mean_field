@@ -1,0 +1,15 @@
+"""Externally reviewed trust pins for the q003 reciprocity certifier."""
+
+from typing import Final
+
+PINNED_Q003_RECIPROCITY_CERTIFIER_SHA256: Final[str] = (
+    "e320a70e4a1d62b9758cee53774a5743af9ac602b1494ab1081c531665b5950b"
+)
+PINNED_Q003_RECIPROCITY_CERTIFIER_REVIEW_SHA256: Final[str] = (
+    "0d71120ac6c8c0a2718c4eff8d7c7e3237837f0b2f262a272fd4f81c846597f6"
+)
+
+__all__ = [
+    "PINNED_Q003_RECIPROCITY_CERTIFIER_REVIEW_SHA256",
+    "PINNED_Q003_RECIPROCITY_CERTIFIER_SHA256",
+]

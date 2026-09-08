@@ -540,3 +540,45 @@ real stationarity, literal-float full-functional parity, eigensolver
 authorization, positivity/local stability, production readiness, and paper
 reproduction remain false. Random bilinear probes are regression evidence only
 and do not enter the comparison verdict.
+
+### q003 source-bound artifact certification
+
+`vituri2024_hf_spiral_q003_source_bound_reciprocity` is a separate,
+standard-library-only certification layer. It never imports or executes the
+historical response, FFT, Hessian, inventory, scalar-functional, operator, or
+eigensolver modules. Its caller cannot select a trust root: a separate trust
+module pins the independently reviewed certifier-source digest and certifier
+review record. The verifier consumes the immutable candidate contract,
+detached approval/review/qualification records, input manifest, result and
+READY records, zero-science recovery records, postrun attestation, capsule and
+source manifests, exact reviewed source/runner/submit bytes, and the independent
+theorem-review record. The two endpoint NPZ identities and byte sizes are bound
+through both pinned capsule and input manifests; endpoint bytes are not loaded
+or deserialized by this artifact-only API.
+
+The certificate independently replays receipt fingerprints and lineage,
+requires both q003 density groups with no postselection, closes all
+`15,052,040` complex dimensions per group through the canonical-orbit
+dimension sum, rejects every structural mismatch, and binds the reviewed
+production bytes to the historical source manifest. The independent theorem
+review records the sufficient conditions
+
+\[
+L_H=c|u\rangle\langle u|,\quad c\in\mathbb R,
+\qquad
+L_F=-\sum_s M_s^\dagger C_KM_s,\quad C_K=C_K^\dagger,
+\]
+
+together with signed conjugation, complete orbit preservation, adjoint
+transition restriction, a real one-body term, and factor-two real packing.
+The sign of `c` and positive-semidefiniteness of `C_K` are not reciprocity
+requirements; they concern definiteness instead.
+
+A positive artifact certificate may set only
+`source_bound_q003_reciprocity_established=True` and
+`whole_inventory_reciprocity_established=True` for those exact two immutable
+sources. It does not mutate the historical candidate receipt and does not
+expose `matvec`, `rmatvec`, `LinearOperator`, or eigensolver APIs. Complete
+stationarity, full-inventory exact-unitary scalar curvature, scalar-Hessian
+authority, Hermitian eigensolver authorization, local stability, production
+readiness, and paper reproduction remain separate false gates.
