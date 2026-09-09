@@ -177,6 +177,7 @@ _IMPORT_BRIDGE_PRIMITIVE_BINDINGS = (
     (np, "all", np.all),
     (np, "isfinite", np.isfinite),
     (np, "array_equal", np.array_equal),
+    (np, "count_nonzero", np.count_nonzero),
     (np, "asarray", np.asarray),
     (np, "int64", np.int64),
     (np, "bool_", np.bool_),
@@ -822,112 +823,90 @@ def _validate_q003_inventory_counts(context: object) -> tuple[int, int, int]:
 def _compare_full_transition_geometry(
     context: Vituri2024HFSpiralFullHessianContext,
 ) -> tuple[int, int, int, int]:
-    """Compare production ``J`` geometry with the scalar signed-block domain.
+    """Compare support, flavor blocks, and dimensions on the signed domain.
 
     Every nonempty canonical orbit and both of its signed lanes are traversed.
-    No action is applied and no sector is selected after inspection.
+    Support equality is evaluated once per displacement, and transition
+    dimensions are counted vectorially from the occupation masks.  This check
+    does not build transition embeddings or establish transition ordering,
+    ``J``, or ``J^dagger``.
     """
 
+    context.validate_live_state()
     inventory = context.inventory
     plan = context.response.fft_plan
+    occupations = inventory.selected_occupations
+    ordered_pair_dimensions_by_displacement: dict[tuple[int, int], Array] = {}
     support_mismatch_count = 0
     flavor_block_mismatch_count = 0
-    transition_embedding_mismatch_count = 0
-    transition_count = 0
+    transition_dimension_mismatch_count = 0
+    summed_transition_dimension = 0
     signed_lane_count = 0
     for orbit in inventory.iter_conjugate_orbits(include_zero_dimension=False):
         for key in (orbit.first, orbit.second):
             dimension = inventory.sector_complex_dimension(key)
             if dimension == 0:
                 continue
-            production_bases, production_targets = context.response.support_indices(key)
-            scalar_bases, scalar_targets = _scalar_module._support(
-                plan, (key.displacement_x, key.displacement_y)
-            )
-            if not (
-                np.array_equal(production_bases, scalar_bases)
-                and np.array_equal(production_targets, scalar_targets)
-            ):
-                support_mismatch_count += 1
-                continue
+            signed_lane_count += 1
+            displacement = (key.displacement_x, key.displacement_y)
+            if displacement not in ordered_pair_dimensions_by_displacement:
+                production_bases, production_targets = (
+                    _response_module._support_indices(inventory, key)
+                )
+                scalar_bases, scalar_targets = _scalar_module._support(
+                    plan, displacement
+                )
+                if not (
+                    np.array_equal(production_bases, scalar_bases)
+                    and np.array_equal(production_targets, scalar_targets)
+                ):
+                    support_mismatch_count += 1
+                hole_occupied = occupations[:, scalar_bases]
+                particle_virtual = ~occupations[:, scalar_targets]
+                ordered_pair_dimensions_by_displacement[displacement] = (
+                    np.count_nonzero(
+                        particle_virtual[:, None, :]
+                        & hole_occupied[None, :, :],
+                        axis=2,
+                    )
+                )
             production_blocks = _response_module._allowed_flavor_blocks(key)
             scalar_blocks = _scalar_module._allowed_blocks(key.valley_charge)
             if production_blocks != scalar_blocks:
                 flavor_block_mismatch_count += 1
-                continue
-            embedding = context._build_embedding(
-                key, production_bases, production_targets
+            block_indices = np.asarray(scalar_blocks, dtype=np.int64)
+            ordered_pair_dimensions = (
+                ordered_pair_dimensions_by_displacement[displacement]
             )
-            particle_slots: list[int] = []
-            hole_slots: list[int] = []
-            particle_k: list[int] = []
-            hole_k: list[int] = []
-            occupations = inventory.selected_occupations
-            for particle_slot, hole_slot in scalar_blocks:
-                for base, target in zip(
-                    scalar_bases.tolist(), scalar_targets.tolist(), strict=True
-                ):
-                    if occupations[hole_slot, base] and not occupations[
-                        particle_slot, target
-                    ]:
-                        particle_slots.append(particle_slot)
-                        hole_slots.append(hole_slot)
-                        particle_k.append(target)
-                        hole_k.append(base)
-            expected_arrays = (
-                np.asarray(particle_slots, dtype=np.int64),
-                np.asarray(hole_slots, dtype=np.int64),
-                np.asarray(particle_k, dtype=np.int64),
-                np.asarray(hole_k, dtype=np.int64),
+            expected_dimension = int(
+                ordered_pair_dimensions[
+                    block_indices[:, 0], block_indices[:, 1]
+                ].sum(dtype=np.int64)
             )
-            production_arrays = (
-                embedding.particle_valley_slots,
-                embedding.hole_valley_slots,
-                embedding.particle_k_indices,
-                embedding.hole_k_indices,
-            )
-            if not all(
-                np.array_equal(actual, expected)
-                for actual, expected in zip(
-                    production_arrays, expected_arrays, strict=True
-                )
-            ):
-                transition_embedding_mismatch_count += 1
-                continue
-            tuples = tuple(
-                zip(
-                    particle_slots,
-                    particle_k,
-                    hole_slots,
-                    hole_k,
-                    strict=True,
-                )
-            )
-            if len(set(tuples)) != len(tuples):
-                transition_embedding_mismatch_count += 1
-                continue
-            transition_dimension = len(tuples)
-            if transition_dimension != dimension:
-                transition_embedding_mismatch_count += 1
-                continue
-            transition_count += transition_dimension
-            signed_lane_count += 1
+            summed_transition_dimension += expected_dimension
+            if expected_dimension != dimension:
+                transition_dimension_mismatch_count += 1
     if (
         support_mismatch_count
         or flavor_block_mismatch_count
-        or transition_embedding_mismatch_count
+        or transition_dimension_mismatch_count
         or signed_lane_count != VITURI2024_Q003_NONEMPTY_SECTOR_COUNT
-        or transition_count != VITURI2024_Q003_COMPLEX_DIMENSION
+        or summed_transition_dimension != VITURI2024_Q003_COMPLEX_DIMENSION
     ):
         raise ValueError(
-            "production/scalar transition injection geometry disagrees on the "
-            "full q003 inventory"
+            "production/scalar transition-domain comparison disagrees on the "
+            "full q003 inventory: "
+            f"support_mismatches={support_mismatch_count}, "
+            f"flavor_block_mismatches={flavor_block_mismatch_count}, "
+            f"transition_dimension_mismatches={transition_dimension_mismatch_count}, "
+            f"signed_lanes={signed_lane_count}, "
+            f"summed_dimension={summed_transition_dimension}"
         )
     return (
         signed_lane_count,
         support_mismatch_count,
         flavor_block_mismatch_count,
-        transition_embedding_mismatch_count,
+        transition_dimension_mismatch_count,
     )
 
 
@@ -1075,7 +1054,7 @@ class Vituri2024Q003SameFunctionalSourceRecord:
     signed_lane_count_checked: int
     support_mismatch_count: int
     flavor_block_mismatch_count: int
-    transition_embedding_mismatch_count: int
+    transition_dimension_mismatch_count: int
     fingerprint: str = field(init=False)
 
     def __post_init__(self, _factory_token: object) -> None:
@@ -1238,7 +1217,7 @@ class Vituri2024Q003SameFunctionalStructuralReceipt:
                     source.signed_lane_count_checked == VITURI2024_Q003_NONEMPTY_SECTOR_COUNT,
                     source.support_mismatch_count == 0,
                     source.flavor_block_mismatch_count == 0,
-                    source.transition_embedding_mismatch_count == 0,
+                    source.transition_dimension_mismatch_count == 0,
                 )
             )
         locked = (
@@ -1333,7 +1312,7 @@ def _build_source_record(
         or orbit_count != group.canonical_orbit_count
     ):
         raise ValueError("live q003 inventory disagrees with reciprocity certificate")
-    signed_lanes, support_mismatches, flavor_mismatches, embedding_mismatches = (
+    signed_lanes, support_mismatches, flavor_mismatches, dimension_mismatches = (
         _compare_full_transition_geometry(live_context)
     )
     closure, offdiagonal, diagonal_imaginary, diagonal, action_bound = (
@@ -1361,7 +1340,7 @@ def _build_source_record(
         signed_lane_count_checked=signed_lanes,
         support_mismatch_count=support_mismatches,
         flavor_block_mismatch_count=flavor_mismatches,
-        transition_embedding_mismatch_count=embedding_mismatches,
+        transition_dimension_mismatch_count=dimension_mismatches,
     )
 
 

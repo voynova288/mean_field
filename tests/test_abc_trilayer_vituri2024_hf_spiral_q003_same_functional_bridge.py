@@ -538,11 +538,143 @@ def test_asymmetric_empty_orbit_partner_is_skipped_before_lane_count(
         "VITURI2024_Q003_COMPLEX_DIMENSION",
         inventory.complex_dimension,
     )
-    checked, support, flavor, embedding = bridge._compare_full_transition_geometry(
+    checked, support, flavor, dimension = bridge._compare_full_transition_geometry(
         reduced_context
     )
     assert checked == inventory.nonempty_sector_count == 49
-    assert (support, flavor, embedding) == (0, 0, 0)
+    assert (support, flavor, dimension) == (0, 0, 0)
+
+
+def test_support_is_compared_once_per_nonempty_displacement(
+    reduced_context,
+    monkeypatch,
+) -> None:
+    inventory = reduced_context.inventory
+    production_support = bridge._response_module._support_indices
+    scalar_support = bridge._scalar_module._support
+    production_calls: dict[tuple[int, int], int] = {}
+    scalar_calls: dict[tuple[int, int], int] = {}
+
+    def counted_production_support(inventory_value, key):
+        displacement = (key.displacement_x, key.displacement_y)
+        production_calls[displacement] = production_calls.get(displacement, 0) + 1
+        return production_support(inventory_value, key)
+
+    def counted_scalar_support(plan, displacement):
+        scalar_calls[displacement] = scalar_calls.get(displacement, 0) + 1
+        return scalar_support(plan, displacement)
+
+    monkeypatch.setattr(
+        bridge._response_module,
+        "_support_indices",
+        counted_production_support,
+    )
+    monkeypatch.setattr(bridge._scalar_module, "_support", counted_scalar_support)
+    monkeypatch.setattr(
+        bridge,
+        "VITURI2024_Q003_NONEMPTY_SECTOR_COUNT",
+        inventory.nonempty_sector_count,
+    )
+    monkeypatch.setattr(
+        bridge,
+        "VITURI2024_Q003_COMPLEX_DIMENSION",
+        inventory.complex_dimension,
+    )
+    bridge._compare_full_transition_geometry(reduced_context)
+    expected_displacements = {
+        (key.displacement_x, key.displacement_y)
+        for key in inventory.iter_sector_keys(include_zero_dimension=False)
+    }
+    assert production_calls == dict.fromkeys(expected_displacements, 1)
+    assert scalar_calls == dict.fromkeys(expected_displacements, 1)
+    assert len(expected_displacements) < inventory.nonempty_sector_count
+
+
+def test_transition_ordering_is_not_claimed_or_built(
+    reduced_context,
+    monkeypatch,
+) -> None:
+    inventory = reduced_context.inventory
+
+    def forbidden_embedding(*_args, **_kwargs):
+        raise AssertionError("transition embeddings must not be built")
+
+    monkeypatch.setattr(type(reduced_context), "_build_embedding", forbidden_embedding)
+    monkeypatch.setattr(
+        bridge,
+        "VITURI2024_Q003_NONEMPTY_SECTOR_COUNT",
+        inventory.nonempty_sector_count,
+    )
+    monkeypatch.setattr(
+        bridge,
+        "VITURI2024_Q003_COMPLEX_DIMENSION",
+        inventory.complex_dimension,
+    )
+    checked, support, flavor, dimension = bridge._compare_full_transition_geometry(
+        reduced_context
+    )
+    assert checked == inventory.nonempty_sector_count
+    assert (support, flavor, dimension) == (0, 0, 0)
+    source_fields = (
+        bridge.Vituri2024Q003SameFunctionalSourceRecord.__dataclass_fields__
+    )
+    assert "transition_dimension_mismatch_count" in source_fields
+    receipt_fields = (
+        bridge.Vituri2024Q003SameFunctionalStructuralReceipt.__dataclass_fields__
+    )
+    assert (
+        receipt_fields["transition_injection_extraction_adjoint_derived"].default
+        is False
+    )
+
+
+def test_vector_transition_dimension_rejects_inventory_mismatch(
+    reduced_context,
+    monkeypatch,
+) -> None:
+    inventory = reduced_context.inventory
+    target_key = next(inventory.iter_sector_keys(include_zero_dimension=False))
+    target_displacement = (target_key.displacement_x, target_key.displacement_y)
+    production_support = bridge._response_module._support_indices
+    scalar_support = bridge._scalar_module._support
+
+    def production_support_without_target(inventory_value, key):
+        bases, targets = production_support(inventory_value, key)
+        if (key.displacement_x, key.displacement_y) == target_displacement:
+            return bases[:0], targets[:0]
+        return bases, targets
+
+    def scalar_support_without_target(plan, displacement):
+        bases, targets = scalar_support(plan, displacement)
+        if displacement == target_displacement:
+            return bases[:0], targets[:0]
+        return bases, targets
+
+    monkeypatch.setattr(
+        bridge._response_module,
+        "_support_indices",
+        production_support_without_target,
+    )
+    monkeypatch.setattr(
+        bridge._scalar_module,
+        "_support",
+        scalar_support_without_target,
+    )
+    monkeypatch.setattr(
+        bridge,
+        "VITURI2024_Q003_NONEMPTY_SECTOR_COUNT",
+        inventory.nonempty_sector_count,
+    )
+    monkeypatch.setattr(
+        bridge,
+        "VITURI2024_Q003_COMPLEX_DIMENSION",
+        inventory.complex_dimension,
+    )
+    with pytest.raises(
+        ValueError,
+        match=r"transition_dimension_mismatches=[1-9]",
+    ):
+        bridge._compare_full_transition_geometry(reduced_context)
 
 
 def test_extra_and_mutable_inputs_fail_closed(reduced_context) -> None:
@@ -694,7 +826,7 @@ def test_factory_token_is_only_an_honest_caller_construction_boundary() -> None:
             signed_lane_count_checked=bridge.VITURI2024_Q003_NONEMPTY_SECTOR_COUNT,
             support_mismatch_count=0,
             flavor_block_mismatch_count=0,
-            transition_embedding_mismatch_count=0,
+            transition_dimension_mismatch_count=0,
         )
 
 
