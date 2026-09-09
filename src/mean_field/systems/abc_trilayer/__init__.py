@@ -795,6 +795,15 @@ from .vituri2024_hf_spiral_q003_same_functional_bridge import *  # noqa: F401,F4
 
 __all__ += list(_vituri2024_hf_spiral_q003_same_functional_bridge.__all__)
 
+# Candidate-only exact-integer transition/J-adjoint same-functional proof receipt.
+from . import (
+    vituri2024_hf_spiral_q003_same_functional_proof
+    as _vituri2024_hf_spiral_q003_same_functional_proof,
+)
+from .vituri2024_hf_spiral_q003_same_functional_proof import *  # noqa: F401,F403
+
+__all__ += list(_vituri2024_hf_spiral_q003_same_functional_proof.__all__)
+
 # Candidate-only fixed-flavor-rank Vituri BFS; generic ODA stays in core/hf.
 from . import vituri2024_hf_fixed_sector as _vituri2024_hf_fixed_sector
 from .vituri2024_hf_fixed_sector import *  # noqa: F401,F403
