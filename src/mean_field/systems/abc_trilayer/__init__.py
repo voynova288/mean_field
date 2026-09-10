@@ -733,6 +733,20 @@ from .vituri2024_hf_spiral import *  # noqa: F401,F403
 
 __all__ += list(_vituri2024_hf_spiral.__all__)
 
+# Tolerance-qualified nested-square initializer transfer receipts.
+from . import (
+    vituri2024_hf_spiral_density_embedding as _vituri2024_hf_spiral_density_embedding,
+)
+from .vituri2024_hf_spiral_density_embedding import *  # noqa: F401,F403
+
+__all__ += list(_vituri2024_hf_spiral_density_embedding.__all__)
+
+# Conditional-on-root exact-shell normal closure and source-group lineage.
+from . import vituri2024_hf_spiral_normal_closure as _vituri2024_hf_spiral_normal_closure
+from .vituri2024_hf_spiral_normal_closure import *  # noqa: F401,F403
+
+__all__ += list(_vituri2024_hf_spiral_normal_closure.__all__)
+
 # First restricted local-rank-preserving spiral-Hessian candidate lane.
 from . import vituri2024_hf_spiral_stability as _vituri2024_hf_spiral_stability
 from .vituri2024_hf_spiral_stability import *  # noqa: F401,F403

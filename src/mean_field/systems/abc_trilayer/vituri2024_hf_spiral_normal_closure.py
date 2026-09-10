@@ -16,7 +16,10 @@ adapter declares exact full steps as a separate fixed-point discriminator.
 For the eight job-468711 normal rejections, an external faithful diagnostic
 observed only unit ODA steps before each exact trigger; production use must bind
 that evidence separately.  This generic API does not claim ODA-trajectory
-parity for arbitrary prepared problems or after a branch is exposed.
+parity for arbitrary prepared problems or after a branch is exposed.  Its
+branch-tree exhaustion is conditional on the declared root; it neither
+exhausts a global source inventory nor excludes prior source-group
+postselection.
 """
 
 from __future__ import annotations
@@ -40,6 +43,9 @@ from .vituri2024_hf import (
     vituri2024_native_density_to_conventional_k_diagonal,
 )
 from .vituri2024_hf_preflight import INTERNAL_FLAVOR_ORDER
+from .vituri2024_hf_spiral_density_embedding import (
+    validate_vituri2024_spiral_density_embedding_receipt,
+)
 from .vituri2024_hf_spiral import (
     Vituri2024PreparedHFSpiral,
     Vituri2024SpiralOccupationBoundaryError,
@@ -57,6 +63,7 @@ VITURI2024_SPIRAL_NORMAL_CLOSURE_AUTHORITY = (
     "candidate finite-domain translation-preserving valley-incoherent normal "
     "global-rank coordinate-sector exact-shell closure"
 )
+VITURI2024_SPIRAL_NORMAL_SOURCE_LINEAGE_API_VERSION = "2"
 
 
 def _strict_int(value: object, label: str) -> int:
@@ -78,7 +85,10 @@ def _readonly(value: object, dtype: np.dtype | None = None) -> Array:
     array = np.asarray(value, dtype=dtype)
     if not np.all(np.isfinite(array)):
         raise ValueError("evidence array must be finite")
-    result = np.array(array, copy=True)
+    contiguous = np.ascontiguousarray(array)
+    result = np.frombuffer(
+        contiguous.tobytes(order="C"), dtype=contiguous.dtype
+    ).reshape(contiguous.shape)
     result.setflags(write=False)
     return result
 
@@ -327,8 +337,13 @@ class Vituri2024SpiralNormalInitializer:
     prepared_fingerprint: str
     policy_fingerprint: str
     boundary: Vituri2024SpiralNormalBoundary
-    h0_boundary_role: Literal["unique_aufbau", "declared_common_seed_exact_shell"]
+    h0_boundary_role: Literal[
+        "unique_aufbau",
+        "declared_common_seed_exact_shell",
+        "validated_embedding_receipt",
+    ]
     selected_occupied_flat_indices: tuple[int, ...]
+    embedding_receipt_fingerprint: str | None = None
     fingerprint: str = field(init=False)
 
     def __post_init__(self) -> None:
@@ -341,7 +356,10 @@ class Vituri2024SpiralNormalInitializer:
             _strict_int(value, "initializer occupied index")
             for value in self.selected_occupied_flat_indices
         )
-        if tuple(sorted(set(occupied))) != occupied or len(occupied) != self.boundary.selected_rank:
+        if (
+            tuple(sorted(set(occupied))) != occupied
+            or len(occupied) != self.boundary.selected_rank
+        ):
             raise ValueError("normal initializer occupied inventory is invalid")
         if self.h0_boundary_role == "unique_aufbau":
             valid = self.boundary.kind == "unique" and occupied == self.boundary.occupied_flat_indices
@@ -356,10 +374,23 @@ class Vituri2024SpiralNormalInitializer:
                 )
                 and len(selected_shell) == self.boundary.shell_selected_rank
             )
+        elif self.h0_boundary_role == "validated_embedding_receipt":
+            # This coordinate projector is intentionally independent of the h0
+            # boundary, but may only enter through a live validated embedding.
+            valid = (
+                len(occupied) == self.boundary.selected_rank
+                and type(self.embedding_receipt_fingerprint) is str
+                and len(self.embedding_receipt_fingerprint) == 64
+            )
         else:
             raise ValueError("normal initializer h0 boundary role is invalid")
         if not valid:
             raise ValueError("normal initializer boundary/occupation receipt is inconsistent")
+        if (
+            self.h0_boundary_role != "validated_embedding_receipt"
+            and self.embedding_receipt_fingerprint is not None
+        ):
+            raise ValueError("legacy normal initializer cannot bind an embedding receipt")
         object.__setattr__(self, "density_native", density)
         object.__setattr__(self, "selected_occupied_flat_indices", occupied)
         object.__setattr__(
@@ -374,6 +405,17 @@ class Vituri2024SpiralNormalInitializer:
                     "boundary_fingerprint": self.boundary.fingerprint,
                     "h0_boundary_role": self.h0_boundary_role,
                     "selected_occupied_flat_indices": occupied,
+                    # Preserve the legacy initializer payload byte-for-byte:
+                    # this key did not exist before supplied embeddings.
+                    **(
+                        {}
+                        if self.embedding_receipt_fingerprint is None
+                        else {
+                            "embedding_receipt_fingerprint": (
+                                self.embedding_receipt_fingerprint
+                            )
+                        }
+                    ),
                 }
             ),
         )
@@ -418,8 +460,9 @@ class Vituri2024SpiralNormalBranchTrigger:
         # Populations are retained as diagnostics, not as a selector.  The
         # declared closure exhausts every coordinate projector in an exact Fock
         # shell even when maximum-overlap continuation would prefer one subset.
-        # This is intentionally the same no-postselection branch universe used
-        # by the established Vituri fixed-sector closure.
+        # This is the same within-root exact-shell branch universe used by the
+        # established Vituri fixed-sector closure; it makes no claim about
+        # source-group selection before this root was supplied.
         object.__setattr__(self, "generation", generation)
         object.__setattr__(self, "canonical_choice_count", count)
         object.__setattr__(self, "shell_previous_populations", populations)
@@ -600,6 +643,18 @@ class Vituri2024SpiralNormalStationaryGroup:
     energy_min_ev: float
     energy_max_ev: float
 
+    def __post_init__(self) -> None:
+        if (
+            type(self.final_density_sha256) is not str
+            or len(self.final_density_sha256) != 64
+            or not self.path_ids
+            or any(type(path_id) is not str or not path_id for path_id in self.path_ids)
+            or not math.isfinite(self.energy_min_ev)
+            or not math.isfinite(self.energy_max_ev)
+            or self.energy_min_ev > self.energy_max_ev
+        ):
+            raise ValueError("normal stationary group evidence is invalid")
+
 
 @dataclass(frozen=True, slots=True)
 class Vituri2024SpiralNormalClosureResult:
@@ -656,6 +711,24 @@ class Vituri2024SpiralNormalClosureResult:
             )
         ):
             raise ValueError("normal closure authority was inflated")
+
+    @property
+    def exhaustion_scope(self) -> Literal[
+        "conditional_on_common_h0_root", "conditional_on_supplied_root"
+    ]:
+        return (
+            "conditional_on_supplied_root"
+            if self.initializer.embedding_receipt_fingerprint is not None
+            else "conditional_on_common_h0_root"
+        )
+
+    @property
+    def global_source_inventory_exhausted(self) -> Literal[False]:
+        return False
+
+    @property
+    def source_postselection_excluded(self) -> Literal[False]:
+        return False
 
 
 class _ScientificTerminal(RuntimeError):
@@ -1064,20 +1137,70 @@ def _density_from_boundary(
     )
 
 
+def _bind_supplied_normal_density(
+    prepared: Vituri2024PreparedHFSpiral,
+    density_native: object,
+) -> tuple[Array, tuple[int, ...]]:
+    """Privately bind one exact normal coordinate projector at target rank."""
+
+    density = np.asarray(density_native)
+    if (
+        density.dtype != np.dtype(np.complex128)
+        or density.shape != (4, 4, prepared.nk)
+        or not np.all(np.isfinite(density))
+    ):
+        raise ValueError(
+            "supplied normal density must be finite complex128 with shape (4,4,Nk)"
+        )
+    bound = _readonly(density, np.dtype(np.complex128))
+    conventional = vituri2024_native_density_to_conventional_k_diagonal(bound)
+    diagonal = np.zeros_like(conventional)
+    indices = np.arange(4, dtype=np.int64)
+    diagonal[indices, indices, :] = conventional[indices, indices, :]
+    if not np.array_equal(conventional, diagonal):
+        raise ValueError("supplied normal density must be exactly flavor diagonal")
+    populations = conventional[indices, indices, :].real
+    if (
+        not np.array_equal(conventional[indices, indices, :].imag, np.zeros((4, prepared.nk)))
+        or not np.array_equal(populations, np.rint(populations))
+        or np.any((populations < 0.0) | (populations > 1.0))
+    ):
+        raise ValueError("supplied normal density must have exact binary populations")
+    spectators = _spectator_flavors(prepared)
+    if not np.array_equal(
+        conventional[np.asarray(spectators, dtype=np.int64), np.asarray(spectators, dtype=np.int64), :],
+        np.ones((2, prepared.nk), dtype=np.complex128),
+    ):
+        raise ValueError("supplied normal density must keep the spectator spin exactly full")
+    selected = _selected_flavors(prepared)
+    selected_diagonal = np.concatenate(
+        [conventional[flavor, flavor, :].real for flavor in selected]
+    )
+    occupied = tuple(int(value) for value in np.flatnonzero(selected_diagonal == 1.0))
+    if len(occupied) != prepared.selected_rank:
+        raise ValueError("supplied normal density changed the selected-spin global rank")
+    return bound, occupied
+
+
 def build_vituri2024_spiral_normal_initializer(
     prepared: Vituri2024PreparedHFSpiral,
     *,
     policy: Vituri2024SpiralNormalClosurePolicy,
+    density_embedding_receipt: object | None = None,
 ) -> Vituri2024SpiralNormalInitializer:
-    """Bind the one declared common normal seed used by the source scout.
+    """Bind the common-h0 seed or a factory-validated embedded projector.
 
-    A unique h0 boundary is independently rebuilt by thresholding. An exact
-    h0 boundary is allowed only as an explicit initializer receipt: the source
-    scout's deterministic coordinate seed is validated against the full exact
-    shell but is not promoted to a physical occupation choice. Exact shells
-    encountered by an applied SCF map are still exhaustively fanned out.
+    A target-domain density cannot be supplied bare.  The optional root must
+    arrive through a typed embedding receipt whose complete live preparation,
+    density hash, scalar, label-map, and index-partition contract is rechecked.
+    Exhaustion from such a root is conditional and says nothing about whether
+    a source group was postselected before embedding.
     """
 
+    if type(prepared) is not Vituri2024PreparedHFSpiral:
+        raise TypeError("prepared must be Vituri2024PreparedHFSpiral")
+    prepared.validate_live_state()
+    policy.validate_live_state()
     if _max_abs(prepared.functional.normal_order_reference_conventional) != 0.0:
         raise ValueError(
             "spiral normal closure currently requires the exact zero normal-order reference"
@@ -1085,6 +1208,33 @@ def build_vituri2024_spiral_normal_initializer(
     boundary = analyze_vituri2024_spiral_normal_boundary(
         prepared, np.asarray(prepared.h0_native), policy=policy
     )
+    if density_embedding_receipt is not None:
+        density_embedding_receipt = (
+            validate_vituri2024_spiral_density_embedding_receipt(
+                density_embedding_receipt
+            )
+        )
+        if (
+            density_embedding_receipt.target_prepared_fingerprint != prepared.fingerprint
+            or density_embedding_receipt.target_prepared.fingerprint != prepared.fingerprint
+            or density_embedding_receipt.target_density_sha256
+            != _array_sha256(density_embedding_receipt.embedded_density_native)
+        ):
+            raise ValueError("embedding receipt does not hash-match target prepared/density")
+        supplied, occupied = _bind_supplied_normal_density(
+            prepared, density_embedding_receipt.embedded_density_native
+        )
+        return Vituri2024SpiralNormalInitializer(
+            density_native=supplied,
+            density_sha256=_array_sha256(supplied),
+            h0_sha256=_array_sha256(prepared.h0_native),
+            prepared_fingerprint=prepared.fingerprint,
+            policy_fingerprint=policy.fingerprint,
+            boundary=boundary,
+            h0_boundary_role="validated_embedding_receipt",
+            selected_occupied_flat_indices=occupied,
+            embedding_receipt_fingerprint=density_embedding_receipt.fingerprint,
+        )
     if boundary.kind == "positive_subtolerance":
         raise _ScientificTerminal(
             "h0_normal_positive_subtolerance_rejection",
@@ -1143,6 +1293,7 @@ def _run_path(
     path: Vituri2024SpiralNormalBranchPath,
     *,
     policy: Vituri2024SpiralNormalClosurePolicy,
+    density_embedding_receipt: object | None,
     dense_boundary_oracle_prepared: Vituri2024PreparedHFSpiral | None,
     dense_boundary_oracle_cache: dict[
         str,
@@ -1154,7 +1305,11 @@ def _run_path(
     ],
     dense_boundary_oracle_receipt_fingerprints: list[str],
 ) -> NormalPathOutcome:
-    rebuilt = build_vituri2024_spiral_normal_initializer(prepared, policy=policy)
+    rebuilt = build_vituri2024_spiral_normal_initializer(
+        prepared,
+        policy=policy,
+        density_embedding_receipt=density_embedding_receipt,
+    )
     if (
         initializer.fingerprint != rebuilt.fingerprint
         or not np.array_equal(initializer.density_native, rebuilt.density_native)
@@ -1558,13 +1713,758 @@ def _stationary_groups(
     )
 
 
-def run_vituri2024_spiral_normal_exact_shell_closure(
+def _strict_sha256(value: object, label: str) -> str:
+    if (
+        type(value) is not str
+        or len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        raise ValueError(f"{label} must be a lowercase SHA256")
+    return value
+
+
+def _strict_string_tuple(value: object, label: str) -> tuple[str, ...]:
+    if type(value) is not tuple or any(type(item) is not str or not item for item in value):
+        raise TypeError(f"{label} must be an exact tuple of nonempty strings")
+    return value
+
+
+def _stationary_group_fingerprint(
+    group: Vituri2024SpiralNormalStationaryGroup,
+) -> str:
+    if type(group) is not Vituri2024SpiralNormalStationaryGroup:
+        raise TypeError("source stationary group must be exact typed evidence")
+    return _fingerprint(
+        {
+            "final_density_sha256": group.final_density_sha256,
+            "path_ids": group.path_ids,
+            "energy_min_ev": group.energy_min_ev,
+            "energy_max_ev": group.energy_max_ev,
+        }
+    )
+
+
+def _source_closure_lineage_snapshot(
+    result: Vituri2024SpiralNormalClosureResult,
+) -> dict[str, object]:
+    """Build the exact scalar/tuple digest schema for a source closure."""
+
+    if type(result) is not Vituri2024SpiralNormalClosureResult:
+        raise TypeError("source_closure_result must be typed")
+    expected_result_schema = (
+        "policy",
+        "initializer",
+        "prepared_fingerprint",
+        "nodes",
+        "endpoints",
+        "rejections",
+        "stationary_groups",
+        "branch_tree_exhausted",
+        "deterministic_terminal_replay_verified",
+        "all_normal_endpoints_stationary",
+        "all_applied_steps_full_step",
+        "dense_boundary_oracle_prepared_fingerprint",
+        "dense_boundary_oracle_pair_fingerprint",
+        "dense_boundary_oracle_receipt_fingerprints",
+        "candidate_finite_domain_only",
+        "same_q_energy_comparison_authorized",
+        "uv_authority",
+        "unrestricted_ground_state_authority",
+        "local_hessian_authority",
+        "fig2_reproduction_authority",
+        "tdhf_authority",
+        "production_authority",
+    )
+    if tuple(result.__dataclass_fields__) != expected_result_schema:
+        raise TypeError("source closure result schema drifted")
+    result.policy.validate_live_state()
+    _strict_sha256(result.prepared_fingerprint, "source prepared fingerprint")
+    if result.initializer.prepared_fingerprint != result.prepared_fingerprint:
+        raise ValueError("source initializer/prepared fingerprint mismatch")
+    initializer_payload = {
+        "density_sha256": result.initializer.density_sha256,
+        "h0_sha256": result.initializer.h0_sha256,
+        "prepared_fingerprint": result.initializer.prepared_fingerprint,
+        "policy_fingerprint": result.initializer.policy_fingerprint,
+        "boundary_fingerprint": result.initializer.boundary.fingerprint,
+        "h0_boundary_role": result.initializer.h0_boundary_role,
+        "selected_occupied_flat_indices": (
+            result.initializer.selected_occupied_flat_indices
+        ),
+        **(
+            {}
+            if result.initializer.embedding_receipt_fingerprint is None
+            else {
+                "embedding_receipt_fingerprint": (
+                    result.initializer.embedding_receipt_fingerprint
+                )
+            }
+        ),
+    }
+    if (
+        result.initializer.policy_fingerprint != result.policy.fingerprint
+        or result.initializer.density_sha256
+        != _array_sha256(result.initializer.density_native)
+        or result.initializer.fingerprint != _fingerprint(initializer_payload)
+    ):
+        raise ValueError("source initializer live fingerprint/hash drifted")
+    for name in (
+        "nodes",
+        "endpoints",
+        "rejections",
+        "stationary_groups",
+        "dense_boundary_oracle_receipt_fingerprints",
+    ):
+        if type(getattr(result, name)) is not tuple:
+            raise TypeError(f"source closure {name} must be an exact tuple")
+    for name in (
+        "branch_tree_exhausted",
+        "deterministic_terminal_replay_verified",
+        "all_normal_endpoints_stationary",
+        "all_applied_steps_full_step",
+        "candidate_finite_domain_only",
+        "same_q_energy_comparison_authorized",
+        "uv_authority",
+        "unrestricted_ground_state_authority",
+        "local_hessian_authority",
+        "fig2_reproduction_authority",
+        "tdhf_authority",
+        "production_authority",
+    ):
+        if type(getattr(result, name)) is not bool:
+            raise TypeError(f"source closure {name} must be an exact bool")
+    if (
+        result.branch_tree_exhausted is not True
+        or result.deterministic_terminal_replay_verified is not True
+        or result.global_source_inventory_exhausted is not False
+        or result.source_postselection_excluded is not False
+        or result.candidate_finite_domain_only is not True
+        or any(
+            (
+                result.same_q_energy_comparison_authorized,
+                result.uv_authority,
+                result.unrestricted_ground_state_authority,
+                result.local_hessian_authority,
+                result.fig2_reproduction_authority,
+                result.tdhf_authority,
+                result.production_authority,
+            )
+        )
+    ):
+        raise ValueError("source closure authority/scope is not lineage-qualified")
+    if any(type(node) is not Vituri2024SpiralNormalBFSNode for node in result.nodes):
+        raise TypeError("source closure node inventory is not exact typed evidence")
+    if any(type(item) is not Vituri2024SpiralNormalEndpoint for item in result.endpoints):
+        raise TypeError("source closure endpoint inventory is not exact typed evidence")
+    if any(
+        type(item) is not Vituri2024SpiralNormalScientificRejection
+        for item in result.rejections
+    ):
+        raise TypeError("source closure rejection inventory is not exact typed evidence")
+    if any(
+        type(item) is not Vituri2024SpiralNormalStationaryGroup
+        for item in result.stationary_groups
+    ):
+        raise TypeError("source closure stationary-group inventory is not exact typed evidence")
+    expected_density_shape = result.initializer.density_native.shape
+    for index, endpoint in enumerate(result.endpoints):
+        density = endpoint.final_density
+        label = f"source endpoint[{index}] final density"
+        if type(density) is not np.ndarray:
+            raise TypeError(f"{label} must be an exact ndarray")
+        if density.dtype != np.dtype(np.complex128):
+            raise TypeError(f"{label} must have dtype complex128")
+        if (
+            density.ndim != 3
+            or density.shape[:2] != (4, 4)
+            or density.shape != expected_density_shape
+        ):
+            raise ValueError(f"{label} shape mismatch")
+        if not np.all(np.isfinite(density)):
+            raise ValueError(f"{label} must be finite")
+        _strict_sha256(endpoint.final_density_sha256, f"{label} SHA256")
+        if _array_sha256(density) != endpoint.final_density_sha256:
+            raise ValueError(f"{label} live hash mismatch")
+    recomputed_groups = _stationary_groups(result.endpoints)
+    if recomputed_groups != result.stationary_groups:
+        raise ValueError("source closure stationary-group inventory drifted")
+    expected_all_stationary = bool(result.endpoints) and all(
+        endpoint.stationary for endpoint in result.endpoints
+    )
+    if result.all_normal_endpoints_stationary != expected_all_stationary:
+        raise ValueError("source closure aggregate stationarity flag drifted")
+    dense_receipts = _strict_string_tuple(
+        result.dense_boundary_oracle_receipt_fingerprints,
+        "dense boundary oracle receipt fingerprints",
+    )
+    if tuple(sorted(set(dense_receipts))) != dense_receipts:
+        raise ValueError("source closure dense-oracle inventory is not sorted/unique")
+    for name in (
+        "dense_boundary_oracle_prepared_fingerprint",
+        "dense_boundary_oracle_pair_fingerprint",
+    ):
+        value = getattr(result, name)
+        if value is not None:
+            _strict_sha256(value, name)
+    oracle_bound = (
+        result.dense_boundary_oracle_prepared_fingerprint is not None
+        and result.dense_boundary_oracle_pair_fingerprint is not None
+    )
+    if oracle_bound != bool(
+        result.dense_boundary_oracle_prepared_fingerprint
+        or result.dense_boundary_oracle_pair_fingerprint
+    ) or (dense_receipts and not oracle_bound):
+        raise ValueError("source closure dense-oracle binding is inconsistent")
+
+    node_digests = tuple(
+        _fingerprint(
+            {
+                "path_id": node.path.path_id,
+                "path_fingerprint": node.path.fingerprint,
+                "outcome": node.outcome,
+                "child_path_ids": node.child_path_ids,
+            }
+        )
+        for node in result.nodes
+    )
+    endpoint_digests = tuple(_outcome_digest(item) for item in result.endpoints)
+    rejection_digests = tuple(_outcome_digest(item) for item in result.rejections)
+    group_fingerprints = tuple(
+        _stationary_group_fingerprint(group) for group in result.stationary_groups
+    )
+    payload = {
+        "api_version": VITURI2024_SPIRAL_NORMAL_SOURCE_LINEAGE_API_VERSION,
+        "result_schema": expected_result_schema,
+        "prepared_fingerprint": result.prepared_fingerprint,
+        "policy_schema_and_values": tuple(
+            (name, getattr(result.policy, name))
+            for name in result.policy.__dataclass_fields__
+        ),
+        "initializer_payload": tuple(initializer_payload.items()),
+        "initializer_fingerprint": result.initializer.fingerprint,
+        "node_path_ids": tuple(node.path.path_id for node in result.nodes),
+        "node_digests": node_digests,
+        "endpoint_path_ids": tuple(item.path.path_id for item in result.endpoints),
+        "endpoint_outcome_digests": endpoint_digests,
+        "rejection_path_ids": tuple(item.path.path_id for item in result.rejections),
+        "rejection_outcome_digests": rejection_digests,
+        "stationary_group_fingerprints": group_fingerprints,
+        "stationary_group_path_ids": tuple(
+            group.path_ids for group in result.stationary_groups
+        ),
+        "branch_tree_exhausted": result.branch_tree_exhausted,
+        "exhaustion_scope": result.exhaustion_scope,
+        "global_source_inventory_exhausted": (
+            result.global_source_inventory_exhausted
+        ),
+        "source_postselection_excluded": result.source_postselection_excluded,
+        "deterministic_terminal_replay_verified": (
+            result.deterministic_terminal_replay_verified
+        ),
+        "all_normal_endpoints_stationary": result.all_normal_endpoints_stationary,
+        "all_applied_steps_full_step": result.all_applied_steps_full_step,
+        "dense_boundary_oracle_prepared_fingerprint": (
+            result.dense_boundary_oracle_prepared_fingerprint
+        ),
+        "dense_boundary_oracle_pair_fingerprint": (
+            result.dense_boundary_oracle_pair_fingerprint
+        ),
+        "dense_boundary_oracle_receipt_fingerprints": dense_receipts,
+        "candidate_finite_domain_only": result.candidate_finite_domain_only,
+        "same_q_energy_comparison_authorized": (
+            result.same_q_energy_comparison_authorized
+        ),
+        "uv_authority": result.uv_authority,
+        "unrestricted_ground_state_authority": (
+            result.unrestricted_ground_state_authority
+        ),
+        "local_hessian_authority": result.local_hessian_authority,
+        "fig2_reproduction_authority": result.fig2_reproduction_authority,
+        "tdhf_authority": result.tdhf_authority,
+        "production_authority": result.production_authority,
+    }
+    return {
+        "digest": _fingerprint(payload),
+        "node_digests": node_digests,
+        "endpoint_digests": endpoint_digests,
+        "rejection_digests": rejection_digests,
+        "group_fingerprints": group_fingerprints,
+    }
+
+
+def _source_closure_lineage_digest(
+    result: Vituri2024SpiralNormalClosureResult,
+) -> str:
+    return str(_source_closure_lineage_snapshot(result)["digest"])
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class _Vituri2024SpiralNormalSourceLineageReceipt:
+    """Private, detached, array-free source-group lineage factory product."""
+
+    source_closure_digest: str
+    source_prepared_fingerprint: str
+    source_policy_fingerprint: str
+    source_initializer_fingerprint: str
+    source_initializer_density_sha256: str
+    source_group_index: int
+    source_group_fingerprint: str
+    source_group_final_density_sha256: str
+    source_group_endpoint_path_ids: tuple[str, ...]
+    all_source_endpoint_path_ids: tuple[str, ...]
+    source_node_digests: tuple[str, ...]
+    source_endpoint_outcome_digests: tuple[str, ...]
+    source_rejection_outcome_digests: tuple[str, ...]
+    source_stationary_group_fingerprints: tuple[str, ...]
+    source_group_endpoint_multiplicity: int
+    all_source_endpoint_multiplicity: int
+    stationary_group_multiplicity: int
+    stationary_endpoint_multiplicity: int
+    source_rejection_multiplicity: int
+    exhaustion_scope: Literal[
+        "conditional_on_common_h0_root", "conditional_on_supplied_root"
+    ]
+    branch_tree_exhausted: Literal[True]
+    deterministic_terminal_replay_verified: Literal[True]
+    all_normal_endpoints_stationary: bool
+    all_applied_steps_full_step: bool
+    dense_boundary_oracle_prepared_fingerprint: str | None
+    dense_boundary_oracle_pair_fingerprint: str | None
+    dense_boundary_oracle_receipt_fingerprints: tuple[str, ...]
+    candidate_finite_domain_only: Literal[True]
+    same_q_energy_comparison_authorized: Literal[False]
+    uv_authority: Literal[False]
+    unrestricted_ground_state_authority: Literal[False]
+    local_hessian_authority: Literal[False]
+    fig2_reproduction_authority: Literal[False]
+    tdhf_authority: Literal[False]
+    production_authority: Literal[False]
+    global_source_inventory_exhausted: Literal[False]
+    source_group_selected: Literal[True]
+    source_postselection_excluded: Literal[False]
+    fingerprint: str = field(init=False)
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        raise TypeError("normal source-lineage receipts are factory-only")
+
+    def _current_fingerprint(self) -> str:
+        return _fingerprint(
+            {
+                "api_version": VITURI2024_SPIRAL_NORMAL_SOURCE_LINEAGE_API_VERSION,
+                **{
+                    name: getattr(self, name)
+                    for name in self.__dataclass_fields__
+                    if name != "fingerprint"
+                },
+            }
+        )
+
+    def _validate_detached_state(self) -> None:
+        expected_schema = (
+            "source_closure_digest",
+            "source_prepared_fingerprint",
+            "source_policy_fingerprint",
+            "source_initializer_fingerprint",
+            "source_initializer_density_sha256",
+            "source_group_index",
+            "source_group_fingerprint",
+            "source_group_final_density_sha256",
+            "source_group_endpoint_path_ids",
+            "all_source_endpoint_path_ids",
+            "source_node_digests",
+            "source_endpoint_outcome_digests",
+            "source_rejection_outcome_digests",
+            "source_stationary_group_fingerprints",
+            "source_group_endpoint_multiplicity",
+            "all_source_endpoint_multiplicity",
+            "stationary_group_multiplicity",
+            "stationary_endpoint_multiplicity",
+            "source_rejection_multiplicity",
+            "exhaustion_scope",
+            "branch_tree_exhausted",
+            "deterministic_terminal_replay_verified",
+            "all_normal_endpoints_stationary",
+            "all_applied_steps_full_step",
+            "dense_boundary_oracle_prepared_fingerprint",
+            "dense_boundary_oracle_pair_fingerprint",
+            "dense_boundary_oracle_receipt_fingerprints",
+            "candidate_finite_domain_only",
+            "same_q_energy_comparison_authorized",
+            "uv_authority",
+            "unrestricted_ground_state_authority",
+            "local_hessian_authority",
+            "fig2_reproduction_authority",
+            "tdhf_authority",
+            "production_authority",
+            "global_source_inventory_exhausted",
+            "source_group_selected",
+            "source_postselection_excluded",
+            "fingerprint",
+        )
+        if tuple(self.__dataclass_fields__) != expected_schema:
+            raise TypeError("source-lineage receipt schema drifted")
+        for name in (
+            "source_closure_digest",
+            "source_prepared_fingerprint",
+            "source_policy_fingerprint",
+            "source_initializer_fingerprint",
+            "source_initializer_density_sha256",
+            "source_group_fingerprint",
+            "source_group_final_density_sha256",
+            "fingerprint",
+        ):
+            _strict_sha256(getattr(self, name), name)
+        for name in (
+            "source_node_digests",
+            "source_endpoint_outcome_digests",
+            "source_rejection_outcome_digests",
+            "source_stationary_group_fingerprints",
+            "dense_boundary_oracle_receipt_fingerprints",
+        ):
+            values = _strict_string_tuple(getattr(self, name), name)
+            for index, value in enumerate(values):
+                _strict_sha256(value, f"{name}[{index}]")
+        group_paths = _strict_string_tuple(
+            self.source_group_endpoint_path_ids,
+            "source_group_endpoint_path_ids",
+        )
+        all_paths = _strict_string_tuple(
+            self.all_source_endpoint_path_ids, "all_source_endpoint_path_ids"
+        )
+        if not group_paths:
+            raise ValueError("source-group path inventory must be nonempty")
+        for name in (
+            "source_group_index",
+            "source_group_endpoint_multiplicity",
+            "all_source_endpoint_multiplicity",
+            "stationary_group_multiplicity",
+            "stationary_endpoint_multiplicity",
+            "source_rejection_multiplicity",
+        ):
+            value = _strict_int(getattr(self, name), name)
+            if value < 0:
+                raise ValueError(f"{name} must be nonnegative")
+        if (
+            self.source_group_index >= self.stationary_group_multiplicity
+            or self.source_group_fingerprint
+            != self.source_stationary_group_fingerprints[self.source_group_index]
+            or not set(group_paths).issubset(all_paths)
+            or self.source_group_endpoint_multiplicity != len(group_paths)
+            or self.all_source_endpoint_multiplicity != len(all_paths)
+            or self.all_source_endpoint_multiplicity
+            != len(self.source_endpoint_outcome_digests)
+            or self.stationary_group_multiplicity
+            != len(self.source_stationary_group_fingerprints)
+            or self.stationary_endpoint_multiplicity < len(group_paths)
+            or self.stationary_endpoint_multiplicity > len(all_paths)
+            or (
+                self.all_normal_endpoints_stationary
+                and self.stationary_endpoint_multiplicity != len(all_paths)
+            )
+            or self.source_rejection_multiplicity
+            != len(self.source_rejection_outcome_digests)
+        ):
+            raise ValueError("source-lineage multiplicity schema is inconsistent")
+        for name in (
+            "branch_tree_exhausted",
+            "deterministic_terminal_replay_verified",
+            "all_normal_endpoints_stationary",
+            "all_applied_steps_full_step",
+            "candidate_finite_domain_only",
+            "same_q_energy_comparison_authorized",
+            "uv_authority",
+            "unrestricted_ground_state_authority",
+            "local_hessian_authority",
+            "fig2_reproduction_authority",
+            "tdhf_authority",
+            "production_authority",
+            "global_source_inventory_exhausted",
+            "source_group_selected",
+            "source_postselection_excluded",
+        ):
+            if type(getattr(self, name)) is not bool:
+                raise TypeError(f"{name} must be an exact bool")
+        if (
+            type(self.exhaustion_scope) is not str
+            or self.exhaustion_scope
+            not in ("conditional_on_common_h0_root", "conditional_on_supplied_root")
+            or self.branch_tree_exhausted is not True
+            or self.deterministic_terminal_replay_verified is not True
+            or self.candidate_finite_domain_only is not True
+            or self.global_source_inventory_exhausted is not False
+            or self.source_group_selected is not True
+            or self.source_postselection_excluded is not False
+            or any(
+                (
+                    self.same_q_energy_comparison_authorized,
+                    self.uv_authority,
+                    self.unrestricted_ground_state_authority,
+                    self.local_hessian_authority,
+                    self.fig2_reproduction_authority,
+                    self.tdhf_authority,
+                    self.production_authority,
+                )
+            )
+        ):
+            raise ValueError("source-lineage authority/scope flags are invalid")
+        for name in (
+            "dense_boundary_oracle_prepared_fingerprint",
+            "dense_boundary_oracle_pair_fingerprint",
+        ):
+            value = getattr(self, name)
+            if value is not None:
+                _strict_sha256(value, name)
+        oracle_bound = (
+            self.dense_boundary_oracle_prepared_fingerprint is not None
+            and self.dense_boundary_oracle_pair_fingerprint is not None
+        )
+        if oracle_bound != bool(
+            self.dense_boundary_oracle_prepared_fingerprint
+            or self.dense_boundary_oracle_pair_fingerprint
+        ) or (self.dense_boundary_oracle_receipt_fingerprints and not oracle_bound):
+            raise ValueError("source-lineage dense-oracle binding is inconsistent")
+        allowed_scalars = (bytes, str, int, float, bool, type(None))
+
+        def detached(value: object) -> bool:
+            return type(value) in allowed_scalars or (
+                type(value) is tuple and all(detached(item) for item in value)
+            )
+
+        if any(
+            not detached(getattr(self, name))
+            for name in self.__dataclass_fields__
+            if name != "fingerprint"
+        ):
+            raise TypeError("source-lineage receipt must remain bytes/scalars/tuples only")
+        if self._current_fingerprint() != self.fingerprint:
+            raise ValueError("source-lineage receipt fingerprint drifted")
+
+
+
+
+def _source_lineage_fields(
+    source_closure_result: Vituri2024SpiralNormalClosureResult,
+    source_group_index: int,
+    snapshot: dict[str, object],
+) -> dict[str, object]:
+    group = source_closure_result.stationary_groups[source_group_index]
+    return {
+        "source_closure_digest": snapshot["digest"],
+        "source_prepared_fingerprint": source_closure_result.prepared_fingerprint,
+        "source_policy_fingerprint": source_closure_result.policy.fingerprint,
+        "source_initializer_fingerprint": source_closure_result.initializer.fingerprint,
+        "source_initializer_density_sha256": source_closure_result.initializer.density_sha256,
+        "source_group_index": source_group_index,
+        "source_group_fingerprint": _stationary_group_fingerprint(group),
+        "source_group_final_density_sha256": group.final_density_sha256,
+        "source_group_endpoint_path_ids": group.path_ids,
+        "all_source_endpoint_path_ids": tuple(
+            endpoint.path.path_id for endpoint in source_closure_result.endpoints
+        ),
+        "source_node_digests": snapshot["node_digests"],
+        "source_endpoint_outcome_digests": snapshot["endpoint_digests"],
+        "source_rejection_outcome_digests": snapshot["rejection_digests"],
+        "source_stationary_group_fingerprints": snapshot["group_fingerprints"],
+        "source_group_endpoint_multiplicity": len(group.path_ids),
+        "all_source_endpoint_multiplicity": len(source_closure_result.endpoints),
+        "stationary_group_multiplicity": len(source_closure_result.stationary_groups),
+        "stationary_endpoint_multiplicity": sum(
+            len(item.path_ids) for item in source_closure_result.stationary_groups
+        ),
+        "source_rejection_multiplicity": len(source_closure_result.rejections),
+        "exhaustion_scope": source_closure_result.exhaustion_scope,
+        "branch_tree_exhausted": source_closure_result.branch_tree_exhausted,
+        "deterministic_terminal_replay_verified": source_closure_result.deterministic_terminal_replay_verified,
+        "all_normal_endpoints_stationary": source_closure_result.all_normal_endpoints_stationary,
+        "all_applied_steps_full_step": source_closure_result.all_applied_steps_full_step,
+        "dense_boundary_oracle_prepared_fingerprint": source_closure_result.dense_boundary_oracle_prepared_fingerprint,
+        "dense_boundary_oracle_pair_fingerprint": source_closure_result.dense_boundary_oracle_pair_fingerprint,
+        "dense_boundary_oracle_receipt_fingerprints": source_closure_result.dense_boundary_oracle_receipt_fingerprints,
+        "candidate_finite_domain_only": source_closure_result.candidate_finite_domain_only,
+        "same_q_energy_comparison_authorized": source_closure_result.same_q_energy_comparison_authorized,
+        "uv_authority": source_closure_result.uv_authority,
+        "unrestricted_ground_state_authority": source_closure_result.unrestricted_ground_state_authority,
+        "local_hessian_authority": source_closure_result.local_hessian_authority,
+        "fig2_reproduction_authority": source_closure_result.fig2_reproduction_authority,
+        "tdhf_authority": source_closure_result.tdhf_authority,
+        "production_authority": source_closure_result.production_authority,
+        "global_source_inventory_exhausted": False,
+        "source_group_selected": True,
+        "source_postselection_excluded": False,
+    }
+
+
+def _make_source_lineage_authority_api(run_implementation):
+    """Share strong result/product identity registration only inside this closure."""
+
+    issued_identities: dict[int, tuple[object, str]] = {}
+    complete_inventory_qualification_by_id: dict[int, tuple[str, str]] = {}
+
+    def require_registered_result(
+        result: object,
+    ) -> tuple[Vituri2024SpiralNormalClosureResult, dict[str, object]]:
+        if type(result) is not Vituri2024SpiralNormalClosureResult:
+            raise TypeError("source_closure_result must be typed")
+        issued = issued_identities.get(id(result))
+        if issued is None or issued[0] is not result:
+            raise TypeError(
+                "source closure result identity is not registered by the public runner"
+            )
+        snapshot = _source_closure_lineage_snapshot(result)
+        if issued[1] != snapshot["digest"]:
+            raise ValueError("source closure result changed after runner registration")
+        return result, snapshot
+
+    def construct(**fields: object) -> _Vituri2024SpiralNormalSourceLineageReceipt:
+        expected_fields = tuple(
+            name
+            for name in _Vituri2024SpiralNormalSourceLineageReceipt.__dataclass_fields__
+            if name != "fingerprint"
+        )
+        if set(fields) != set(expected_fields):
+            raise TypeError("source-lineage receipt factory field schema drifted")
+        product = object.__new__(_Vituri2024SpiralNormalSourceLineageReceipt)
+        for name in expected_fields:
+            object.__setattr__(product, name, fields[name])
+        object.__setattr__(product, "fingerprint", product._current_fingerprint())
+        product._validate_detached_state()
+        issued_state_fingerprint = product._current_fingerprint()
+        if issued_state_fingerprint != product.fingerprint:
+            raise RuntimeError("source-lineage receipt issuance fingerprint drifted")
+        issued_identities[id(product)] = (product, issued_state_fingerprint)
+        return product
+
+    def validate(
+        product: object, *, require_complete_inventory: bool = False
+    ) -> _Vituri2024SpiralNormalSourceLineageReceipt:
+        if type(require_complete_inventory) is not bool:
+            raise TypeError("require_complete_inventory must be an exact bool")
+        if type(product) is not _Vituri2024SpiralNormalSourceLineageReceipt:
+            raise TypeError("source-lineage receipt must be a factory product")
+        issued = issued_identities.get(id(product))
+        if issued is None or issued[0] is not product:
+            raise TypeError("source-lineage receipt identity is not registered")
+        product._validate_detached_state()
+        if product._current_fingerprint() != issued[1]:
+            raise ValueError("source-lineage receipt changed after factory issuance")
+        if require_complete_inventory and complete_inventory_qualification_by_id.get(
+            id(product)
+        ) != (issued[1], product.source_closure_digest):
+            raise ValueError("source-lineage receipt lacks complete-inventory validation")
+        return product
+
+    def run_vituri2024_spiral_normal_exact_shell_closure(
+        prepared: Vituri2024PreparedHFSpiral,
+        *,
+        policy: Vituri2024SpiralNormalClosurePolicy | None = None,
+        dense_boundary_oracle_prepared: Vituri2024PreparedHFSpiral | None = None,
+        density_embedding_receipt: object | None = None,
+    ) -> Vituri2024SpiralNormalClosureResult:
+        """Run, live-validate, and identity-register one closure result."""
+
+        result = run_implementation(
+            prepared,
+            policy=policy,
+            dense_boundary_oracle_prepared=dense_boundary_oracle_prepared,
+            density_embedding_receipt=density_embedding_receipt,
+        )
+        snapshot = _source_closure_lineage_snapshot(result)
+        identity = id(result)
+        if identity in issued_identities:
+            raise RuntimeError("source closure result identity was already registered")
+        issued_identities[identity] = (result, str(snapshot["digest"]))
+        return result
+
+    def make(
+        source_closure_result: Vituri2024SpiralNormalClosureResult,
+        source_group: Vituri2024SpiralNormalStationaryGroup,
+    ) -> _Vituri2024SpiralNormalSourceLineageReceipt:
+        source_closure_result, snapshot = require_registered_result(
+            source_closure_result
+        )
+        if type(source_group) is not Vituri2024SpiralNormalStationaryGroup:
+            raise TypeError("source_group must be typed")
+        matches = tuple(
+            index
+            for index, candidate in enumerate(source_closure_result.stationary_groups)
+            if candidate is source_group
+        )
+        if len(matches) != 1:
+            raise ValueError("source group must be the exact member of its closure result")
+        return validate(
+            construct(
+                **_source_lineage_fields(
+                    source_closure_result, matches[0], snapshot
+                )
+            )
+        )
+
+    def validate_complete(
+        source_closure_result: Vituri2024SpiralNormalClosureResult,
+        receipts: tuple[object, ...],
+    ) -> tuple[_Vituri2024SpiralNormalSourceLineageReceipt, ...]:
+        source_closure_result, snapshot = require_registered_result(
+            source_closure_result
+        )
+        if type(receipts) is not tuple:
+            raise TypeError("source-group lineage inventory must be a tuple")
+        expected_indices = tuple(range(len(source_closure_result.stationary_groups)))
+        if not expected_indices:
+            raise ValueError("source closure has no stationary group to launch")
+        validated = tuple(validate(receipt) for receipt in receipts)
+        ordered = tuple(sorted(validated, key=lambda item: item.source_group_index))
+        if tuple(item.source_group_index for item in ordered) != expected_indices:
+            raise ValueError("source-group lineage inventory is incomplete or duplicated")
+        for index, receipt in enumerate(ordered):
+            expected = _source_lineage_fields(source_closure_result, index, snapshot)
+            actual = {
+                name: getattr(receipt, name)
+                for name in receipt.__dataclass_fields__
+                if name != "fingerprint"
+            }
+            if actual != expected:
+                raise ValueError(
+                    "source-group lineage belongs to a foreign or tampered closure"
+                )
+        for receipt in ordered:
+            issued = issued_identities[id(receipt)]
+            complete_inventory_qualification_by_id[id(receipt)] = (
+                issued[1],
+                str(snapshot["digest"]),
+            )
+        return ordered
+
+    exported_runner_name = "run_vituri2024_spiral_normal_exact_shell_closure"
+    run_vituri2024_spiral_normal_exact_shell_closure.__module__ = __name__
+    run_vituri2024_spiral_normal_exact_shell_closure.__name__ = exported_runner_name
+    run_vituri2024_spiral_normal_exact_shell_closure.__qualname__ = exported_runner_name
+
+    return (
+        run_vituri2024_spiral_normal_exact_shell_closure,
+        make,
+        validate,
+        validate_complete,
+    )
+
+
+
+
+
+
+
+def _run_vituri2024_spiral_normal_exact_shell_closure_implementation(
     prepared: Vituri2024PreparedHFSpiral,
     *,
     policy: Vituri2024SpiralNormalClosurePolicy | None = None,
     dense_boundary_oracle_prepared: Vituri2024PreparedHFSpiral | None = None,
+    density_embedding_receipt: object | None = None,
 ) -> Vituri2024SpiralNormalClosureResult:
-    """Exhaust and byte-replay the declared normal coordinate branch tree."""
+    """Exhaust and byte-replay branches conditional on one declared root.
+
+    A supplied root is accepted only as a typed, live-validated embedding
+    receipt.  This closure does not establish a global source inventory and
+    does not claim that source-group postselection was absent.
+    """
 
     if type(prepared) is not Vituri2024PreparedHFSpiral:
         raise TypeError("prepared must be Vituri2024PreparedHFSpiral")
@@ -1578,7 +2478,9 @@ def run_vituri2024_spiral_normal_exact_shell_closure(
         )
     )
     initializer = build_vituri2024_spiral_normal_initializer(
-        prepared, policy=active_policy
+        prepared,
+        policy=active_policy,
+        density_embedding_receipt=density_embedding_receipt,
     )
     root = Vituri2024SpiralNormalBranchPath()
     queue: deque[Vituri2024SpiralNormalBranchPath] = deque((root,))
@@ -1605,6 +2507,7 @@ def run_vituri2024_spiral_normal_exact_shell_closure(
             initializer,
             path,
             policy=active_policy,
+            density_embedding_receipt=density_embedding_receipt,
             dense_boundary_oracle_prepared=dense_boundary_oracle_prepared,
             dense_boundary_oracle_cache=dense_boundary_oracle_cache,
             dense_boundary_oracle_receipt_fingerprints=dense_boundary_oracle_receipts,
@@ -1650,6 +2553,7 @@ def run_vituri2024_spiral_normal_exact_shell_closure(
             initializer,
             original.path,
             policy=active_policy,
+            density_embedding_receipt=density_embedding_receipt,
             dense_boundary_oracle_prepared=dense_boundary_oracle_prepared,
             dense_boundary_oracle_cache=replay_oracle_cache,
             dense_boundary_oracle_receipt_fingerprints=replay_oracle_receipts,
@@ -1694,10 +2598,20 @@ def run_vituri2024_spiral_normal_exact_shell_closure(
     )
 
 
+(
+    run_vituri2024_spiral_normal_exact_shell_closure,
+    make_vituri2024_spiral_normal_source_lineage_receipt,
+    validate_vituri2024_spiral_normal_source_lineage_receipt,
+    validate_complete_vituri2024_spiral_normal_source_group_lineages,
+) = _make_source_lineage_authority_api(
+    _run_vituri2024_spiral_normal_exact_shell_closure_implementation
+)
+
 __all__ = [
     "VITURI2024_SPIRAL_NORMAL_CLOSURE_API_VERSION",
     "VITURI2024_SPIRAL_NORMAL_CLOSURE_AUTHORITY",
     "VITURI2024_SPIRAL_NORMAL_DENSE_BOUNDARY_ORACLE_API_VERSION",
+    "VITURI2024_SPIRAL_NORMAL_SOURCE_LINEAGE_API_VERSION",
     "Vituri2024SpiralNormalBoundary",
     "Vituri2024SpiralNormalBranchChoice",
     "Vituri2024SpiralNormalBranchPath",
@@ -1709,5 +2623,8 @@ __all__ = [
     "certify_vituri2024_spiral_normal_dense_boundary_oracle",
     "build_vituri2024_spiral_normal_initializer",
     "enumerate_vituri2024_spiral_normal_branch_choices",
+    "make_vituri2024_spiral_normal_source_lineage_receipt",
     "run_vituri2024_spiral_normal_exact_shell_closure",
+    "validate_complete_vituri2024_spiral_normal_source_group_lineages",
+    "validate_vituri2024_spiral_normal_source_lineage_receipt",
 ]
