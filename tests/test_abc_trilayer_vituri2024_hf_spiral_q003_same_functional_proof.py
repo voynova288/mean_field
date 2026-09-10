@@ -470,6 +470,104 @@ def test_signed_lane_covariance_is_explicit_hypotheses_not_authority() -> None:
     assert "not_an_established_production_J_identity" in theorem
 
 
+def test_source_record_normalizes_numpy_float64_area_before_serialization(
+    reduced_context,
+    monkeypatch,
+) -> None:
+    # job498493 completed the full proof workload and then failed only at
+    # receipt serialization because a NumPy float64 crossed this boundary.
+    # This records an engineering serialization failure, not new authority.
+    response_type = type(reduced_context.response)
+    original_area_property = response_type.area_angstrom_squared
+
+    class BridgeSource:
+        group_label = "reduced"
+        context_fingerprint = reduced_context.context_fingerprint
+        inventory_fingerprint = reduced_context.inventory.inventory_fingerprint
+        response_fingerprint = reduced_context.response.response_fingerprint
+
+    captured: dict[str, object] = {}
+
+    def capture_factory(owner, /, **kwargs):
+        assert owner is proof.Vituri2024Q003SameFunctionalProofSourceRecord
+        captured.update(kwargs)
+        return kwargs
+
+    with monkeypatch.context() as isolated:
+        isolated.setattr(
+            response_type,
+            "area_angstrom_squared",
+            property(
+                lambda self: np.float64(original_area_property.fget(self))
+            ),
+        )
+        isolated.setattr(proof, "_validate_audit", lambda *_args, **_kwargs: None)
+        proof._build_source_record(
+            reduced_context,
+            "reduced",
+            BridgeSource(),
+            capture_factory,
+        )
+
+    integer_fields = (
+        "selected_occupied_count",
+        "selected_virtual_count",
+        "transition_count",
+        "complex_dimension",
+        "real_dimension",
+        "nonempty_signed_lane_count",
+        "canonical_orbit_count",
+        "nonempty_signed_lanes_checked",
+    )
+    floating_fields = (
+        "area_angstrom_squared",
+        "maximum_kernel_imaginary_residual",
+        "maximum_kernel_evenness_residual",
+        "kernel_tolerance",
+    )
+    assert all(type(captured[name]) is int for name in integer_fields)
+    assert all(type(captured[name]) is float for name in floating_fields)
+    assert captured["area_angstrom_squared"] > 0.0
+
+    closure = dict(
+        zip(
+            proof.build_vituri2024_q003_same_functional_candidate_proof_receipt.__code__.co_freevars,
+            proof.build_vituri2024_q003_same_functional_candidate_proof_receipt.__closure__,
+        )
+    )
+    factory = closure["factory"].cell_contents
+    source = factory(proof.Vituri2024Q003SameFunctionalProofSourceRecord, **captured)
+    source.validate_live_state()
+
+    token = proof._require_factory.__closure__[0].cell_contents
+    with pytest.raises(TypeError, match="exact Python floats"):
+        proof.Vituri2024Q003SameFunctionalProofSourceRecord(
+            _factory_token=token,
+            **{
+                **captured,
+                "area_angstrom_squared": np.float64(
+                    captured["area_angstrom_squared"]
+                ),
+            },
+        )
+    for invalid_area in (0.0, -1.0, float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="finite|positive"):
+            proof.Vituri2024Q003SameFunctionalProofSourceRecord(
+                _factory_token=token,
+                **{**captured, "area_angstrom_squared": invalid_area},
+            )
+    with pytest.raises(TypeError, match="non-JSON value"):
+        proof._json_native(np.float64(captured["area_angstrom_squared"]))
+
+    object.__setattr__(
+        source,
+        "area_angstrom_squared",
+        np.float64(source.area_angstrom_squared),
+    )
+    with pytest.raises(ValueError, match="scalar live state drifted"):
+        source.validate_live_state()
+
+
 def test_candidate_receipt_schema_is_array_free_and_every_promotion_is_false() -> None:
     receipt_type = proof.Vituri2024Q003SameFunctionalCandidateProofReceipt
     receipt_fields = receipt_type.__dataclass_fields__

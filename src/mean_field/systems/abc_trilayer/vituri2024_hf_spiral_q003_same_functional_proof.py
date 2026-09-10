@@ -1264,7 +1264,7 @@ def _kernel_hypotheses(context: object) -> tuple[float, float, float]:
     plan = context.response.fft_plan
     kernel = plan.kernel_by_signed_displacement
     scale = max(1.0, float(np.max(np.abs(kernel), initial=0.0)))
-    tolerance = 64.0 * np.finfo(np.float64).eps * scale
+    tolerance = float(64.0 * np.finfo(np.float64).eps * scale)
     imaginary = float(np.max(np.abs(kernel.imag), initial=0.0))
     even = float(np.max(np.abs(kernel - kernel[::-1, ::-1]), initial=0.0))
     if imaginary > tolerance or even > tolerance:
@@ -1304,6 +1304,35 @@ class Vituri2024Q003SameFunctionalProofSourceRecord:
         self, _factory_token: object, _require: object = _require_factory
     ) -> None:
         _require(_factory_token, "candidate proof source records")
+        integer_values = (
+            self.selected_occupied_count,
+            self.selected_virtual_count,
+            self.transition_count,
+            self.complex_dimension,
+            self.real_dimension,
+            self.nonempty_signed_lane_count,
+            self.canonical_orbit_count,
+            self.nonempty_signed_lanes_checked,
+        )
+        floating_values = (
+            self.area_angstrom_squared,
+            self.maximum_kernel_imaginary_residual,
+            self.maximum_kernel_evenness_residual,
+            self.kernel_tolerance,
+        )
+        if any(type(value) is not int or value < 0 for value in integer_values):
+            raise TypeError("candidate proof source counts must be Python nonnegative ints")
+        if any(type(value) is not float for value in floating_values):
+            raise TypeError("candidate proof source scalars must be exact Python floats")
+        if any(not bool(np.isfinite(value)) for value in floating_values):
+            raise ValueError("candidate proof source scalars must be finite")
+        if self.area_angstrom_squared <= 0.0 or self.kernel_tolerance <= 0.0:
+            raise ValueError("candidate proof source area and tolerance must be positive")
+        if (
+            self.maximum_kernel_imaginary_residual < 0.0
+            or self.maximum_kernel_evenness_residual < 0.0
+        ):
+            raise ValueError("candidate proof source residuals must be nonnegative")
         payload = {
             item.name: getattr(self, item.name)
             for item in fields(self)
@@ -1324,6 +1353,36 @@ class Vituri2024Q003SameFunctionalProofSourceRecord:
         if not _registered(self, owner):
             raise ValueError("candidate proof source is not an identity-registered factory product")
         guard()
+        integer_values = (
+            self.selected_occupied_count,
+            self.selected_virtual_count,
+            self.transition_count,
+            self.complex_dimension,
+            self.real_dimension,
+            self.nonempty_signed_lane_count,
+            self.canonical_orbit_count,
+            self.nonempty_signed_lanes_checked,
+        )
+        floating_values = (
+            self.area_angstrom_squared,
+            self.maximum_kernel_imaginary_residual,
+            self.maximum_kernel_evenness_residual,
+            self.kernel_tolerance,
+        )
+        if any(type(value) is not int or value < 0 for value in integer_values):
+            raise ValueError("candidate proof source count live state drifted")
+        if any(
+            type(value) is not float or not bool(np.isfinite(value))
+            for value in floating_values
+        ):
+            raise ValueError("candidate proof source scalar live state drifted")
+        if (
+            self.area_angstrom_squared <= 0.0
+            or self.kernel_tolerance <= 0.0
+            or self.maximum_kernel_imaginary_residual < 0.0
+            or self.maximum_kernel_evenness_residual < 0.0
+        ):
+            raise ValueError("candidate proof source scalar bounds drifted")
         payload = {
             item.name: getattr(self, item.name)
             for item in fields(self)
@@ -1622,6 +1681,16 @@ def _build_source_record(
     imaginary, even, tolerance = _kernel_hypotheses(context)
     response = context.response
     plan = response.fft_plan
+    raw_area = response.area_angstrom_squared
+    if type(raw_area) not in (float, np.float64):
+        raise TypeError("candidate proof response area must be float or numpy.float64")
+    area_angstrom_squared = float(raw_area)
+    if (
+        type(area_angstrom_squared) is not float
+        or not bool(np.isfinite(area_angstrom_squared))
+        or area_angstrom_squared <= 0.0
+    ):
+        raise ValueError("candidate proof response area must convert to a positive finite float")
     return factory(
         Vituri2024Q003SameFunctionalProofSourceRecord,
         group_label=group_label,
@@ -1633,18 +1702,18 @@ def _build_source_record(
         selected_occupations_sha256=_array_sha256(context.inventory.selected_occupations),
         fft_plan_fingerprint=plan.fingerprint,
         kernel_sha256=_array_sha256(plan.kernel_by_signed_displacement),
-        area_angstrom_squared=response.area_angstrom_squared,
-        selected_occupied_count=audit.selected_occupied_count,
-        selected_virtual_count=audit.selected_virtual_count,
-        transition_count=audit.transition_count,
-        complex_dimension=audit.transition_count,
-        real_dimension=2 * audit.transition_count,
-        nonempty_signed_lane_count=audit.nonempty_signed_lane_count,
-        canonical_orbit_count=audit.canonical_orbit_count,
-        nonempty_signed_lanes_checked=audit.nonempty_signed_lanes_checked,
-        maximum_kernel_imaginary_residual=imaginary,
-        maximum_kernel_evenness_residual=even,
-        kernel_tolerance=tolerance,
+        area_angstrom_squared=area_angstrom_squared,
+        selected_occupied_count=int(audit.selected_occupied_count),
+        selected_virtual_count=int(audit.selected_virtual_count),
+        transition_count=int(audit.transition_count),
+        complex_dimension=int(audit.transition_count),
+        real_dimension=int(2 * audit.transition_count),
+        nonempty_signed_lane_count=int(audit.nonempty_signed_lane_count),
+        canonical_orbit_count=int(audit.canonical_orbit_count),
+        nonempty_signed_lanes_checked=int(audit.nonempty_signed_lanes_checked),
+        maximum_kernel_imaginary_residual=float(imaginary),
+        maximum_kernel_evenness_residual=float(even),
+        kernel_tolerance=float(tolerance),
         canonical_tuple_stream_sha256=audit.canonical_tuple_stream_sha256,
         canonical_vertex_stream_sha256=audit.canonical_vertex_stream_sha256,
     )
