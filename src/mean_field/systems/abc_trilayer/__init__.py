@@ -818,6 +818,15 @@ from .vituri2024_hf_spiral_q003_same_functional_proof import *  # noqa: F401,F40
 
 __all__ += list(_vituri2024_hf_spiral_q003_same_functional_proof.__all__)
 
+# Whole-inventory production embedding/action implementation canary.
+from . import (
+    vituri2024_hf_spiral_q003_production_canary
+    as _vituri2024_hf_spiral_q003_production_canary,
+)
+from .vituri2024_hf_spiral_q003_production_canary import *  # noqa: F401,F403
+
+__all__ += list(_vituri2024_hf_spiral_q003_production_canary.__all__)
+
 # Candidate-only fixed-flavor-rank Vituri BFS; generic ODA stays in core/hf.
 from . import vituri2024_hf_fixed_sector as _vituri2024_hf_fixed_sector
 from .vituri2024_hf_fixed_sector import *  # noqa: F401,F403

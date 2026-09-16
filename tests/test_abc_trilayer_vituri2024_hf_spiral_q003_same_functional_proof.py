@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import MISSING, fields, is_dataclass, replace
+import inspect
 
 import numpy as np
 import pytest
 
 from mean_field.systems import abc_trilayer
+from mean_field.systems.abc_trilayer import (
+    vituri2024_hf_spiral_q003_production_canary as production_canary,
+)
 from mean_field.systems.abc_trilayer import (
     vituri2024_hf_spiral_q003_same_functional_proof as proof,
 )
@@ -154,6 +158,106 @@ def test_reduced_actual_production_embedding_order_and_one_empty_lanes(
     assert comparison.support_mismatch_count == 0
     assert comparison.flavor_block_mismatch_count == 0
     assert comparison.order_or_extraction_mismatch_count == 0
+
+
+def test_reduced_production_canary_executes_all_orbits_without_issuing_receipt(
+    reduced_context,
+) -> None:
+    result = production_canary._qualify_reduced_production_canary(
+        context=reduced_context,
+        source_seed_sha256=proof._fingerprint("reduced-source-binding"),
+    )
+    assert result.signed_lane_keys_checked == 62
+    assert result.nonempty_signed_lanes_checked == 49
+    assert result.empty_signed_lanes_checked == 13
+    assert result.canonical_orbits_checked == 31
+    assert result.one_empty_orbits_checked == 13
+    assert result.complex_dimensions_touched == 72
+    assert result.expected_embedding_stream_sha256 == (
+        result.production_embedding_stream_sha256
+    )
+    assert result.direct_applicable_orbits > 0
+    assert result.direct_informative_orbits == result.direct_applicable_orbits
+    assert result.exchange_informative_orbits == 31
+    assert result.total_informative_orbits == 31
+    assert result.one_body_informative_orbits == 31
+    assert result.full_action_informative_orbits == 31
+    assert result.quadratic_form_informative_orbits == 31
+    assert result.minimum_direct_output_norm_ev > 1.0e-14
+    assert result.minimum_exchange_output_norm_ev > 1.0e-14
+    assert result.minimum_total_output_norm_ev > 1.0e-14
+    assert result.minimum_one_body_output_norm_ev > 1.0e-14
+    assert result.minimum_full_action_output_norm_ev > 1.0e-14
+    assert result.minimum_quadratic_form_magnitude_ev > 1.0e-14
+    assert result.maximum_one_body_absolute_residual_ev < 5.0e-12
+    assert result.maximum_direct_absolute_residual_ev < 5.0e-12
+    assert result.maximum_exchange_absolute_residual_ev < 5.0e-12
+    assert result.maximum_total_absolute_residual_ev < 5.0e-12
+    assert result.maximum_quadratic_form_absolute_residual_ev < 5.0e-12
+
+
+def test_reduced_production_canary_rejects_embedding_implementation_mutation(
+    reduced_context,
+    monkeypatch,
+) -> None:
+    context_type = type(reduced_context)
+    original = context_type._build_embedding
+
+    def reversed_first_embedding(self, key, bases, targets):
+        embedding = original(self, key, bases, targets)
+        if embedding.complex_dimension:
+            object.__setattr__(
+                embedding,
+                "particle_k_indices",
+                embedding.particle_k_indices[::-1].copy(),
+            )
+        return embedding
+
+    monkeypatch.setattr(context_type, "_build_embedding", reversed_first_embedding)
+    with pytest.raises(RuntimeError, match="production canary binding drifted: prod_embedding"):
+        production_canary._qualify_reduced_production_canary(
+            context=reduced_context,
+            source_seed_sha256=proof._fingerprint("mutated-source-binding"),
+        )
+
+
+def test_q003_production_canary_public_surface_and_fixed_authority() -> None:
+    assert abc_trilayer.qualify_vituri2024_q003_production_canary is (
+        production_canary.qualify_vituri2024_q003_production_canary
+    )
+    assert not hasattr(abc_trilayer, "Vituri2024Q003ProductionCanaryReceipt")
+    assert "_qualify_reduced_production_canary" not in production_canary.__all__
+    parameters = inspect.signature(
+        production_canary.qualify_vituri2024_q003_production_canary
+    ).parameters
+    assert tuple(parameters) == (
+        "context",
+        "proof_source_record",
+        "bridge_receipt",
+        "independent_source_fock",
+        "provenance",
+    )
+    assert production_canary._EXPECTED_Q003_NONEMPTY_LANES == 38_259
+    assert production_canary._EXPECTED_Q003_CANONICAL_ORBITS == 21_170
+    assert production_canary._EXPECTED_Q003_COMPLEX_DIMENSION == 15_052_040
+    assert production_canary._EXPECTED_Q003_REAL_DIMENSION == 30_104_080
+    assert (
+        len(production_canary.vituri2024_q003_production_canary_implementation_fingerprint())
+        == 64
+    )
+
+
+def test_q003_production_canary_public_path_rejects_unregistered_sources(
+    reduced_context,
+) -> None:
+    with pytest.raises(TypeError, match="candidate-proof source record"):
+        production_canary.qualify_vituri2024_q003_production_canary(
+            context=reduced_context,
+            proof_source_record=object(),
+            bridge_receipt=object(),
+            independent_source_fock=np.zeros((4, 4, reduced_context.nk), dtype=np.complex128),
+            provenance="Expected public-path source rejection.",
+        )
 
 
 def test_reduced_exhaustive_canonical_vertex_oracle_is_independent_of_embedding(
@@ -466,6 +570,9 @@ def test_signed_lane_covariance_is_explicit_hypotheses_not_authority() -> None:
     theorem = proof.VITURI2024_Q003_REAL_ADJOINT_THEOREM
     for hypothesis in ("H3_", "H5_", "H6_direct", "H7_exchange", "H8_Sigma"):
         assert hypothesis in theorem
+    assert "Jdagger(C_r,C_-r)=(E_r^dagger*C_r,E_-r^dagger*C_-r)" in theorem
+    assert "E_-r^dagger*(C_r^dagger)" in theorem
+    assert "conj(E_-r^dagger*C_r)" not in theorem
     assert "recorded_candidate_derivation" in theorem
     assert "not_an_established_production_J_identity" in theorem
 

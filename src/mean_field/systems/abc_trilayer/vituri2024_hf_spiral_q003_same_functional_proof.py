@@ -47,7 +47,7 @@ from ...core.hf import zero_temperature_sector_stability as _core_module
 Array = np.ndarray
 
 VITURI2024_Q003_SAME_FUNCTIONAL_PROOF_API_VERSION: Final[str] = (
-    "vituri2024_q003_exact_integer_transition_adjoint_candidate_proof.v1"
+    "vituri2024_q003_exact_integer_transition_adjoint_candidate_proof.v2"
 )
 VITURI2024_Q003_SAME_FUNCTIONAL_PROOF_SCOPE: Final[str] = (
     "both_pinned_q003_sources_full_selected_spin_fixed_rank_exact_integer_inventory"
@@ -78,8 +78,9 @@ VITURI2024_Q003_REAL_ADJOINT_THEOREM: Final[str] = (
     "conjugation_imply_X_-s[W_s^dagger]=X_s[W_s]^dagger_term_by_term;"
     "H8_Sigma_s=(D_s+X_s)/area_therefore_has_the_same_signed_lane_covariance]."
     "Then_J(x,y)=(W_r,W_-r),Jdagger(C_r,C_-r)=(E_r^dagger*C_r,"
-    "conj(E_-r^dagger*C_r))_when_C_-r=C_r^dagger;hence_"
-    "<J(x,y),C>_H=Re(x^dagger*Jdagger_x+y^dagger*Jdagger_y)."
+    "E_-r^dagger*C_-r);when_C_-r=C_r^dagger_the_second_component_is_"
+    "E_-r^dagger*(C_r^dagger);hence_<J(x,y),C>_H=Re(x^dagger*"
+    "Jdagger_x+y^dagger*Jdagger_y)."
     "This_is_a_recorded_candidate_derivation_not_an_established_production_"
     "J_identity_or_scalar_Hessian_theorem"
 )
