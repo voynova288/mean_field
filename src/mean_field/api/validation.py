@@ -17,12 +17,12 @@ def validate_fig6_screening_checkpoints(
 ) -> dict[str, object]:
     """Validate the R5G/hBN screened-U checkpoints used before Fig. 6 HF runs."""
 
-    from mean_field.systems.RnG_hBN import (  # noqa: PLC0415
+    from mean_field.systems.RnG_hBN import (
         RLGhBNInteractionParams,
         RLGhBNModel,
-        load_or_solve_screening,
-        screening_result_to_dict,
     )
+    from mean_field.systems.RnG_hBN.cache import load_or_solve_screening
+    from mean_field.systems.RnG_hBN.screening import screening_result_to_dict
 
     start = perf_counter()
     checks: list[dict[str, object]] = []

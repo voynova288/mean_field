@@ -7,7 +7,11 @@ import numpy as np
 
 from ...api.artifacts import ModelRecord, write_contract_artifacts
 from ...core.io import write_json_artifact
-from .projected_hf import TDBGProjectedHFResult, liu2022_projected_hf_metadata, tdbg_hf_grid_band_summary
+from mean_field.systems.tdbg.projected_hf_state import TDBGProjectedHFResult
+from mean_field.systems.tdbg.projected_hf_reports import (
+    liu2022_projected_hf_metadata,
+    tdbg_hf_grid_band_summary,
+)
 
 
 def _json_default(value: object) -> object:

@@ -13,22 +13,24 @@ from mean_field.core.contracts import (
     assert_hamiltonian_parts_consistent,
     assert_projected_basis_consistent,
 )
-from mean_field.core.hf import HartreeFockRun
-from mean_field.systems.tdbg.projected_hf import (
+from mean_field.core.hf.engine import HartreeFockRun
+from mean_field.systems.tdbg.projected_hf_config import (
     SPIN_LABELS,
     VALLEY_SEQUENCE,
     TDBGInteractionSettings,
     TDBGProjectedHFConfig,
+    TDBGProjectedWindow,
+)
+from mean_field.systems.tdbg.projected_hf_state import (
     TDBGProjectedHFData,
     TDBGProjectedHFResult,
     TDBGProjectedHFState,
-    TDBGProjectedWindow,
     TDBGStateLabel,
     initialize_tdbg_density,
-    tdbg_energy_components,
     tdbg_order_parameters,
-    tdbg_projected_hf_result_to_hf_run_result,
 )
+from mean_field.systems.tdbg.projected_hf_interactions import tdbg_energy_components
+from mean_field.systems.tdbg.projected_hf_contracts import tdbg_projected_hf_result_to_hf_run_result
 
 
 def _toy_data(*, filling: int = 2) -> TDBGProjectedHFData:

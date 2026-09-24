@@ -1,7 +1,7 @@
 # RLG/hBN Fig. S45 Track-P parent-cutoff qualifier submission
 
 Date: 2026-07-26
-Status: **RUNNING — no shell-5/6 spectrum result is claimed in this report**
+Status: **COMPLETED THROUGH USER-AUTHORIZED SHELL-5/6 FULL 144-q INTRAFLAVOR MESHES**
 
 ## Purpose
 
@@ -165,6 +165,142 @@ For each successful fresh source:
 The planned qualifier has 19 requested labels. Each non-self-conjugate request must save independently assembled `+q` and `-q`, so the resulting coverage is larger than 19 unique signed sectors.
 
 A shell-6 144-q full mesh is authorized only if shell 5 and 6 select the same HF branch, pass q=0 gates, and give stable qualifier classifications/margins. If the ten shell-4 false negatives remain clearly real-stable and cutoff-converged, the result will be reported as strengthened Track-P nonreproduction rather than hidden by a full-mesh plot.
+
+## Completion follow-up (2026-07-30)
+
+Both fresh HF sources, both q=0 gates, and both 19-label qualifiers completed. No shell-6 144-q job was submitted.
+
+### Shell 5
+
+```text
+HF job                 194628_5  COMPLETED / pass
+q=0 job                196146    COMPLETED / pass
+19-label qualifier     196170    COMPLETED / pass
+q=0 Goldstone energy              9.36432951645e-10 meV
+q=0 Ward residual                 4.49840685226e-6 meV
+qualifier stable/complex           12 / 7
+qualifier min signed Hstat         -1.04915868206 meV
+qualifier max |Im Omega|            3.09685939680 meV
+```
+
+### Shell 6
+
+```text
+HF job                 194628_6  COMPLETED / pass
+q=0 job                197247    COMPLETED / pass
+19-label qualifier     197299    COMPLETED / pass
+q=0 elapsed / MaxRSS              00:06:30 / 9.59 GB
+q=0 Goldstone energy              9.82502808565e-10 meV
+q=0 Ward residual                 4.55714113380e-6 meV
+q=0 Goldstone overlap             0.9999999999999843
+q=0 intervalley energy            2.03459774258 meV
+qualifier elapsed / MaxRSS         01:51:37 / 20080160K
+qualifier stable/complex           12 / 7
+qualifier max selected residual    4.65706114180e-12
+qualifier max raw residual         4.68530195604e-12
+qualifier max signed PH residual   6.59384284882e-12 meV
+qualifier max Hstat defect         8.95090418262e-16 meV
+qualifier min signed Hstat         -0.985623798742 meV
+qualifier max |Im Omega|            3.01207143871 meV
+```
+
+The shell-6 postflight independently rebuilt the plus/minus pair ordering from the pinned HF archive/cache, reconstructed both signed Liouvillians and the static Hessian, and replayed all raw and selected eigensystem residuals, eta norms, inertia, particle-hole pairing, and classifications before atomic publication. Its attestation is
+
+```text
+results/RnG_hBN/tdhf_m2_pilot/track_p_parent_cutoff_v1_20260726/
+  shell6/qualifier/track_p_shell6_qualifier_attestation.json
+SHA256 0d96fd17d404bff83101c281fe051d1868e591b8a4997fa8a53bb476d7e773e2
+```
+
+The three exact-M labels `(-6,-6)`, `(-6,0)`, and `(0,-6)` remain explicitly **raw signed-regulator diagnostics only**. Their signed classifications have no paper/physical stability authority; the canonical role-resolved exact-M curvature remains the physical gate.
+
+### Shell-4/5/6 cutoff comparison
+
+Across all 19 requested labels, the shell-4, shell-5, and shell-6 classifications are identical. In particular:
+
+```text
+original paper-white false-negative representatives
+  labels                 (-5,-4), (-4,-5), (-3,-3), (-3,0), (0,-3)
+  classification         stable / stable / stable at shells 4/5/6
+  lowest energy range    0.957--1.684 / 0.820--1.668 / 1.070--1.787 meV
+  minimum Hstat          0.1304 / 0.0795 / 0.1455 meV
+
+darkest-raster representatives
+  classification         stable / stable / stable at shells 4/5/6
+  lowest energy range    1.541--2.018 / 1.456--1.958 / 1.604--2.085 meV
+  minimum Hstat          0.4063 / 0.3787 / 0.4432 meV
+
+exact-M raw diagnostics
+  classification         complex / complex / complex at shells 4/5/6
+  minimum signed Hstat   -0.9566 / -1.0492 / -0.9856 meV
+  max |Im Omega|          2.9708 / 3.0969 / 3.0121 meV
+```
+
+The values are not quantitatively converged to the previously proposed `0.02 meV`/`1%` thresholds, and their shell dependence is non-monotonic. Nevertheless, the physically relevant qualifier conclusion is robust: increasing the parent plane-wave shell from 4 to 5 and 6 does **not** turn the original paper-white false negatives into static-negative or complex sectors, and it does not drive the darkest-raster anchors to zero.
+
+Therefore a shell-6 144-q full mesh is not authorized: it would be an expensive repetition of an unchanged classification pattern, not a discriminating physics test. The shell-4 Track-P 144-q map remains the reported finite-cutoff paper-hypothesis diagnostic, now with strengthened cutoff evidence for its nonreproduction. Smallest-q shell-5/6 stiffness was not part of the frozen 19-label manifest and remains unmeasured; that narrow anchor is only needed if a stricter quantitative parent-cutoff extrapolation is pursued later.
+
+Comparison artifacts:
+
+```text
+reports/data/rlg_hbn_track_p_shell4_shell5_shell6_qualifier_comparison_20260730.json
+reports/rlg_hbn_track_p_shell4_shell5_shell6_qualifier_comparison_20260730.md
+reports/figures/rlg_hbn_track_p_shell4_shell5_shell6_parent_cutoff_qualifier_20260730.png
+reports/figures/rlg_hbn_figs45_track_p_parent_cutoff_shell456_sparse_qualifier_20260730.png
+```
+
+## Full-mesh follow-up after explicit user authorization (2026-07-31)
+
+The earlier decision not to spend resources on a shell-6 full mesh was superseded by an explicit user request for complete shell-5 and shell-6 maps. Both `12x12` intraflavor meshes were then independently assembled with no interpolation, C3 orbit copying, or post-assembly averaging.
+
+```text
+compute array                    197749
+original completed chunks        shell5 12/12; shell6 11/12
+repair of shell6 chunk_11        198219 COMPLETED / pass
+atomic merge/publication array   198221 COMPLETED / pass
+q sectors per shell              144
+```
+
+The original task `197749_23` failed before numerical calculation because Slurm represented the last array task with the array-master job ID and returned multiple controller records to the strict preflight. The failed preflight staging was preserved under `shell6/failed_fullmesh_attempts/`; only the missing shell-6 `chunk_11` was recomputed. The repaired preflight selects exactly one controller record by `SLURM_JOB_ID`, and the final merger explicitly attests the mixed original/repair wrapper lineage for shell 6. Shell 5 retains only the original wrapper lineage.
+
+### Full-mesh result
+
+All 144 raw signed classifications are identical at parent shells 4, 5, and 6:
+
+```text
+                         shell 4       shell 5       shell 6
+stable                       109           109           109
+complex                       35            35            35
+real-negative-only             0             0             0
+max |Im Omega| (meV)       2.97076       3.09686       3.01207
+stable-energy RMSE (meV)   0.55948       0.52411       0.63448
+```
+
+The three exact-M labels remain raw signed-regulator diagnostics without paper/physical stability authority. Excluding them from the paper-mask authority set leaves 141 sectors and gives the same shell-5/shell-6 confusion matrix:
+
+```text
+tp / fn / fp / tn     32 / 10 / 0 / 99
+precision             1.0
+recall                 0.7619047619
+```
+
+Thus increasing the parent shell to 5 or 6 does not recover any of the ten paper-white false negatives. Energies change non-monotonically: among the 109 sectors stable at all cutoffs, the shell-5-to-shell-6 energy change has maximum `0.2992 meV` and RMS `0.1269 meV`. The classification conclusion is cutoff-robust, but the energies are not converged to the earlier `0.02 meV`/`1%` target.
+
+Full comparison figure:
+
+```text
+reports/figures/rlg_hbn_figs45_track_p_parent_cutoff_shell456_full_144q_20260731.png
+SHA256 a328a711e29dca00832174d1c04b57a2c1f43b50326027a82c1595f31de20919
+```
+
+Canonical full-mesh summaries:
+
+```text
+shell5/fullmesh/track_p_shell5_fullmesh_144q_summary.json
+SHA256 72f344711c02d8ce5714285418d07ac1deedac17a8bfc9dbc7e5938ca9088d7a
+shell6/fullmesh/track_p_shell6_fullmesh_144q_summary.json
+SHA256 d7478e4f4609f57bb21e943387471f753666015c0e128478784821156fa26dbd
+```
 
 ## Interpretation boundary
 

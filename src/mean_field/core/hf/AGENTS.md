@@ -7,12 +7,14 @@ Applies to the reusable Hartree-Fock framework in this directory.
 ## Source of Truth
 
 - Architecture and layering: `../../../../docs/architecture.md`.
-- Public export surface: `__init__.py`.
+- Stable user-facing HF API: `../../api/hf.py` and `../../../../docs/api/hf_api.md`.
+- Empty namespace contract: `__init__.py`.
 - Generic SCF/problem contracts: `engine.py`, `problem.py`, `interaction.py`.
 
 ## Local Guidance
 
 - Keep this directory system-agnostic. Do not import from `mean_field.systems.*` or encode TBG/RnG/HTG-specific basis conventions here.
+- Import framework capabilities from explicit owner modules such as `engine.py`, `overlap.py`, `occupations.py`, or `tdhf_signed.py`; do not rebuild a flat `mean_field.core.hf` re-export façade.
 - Generic SCF iteration, ODA, occupation bookkeeping, projected-overlap contraction, Coulomb helpers, and projected-HF kernel assembly belong here when they are reusable across systems.
 - Physical-system choices belong in `../../systems/<system>/`: Hamiltonian construction, basis labels, valley/flavor conventions, projected window selection, screening model, sewing/gauge conventions, and paper-specific runners.
 - If a needed hook is missing, add a protocol/callback/adapter surface here instead of copying the SCF loop into a system module.

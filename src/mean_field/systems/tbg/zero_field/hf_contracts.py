@@ -2,15 +2,15 @@ from __future__ import annotations
 
 """Canonical mean-field contract adapters for TBG zero-field HF runs.
 
-The functions here are post-run I/O adapters.  They wrap arrays already produced
-by the existing TBG zero-field B0/BM workflow and do not change the SCF loop,
-interaction contractions, topology, path reconstruction, or cRPA behavior.
+The functions here are typed run/post-run adapters. They wrap arrays produced
+by the TBG zero-field model and HF numerical owners and do not change the SCF
+loop, interaction contractions, topology, saved-grid selection, or cRPA behavior.
 
 A bare :class:`RestrictedHartreeFockRun` is not self-describing enough for the
 canonical projected-basis contract: it lacks the k-grid coordinates and BM
 micro-wavefunctions.  The safe boundary therefore requires the matching
-``grid_solution`` (or a higher-level ``B0HFBenchmarkRun`` that owns it) and
-requires the carried canonical half-open torus mesh before creating the
+``grid_solution`` and requires the carried canonical half-open torus mesh
+before creating the
 canonical view. Endpoint-inclusive B0 meshes remain legacy diagnostics only.
 """
 
@@ -33,19 +33,21 @@ from mean_field.core.contracts import (
 )
 from mean_field.core.hf.contracts_bridge import density_state_from_delta
 
-from .hf import (
+from mean_field.systems.tbg.zero_field._hf_basis_overlap import (
     RestrictedHartreeFockRun,
     RestrictedHartreeFockState,
     TBGZeroFieldHFRunProvenance,
     TBGZeroFieldHFSourceReceipt,
     TBGZeroFieldScreenedBlockBundle,
     build_tbg_zero_field_screened_block_bundle,
-    normalize_full_init_mode,
-    normalize_restricted_init_mode,
     restricted_filling,
     restricted_occupied_state_count,
-    run_restricted_hartree_fock,
     tbg_zero_field_lattice_kvec_sha256,
+)
+from mean_field.systems.tbg.zero_field._hf_full import normalize_full_init_mode
+from mean_field.systems.tbg.zero_field._hf_restricted import (
+    normalize_restricted_init_mode,
+    run_restricted_hartree_fock,
 )
 from ._hf_basis_overlap import (
     validate_tbg_zero_field_primitive_cell_nu,
@@ -93,7 +95,7 @@ def _numeric_values_match(
 def _unavailable_hamiltonian_builder(_kvec: np.ndarray) -> np.ndarray:
     raise NotImplementedError(
         "TBG zero-field contract records an already-built BM projected basis; "
-        "use mean_field.systems.tbg.zero_field.solve_bm_model for fresh Hamiltonians."
+        "use mean_field.systems.tbg.zero_field.solve_bm_model_on_torus for fresh Hamiltonians."
     )
 
 
@@ -258,41 +260,6 @@ def _carried_torus_mesh(solution: BMSolution):
         raise ValueError("grid_solution.lattice_kvec does not match its carried torus mesh")
     return mesh
 
-def _legacy_diagnostic_infer_b0_lk(solution: BMSolution) -> int:
-    nk = int(solution.nk)
-    side = int(round(math.sqrt(nk)))
-    if side * side != nk:
-        raise ValueError(
-            "Legacy endpoint-inclusive B0 diagnostic requires a square uniform grid_solution; "
-            f"got grid_solution.nk={nk}.  A bare RestrictedHartreeFockRun does not carry enough k-grid metadata."
-        )
-    lk = side - 1
-    if lk <= 0:
-        raise ValueError(
-            "Legacy endpoint-inclusive B0 diagnostic requires lk >= 1; "
-            f"got inferred lk={lk} from grid_solution.nk={nk}."
-        )
-    return lk
-
-
-def _legacy_diagnostic_b0_uniform_k_grid_frac(solution: BMSolution) -> np.ndarray:
-    """Endpoint-inclusive B0 coordinates retained only for legacy diagnostics."""
-
-    lk = _legacy_diagnostic_infer_b0_lk(solution)
-    frac = np.arange(lk + 1, dtype=float) / float(lk)
-    f1, f2 = np.meshgrid(frac, frac, indexing="ij")
-    k_grid_frac = np.stack([np.ravel(f1, order="F"), np.ravel(f2, order="F")], axis=1)
-    expected_kvec = np.ravel(
-        frac[:, None] * solution.params.g1 + frac[None, :] * solution.params.g2,
-        order="F",
-    ).astype(np.complex128)
-    actual_kvec = np.asarray(solution.lattice_kvec, dtype=np.complex128).reshape(-1)
-    if actual_kvec.shape != expected_kvec.shape or not np.allclose(actual_kvec, expected_kvec, atol=1.0e-10, rtol=1.0e-10):
-        raise ValueError(
-            "Legacy endpoint-inclusive B0 diagnostic requires grid_solution.lattice_kvec to match "
-            f"the B0 uniform mesh inferred from nk={solution.nk} (lk={lk}); received a non-uniform or reordered grid."
-        )
-    return k_grid_frac
 
 
 def _central_bm_band_indices(solution: BMSolution) -> tuple[int, ...]:
@@ -835,12 +802,6 @@ def _tbg_zero_field_grid_metadata_claims(solution: BMSolution) -> dict[str, obje
 
 
 
-def _resolved_screening_lm(config: TBGZeroFieldRunHFConfig) -> float:
-    spec = config.interaction_spec
-    if not isinstance(spec, TBGZeroFieldInteractionSpec):
-        raise ValueError("TBG zero-field canonical adapter requires a typed interaction_spec")
-    return float(spec.screening_lm)
-
 def _validate_tbg_zero_field_public_hf_config(config: "HFConfig", tbg_config: TBGZeroFieldRunHFConfig) -> None:
     solution = tbg_config.grid_solution
     mesh = _tbg_zero_field_grid_shape(solution)
@@ -992,8 +953,7 @@ def tbg_zero_field_hf_run_to_hf_run_result(
 
     ``RestrictedHartreeFockRun`` itself does not store the k-grid fractional
     coordinates or BM micro-wavefunctions required by ``ProjectedBasis``. Pass
-    the matching torus-owning ``grid_solution`` (or use
-    :func:`b0_hf_benchmark_run_to_hf_run_result`) so the adapter can validate the
+    the matching torus-owning ``grid_solution`` so the adapter can validate the
     grid and avoid fabricating canonical basis data.
     """
 
@@ -1001,8 +961,7 @@ def tbg_zero_field_hf_run_to_hf_run_result(
         raise ValueError(
             "TBG zero-field canonical HFRunResult adapter requires the matching BMSolution grid_solution; "
             "a bare RestrictedHartreeFockRun has no k-grid coordinates or BM micro-wavefunctions. "
-            "Use b0_hf_benchmark_run_to_hf_run_result(result) for benchmark results, or pass "
-            "grid_solution=<BMSolution> from the same SCF grid."
+            "Pass grid_solution=<BMSolution> from the same SCF grid."
         )
 
     interaction_spec, screened_block_bundle, receipt = _validate_typed_run_source(
@@ -1070,26 +1029,6 @@ def tbg_zero_field_hf_run_to_hf_run_result(
     )
 
 
-def b0_hf_benchmark_run_to_hf_run_result(
-    result: object,
-    *,
-    archive_manifest: dict[str, Any] | None = None,
-) -> ContractHFRunResult:
-    """Wrap a ``B0HFBenchmarkRun``-like result in canonical core contracts.
-
-    The higher-level result must carry a typed half-open torus solution and its
-    matching screened bundle. Historical endpoint-inclusive B0 results are
-    intentionally diagnostic-only and are refused here.
-    """
-
-    hf_run = getattr(result, "hf_run")
-    grid_solution = getattr(result, "grid_solution")
-    _carried_torus_mesh(grid_solution)
-    return tbg_zero_field_hf_run_to_hf_run_result(
-        hf_run,
-        grid_solution=grid_solution,
-        archive_manifest=archive_manifest,
-    )
 
 
 
@@ -1432,7 +1371,7 @@ def tbg_zero_field_hf_run_to_hf_result(
 def run_tbg_zero_field_hf_config_adapter(model: object, config: "HFConfig", **kwargs: Any) -> "HFResult | None":
     """Run TBG zero-field restricted HF from an explicit grid-owning config."""
 
-    if not isinstance(model, TBGZeroFieldBMModel):
+    if type(model) is not TBGZeroFieldBMModel:
         return None
     if "tbg_zero_field_config" not in kwargs:
         raise NotImplementedError(
@@ -1441,7 +1380,7 @@ def run_tbg_zero_field_hf_config_adapter(model: object, config: "HFConfig", **kw
             "generic HFConfig -> BMSolution/grid workflow mapping is not implemented"
         )
     tbg_config = kwargs.pop("tbg_zero_field_config")
-    if not isinstance(tbg_config, TBGZeroFieldRunHFConfig):
+    if type(tbg_config) is not TBGZeroFieldRunHFConfig:
         raise TypeError(f"tbg_zero_field_config must be TBGZeroFieldRunHFConfig, got {type(tbg_config).__name__}")
     if kwargs:
         raise TypeError(f"Unsupported TBG zero-field run_hf kwargs: {sorted(kwargs)}")
@@ -1509,7 +1448,6 @@ def run_tbg_zero_field_hf_config_adapter(model: object, config: "HFConfig", **kw
 
 __all__ = [
     "TBGZeroFieldRunHFConfig",
-    "b0_hf_benchmark_run_to_hf_run_result",
     "run_tbg_zero_field_hf_config_adapter",
     "tbg_zero_field_hf_run_to_hf_result",
     "tbg_zero_field_hf_run_to_hf_run_result",

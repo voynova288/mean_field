@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import numpy as np
 
-from mean_field.systems.RnG_hBN import RLGhBNInteractionParams, RLGhBNModel, build_rlg_hbn_projected_basis
+from mean_field.systems.RnG_hBN import (
+    RLGhBNInteractionParams,
+    RLGhBNModel,
+)
+from mean_field.systems.RnG_hBN.hf import (
+    build_rlg_hbn_projected_basis,
+)
 from mean_field.systems.RnG_hBN.hf import (
     build_rlg_hbn_layer_overlap_blocks,
     build_rlg_hbn_layer_overlap_blocks_between,

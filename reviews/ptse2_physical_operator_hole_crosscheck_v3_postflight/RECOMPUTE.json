@@ -1,0 +1,988 @@
+{
+  "Q0": {
+    "counts": {
+      "N_e": {
+        "imag": -2.282016826623343e-26,
+        "real": 21.999999799616788
+      },
+      "N_h_complement": {
+        "imag": 2.282016826623343e-26,
+        "real": 2.000000015067958
+      },
+      "N_h_direct": {
+        "imag": -1.629050360008404e-26,
+        "real": 2.0000000150679575
+      },
+      "N_ref": {
+        "imag": 0.0,
+        "real": 23.99999981468476
+      }
+    },
+    "expected_counts": {
+      "N_e": 22,
+      "N_h_complement": 2,
+      "N_h_direct": 2,
+      "N_ref": 24
+    },
+    "reference_spin_S_over_hbar": {
+      "Sx_over_hbar": {
+        "imag": 0.0,
+        "real": -6.713888704249863e-13
+      },
+      "Sy_over_hbar": {
+        "imag": 0.0,
+        "real": -2.4733502283306543e-12
+      },
+      "Sz_over_hbar": {
+        "imag": 0.0,
+        "real": -2.1856590611453913e-13
+      }
+    }
+  },
+  "closure": {
+    "cross_bindings": {
+      "complete_oracle_sentinel_binding_match": true,
+      "complete_summary_binding_match": true,
+      "oracle_complete_oracle_manifest_binding_match": true,
+      "producer_job_ids": [
+        "517203",
+        "517203",
+        "517203"
+      ],
+      "source_frozen_sha256s": [
+        "6b238a7d79d70abc7429d941db39173d25c3d937691cef478af728697c419272",
+        "6b238a7d79d70abc7429d941db39173d25c3d937691cef478af728697c419272",
+        "6b238a7d79d70abc7429d941db39173d25c3d937691cef478af728697c419272"
+      ]
+    },
+    "oracle_checkpoint": {
+      "actual_file_count": 70,
+      "all_payload_hashes_match": true,
+      "all_payloads_regular_nonsymlink": true,
+      "exact_file_namespace": true,
+      "expected_file_count": 70,
+      "manifest_binding_match": true,
+      "manifest_mode": "0400",
+      "manifest_sha256": "8ccaf6996c3a2fbfe1a969a10b6f88f582c6ebe62fb154add8667c6e3db0878e",
+      "missing_files": [],
+      "payload_checks": {
+        "WORKSPACE_READY.json": {
+          "expected_sha256": "38f548fd47b047e8e97e4ddfac114657777a8a9152eb9b29dcbbf114718eb53d",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "38f548fd47b047e8e97e4ddfac114657777a8a9152eb9b29dcbbf114718eb53d",
+          "size_bytes": 1676
+        },
+        "oracle_manifest.json": {
+          "expected_sha256": "053631ae3e29536f729d73a8f11240721ed918e50e86ad3557c2e27da1e36c87",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "053631ae3e29536f729d73a8f11240721ed918e50e86ad3557c2e27da1e36c87",
+          "size_bytes": 13487
+        },
+        "q_vectors_bohr_inv.txt": {
+          "expected_sha256": "df975b09023ada92cb93ee9d35698d23a1c7891b4606e2802fe45848d385d68b",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "df975b09023ada92cb93ee9d35698d23a1c7891b4606e2802fe45848d385d68b",
+          "size_bytes": 510
+        },
+        "seven_q_inventory.npz": {
+          "expected_sha256": "45307c7d891a12b71d36616c1c2e82c4f40c869886ee3cfe3e0ff743921ff37b",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "45307c7d891a12b71d36616c1c2e82c4f40c869886ee3cfe3e0ff743921ff37b",
+          "size_bytes": 2174
+        },
+        "vertex/sevenq.rank00000.bin": {
+          "expected_sha256": "fb3ef29fd6bd9132fbb94cb549ac9c0b0a53f64ab6f5af6676abd8cd35e621a1",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "fb3ef29fd6bd9132fbb94cb549ac9c0b0a53f64ab6f5af6676abd8cd35e621a1",
+          "size_bytes": 6604036
+        },
+        "vertex/sevenq.rank00001.bin": {
+          "expected_sha256": "b6db7660aeb26065931b4c2c454f032f75bd7c6756db0ba3be3c2c208407b083",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "b6db7660aeb26065931b4c2c454f032f75bd7c6756db0ba3be3c2c208407b083",
+          "size_bytes": 9233460
+        },
+        "vertex/sevenq.rank00002.bin": {
+          "expected_sha256": "de3b3566bc80e0a20b6e33ccaa63d91cffbbcc7bdff8cafa8f044c48abf00a28",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "de3b3566bc80e0a20b6e33ccaa63d91cffbbcc7bdff8cafa8f044c48abf00a28",
+          "size_bytes": 7717428
+        },
+        "vertex/sevenq.rank00003.bin": {
+          "expected_sha256": "d9aba64dce3d9e9146fd1628adefb58868b2d8719981c40d4fab4719f8f602d5",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "d9aba64dce3d9e9146fd1628adefb58868b2d8719981c40d4fab4719f8f602d5",
+          "size_bytes": 8022768
+        },
+        "vertex/sevenq.rank00004.bin": {
+          "expected_sha256": "8b134c356c98e0b2bfae47e4a07de26898a65f0294f82049d3121c8051dcf9e3",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "8b134c356c98e0b2bfae47e4a07de26898a65f0294f82049d3121c8051dcf9e3",
+          "size_bytes": 6927856
+        },
+        "vertex/sevenq.rank00005.bin": {
+          "expected_sha256": "30136212c8faa935b678eb68d299abe739a49e41cb3b95199741bb1072e5aae3",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "30136212c8faa935b678eb68d299abe739a49e41cb3b95199741bb1072e5aae3",
+          "size_bytes": 8876852
+        },
+        "vertex/sevenq.rank00006.bin": {
+          "expected_sha256": "dcc56692e6d7224fa82a5b175c068dfc5832d8eefcd09dd5428f02a6cb523c22",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "dcc56692e6d7224fa82a5b175c068dfc5832d8eefcd09dd5428f02a6cb523c22",
+          "size_bytes": 9233460
+        },
+        "vertex/sevenq.rank00007.bin": {
+          "expected_sha256": "248e433a603102c4ca115f4aa12a0bf23cc19561ea83a1b0a948abe0e23c6eb8",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "248e433a603102c4ca115f4aa12a0bf23cc19561ea83a1b0a948abe0e23c6eb8",
+          "size_bytes": 8230444
+        },
+        "vertex/sevenq.rank00008.bin": {
+          "expected_sha256": "13785716f570f9572190cbff81baf02a8b9ab76a8e983678dd354d0c8c3b3fbd",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "13785716f570f9572190cbff81baf02a8b9ab76a8e983678dd354d0c8c3b3fbd",
+          "size_bytes": 7717428
+        },
+        "vertex/sevenq.rank00009.bin": {
+          "expected_sha256": "fa78cf2f4833ca382efa2646a6353a928764c7c51f3cffc7d7301963da4238e2",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "fa78cf2f4833ca382efa2646a6353a928764c7c51f3cffc7d7301963da4238e2",
+          "size_bytes": 9591944
+        },
+        "vertex/sevenq.rank00010.bin": {
+          "expected_sha256": "ac3483a646beee95f866fae66da310e1118b22d11e63bdb29478bbc14033f6b2",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "ac3483a646beee95f866fae66da310e1118b22d11e63bdb29478bbc14033f6b2",
+          "size_bytes": 8288180
+        },
+        "vertex/sevenq.rank00011.bin": {
+          "expected_sha256": "32d6aa146bc9eb01dfb538b6b8a09b5cad2dca1f010f3fdd81331401fb9b6c59",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "32d6aa146bc9eb01dfb538b6b8a09b5cad2dca1f010f3fdd81331401fb9b6c59",
+          "size_bytes": 9788616
+        },
+        "vertex/sevenq.rank00012.bin": {
+          "expected_sha256": "df4944fe71293bc93c643ead6c27e8e3103ca3df60e591929460d038ffef749d",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "df4944fe71293bc93c643ead6c27e8e3103ca3df60e591929460d038ffef749d",
+          "size_bytes": 8473148
+        },
+        "vertex/sevenq.rank00013.bin": {
+          "expected_sha256": "8232b28355103e1551ba9b088fb1f861fab5ba3416d4674d3b940addf454c64b",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "8232b28355103e1551ba9b088fb1f861fab5ba3416d4674d3b940addf454c64b",
+          "size_bytes": 7927400
+        },
+        "vertex/sevenq.rank00014.bin": {
+          "expected_sha256": "caa473829c187817ba540fec39331b93f2f686b3bc9c3a90465f294d0d46be2a",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "caa473829c187817ba540fec39331b93f2f686b3bc9c3a90465f294d0d46be2a",
+          "size_bytes": 9881380
+        },
+        "vertex/sevenq.rank00015.bin": {
+          "expected_sha256": "d62db705b487aef60af92efc1c0962fb4a7cd6fa57530d540560f78f528dfab4",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "d62db705b487aef60af92efc1c0962fb4a7cd6fa57530d540560f78f528dfab4",
+          "size_bytes": 10230596
+        },
+        "vertex/sevenq.rank00016.bin": {
+          "expected_sha256": "75a74601c80fa05cc56494826822991bfbc946cc36bd1754c7bace04b9df5b47",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "75a74601c80fa05cc56494826822991bfbc946cc36bd1754c7bace04b9df5b47",
+          "size_bytes": 8329256
+        },
+        "vertex/sevenq.rank00017.bin": {
+          "expected_sha256": "399007a76e9aa5dfe4debbff575b618e1c6f637549f6bc5ae6585f67493a293d",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "399007a76e9aa5dfe4debbff575b618e1c6f637549f6bc5ae6585f67493a293d",
+          "size_bytes": 8898636
+        },
+        "vertex/sevenq.rank00018.bin": {
+          "expected_sha256": "db57f4f2605d5a82b143c069efa216c090ce1f87387e46b04cb972be1fa30aee",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "db57f4f2605d5a82b143c069efa216c090ce1f87387e46b04cb972be1fa30aee",
+          "size_bytes": 9642848
+        },
+        "vertex/sevenq.rank00019.bin": {
+          "expected_sha256": "a87b6ee30c31fbac1da20b7c9c773a4a95a98f70eb9a848337806681e330aeaf",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "a87b6ee30c31fbac1da20b7c9c773a4a95a98f70eb9a848337806681e330aeaf",
+          "size_bytes": 9363688
+        },
+        "vertex/sevenq.rank00020.bin": {
+          "expected_sha256": "ab27b4017beec0514b311df2aeffbc8b49e80b4143f24586438e1db6f8ea0fba",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "ab27b4017beec0514b311df2aeffbc8b49e80b4143f24586438e1db6f8ea0fba",
+          "size_bytes": 7800420
+        },
+        "vertex/sevenq.rank00021.bin": {
+          "expected_sha256": "4cd9a6ac41b3c5b0a5c8357eafd9334e4897ac5dd55e8a93c137cf7b58f2dba3",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "4cd9a6ac41b3c5b0a5c8357eafd9334e4897ac5dd55e8a93c137cf7b58f2dba3",
+          "size_bytes": 8699164
+        },
+        "vertex/sevenq.rank00022.bin": {
+          "expected_sha256": "0938707fb510b05561e59b2eae3f308e28979a94b9ffa34783ea48d8542c0eea",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "0938707fb510b05561e59b2eae3f308e28979a94b9ffa34783ea48d8542c0eea",
+          "size_bytes": 9661692
+        },
+        "vertex/sevenq.rank00023.bin": {
+          "expected_sha256": "81d9f8ef4494b979c47a40a54322158a86c02c0020020090c2c177ff8ca02dc9",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "81d9f8ef4494b979c47a40a54322158a86c02c0020020090c2c177ff8ca02dc9",
+          "size_bytes": 8252592
+        },
+        "vertex/sevenq.rank00024.bin": {
+          "expected_sha256": "d377f59dc02e4284d4c046e12f2ebc5db1f1640f9f230f55a4202d280f0db6d4",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "d377f59dc02e4284d4c046e12f2ebc5db1f1640f9f230f55a4202d280f0db6d4",
+          "size_bytes": 7800420
+        },
+        "vertex/sevenq.rank00025.bin": {
+          "expected_sha256": "30bdac6974faf475231b928e736ae36b3a712d8eca44f9abab5b570f9a25a15e",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "30bdac6974faf475231b928e736ae36b3a712d8eca44f9abab5b570f9a25a15e",
+          "size_bytes": 8699164
+        },
+        "vertex/sevenq.rank00026.bin": {
+          "expected_sha256": "0ad29126e26f379e47a22e0c87227a02870c3f3447ecdd15d7ed477221c06489",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "0ad29126e26f379e47a22e0c87227a02870c3f3447ecdd15d7ed477221c06489",
+          "size_bytes": 8252592
+        },
+        "vertex/sevenq.rank00027.bin": {
+          "expected_sha256": "6c4b12201edcaed81123f845edbbebe6f059147d715132a843c157ee7894371f",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "6c4b12201edcaed81123f845edbbebe6f059147d715132a843c157ee7894371f",
+          "size_bytes": 9661692
+        },
+        "vertex/sevenq.rank00028.bin": {
+          "expected_sha256": "b09538a0e83a1fe05e328a259f2b8a75e11bfc789c6531f7805c35d092080cac",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "b09538a0e83a1fe05e328a259f2b8a75e11bfc789c6531f7805c35d092080cac",
+          "size_bytes": 7430932
+        },
+        "vertex/sevenq.rank00029.bin": {
+          "expected_sha256": "a74e53b590e5988d83164a4dc1de84633fc8c2ea9013f7f6d9e3dc3d5b7c5222",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "a74e53b590e5988d83164a4dc1de84633fc8c2ea9013f7f6d9e3dc3d5b7c5222",
+          "size_bytes": 9949196
+        },
+        "vertex/sevenq.rank00030.bin": {
+          "expected_sha256": "2ce3efc3329018785ccbec469d6a13217e6cd6d59cfddcc6970d8e8b4b7e3d22",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "2ce3efc3329018785ccbec469d6a13217e6cd6d59cfddcc6970d8e8b4b7e3d22",
+          "size_bytes": 9955664
+        },
+        "vertex/sevenq.rank00031.bin": {
+          "expected_sha256": "26e2259a96b5a76ba20e5d7850ac43715a0759e0193bc898ef064020d7711768",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "26e2259a96b5a76ba20e5d7850ac43715a0759e0193bc898ef064020d7711768",
+          "size_bytes": 8898636
+        },
+        "vertex/sevenq.rank00032.bin": {
+          "expected_sha256": "a23570374f4362934f2d9b994762c527d289787803ffa7d1adecaa82117d2926",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "a23570374f4362934f2d9b994762c527d289787803ffa7d1adecaa82117d2926",
+          "size_bytes": 7609992
+        },
+        "vertex/sevenq.rank00033.bin": {
+          "expected_sha256": "3b768817a50098bfb114e0ed2b88642e7eb57c5e69fbad20b7a634adb3758270",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "3b768817a50098bfb114e0ed2b88642e7eb57c5e69fbad20b7a634adb3758270",
+          "size_bytes": 8291484
+        },
+        "vertex/sevenq.rank00034.bin": {
+          "expected_sha256": "16e91bd24e1ec487a0d59140927a777f5305b45e974b5ffa0291ab5ef976c8a8",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "16e91bd24e1ec487a0d59140927a777f5305b45e974b5ffa0291ab5ef976c8a8",
+          "size_bytes": 7681476
+        },
+        "vertex/sevenq.rank00035.bin": {
+          "expected_sha256": "37aababcc89cbefca4faa3baafba1f8028a067082834cf4979cb64e64e8c3338",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "37aababcc89cbefca4faa3baafba1f8028a067082834cf4979cb64e64e8c3338",
+          "size_bytes": 9195268
+        },
+        "vertex/sevenq.rank00036.bin": {
+          "expected_sha256": "e014a3ffdb9aaa7e0cf0253abe33f7e8d7e8d0767fc162aeb4513903a191f25c",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "e014a3ffdb9aaa7e0cf0253abe33f7e8d7e8d0767fc162aeb4513903a191f25c",
+          "size_bytes": 7411024
+        },
+        "vertex/sevenq.rank00037.bin": {
+          "expected_sha256": "7a56e42bc591d2c1d4c6a0ecbeaff2561a702644667d8108fc3eab81ebed52e7",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "7a56e42bc591d2c1d4c6a0ecbeaff2561a702644667d8108fc3eab81ebed52e7",
+          "size_bytes": 9332832
+        },
+        "vertex/sevenq.rank00038.bin": {
+          "expected_sha256": "5e5de14eb6af7f80b05c4a658d5a236cce714a9ed6863105543a5d8ea1152998",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "5e5de14eb6af7f80b05c4a658d5a236cce714a9ed6863105543a5d8ea1152998",
+          "size_bytes": 9472636
+        },
+        "vertex/sevenq.rank00039.bin": {
+          "expected_sha256": "7c8dccef52dabcd964c4e2074ac0522d9ee9c8936be5d1477409b1926e2b7fa1",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "7c8dccef52dabcd964c4e2074ac0522d9ee9c8936be5d1477409b1926e2b7fa1",
+          "size_bytes": 10764892
+        },
+        "vertex/sevenq.rank00040.bin": {
+          "expected_sha256": "26285041112767320b6e782b2af1e04208674bc6360707f42b922bc61233aaad",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "26285041112767320b6e782b2af1e04208674bc6360707f42b922bc61233aaad",
+          "size_bytes": 7542176
+        },
+        "vertex/sevenq.rank00041.bin": {
+          "expected_sha256": "dfeda9da0767976eca03cbe97d98daa08a569fac71dfea32ef04e9e05588d5b9",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "dfeda9da0767976eca03cbe97d98daa08a569fac71dfea32ef04e9e05588d5b9",
+          "size_bytes": 8508792
+        },
+        "vertex/sevenq.rank00042.bin": {
+          "expected_sha256": "e50a77f965eadf61d6bc28208324cede5dc7a06b0fa365dd07f1cff5cdc87581",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "e50a77f965eadf61d6bc28208324cede5dc7a06b0fa365dd07f1cff5cdc87581",
+          "size_bytes": 9150972
+        },
+        "vertex/sevenq.rank00043.bin": {
+          "expected_sha256": "3686f9d31c05de55baea12e829068cb6b0ef4ece5536e3ffdfc581094ab05802",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "3686f9d31c05de55baea12e829068cb6b0ef4ece5536e3ffdfc581094ab05802",
+          "size_bytes": 9736536
+        },
+        "vertex/sevenq.rank00044.bin": {
+          "expected_sha256": "ed613deb99005b5c84c63e917450ccd0589b69bfa82c821ff93efe3586f37831",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "ed613deb99005b5c84c63e917450ccd0589b69bfa82c821ff93efe3586f37831",
+          "size_bytes": 7964360
+        },
+        "vertex/sevenq.rank00045.bin": {
+          "expected_sha256": "0375af891b8951c91e4ef8f99b53f422552ce4d9ae4a8d072cac0a804047882d",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "0375af891b8951c91e4ef8f99b53f422552ce4d9ae4a8d072cac0a804047882d",
+          "size_bytes": 9371024
+        },
+        "vertex/sevenq.rank00046.bin": {
+          "expected_sha256": "1052481bf32acfb3858c008aaae4de6e4b1347e09398512b940b5a4530466596",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "1052481bf32acfb3858c008aaae4de6e4b1347e09398512b940b5a4530466596",
+          "size_bytes": 8508792
+        },
+        "vertex/sevenq.rank00047.bin": {
+          "expected_sha256": "9ae20705607b7a5bfd8f91c4f463c68245dd7faf819ca70e0cb2e847621154fb",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "9ae20705607b7a5bfd8f91c4f463c68245dd7faf819ca70e0cb2e847621154fb",
+          "size_bytes": 9094300
+        },
+        "vertex/sevenq.rank00048.bin": {
+          "expected_sha256": "057f98550c8410b7ffaa1ce1bfba4062ab6432d3d6af2d8bc0c663910c05eaac",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "057f98550c8410b7ffaa1ce1bfba4062ab6432d3d6af2d8bc0c663910c05eaac",
+          "size_bytes": 8064908
+        },
+        "vertex/sevenq.rank00049.bin": {
+          "expected_sha256": "3e9a4627e5bc60cceeaa6d461babb06de00c2bd4cdbce3a889a05120410ca6a4",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "3e9a4627e5bc60cceeaa6d461babb06de00c2bd4cdbce3a889a05120410ca6a4",
+          "size_bytes": 8648596
+        },
+        "vertex/sevenq.rank00050.bin": {
+          "expected_sha256": "dda65a7983af52742561b98d702c3bbd8507f047fb3f9665e3b78fda776cafa1",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "dda65a7983af52742561b98d702c3bbd8507f047fb3f9665e3b78fda776cafa1",
+          "size_bytes": 9538576
+        },
+        "vertex/sevenq.rank00051.bin": {
+          "expected_sha256": "23a9930d2043413fda898fc09cef8c11f31655cc80fa488100ec22c1903e9cb4",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "23a9930d2043413fda898fc09cef8c11f31655cc80fa488100ec22c1903e9cb4",
+          "size_bytes": 9699156
+        },
+        "vertex/sevenq.rank00052.bin": {
+          "expected_sha256": "a55118a7a53ab16cf5421047fb4d1b67d0a6ccf4bc19f63b144f5d8e6ed80cd0",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "a55118a7a53ab16cf5421047fb4d1b67d0a6ccf4bc19f63b144f5d8e6ed80cd0",
+          "size_bytes": 7898784
+        },
+        "vertex/sevenq.rank00053.bin": {
+          "expected_sha256": "3a098d9cf3daaa52a43538544e488120534f6491303703bf7d184e22fd195eab",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "3a098d9cf3daaa52a43538544e488120534f6491303703bf7d184e22fd195eab",
+          "size_bytes": 9460988
+        },
+        "vertex/sevenq.rank00054.bin": {
+          "expected_sha256": "9952943596a316e37e5c61e95965be2018eafdfb61148afcb451ed0898571e22",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "9952943596a316e37e5c61e95965be2018eafdfb61148afcb451ed0898571e22",
+          "size_bytes": 9206412
+        },
+        "vertex/sevenq.rank00055.bin": {
+          "expected_sha256": "17fbdd116d612b86eaf28c544502bb3bdf1aa57b30bff80b62517e92f9f56211",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "17fbdd116d612b86eaf28c544502bb3bdf1aa57b30bff80b62517e92f9f56211",
+          "size_bytes": 8572940
+        },
+        "vertex/sevenq.rank00056.bin": {
+          "expected_sha256": "cf607cc9cb4b7c2530315aafcbc2fe1e48c9d940c351c91c61528f45ea4e4d1c",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "cf607cc9cb4b7c2530315aafcbc2fe1e48c9d940c351c91c61528f45ea4e4d1c",
+          "size_bytes": 7074324
+        },
+        "vertex/sevenq.rank00057.bin": {
+          "expected_sha256": "8f8d6d1d6c26688c0efbf8e110436087cab3fb21f887549489f8829f5e03e481",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "8f8d6d1d6c26688c0efbf8e110436087cab3fb21f887549489f8829f5e03e481",
+          "size_bytes": 9078620
+        },
+        "vertex/sevenq.rank00058.bin": {
+          "expected_sha256": "430d4a3e6365c0e5890b1e192eba90c910253793d537c18be78909da06e74c4f",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "430d4a3e6365c0e5890b1e192eba90c910253793d537c18be78909da06e74c4f",
+          "size_bytes": 8975216
+        },
+        "vertex/sevenq.rank00059.bin": {
+          "expected_sha256": "0642ceab8896a7455545b883875d9e9acb4957686a295266f512b47a57b39974",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "0642ceab8896a7455545b883875d9e9acb4957686a295266f512b47a57b39974",
+          "size_bytes": 10010964
+        },
+        "vertex/sevenq.rank00060.bin": {
+          "expected_sha256": "deb0522a9a707f75cc4dbb0417c0dd3aa82351ef9805ee37595767928b9e09d5",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "deb0522a9a707f75cc4dbb0417c0dd3aa82351ef9805ee37595767928b9e09d5",
+          "size_bytes": 8548440
+        },
+        "vertex/sevenq.rank00061.bin": {
+          "expected_sha256": "42bfc3a1be8a0738feefd518fa7497ba4830a4eb785154c1defb0f9b7b568516",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "42bfc3a1be8a0738feefd518fa7497ba4830a4eb785154c1defb0f9b7b568516",
+          "size_bytes": 8980760
+        },
+        "vertex/sevenq.rank00062.bin": {
+          "expected_sha256": "183cbfe64513a07f074f0198f2fc9c45ca8dbab0676f7177fdb6bccb9026d9a8",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "183cbfe64513a07f074f0198f2fc9c45ca8dbab0676f7177fdb6bccb9026d9a8",
+          "size_bytes": 9228560
+        },
+        "vertex/sevenq.rank00063.bin": {
+          "expected_sha256": "1089539e1868acb40e87c931463b39dfa31a6ea38bb8b134fb84cd6afc1c9403",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "1089539e1868acb40e87c931463b39dfa31a6ea38bb8b134fb84cd6afc1c9403",
+          "size_bytes": 9193476
+        }
+      },
+      "payload_modes": [
+        "0400"
+      ],
+      "root": "/data/home/ziyuzhu/Mean_Field/results/ptse2_openmx_screened_hf/source_data/ptse2_fractional_fillings_v1/7p340993_epsilon5_15_fillings_v1/physical_operator_hole_crosscheck_v3/runtime/checkpoint/oracle_job_517203",
+      "root_mode": "0700",
+      "sentinel": {
+        "authority": "fresh minimal scalar-vertex checkpoint for this cross-validation only",
+        "channel_count": 7,
+        "oracle_manifest_sha256": "053631ae3e29536f729d73a8f11240721ed918e50e86ad3557c2e27da1e36c87",
+        "output_manifest_sha256": "8ccaf6996c3a2fbfe1a969a10b6f88f582c6ebe62fb154add8667c6e3db0878e",
+        "physical_authority": false,
+        "producer_job_id": "517203",
+        "schema": "ptse2_physical_operator_hole_oracle_complete/v3",
+        "sentinel_last": true,
+        "source_frozen_sha256": "6b238a7d79d70abc7429d941db39173d25c3d937691cef478af728697c419272"
+      },
+      "sentinel_mode": "0400",
+      "sentinel_sha256": "ce1e8b34817f4eda04a6932d6d587885272d76df1451ef7a193ae5cb72c4fc57",
+      "unexpected_files": []
+    },
+    "oracle_publication_receipt_mirror": {
+      "all_exist": true,
+      "all_modes_equal": true,
+      "all_sha256_equal": true,
+      "files": {
+        "ORACLE_COMPLETE": {
+          "exists": true,
+          "final_mode": "0400",
+          "mirror_mode": "0400",
+          "sha256_equal": true
+        },
+        "oracle_manifest.json": {
+          "exists": true,
+          "final_mode": "0400",
+          "mirror_mode": "0400",
+          "sha256_equal": true
+        }
+      },
+      "mirror": "/data/home/ziyuzhu/Mean_Field/results/ptse2_openmx_screened_hf/source_data/ptse2_fractional_fillings_v1/7p340993_epsilon5_15_fillings_v1/physical_operator_hole_crosscheck_v3/runtime/.oracle_publication.517203"
+    },
+    "output": {
+      "actual_file_count": 6,
+      "all_payload_hashes_match": true,
+      "all_payloads_regular_nonsymlink": true,
+      "exact_file_namespace": true,
+      "expected_file_count": 6,
+      "manifest_binding_match": true,
+      "manifest_mode": "0400",
+      "manifest_sha256": "b60335dbf1f60124c8afce28d6fdeebd33d6f3e26700a013f4f40234e29f81d7",
+      "missing_files": [],
+      "payload_checks": {
+        "REPORT.md": {
+          "expected_sha256": "5d83d2e949a2e07463625d68daaaa4b69cb1d4334547222f47dfa57d01e1790b",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "5d83d2e949a2e07463625d68daaaa4b69cb1d4334547222f47dfa57d01e1790b",
+          "size_bytes": 2010
+        },
+        "coefficients.csv": {
+          "expected_sha256": "fd5269f65e6bfbedaa3c1876b81b220c02f045a0f442debcfeb0090db4f4478d",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "fd5269f65e6bfbedaa3c1876b81b220c02f045a0f442debcfeb0090db4f4478d",
+          "size_bytes": 15065
+        },
+        "crosscheck_arrays.npz": {
+          "expected_sha256": "42ca029114c72a99679e39f27966249bd543f5233f2ac63b8c4ccc7b1039615f",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "42ca029114c72a99679e39f27966249bd543f5233f2ac63b8c4ccc7b1039615f",
+          "size_bytes": 65922202
+        },
+        "summary.json": {
+          "expected_sha256": "a1d2973af86294496b324fc7b1afbf26514d8df24ce46226202e94edfc40a9c9",
+          "hash_match": true,
+          "mode": "0400",
+          "regular_nonsymlink": true,
+          "sha256": "a1d2973af86294496b324fc7b1afbf26514d8df24ce46226202e94edfc40a9c9",
+          "size_bytes": 20882
+        }
+      },
+      "payload_modes": [
+        "0400"
+      ],
+      "root": "/data/home/ziyuzhu/Mean_Field/results/ptse2_openmx_screened_hf/source_data/ptse2_fractional_fillings_v1/7p340993_epsilon5_15_fillings_v1/physical_operator_hole_crosscheck_v3/runtime/output/job_517203",
+      "root_mode": "0700",
+      "sentinel": {
+        "classification": null,
+        "coefficient_thresholds": null,
+        "finite_seven_mode_positivity_proof": false,
+        "oracle_checkpoint_sentinel_sha256": "ce1e8b34817f4eda04a6932d6d587885272d76df1451ef7a193ae5cb72c4fc57",
+        "output_manifest_sha256": "b60335dbf1f60124c8afce28d6fdeebd33d6f3e26700a013f4f40234e29f81d7",
+        "producer_job_id": "517203",
+        "schema": "ptse2_physical_operator_hole_crosscheck_complete/v3",
+        "sentinel_last": true,
+        "source_frozen_sha256": "6b238a7d79d70abc7429d941db39173d25c3d937691cef478af728697c419272",
+        "summary_sha256": "a1d2973af86294496b324fc7b1afbf26514d8df24ce46226202e94edfc40a9c9"
+      },
+      "sentinel_mode": "0400",
+      "sentinel_sha256": "1b0d2b6bffd2dcc31c3984901ae25fad9c5956e826ef9cb18efc3db6639be391",
+      "unexpected_files": []
+    },
+    "output_publication_mirror": {
+      "all_exist": true,
+      "all_modes_equal": true,
+      "all_sha256_equal": true,
+      "files": {
+        "COMPLETE": {
+          "exists": true,
+          "final_mode": "0400",
+          "mirror_mode": "0400",
+          "sha256_equal": true
+        },
+        "OUTPUT_SHA256.json": {
+          "exists": true,
+          "final_mode": "0400",
+          "mirror_mode": "0400",
+          "sha256_equal": true
+        },
+        "REPORT.md": {
+          "exists": true,
+          "final_mode": "0400",
+          "mirror_mode": "0400",
+          "sha256_equal": true
+        },
+        "coefficients.csv": {
+          "exists": true,
+          "final_mode": "0400",
+          "mirror_mode": "0400",
+          "sha256_equal": true
+        },
+        "crosscheck_arrays.npz": {
+          "exists": true,
+          "final_mode": "0400",
+          "mirror_mode": "0400",
+          "sha256_equal": true
+        },
+        "summary.json": {
+          "exists": true,
+          "final_mode": "0400",
+          "mirror_mode": "0400",
+          "sha256_equal": true
+        }
+      },
+      "mirror": "/data/home/ziyuzhu/Mean_Field/results/ptse2_openmx_screened_hf/source_data/ptse2_fractional_fillings_v1/7p340993_epsilon5_15_fillings_v1/physical_operator_hole_crosscheck_v3/runtime/.crosscheck_publication.517203"
+    }
+  },
+  "csv_npz_agreement": {
+    "coefficient_max_abs_difference": 0.0,
+    "saved_direct_minus_complement_residual_max_abs_difference": 0.0,
+    "saved_electron_plus_hole_residual_max_abs_difference": 0.0
+  },
+  "execution": {
+    "capsule_mutated": false,
+    "hostname": "test001",
+    "numpy": "1.26.4",
+    "production_modules_imported": false,
+    "python": "/data/home/ziyuzhu/miniconda3/envs/moirekp/bin/python3.11",
+    "sources": [
+      "/data/home/ziyuzhu/Mean_Field/results/ptse2_openmx_screened_hf/source_data/ptse2_fractional_fillings_v1/7p340993_epsilon5_15_fillings_v1/physical_operator_hole_crosscheck_v3/runtime/output/job_517203/crosscheck_arrays.npz",
+      "/data/home/ziyuzhu/Mean_Field/results/ptse2_openmx_screened_hf/source_data/ptse2_fractional_fillings_v1/7p340993_epsilon5_15_fillings_v1/physical_operator_hole_crosscheck_v3/runtime/output/job_517203/coefficients.csv"
+    ]
+  },
+  "finite_seven_mode": {
+    "area_nm2": 21.809962662515687,
+    "authority": "finite seven retained Fourier modes only; no positivity proof",
+    "csv_reconstructed_minimum_n_h_over_2_minus_abs_S_h_over_hbar_per_nm2": -0.035043673571072964,
+    "csv_vs_npz_density_max_abs_difference": 0.0,
+    "csv_vs_npz_margin_max_abs_difference": 0.0,
+    "csv_vs_npz_spin_max_abs_difference": 0.0,
+    "grid": [
+      192,
+      192
+    ],
+    "max_reconstruction_imaginary_abs_per_nm2": 2.290697920083893e-17,
+    "npz_saved_minimum_per_nm2": -0.035043673571072964
+  },
+  "full_reference_TSB_exact_zero": {
+    "all_exact_complex_zero": true,
+    "entry_count": 24,
+    "labels": [
+      [
+        -1,
+        0
+      ],
+      [
+        0,
+        -1
+      ],
+      [
+        1,
+        -1
+      ],
+      [
+        1,
+        0
+      ],
+      [
+        0,
+        1
+      ],
+      [
+        -1,
+        1
+      ]
+    ],
+    "max_abs": 0.0
+  },
+  "independent_residuals": {
+    "csv_formed_vs_csv_saved_dc_max_abs_difference": 0.0,
+    "csv_formed_vs_csv_saved_er_max_abs_difference": 0.0,
+    "direct_hole_minus_complement_hole_from_csv_coefficients": {
+      "index": [
+        2,
+        4
+      ],
+      "max_abs": 1.844897597698432e-10,
+      "value": {
+        "imag": 6.845402023003544e-11,
+        "real": -1.713199304642643e-10
+      }
+    },
+    "direct_hole_minus_complement_hole_from_npz_coefficients": {
+      "index": [
+        2,
+        4
+      ],
+      "max_abs": 1.844897597698432e-10,
+      "value": {
+        "imag": 6.845402023003544e-11,
+        "real": -1.713199304642643e-10
+      }
+    },
+    "electron_plus_direct_hole_minus_reference_from_csv_coefficients": {
+      "index": [
+        2,
+        4
+      ],
+      "max_abs": 1.844897597698432e-10,
+      "value": {
+        "imag": 6.845402023003544e-11,
+        "real": -1.713199304642643e-10
+      }
+    },
+    "electron_plus_direct_hole_minus_reference_from_npz_coefficients": {
+      "index": [
+        2,
+        4
+      ],
+      "max_abs": 1.844897597698432e-10,
+      "value": {
+        "imag": 6.845402023003544e-11,
+        "real": -1.713199304642643e-10
+      }
+    },
+    "npz_formed_vs_npz_saved_dc_max_abs_difference": 0.0,
+    "npz_formed_vs_npz_saved_er_max_abs_difference": 0.0,
+    "production_summary_dc_difference": 0.0,
+    "production_summary_er_difference": 0.0
+  },
+  "inventory": {
+    "axes": [
+      "charge",
+      "Sx_over_hbar",
+      "Sy_over_hbar",
+      "Sz_over_hbar"
+    ],
+    "csv_row_count": 168,
+    "physical_labels": [
+      [
+        0,
+        0
+      ],
+      [
+        -1,
+        0
+      ],
+      [
+        0,
+        -1
+      ],
+      [
+        1,
+        -1
+      ],
+      [
+        1,
+        0
+      ],
+      [
+        0,
+        1
+      ],
+      [
+        -1,
+        1
+      ]
+    ],
+    "projectors": [
+      "electron_stored_abi",
+      "hole_direct_eigh",
+      "hole_complement",
+      "full_reference_I24"
+    ]
+  },
+  "npz_schema": "ptse2_physical_operator_hole_crosscheck_arrays/v3",
+  "producer_job_id": "517203",
+  "schema": "ptse2_physical_operator_hole_crosscheck_v3_detached_recompute/v1",
+  "scope_review": {
+    "classification": null,
+    "coefficient_thresholds": null,
+    "declared_scope": {
+      "Q0_plus_six_shell1_TSB": true,
+      "count": 7,
+      "labels": [
+        [
+          0,
+          0
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          0,
+          -1
+        ],
+        [
+          1,
+          -1
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          -1,
+          1
+        ]
+      ]
+    },
+    "no_overclaim_assessment": "consistent: raw seven-channel cross-validation only; no coefficient classification, positivity proof, global-ground-state claim, or authority beyond Q0 plus six shell-1 TSB channels",
+    "uncertainty": [
+      "No raw coefficient residual is classified by a newly invented floating threshold.",
+      "The direct top-two eigenspace can rotate internally at exact degeneracy, while its rank-two projector remains the compared object.",
+      "The real-space minimum is a finite-seven-mode diagnostic only and is not a positivity proof.",
+      "The accepted B1 root is a pinned local fixed-rank branch, not a global-ground-state proof."
+    ]
+  },
+  "spin_major_synthetic_plus_y": {
+    "S_over_hbar": [
+      {
+        "imag": 0.0,
+        "real": 0.0
+      },
+      {
+        "imag": 0.0,
+        "real": 0.4999999999999999
+      },
+      {
+        "imag": 0.0,
+        "real": 0.0
+      }
+    ],
+    "chi": "(1,i)/sqrt(2)",
+    "is_plus_y_half_with_zero_xz": true
+  }
+}

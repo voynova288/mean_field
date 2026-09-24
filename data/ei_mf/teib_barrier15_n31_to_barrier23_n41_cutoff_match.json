@@ -1,0 +1,49 @@
+{
+  "claim_scope": "fixed_target_Lambda_z_integer_harmonic_geometry_diagnostic_only",
+  "evidence_scope": "geometry_and_integer_cutoff_contract_only; historical source, NPZ, Poisson, and observable results are not attested by this artifact",
+  "formula": "N(Lz)=nearest_half_up(Lambda_target*Lz/(2*pi))",
+  "matched": {
+    "absolute_mismatch_nm_inv": 0.0019379089543307693,
+    "absolute_mismatch_tolerance_nm_inv": 0.002,
+    "active_region_nm": 19.5,
+    "actual_maximum_wavevector_nm_inv": 3.9329862228147032,
+    "bandlimit_fingerprint": "c1db1aa2dcb2d708c26f68f03d0ac845f5b7fb510b15f9d9d8918992202c7743",
+    "barrier_nm_each_side": 23.0,
+    "match_receipt_fingerprint": "2edc03ab18b885645d7c0c31f8fa26a9400759bd05929c2910710095d53f9e9d",
+    "maximum_harmonic": 41,
+    "mismatch_in_reciprocal_spacings": -0.02020202020201811,
+    "parent_hilbert_dimension": 664,
+    "period_nm": 65.5,
+    "plane_wave_count": 83,
+    "reciprocal_spacing_nm_inv": 0.095926493239383,
+    "relative_mismatch": -0.0004924895345973389,
+    "signed_mismatch_nm_inv": -0.0019379089543307693,
+    "tolerance_passed": true
+  },
+  "matching_rule": "nearest_nonnegative_integer_harmonic_half_up",
+  "receipt_schema_version": 1,
+  "reference": {
+    "active_region_nm": 19.5,
+    "bandlimit_fingerprint": "780fc688c5067c5f4ecf986d2f8cf42b790ecde850890c8b287a563b56272780",
+    "barrier_nm_each_side": 15.0,
+    "maximum_harmonic": 31,
+    "parent_hilbert_dimension": 504,
+    "period_nm": 49.5,
+    "plane_wave_count": 63,
+    "reciprocal_spacing_nm_inv": 0.12693303650867852,
+    "target_maximum_wavevector_nm_inv": 3.934924131769034
+  },
+  "release_status": {
+    "bcs_authorized": false,
+    "hartree_fock_authorized": false,
+    "historical_result_attested": false,
+    "jdos_authorized": false,
+    "optical_response_authorized": false,
+    "physical_cutoff_authorized": false,
+    "physical_identity_attested": false,
+    "physical_poisson_authorized": false
+  },
+  "schema": "teib-barrier-geometry-fixed-Lambda-z-match-v1",
+  "tolerance_declaration_status": "declared by this receipt before any future replay; not attested as a historical predeclaration",
+  "tolerance_rule": "absolute_mismatch_lte_tolerance"
+}

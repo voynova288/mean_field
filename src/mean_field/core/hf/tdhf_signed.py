@@ -13,6 +13,11 @@ For a generic signed orbit the block convention is
     L(q) = eta H(q),  eta = diag(+I_q, -I_-q).
 
 No matrix is Hermitized, symmetrized, averaged, or copied between signs.
+
+This module validates typed block algebra and sewing only. It does not validate
+that an ``F0/P0`` reference is stationary or that a finite-temperature source
+obeys thermal closure. Every production adapter must establish and bind those
+physical conditions; algebraic assembly alone grants no such authority.
 """
 from __future__ import annotations
 
@@ -24,7 +29,7 @@ from typing import TYPE_CHECKING, Any, Hashable, Literal, Protocol, runtime_chec
 import numpy as np
 from scipy import linalg as scipy_linalg
 
-from .tdhf import ParticleHolePair, signed_q_particle_hole_assignment_residual
+from .tdhf import signed_q_particle_hole_assignment_residual
 
 if TYPE_CHECKING:
     from .tdhf_goldstone import TDHFWardSubspaceCertificate
@@ -34,6 +39,36 @@ TDHF_TYPED_API_VERSION = "typed_signed_q_v1"
 TDHFStaticHessianAuthority = Literal[
     "scalar_hessian", "projected_signed_ab", "not_established"
 ]
+_TDHF_STATIC_HESSIAN_AUTHORITIES = frozenset(
+    ("scalar_hessian", "projected_signed_ab", "not_established")
+)
+
+def _validate_static_hessian_authority(
+    value: TDHFStaticHessianAuthority,
+) -> TDHFStaticHessianAuthority:
+    if value not in _TDHF_STATIC_HESSIAN_AUTHORITIES:
+        raise ValueError(
+            "static_hessian_authority must be scalar_hessian, "
+            "projected_signed_ab, or not_established"
+        )
+    return value
+
+
+@runtime_checkable
+class TDHFTransitionLabelProtocol(Protocol):
+    """Runtime-neutral transition label accepted by the typed signed-q API.
+
+    ``particle`` and ``hole`` name the two ordered transition endpoints. This
+    protocol intentionally makes no occupied/unoccupied assertion; callers own
+    that physical interpretation.
+    """
+
+    particle: int
+    hole: int
+    particle_momentum: Any
+    hole_momentum: Any
+    particle_flavor: Any
+    hole_flavor: Any
 
 
 @dataclass(frozen=True)
@@ -106,12 +141,16 @@ def classify_tdhf_signed_q(
 class TDHFSignedQBlocks:
     """Independent q/-q A/B blocks with explicit row and column pair spaces."""
 
-    plus_pairs: tuple[ParticleHolePair, ...]
-    minus_pairs: tuple[ParticleHolePair, ...]
+    plus_pairs: tuple[TDHFTransitionLabelProtocol, ...]
+    minus_pairs: tuple[TDHFTransitionLabelProtocol, ...]
     A_plus: np.ndarray
     B_plus_minus: np.ndarray
     A_minus: np.ndarray
     B_minus_plus: np.ndarray
+
+    def __post_init__(self) -> None:
+        _validate_transition_labels(self.plus_pairs, name="plus_pairs")
+        _validate_transition_labels(self.minus_pairs, name="minus_pairs")
 
 
 @dataclass(frozen=True)
@@ -184,10 +223,24 @@ class TDHFGenericSignedQSector:
     def __post_init__(self) -> None:
         if not isinstance(self.q, TDHFGenericSignedQ):
             raise TypeError("generic TDHF sector requires TDHFGenericSignedQ")
+        if not isinstance(self.blocks, TDHFSignedQBlocks):
+            raise TypeError("generic TDHF sector requires TDHFSignedQBlocks")
+        if not isinstance(self.sewing, TDHFNambuSewing):
+            raise TypeError("generic TDHF sector requires TDHFNambuSewing")
         if not self.source_fingerprint or not self.interaction_fingerprint:
             raise ValueError("typed TDHF sector fingerprints must be nonempty")
         if not self.response_scope:
             raise ValueError("typed TDHF response_scope must be nonempty")
+        _validate_static_hessian_authority(self.static_hessian_authority)
+        if self.sewing.source_fingerprint != self.source_fingerprint:
+            raise ValueError("generic TDHF sewing source fingerprint mismatch")
+        if (
+            self.sewing.plus_pairs_fingerprint
+            != fingerprint_tdhf_pairs(self.blocks.plus_pairs)
+            or self.sewing.minus_pairs_fingerprint
+            != fingerprint_tdhf_pairs(self.blocks.minus_pairs)
+        ):
+            raise ValueError("generic TDHF sewing pair fingerprints mismatch")
 
 
 @dataclass(frozen=True)
@@ -221,7 +274,7 @@ class TDHFSelfConjugateQMatrices:
 @dataclass(frozen=True)
 class TDHFSelfConjugateQSector:
     q: TDHFSelfConjugateQ
-    canonical_pairs: tuple[ParticleHolePair, ...]
+    canonical_pairs: tuple[TDHFTransitionLabelProtocol, ...]
     A: np.ndarray
     B: np.ndarray
     source_fingerprint: str
@@ -237,12 +290,14 @@ class TDHFSelfConjugateQSector:
             raise TypeError(
                 "self-conjugate TDHF sector requires TDHFSelfConjugateQ"
             )
+        _validate_transition_labels(self.canonical_pairs, name="canonical_pairs")
         if not self.source_fingerprint or not self.interaction_fingerprint:
             raise ValueError("typed TDHF sector fingerprints must be nonempty")
         if not self.response_scope or not self.canonical_sewing_provenance:
             raise ValueError(
                 "self-conjugate TDHF requires response and sewing provenance"
             )
+        _validate_static_hessian_authority(self.static_hessian_authority)
 
 
 TDHFTypedSector = TDHFGenericSignedQSector | TDHFSelfConjugateQSector
@@ -389,13 +444,55 @@ def _validated_tolerance(name: str, value: float) -> float:
     return resolved
 
 
-def fingerprint_tdhf_pairs(pairs: tuple[ParticleHolePair, ...]) -> str:
-    """Deterministically bind pair order and adapter-owned metadata."""
+def _validate_transition_labels(
+    labels: tuple[TDHFTransitionLabelProtocol, ...],
+    *,
+    name: str,
+) -> None:
+    required_attributes = (
+        "particle",
+        "hole",
+        "particle_momentum",
+        "hole_momentum",
+        "particle_flavor",
+        "hole_flavor",
+    )
+    for index, label in enumerate(labels):
+        if not isinstance(label, TDHFTransitionLabelProtocol):
+            missing = [
+                attr for attr in required_attributes if not hasattr(label, attr)
+            ]
+            detail = f"; missing {', '.join(missing)}" if missing else ""
+            raise TypeError(
+                f"{name}[{index}] must implement "
+                f"TDHFTransitionLabelProtocol{detail}"
+            )
+        for endpoint_name in ("particle", "hole"):
+            endpoint = getattr(label, endpoint_name)
+            if isinstance(endpoint, (bool, np.bool_)) or not isinstance(
+                endpoint, (int, np.integer)
+            ):
+                raise TypeError(
+                    f"{name}[{index}].{endpoint_name} must be an integer endpoint"
+                )
+            if int(endpoint) < 0:
+                raise ValueError(
+                    f"{name}[{index}].{endpoint_name} must be non-negative"
+                )
+        if int(label.particle) == int(label.hole):
+            raise ValueError(f"{name}[{index}] endpoints must be distinct")
 
+
+def fingerprint_tdhf_pairs(
+    pairs: tuple[TDHFTransitionLabelProtocol, ...],
+) -> str:
+    """Deterministically bind neutral label order and adapter metadata."""
+
+    _validate_transition_labels(pairs, name="pairs")
     records = [
         {
-            "particle": pair.particle,
-            "hole": pair.hole,
+            "particle": int(pair.particle),
+            "hole": int(pair.hole),
             "particle_momentum": repr(pair.particle_momentum),
             "hole_momentum": repr(pair.hole_momentum),
             "particle_flavor": repr(pair.particle_flavor),
@@ -452,6 +549,8 @@ def fingerprint_tdhf_sector(sector: TDHFTypedSector) -> str:
 
 
 def _validate_blocks(blocks: TDHFSignedQBlocks) -> tuple[int, int]:
+    _validate_transition_labels(blocks.plus_pairs, name="plus_pairs")
+    _validate_transition_labels(blocks.minus_pairs, name="minus_pairs")
     n_plus = len(blocks.plus_pairs)
     n_minus = len(blocks.minus_pairs)
     if n_plus == 0 or n_minus == 0:
@@ -472,14 +571,16 @@ def _validate_blocks(blocks: TDHFSignedQBlocks) -> tuple[int, int]:
 
 
 def build_standard_nambu_sewing(
-    plus_pairs: tuple[ParticleHolePair, ...],
-    minus_pairs: tuple[ParticleHolePair, ...],
+    plus_pairs: tuple[TDHFTransitionLabelProtocol, ...],
+    minus_pairs: tuple[TDHFTransitionLabelProtocol, ...],
     *,
     source_fingerprint: str,
     construction: str = "standard_block_swap_v1",
 ) -> TDHFNambuSewing:
-    """Build the standard block swap and bind the exact pair inventories."""
+    """Build the standard block swap and bind the exact label inventories."""
 
+    _validate_transition_labels(plus_pairs, name="plus_pairs")
+    _validate_transition_labels(minus_pairs, name="minus_pairs")
     n_plus = len(plus_pairs)
     n_minus = len(minus_pairs)
     if n_plus <= 0 or n_minus <= 0:
@@ -579,6 +680,7 @@ def build_tdhf_self_conjugate_matrices(
     """
 
     tolerance = _validated_tolerance("structure_tolerance", structure_tolerance)
+    _validate_transition_labels(sector.canonical_pairs, name="canonical_pairs")
     n_pairs = len(sector.canonical_pairs)
     if n_pairs == 0:
         raise ValueError("self-conjugate TDHF requires a nonempty canonical pair space")
@@ -1269,6 +1371,7 @@ __all__ = [
     "TDHFGenericSignedQSector",
     "TDHFNambuSewing",
     "TDHFSectorProviderProtocol",
+    "TDHFTransitionLabelProtocol",
     "TDHFSelfConjugateModeAssignment",
     "TDHFSelfConjugateQ",
     "TDHFSelfConjugateQMatrices",

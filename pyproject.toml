@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mean-field"
 version = "0.1.0"
-description = "Python rewrite of the mean-field TBG workflow with benchmark-driven validation."
+description = "Reusable mean-field framework with typed physical-system adapters and analysis APIs."
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [

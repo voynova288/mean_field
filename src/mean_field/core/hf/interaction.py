@@ -55,6 +55,26 @@ def _state_interaction_scale(state: HartreeFockStateProtocol, v0: float | None) 
 def _validate_overlap_shift_table(overlap_blocks: HFOverlapBlockSet) -> None:
     if len(overlap_blocks.shifts) != int(overlap_blocks.gvecs.size):
         raise ValueError("Overlap shifts and g-vectors must have the same length.")
+    if len(set(overlap_blocks.shifts)) != len(overlap_blocks.shifts):
+        raise ValueError("Overlap shifts must be unique and ordered explicitly.")
+    if set(overlap_blocks.overlaps) != set(overlap_blocks.shifts):
+        raise ValueError("Overlap block keys must exactly match the shift inventory.")
+
+
+def _validate_matching_shift_inventories(*block_sets: HFOverlapBlockSet) -> None:
+    if not block_sets:
+        return
+    reference = block_sets[0]
+    _validate_overlap_shift_table(reference)
+    reference_gvecs = np.asarray(reference.gvecs, dtype=np.complex128)
+    for blocks in block_sets[1:]:
+        _validate_overlap_shift_table(blocks)
+        if blocks.shifts != reference.shifts:
+            raise ValueError("Source, target, and target/source shift order must match exactly.")
+        if not np.array_equal(
+            np.asarray(blocks.gvecs, dtype=np.complex128), reference_gvecs
+        ):
+            raise ValueError("Source, target, and target/source g-vectors must match exactly.")
 
 
 def build_projected_interaction_hamiltonian(
@@ -113,23 +133,43 @@ def build_projected_target_hamiltonian(
     beta: float = 1.0,
     use_numba: bool | None = None,
 ) -> np.ndarray:
-    target_hamiltonian = np.asarray(base_hamiltonian, dtype=np.complex128).copy()
-    nt, nt_rhs, nk_source = density.shape
-    if nt != nt_rhs:
-        raise ValueError(f"Expected square density blocks, got {density.shape}")
-    if target_hamiltonian.shape[0] != nt or target_hamiltonian.shape[1] != nt:
-        raise ValueError(f"Expected target Hamiltonian flavor dimension {nt}, got {target_hamiltonian.shape}")
+    """Evaluate a source-density HF operator in a target projected basis.
 
-    nk_target = target_hamiltonian.shape[2]
+    The target and source flavor dimensions may differ.  Their only bridge is
+    the rectangular target-source overlap; Hartree traces remain source-space
+    scalars and Fock contraction returns a square target-space operator.
+    """
+
+    target_hamiltonian = np.asarray(base_hamiltonian, dtype=np.complex128).copy()
+    nt_source, nt_source_rhs, nk_source = density.shape
+    if nt_source != nt_source_rhs:
+        raise ValueError(f"Expected square source density blocks, got {density.shape}")
+    if (
+        target_hamiltonian.ndim != 3
+        or target_hamiltonian.shape[0] != target_hamiltonian.shape[1]
+    ):
+        raise ValueError(f"Expected square target Hamiltonian blocks, got {target_hamiltonian.shape}")
+
+    nt_target = int(target_hamiltonian.shape[0])
+    nk_target = int(target_hamiltonian.shape[2])
     scale = float(beta) * float(v0) / nk_source
-    for blocks in (source_overlap_blocks, target_overlap_blocks, target_source_overlap_blocks):
-        _validate_overlap_shift_table(blocks)
+    _validate_matching_shift_inventories(
+        source_overlap_blocks,
+        target_overlap_blocks,
+        target_source_overlap_blocks,
+    )
 
     for shift in target_source_overlap_blocks.shifts:
         target_source_overlap = target_source_overlap_blocks.overlaps[shift]
-        if target_source_overlap.shape != (nt, nk_target, nt, nk_source):
+        expected_target_source_shape = (
+            nt_target,
+            nk_target,
+            nt_source,
+            nk_source,
+        )
+        if target_source_overlap.shape != expected_target_source_shape:
             raise ValueError(
-                f"Expected target-source overlap shape {(nt, nk_target, nt, nk_source)}, "
+                f"Expected target-source overlap shape {expected_target_source_shape}, "
                 f"got {target_source_overlap.shape} for shift {shift}"
             )
 
@@ -139,10 +179,16 @@ def build_projected_target_hamiltonian(
             target_diagonal = target_overlap_blocks.diagonal_overlaps.get(shift)
             if source_diagonal is None or target_diagonal is None:
                 raise ValueError(f"Missing source/target diagonal overlap for active Hartree shift {shift}")
-            if source_diagonal.shape != (nt, nt, nk_source):
-                raise ValueError(f"Expected source diagonal shape {(nt, nt, nk_source)}, got {source_diagonal.shape}")
-            if target_diagonal.shape != (nt, nt, nk_target):
-                raise ValueError(f"Expected target diagonal shape {(nt, nt, nk_target)}, got {target_diagonal.shape}")
+            if source_diagonal.shape != (nt_source, nt_source, nk_source):
+                raise ValueError(
+                    f"Expected source diagonal shape {(nt_source, nt_source, nk_source)}, "
+                    f"got {source_diagonal.shape}"
+                )
+            if target_diagonal.shape != (nt_target, nt_target, nk_target):
+                raise ValueError(
+                    f"Expected target diagonal shape {(nt_target, nt_target, nk_target)}, "
+                    f"got {target_diagonal.shape}"
+                )
             hartree_prefactor = scale * float(hartree_kernel)
             if hartree_prefactor != 0.0:
                 tr_pg = compute_density_overlap_trace_from_diagonal(density, source_diagonal, use_numba=use_numba)
@@ -198,6 +244,7 @@ def build_projected_hf_kernel(
     density_postprocessor: Callable[[np.ndarray], None] | None = None,
     step_callback: Callable[[HartreeFockStateProtocol, HartreeFockStepResult], None] | None = None,
     final_state_callback: Callable[[HartreeFockStateProtocol, DensityUpdateResult], None] | None = None,
+    convergence_metric: Callable[[np.ndarray, np.ndarray], float] | None = None,
     convergence_rule: Literal["raw", "mixed"] = "raw",
     use_numba: bool | None = None,
 ) -> HartreeFockKernel:
@@ -226,6 +273,7 @@ def build_projected_hf_kernel(
         density_postprocessor=density_postprocessor,
         step_callback=step_callback,
         final_state_callback=final_state_callback,
+        convergence_metric=convergence_metric,
         convergence_rule=convergence_rule,
     )
 
@@ -254,9 +302,11 @@ def run_projected_hartree_fock(
     density_postprocessor: Callable[[np.ndarray], None] | None = None,
     step_callback: Callable[[HartreeFockStateProtocol, HartreeFockStepResult], None] | None = None,
     final_state_callback: Callable[[HartreeFockStateProtocol, DensityUpdateResult], None] | None = None,
+    convergence_metric: Callable[[np.ndarray, np.ndarray], float] | None = None,
     convergence_rule: Literal["raw", "mixed"] = "raw",
     max_iter: int = 300,
     oda_stall_threshold: float = 1e-3,
+    max_oda_lambda: float | None = None,
     use_numba: bool | None = None,
 ) -> HartreeFockRun:
     kernel = build_projected_hf_kernel(
@@ -271,6 +321,7 @@ def run_projected_hartree_fock(
         density_postprocessor=density_postprocessor,
         step_callback=step_callback,
         final_state_callback=final_state_callback,
+        convergence_metric=convergence_metric,
         convergence_rule=convergence_rule,
         use_numba=use_numba,
     )
@@ -282,4 +333,5 @@ def run_projected_hartree_fock(
         seed=seed,
         max_iter=max_iter,
         oda_stall_threshold=oda_stall_threshold,
+        max_oda_lambda=max_oda_lambda,
     )

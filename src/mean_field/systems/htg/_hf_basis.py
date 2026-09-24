@@ -1,7 +1,20 @@
 from __future__ import annotations
 
-from ._hf_types import *  # noqa: F401,F403
-from ._hf_reference import *  # noqa: F401,F403
+import numpy as np
+from scipy.linalg import eigh
+
+from mean_field.core.hf.coulomb import screened_coulomb_matrix
+from mean_field.core.hf.overlap import (
+    HFOverlapBlockSet,
+    ProjectedWavefunctionBasis,
+    calculate_projected_overlap_between,
+)
+from ._hf_reference import moire_cell_area_nm2
+from ._hf_types import HTGProjectedBasisData, VALLEY_SEQUENCE
+from .hamiltonian import build_hamiltonian, centered_band_indices, sublattice_sigma_z
+from .lattice import HTGLattice, build_moire_k_grid
+from .model import HTGModel
+from .params import HTGParams, InteractionParams
 
 def _layer_potential_operator(lattice: HTGLattice, U_ev: float) -> np.ndarray:
     diagonal = np.zeros(lattice.matrix_dim, dtype=float)
@@ -23,36 +36,6 @@ def _rectangular_g_embedding(lattice: HTGLattice) -> tuple[tuple[int, int], tupl
         for n1, n2 in np.asarray(lattice.g_indices, dtype=int)
     }
     return grid_shape, origin, positions
-
-
-def _central_chern_basis_at_k(
-    k_tilde: complex,
-    lattice: HTGLattice,
-    params: HTGParams,
-    interaction: InteractionParams,
-    *,
-    valley: int,
-    central_pair: tuple[int, int],
-    sigma_z_operator: np.ndarray,
-    layer_potential: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    hmat = build_hamiltonian(k_tilde, lattice, params, valley=valley)
-    if interaction.U_ev != 0.0:
-        hmat = hmat + layer_potential
-    subset = (int(central_pair[0]), int(central_pair[1]))
-    central_evals, central_evecs = eigh(hmat, subset_by_index=subset, driver="evr")
-    central_evals = np.asarray(central_evals, dtype=float)
-    central_evecs = np.asarray(central_evecs, dtype=np.complex128)
-
-    projected_sigma = central_evecs.conjugate().T @ sigma_z_operator @ central_evecs
-    sigma_eigs, sigma_rot = np.linalg.eigh(projected_sigma)
-    # Return positive-sigma (A-like) then negative-sigma (B-like).
-    order = np.asarray([int(np.argmax(sigma_eigs)), int(np.argmin(sigma_eigs))], dtype=int)
-    rot = np.asarray(sigma_rot[:, order], dtype=np.complex128)
-    wavefunctions = central_evecs @ rot
-    h_projected = rot.conjugate().T @ np.diag(central_evals) @ rot
-    sigma_projected = rot.conjugate().T @ projected_sigma @ rot
-    return wavefunctions, h_projected, sigma_projected, sigma_eigs[order]
 
 
 def _hybrid_projected_basis_at_k(
@@ -355,4 +338,11 @@ def build_htg_overlap_blocks_between(
         fock_screening=fock_screening,
     )
 
-__all__ = [name for name in globals() if not name.startswith('__')]
+__all__ = [
+    "build_htg_overlap_blocks",
+    "build_htg_overlap_blocks_between",
+    "build_htg_projected_basis",
+    "build_htg_projected_basis_for_kvec",
+    "centered_projection_band_indices",
+    "reciprocal_shift_labels",
+]

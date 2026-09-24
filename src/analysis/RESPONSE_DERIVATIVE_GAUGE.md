@@ -17,6 +17,9 @@ src/analysis/shift_current/
 Main derivative API:
 
 ```python
+projected_basis_connection(...)
+projected_basis_covariant_hamiltonian_derivative(...)
+projected_basis_covariant_velocity(...)
 hamiltonian_gauge_data(...)
 covariant_derivative_matrix(...)
 wannierberri_matrix_gen_derivative_ln(...)
@@ -80,9 +83,95 @@ For full nondegenerate band matrices, use:
 covariant_derivative_matrix(...)
 ```
 
+## k-dependent projected-basis derivative (P2.2)
+
+Let the orthonormal columns of a possibly rectangular matrix `U(k)` define the
+projected basis and let
+
+```text
+H_proj = U† H_full U
+A_basis,a = i U† partial_a U.
+```
+
+If the range of `U` is invariant under `H_full` (including an exactly
+reconstructed projected operator), differentiating `H_proj` gives
+
+```text
+partial_a H_proj = U† (partial_a H_full) U + i [A_basis,a, H_proj],
+D_a H_proj = partial_a H_proj - i [A_basis,a, H_proj]
+           = U† (partial_a H_full) U,
+v_a,cov = D_a H_proj / hbar.
+```
+
+The sign is fixed by `A_basis = i U† partial U`; it is not a tunable response
+convention. Under a k-dependent projected-frame change `U -> U W`,
+
+```text
+H_proj -> W† H_proj W,
+A_basis,a -> W† A_basis,a W + i W† partial_a W,
+D_a H_proj -> W† (D_a H_proj) W.
+```
+
+The current HTQG projected-HF adapter uses the same sign implicitly. For a
+neighbor basis `U(k+dk)`, its overlap/polar transporter is
+`q = polar[U(k)† U(k+dk)] = I + dk U† partial U + O(dk^2)`. Therefore
+`q H_proj(k+dk) q†` has derivative
+`partial H_proj - i[A_basis,H_proj]` in the base frame.
+
+Use:
+
+```python
+A_basis = projected_basis_connection(U, dU)
+dH_cov = projected_basis_covariant_hamiltonian_derivative(H_proj, dH_proj, A_basis)
+v_cov = projected_basis_covariant_velocity(H_proj, dH_proj, A_basis, hbar=...)
+```
+
+Do not identify `A_basis` automatically with WannierBerri's Hamiltonian-gauge
+`A_H = i D_H + Xbar('AA')`. `A_basis` is the connection of the active/projected
+frame, and the response decomposition must be chosen consistently. In the
+Hamiltonian eigenbasis, for `n != m`,
+
+```text
+(D_a H_proj)_nm = (partial_a H_proj)_nm
+                  + i(E_n-E_m)(A_basis,a)_nm,
+-i(D_a H_proj)_nm/(E_n-E_m)
+  = -i(partial_a H_proj)_nm/(E_n-E_m) + (A_basis,a)_nm.
+```
+
+Thus, if `hamiltonian_gauge_data` receives the already covariant `D H_proj`, its
+internal `i D_H` already contains the off-diagonal projected-basis connection.
+Adding the same rotated `A_basis` again as `external_connection` would double
+count it. The WannierBerri-like alternative is to use the ordinary `partial
+H_proj` and add the consistently rotated basis/position connection externally.
+The diagonal connection and generalized derivative still require a deliberate,
+consistent treatment; velocity matrix elements alone do not determine them.
+That response-level integration is a later audit gate.
+
+If the projected range is not invariant under `H_full`, the identity above has
+additional leakage terms involving `(1-UU†) H_full U`. The common helper does
+not estimate or hide them; a full-continuum comparison is required.
+
 ## Gauge/subspace rule from WannierBerri
 
-WannierBerri dynamic calculators group nearly degenerate bands and trace covariant formulas over subspaces, rather than trusting arbitrary phases/vectors inside the degenerate manifold.  Local helpers mirror this validation pattern:
+WannierBerri dynamic calculators identify band groups, evaluate one common
+spectral/Fermi factor per group pair, and call
+`ShiftCurrentFormula.trace_ln`, which sums the complete initial/final pair
+block. For strictly exact degeneracy, the local product represented by that
+sum is
+
+```text
+Tr_I[(A^c_;a)_IF A^b_FI] + (b <-> c).
+```
+
+Under independent `U_I` and `U_F` rotations, the rectangular factors transform
+as `G_IF -> U_I† G_IF U_F` and `A_FI -> U_F† A_FI U_I`; their product changes by
+similarity and the trace is invariant. Individual labeled `(n,m)` summands are
+not invariant. The reusable response-level implementation is
+`analysis.shift_current.component_group_trace_amplitude`, with strict
+energy/occupation validation in
+`exact_degenerate_group_transition_weight`.
+
+Local matrix helpers also support subspace-covariance tests:
 
 ```python
 groups = degenerate_band_groups(energies, threshold=...)
@@ -91,7 +180,14 @@ X_g = apply_band_gauge_to_matrix(X, G)       # X -> G† X G
 trace_subspace(X_g, group) == trace_subspace(X, group)
 ```
 
-Use these for gauge-randomization tests.  If an active band window cuts a degenerate group, expand the window or exclude the point.
+A numerical grouping threshold is useful for finding candidate manifolds but
+does not turn distinct energies into an exact gauge freedom. This milestone
+demands arbitrary U(N) covariance only for strictly exactly-degenerate groups.
+The near-degenerate WannierBerri mean-group-energy prescription is an
+additional approximation; a local near-degenerate cluster spectrum requires a
+separate matrix-valued spectral/occupation contract and is not claimed here.
+If an active window cuts an exact degenerate group, expand it or exclude the
+point.
 
 ## Phase derivative rule
 
@@ -117,30 +213,35 @@ tests/test_response_derivative_gauge.py
 tests/test_shift_current_generic.py
 ```
 
-The generic shift-current module adds system-facing helpers for component parsing, named WannierBerri/Joya conventions, Fermi occupations, Lorentzian conventions, transition tables, heatmap accumulation, and selected-pair/full-tensor transition weights. Paper-specific workspaces should call `analysis.shift_current` rather than reimplementing these pieces.
+The P2.2 tests in `tests/test_response_derivative_gauge.py` are exact,
+finite-dimensional analytic constructions. They check:
 
-Current validation checks:
+1. a moving rectangular three-dimensional projected basis inside a
+   four-dimensional full space;
+2. the sign-discriminating identity
+   `partial H_proj - i[A_basis,H_proj] = U†(partial H_full)U`;
+3. the corresponding explicit `1/hbar` velocity identity;
+4. the transformation law of `A_basis` under a k-dependent frame change;
+5. covariance and trace invariance under a seeded random `U(2)` rotation inside
+   an exactly degenerate doublet.
 
-1. Loads the actual upstream WannierBerri `formula.py` source with minimal stubs and verifies our `wannierberri_matrix_gen_derivative_ln/nn` against `Matrix_GenDer_ln` numerically.
-2. Verifies `berry_connection_generalized_derivative` against the common `analysis.shift_current` sum-rule implementation on a nonlinear two-band toy model with nonzero `d2H/dkdk`.
-3. Verifies the optimized selected-pair generalized derivative against the full tensor and pair integrand/shift-vector helpers against their full-tensor forms.
-4. Verifies the optional WannierBerri/Wannier90 principal-value regularized selected-pair derivative against the full tensor.
-5. Random U(1) gauge test: `Im[A_mn(A_nm)_;]` is invariant under eigenvector phase rotations.
-6. Random block-unitary subspace test: covariant derivatives transform as `G† X G`, and traces over degenerate groups are invariant.
-7. Wilson-link independent-gauge test: `link_shift_vector` is invariant under independent U(1) phase choices at `k` and `k+dk`.
-8. Wilson-link phase derivative test: `link_shift_vector` agrees with the covariant derivative shift vector on a smooth nondegenerate point.
-9. Ported WannierBerri `ShiftCurrentFormula` internal-term integrand matches the existing SLG reference-formula audit and exposes group-trace helpers.
-10. Historical Chaudhary b0 and hTG legacy wrapper gates were retired with those paper-audit surfaces; their durable convention lessons are kept in the common API and this note.
-11. Generic `analysis.shift_current` gates: `JOYA_EQ7_GEOMETRIC_CONVENTION` matches the ordered pair integrand/no-`1/pi` Lorentzian, `WANNIERBERRI_INTERNAL_IMN_CONVENTION` matches upstream internal `Imn`, and selected-pair kernels agree with their full-tensor forms.
+`tests/test_shift_current_generic.py` separately covers the reusable
+shift-current API and named WannierBerri/Joya response conventions. Its P2.1
+exact-degenerate spectrum gate applies independent random `U(2)` rotations to
+occupied and empty doublets at every sampled k point, proves that ordinary
+pair-resolved weights change, and checks max/L2/peak/integrated residuals of the
+group-trace spectrum. The broader historical derivative tests (upstream
+`Matrix_GenDer_ln` parity, Wilson-link phase checks, and the old hTG wrapper
+comparison) were pruned from the public snapshot; their earlier pass record
+must not be mistaken for a current run. The new P2.1 gate remains authored but
+not numerically executed until it runs on an allowed compute/test node.
 
-Command used:
+Cluster policy forbids numerical `pytest` on login nodes. Run the current tests
+on an allowed test/compute node before marking the executable milestone
+numerically passed, for example:
 
 ```bash
-PYTHONPATH=src pytest -q tests/test_tdbg_shift_current_adapter.py tests/test_shift_current_generic.py tests/test_response_derivative_gauge.py
-```
-
-Result:
-
-```text
-24 passed
+PYTHONPATH=src pytest -q \
+  tests/test_response_derivative_gauge.py \
+  tests/test_shift_current_generic.py
 ```

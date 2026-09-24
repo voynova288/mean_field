@@ -1,24 +1,23 @@
 from __future__ import annotations
 
-import pytest
-
 from mean_field.core.validation import ValidationCheck, ValidationReport, make_validation_check, status_from_bool
 
 
-def test_validation_check_accepts_value_and_val_aliases() -> None:
-    with_value = ValidationCheck(name="a", status="pass", detail="ok", value=1.25)
-    with_val = ValidationCheck(name="b", status="fail", detail="bad", val=2.5)
+def test_validation_check_uses_canonical_value_field() -> None:
+    check = ValidationCheck(name="a", status="pass", detail="ok", value=1.25)
 
-    assert with_value.passed
-    assert with_value.value == 1.25
-    assert with_value.val == 1.25
-    assert with_value.to_dict()["passed"] is True
-    with_tolerance = ValidationCheck(name="tol", status="pass", detail="ok", value=0.2, tolerance=0.1)
+    assert check.passed
+    assert check.value == 1.25
+    assert check.to_dict()["passed"] is True
+    with_tolerance = ValidationCheck(
+        name="tol",
+        status="pass",
+        detail="ok",
+        value=0.2,
+        tolerance=0.1,
+    )
     assert with_tolerance.tolerance == 0.1
     assert with_tolerance.to_dict()["tolerance"] == 0.1
-    assert not with_val.passed
-    assert with_val.value == 2.5
-    assert with_val.val == 2.5
 
 
 def test_make_validation_check_formats_default_detail_and_tolerance() -> None:
@@ -29,10 +28,6 @@ def test_make_validation_check_formats_default_detail_and_tolerance() -> None:
     assert check.tolerance == 0.1
     assert check.detail == "value=0.2, tolerance=0.1"
 
-
-def test_validation_check_rejects_double_payload_alias() -> None:
-    with pytest.raises(ValueError, match="either value= or val="):
-        ValidationCheck(name="bad", status="pass", detail="bad", value=1.0, val=2.0)
 
 
 def test_validation_report_counts_skips_and_combines() -> None:

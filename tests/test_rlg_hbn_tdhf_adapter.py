@@ -7,12 +7,13 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from mean_field.core.hf import (
+from mean_field.core.hf.tdhf import (
     ParticleHolePair,
-    compute_hf_energy,
-    shift_wavefunction_grid,
     split_pair_indices_by_flavor_channel,
 )
+from mean_field.core.hf.interaction import compute_hf_energy
+from mean_field.core.hf.overlap import shift_wavefunction_grid
+from mean_field.core.hf.archive import summarize_hf_state_archive
 from mean_field.systems.RnG_hBN._tdhf_finite_q import (
     _build_rlg_hbn_tdhf_track_p_terms_from_provider,
 )
@@ -30,17 +31,12 @@ from mean_field.systems.RnG_hBN._tdhf_fixed_quotient import (
     populate_shared_b_partner_entries,
     transport_fixed_terms_from_canonical_form_factors,
 )
-from mean_field.devtools.run_rlg_hbn_tdhf_q0 import _shortcut_decision
-from mean_field.systems.RnG_hBN import (
+from mean_field.systems.RnG_hBN.hf import (
     RLGhBNFiniteQDensityTangent,
     RLGhBNHFInteractionProvenance,
     RLGhBNHartreeFockRun,
     RLGhBNHartreeFockState,
-    RLGhBNInteractionParams,
     RLGhBNLayerOverlapBlockSet,
-    RLGhBNModel,
-    RLGhBNTDHFInteraction,
-    RLGhBNTDHFOrbitals,
     RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING,
     RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
     RLG_HBN_FORM_FACTOR_CONVENTION_VERSION,
@@ -53,9 +49,26 @@ from mean_field.systems.RnG_hBN import (
     build_rlg_hbn_hf_c3_quotient_interaction_context,
     build_rlg_hbn_hf_interaction_hamiltonian,
     build_rlg_hbn_hf_problem,
-    build_rlg_hbn_lattice,
     build_rlg_hbn_layer_overlap_blocks,
     build_rlg_hbn_projected_basis,
+    compute_rlg_hbn_oda_parameter,
+    initialize_rlg_hbn_density,
+    interaction_shifts_for_cutoff,
+    build_rlg_hbn_track_p_interaction_provider,
+    project_rlg_hbn_hf_single_representative_finite_q_response,
+    rlg_hbn_flavor_occupation_counts_for_init_mode,
+    rlg_hbn_reference_density,
+    run_rlg_hbn_hartree_fock,
+    validate_rlg_hbn_hf_single_representative_provenance,
+    validate_rlg_hbn_hf_single_representative_source_closure,
+)
+from mean_field.systems.RnG_hBN import (
+    RLGhBNInteractionParams,
+    RLGhBNModel,
+)
+from mean_field.systems.RnG_hBN.tdhf import (
+    RLGhBNTDHFInteraction,
+    RLGhBNTDHFOrbitals,
     build_rlg_hbn_tdhf_c3_quotient_cycle,
     build_rlg_hbn_tdhf_c3_quotient_orbit,
     build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs,
@@ -71,25 +84,27 @@ from mean_field.systems.RnG_hBN import (
     build_rlg_hbn_tdhf_q0_matrices_from_canonical_hf,
     build_rlg_hbn_tdhf_q0_matrices_from_pairs,
     build_rlg_hbn_tdhf_q0_pairs,
+    load_rlg_hbn_tdhf_run_from_archive,
+    required_rlg_hbn_tdhf_finite_q_overlap_shifts,
+    rlg_hbn_tdhf_finite_q_mode_support,
+    validate_rlg_hbn_tdhf_canonical_orbital_parity,
+)
+from mean_field.systems.RnG_hBN.lattice import (
+    build_rlg_hbn_lattice,
     center_reciprocal_fractional_coordinates,
-    compute_rlg_hbn_oda_parameter,
     finite_q_shift_cartesian_nm_inv,
-    initialize_rlg_hbn_density,
-    interaction_shifts_for_cutoff,
-    build_rlg_hbn_track_p_interaction_provider,
+    mbz_hexagon_vertices_nm_inv,
+)
+from mean_field.systems.RnG_hBN.cache import (
+    load_or_build_layer_overlap_blocks,
     load_or_build_projected_basis,
     load_projected_basis_cache,
-    mbz_hexagon_vertices_nm_inv,
-    project_rlg_hbn_hf_single_representative_finite_q_response,
-    required_rlg_hbn_tdhf_finite_q_overlap_shifts,
-    rlg_hbn_flavor_occupation_counts_for_init_mode,
+)
+from mean_field.systems.RnG_hBN.hf_contracts import (
     rlg_hbn_hf_run_to_hf_run_result,
-    rlg_hbn_reference_density,
-    run_rlg_hbn_hartree_fock,
-    rlg_hbn_tdhf_finite_q_mode_support,
-    validate_rlg_hbn_hf_single_representative_provenance,
-    validate_rlg_hbn_hf_single_representative_source_closure,
-    validate_rlg_hbn_tdhf_canonical_orbital_parity,
+)
+from mean_field.systems.RnG_hBN.hf_archive import (
+    save_rlg_hbn_hf_archive,
 )
 
 
@@ -1012,6 +1027,12 @@ def test_rlg_hbn_tdhf_q_matrices_reports_precise_blockers_for_unsupported_finite
         )
     with pytest.raises(ValueError, match="unknown finite-q channel"):
         build_rlg_hbn_tdhf_q_matrices(run, (1, 0), channel="bogus")  # type: ignore[arg-type]
+    with pytest.raises(NotImplementedError, match="all-channel finite-q blocks mix"):
+        build_rlg_hbn_tdhf_q_matrices(
+            object(),  # guard must fire before run/orbital access
+            (1, 0),
+            channel="all",  # type: ignore[arg-type]
+        )
 
 
 def test_rlg_hbn_single_representative_active_functional_is_pairing_self_adjoint() -> None:
@@ -2336,16 +2357,344 @@ def test_rlg_hbn_tdhf_interaction_enforces_momentum_and_q0_fock_conventions(monk
         )
 
 
-def test_rlg_hbn_tdhf_runner_does_not_apply_single_flavor_shortcut_to_all_channel() -> None:
-    state = SimpleNamespace(
-        active_valence_bands=0,
-        occupation_counts=(1, 0, 0, 0),
-        n_spin=2,
-        n_eta=2,
+def test_rlg_hbn_hf_archive_writer_preserves_typed_provenance(tmp_path) -> None:
+    run = _typed_single_representative_tiny_run()
+    provider = run.track_p_provider
+    provenance = run.interaction_provenance
+    assert provider is not None
+    assert provenance is not None
+    archive = tmp_path / "hf_run_state.npz"
+    trace = {"energy_mev": (1.25,), "err": (2.5e-7,), "oda": (0.75,)}
+    written = save_rlg_hbn_hf_archive(
+        archive,
+        run,
+        trace,
+        cache_metadata={
+            "cache_dir": tmp_path / "cache",
+            "cache_key_basis": "basis-key",
+            "cache_key_overlap": "overlap-key",
+        },
     )
-    allowed, reason = _shortcut_decision(state, "auto", "all")
-    assert not allowed
-    assert "all-channel" in reason
+    assert written == archive
+
+    kvec = np.asarray(run.basis_data.kvec, dtype=np.complex128)
+    expected = {
+        "density": np.asarray(run.state.density, dtype=np.complex128),
+        "hamiltonian": np.asarray(run.state.hamiltonian, dtype=np.complex128),
+        "h0": np.asarray(run.state.h0, dtype=np.complex128),
+        "energies_mev": np.asarray(run.state.energies, dtype=float),
+        "reference_density": np.asarray(run.state.reference_density, dtype=np.complex128),
+        "density_convention": np.asarray("stored_delta"),
+        "density_axis_order": np.asarray("abk"),
+        "reference_density_convention": np.asarray(run.state.scheme),
+        "basis_periodic_gauge": np.asarray(provenance.basis_periodic_gauge),
+        "basis_periodic_gauge_padding": np.asarray(
+            [provenance.basis_periodic_gauge_padding], dtype=int
+        ),
+        "form_factor_convention": np.asarray(provenance.form_factor_convention),
+        "nu": np.asarray([run.state.nu], dtype=float),
+        "active_valence_bands": np.asarray(
+            [run.state.active_valence_bands], dtype=int
+        ),
+        "scheme": np.asarray(run.state.scheme),
+        "n_spin": np.asarray([run.state.n_spin], dtype=int),
+        "n_eta": np.asarray([run.state.n_eta], dtype=int),
+        "n_band": np.asarray([run.state.n_band], dtype=int),
+        "occupation_counts": np.asarray(run.state.occupation_counts, dtype=int),
+        "mu_mev": np.asarray([run.state.mu], dtype=float),
+        "kvec_nm_inv": np.stack((kvec.real, kvec.imag), axis=-1),
+        "k_grid_frac": np.asarray(run.basis_data.k_grid_frac, dtype=float),
+        "band_energies_mev": np.asarray(run.basis_data.band_energies, dtype=float),
+        "active_band_indices": np.asarray(
+            run.basis_data.active_band_indices, dtype=int
+        ),
+        "flat_band_indices": np.asarray(run.basis_data.flat_band_indices, dtype=int),
+        "iter_energy_mev": np.asarray([1.25], dtype=float),
+        "iter_err": np.asarray([2.5e-7], dtype=float),
+        "iter_oda": np.asarray([0.75], dtype=float),
+        "hf_interaction_convention": np.asarray(provenance.convention),
+        "hf_quotient_enabled": np.asarray(
+            [provenance.quotient_enabled], dtype=bool
+        ),
+        "hf_beta": np.asarray([provenance.beta], dtype=float),
+        "hf_physical_shifts": np.asarray(
+            provenance.physical_shifts, dtype=int
+        ).reshape(-1, 2),
+        "zero_literal_q0_fock": np.asarray(
+            [provenance.zero_literal_q0_fock], dtype=bool
+        ),
+        "hf_basis_periodic_gauge": np.asarray(provenance.basis_periodic_gauge),
+        "hf_basis_periodic_gauge_padding": np.asarray(
+            [provenance.basis_periodic_gauge_padding], dtype=int
+        ),
+        "hf_form_factor_convention": np.asarray(
+            provenance.form_factor_convention
+        ),
+        "hf_remote_h0_policy": np.asarray(provenance.remote_h0_policy),
+        "hf_remote_h0_sha256": np.asarray(provenance.remote_h0_sha256),
+        "hf_physical_shift_policy": np.asarray(
+            provenance.physical_shift_policy
+        ),
+        "hf_provider_fingerprint": np.asarray(provider.fingerprint),
+        "hf_provider_schema_version": np.asarray(
+            [provenance.provider_schema_version], dtype=int
+        ),
+        "cache_dir": np.asarray(str(tmp_path / "cache")),
+        "cache_key_basis": np.asarray("basis-key"),
+        "cache_key_overlap": np.asarray("overlap-key"),
+    }
+    with np.load(archive, allow_pickle=False) as payload:
+        assert set(payload.files) == set(expected)
+        for key, expected_array in expected.items():
+            actual = np.asarray(payload[key])
+            assert actual.dtype == expected_array.dtype, key
+            np.testing.assert_array_equal(actual, expected_array, err_msg=key)
+
+    summary = summarize_hf_state_archive(archive)
+    assert summary.metadata["density_convention"] == "stored_delta"
+    assert summary.metadata["density_axis_order"] == "abk"
+    assert summary.metadata["reference_density_convention"] == "average"
+    assert summary.metadata["basis_periodic_gauge"] == RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION
+    assert summary.metadata["form_factor_convention"] == RLG_HBN_FORM_FACTOR_CONVENTION_VERSION
+
+
+def test_rlg_hbn_hf_archive_writer_rejects_invalid_authority(tmp_path) -> None:
+    run = _typed_single_representative_tiny_run()
+    provenance = run.interaction_provenance
+    provider = run.track_p_provider
+    assert provenance is not None
+    assert provider is not None
+    cache_metadata = {
+        "cache_dir": tmp_path / "cache",
+        "cache_key_basis": "basis-key",
+        "cache_key_overlap": "overlap-key",
+    }
+    cases = (
+        (
+            "unsupported_schema",
+            replace(run, interaction_provenance=replace(provenance, provider_schema_version=2)),
+            "Unsupported HF provider schema version",
+        ),
+        (
+            "wrong_schema_one_convention",
+            replace(run, interaction_provenance=replace(provenance, convention="wrong")),
+            "requires the Track-P convention",
+        ),
+        (
+            "quotient_schema_one",
+            replace(run, interaction_provenance=replace(provenance, quotient_enabled=True)),
+            "cannot describe a quotient functional",
+        ),
+        ("missing_provider", replace(run, track_p_provider=None), "without an attached Track-P provider"),
+        (
+            "provider_basis_identity",
+            replace(
+                run,
+                track_p_provider=SimpleNamespace(
+                    basis_data=object(),
+                    overlap_blocks=run.overlap_blocks,
+                ),
+            ),
+            "basis identity mismatch",
+        ),
+        (
+            "provider_overlap_identity",
+            replace(
+                run,
+                track_p_provider=SimpleNamespace(
+                    basis_data=run.basis_data,
+                    overlap_blocks=object(),
+                ),
+            ),
+            "overlap identity mismatch",
+        ),
+        (
+            "provider_state_mismatch",
+            replace(run, state=replace(run.state, v0=run.state.v0 + 1.0)),
+            "state v0 mismatch",
+        ),
+        (
+            "blank_fingerprint",
+            replace(run, interaction_provenance=replace(provenance, provider_fingerprint="")),
+            "blank fingerprint",
+        ),
+        (
+            "fingerprint_mismatch",
+            replace(run, interaction_provenance=replace(provenance, provider_fingerprint="wrong")),
+            "fingerprint mismatch",
+        ),
+    )
+    for label, candidate, match in cases:
+        output = tmp_path / f"{label}.npz"
+        with pytest.raises(ValueError, match=match):
+            save_rlg_hbn_hf_archive(
+                output,
+                candidate,
+                {"energy_mev": (), "err": (), "oda": ()},
+                cache_metadata=cache_metadata,
+            )
+        assert not output.exists()
+        assert not output.with_name(output.name + ".tmp").exists()
+
+    stale_output = tmp_path / "stale_provider_integrity.npz"
+    run.basis_data.h0.setflags(write=True)
+    try:
+        with pytest.raises(ValueError, match="became writeable"):
+            save_rlg_hbn_hf_archive(
+                stale_output,
+                run,
+                {"energy_mev": (), "err": (), "oda": ()},
+                cache_metadata=cache_metadata,
+            )
+    finally:
+        run.basis_data.h0.setflags(write=False)
+    assert not stale_output.exists()
+
+    missing_cache = tmp_path / "missing_cache.npz"
+    with pytest.raises(ValueError, match="without cache keys"):
+        save_rlg_hbn_hf_archive(
+            missing_cache,
+            run,
+            {"energy_mev": (), "err": (), "oda": ()},
+        )
+    assert not missing_cache.exists()
+
+    without_provenance = replace(
+        run,
+        interaction_provenance=None,
+        track_p_provider=None,
+    )
+    with pytest.raises(ValueError, match="without typed interaction provenance"):
+        save_rlg_hbn_hf_archive(
+            tmp_path / "missing_provenance.npz",
+            without_provenance,
+            {"energy_mev": (object(),), "err": (), "oda": ()},
+        )
+
+
+def test_rlg_hbn_hf_archive_writer_rejects_metadata_overrides(tmp_path) -> None:
+    run = _typed_single_representative_tiny_run()
+    base_metadata = {
+        "cache_dir": tmp_path / "cache",
+        "cache_key_basis": "basis-key",
+        "cache_key_overlap": "overlap-key",
+    }
+    collisions = {
+        "density": np.zeros_like(run.state.density),
+        "zero_literal_q0_fock": False,
+        "hf_provider_fingerprint": "wrong",
+    }
+    for key, value in collisions.items():
+        output = tmp_path / f"collision_{key}.npz"
+        with pytest.raises(ValueError, match="cannot override owned field"):
+            save_rlg_hbn_hf_archive(
+                output,
+                run,
+                {"energy_mev": (), "err": (), "oda": ()},
+                cache_metadata={**base_metadata, key: value},
+            )
+        assert not output.exists()
+        assert not output.with_name(output.name + ".tmp").exists()
+
+    opt_out_run = replace(
+        run,
+        interaction_provenance=None,
+        track_p_provider=None,
+    )
+    injected = tmp_path / "injected_provenance.npz"
+    with pytest.raises(ValueError, match="cannot override owned field"):
+        save_rlg_hbn_hf_archive(
+            injected,
+            opt_out_run,
+            {"energy_mev": (), "err": (), "oda": ()},
+            cache_metadata={"hf_provider_schema_version": 1},
+            require_interaction_provenance=False,
+        )
+    assert not injected.exists()
+
+    provenance = run.interaction_provenance
+    assert provenance is not None
+    run_with_cache_keys = replace(
+        run,
+        interaction_provenance=replace(
+            provenance,
+            basis_cache_key="basis-key",
+            overlap_cache_key="overlap-key",
+        ),
+    )
+    output = tmp_path / "matching_cache_keys.npz"
+    save_rlg_hbn_hf_archive(
+        output,
+        run_with_cache_keys,
+        {"energy_mev": (), "err": (), "oda": ()},
+        cache_metadata=base_metadata,
+    )
+    assert output.exists()
+
+    unequal = tmp_path / "unequal_cache_key.npz"
+    with pytest.raises(ValueError, match="cannot override owned field"):
+        save_rlg_hbn_hf_archive(
+            unequal,
+            run_with_cache_keys,
+            {"energy_mev": (), "err": (), "oda": ()},
+            cache_metadata={**base_metadata, "cache_key_basis": "other-basis"},
+        )
+    assert not unequal.exists()
+
+
+def test_rlg_hbn_hf_archive_writer_loader_round_trip(tmp_path) -> None:
+    run = _typed_single_representative_tiny_run()
+    cache_dir = tmp_path / "cache"
+    basis_cache = load_or_build_projected_basis(
+        run.basis_data.model,
+        run.basis_data.interaction,
+        cache_dir=cache_dir,
+        cache_policy="refresh",
+        mesh_size=run.basis_data.mesh_size,
+        valleys=tuple(run.basis_data.valleys),
+    )
+    overlap_cache = load_or_build_layer_overlap_blocks(
+        basis_cache.value,
+        cache_dir=cache_dir,
+        cache_policy="refresh",
+        basis_cache_key=basis_cache.key,
+        shifts=run.overlap_blocks.shifts,
+    )
+    provenance = run.interaction_provenance
+    assert provenance is not None
+    source = replace(
+        run,
+        interaction_provenance=replace(
+            provenance,
+            basis_cache_key=basis_cache.key,
+            overlap_cache_key=overlap_cache.key,
+        ),
+    )
+    archive = tmp_path / "round_trip.npz"
+    save_rlg_hbn_hf_archive(
+        archive,
+        source,
+        {"energy_mev": (), "err": (), "oda": ()},
+        cache_metadata={"cache_dir": cache_dir},
+    )
+
+    restored = load_rlg_hbn_tdhf_run_from_archive(archive)
+    np.testing.assert_array_equal(restored.state.density, source.state.density)
+    np.testing.assert_array_equal(restored.state.hamiltonian, source.state.hamiltonian)
+    np.testing.assert_array_equal(restored.state.h0, source.state.h0)
+    assert restored.interaction_provenance is not None
+    assert restored.track_p_provider is not None
+    assert restored.interaction_provenance.provider_fingerprint == source.interaction_provenance.provider_fingerprint
+    assert restored.track_p_provider.fingerprint == source.track_p_provider.fingerprint
+
+
+
+
+def test_rlg_hbn_archive_loader_rejects_q0_fock_diagnostic_before_cache_access(tmp_path) -> None:
+    archive = tmp_path / "hf_run_state.npz"
+    np.savez(archive, zero_literal_q0_fock=np.asarray([True], dtype=bool))
+    with pytest.raises(ValueError, match="ZERO_LITERAL_Q0_FOCK"):
+        load_rlg_hbn_tdhf_run_from_archive(archive)
 
 
 def test_rlg_hbn_tdhf_c3_repeated_zone_direct_shell_convention() -> None:

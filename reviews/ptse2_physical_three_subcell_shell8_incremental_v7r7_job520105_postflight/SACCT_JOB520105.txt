@@ -1,0 +1,4 @@
+2026-09-24T05:37:19Z
+JobIDRaw|JobName|Partition|Account|State|ExitCode|Elapsed|Start|End|NodeList|AllocCPUS|ReqMem|MaxRSS
+520105|ptse2_shell8_merge_v7r7|regular256|hmt03|COMPLETED|0:0|00:00:35|2026-09-24T13:14:05|2026-09-24T13:14:40|node035|64|250G|
+520105.batch|batch||hmt03|COMPLETED|0:0|00:00:35|2026-09-24T13:14:05|2026-09-24T13:14:40|node035|64||809144K

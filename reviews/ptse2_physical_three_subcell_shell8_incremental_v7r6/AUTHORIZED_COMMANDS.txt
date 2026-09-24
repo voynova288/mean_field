@@ -1,0 +1,11 @@
+# Authorized commands for shell-8 merge recovery V7R6
+# Do not run this file as a script. Execute each command separately only when requested.
+
+# 1. Scheduler-free authorization verification:
+/data/home/ziyuzhu/miniconda3/envs/moirekp/bin/python3.11 -I -S /data/home/ziyuzhu/Mean_Field/results/ptse2_openmx_screened_hf/source_data/ptse2_fractional_fillings_v1/7p340993_epsilon5_15_fillings_v1/physical_three_subcell_shell8_incremental_v7r6/bootstrap.py --verify-authorized
+
+# 2. One-shot HELD merge/final submission (scheduler mutation; do not repeat on ambiguity):
+/data/home/ziyuzhu/miniconda3/envs/moirekp/bin/python3.11 -I -S /data/home/ziyuzhu/Mean_Field/results/ptse2_openmx_screened_hf/source_data/ptse2_fractional_fillings_v1/7p340993_epsilon5_15_fillings_v1/physical_three_subcell_shell8_incremental_v7r6/scheduler_workflow.py
+
+# 3. Separate receipt-bound release, only after inspecting the held submission receipt:
+/data/home/ziyuzhu/miniconda3/envs/moirekp/bin/python3.11 -I -S /data/home/ziyuzhu/Mean_Field/results/ptse2_openmx_screened_hf/source_data/ptse2_fractional_fillings_v1/7p340993_epsilon5_15_fillings_v1/physical_three_subcell_shell8_incremental_v7r6/release_shell8.py

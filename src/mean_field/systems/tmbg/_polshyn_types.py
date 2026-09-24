@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-from ._polshyn_shared import *  # noqa: F401,F403
+from dataclasses import dataclass
 
-from .params import TMBGParameters
+import numpy as np
+
+from ...core.supercell import IntegerSupercell
+from .lattice import TMBGLattice
+from .model import TMBGModel
 
 
 @dataclass(frozen=True)
@@ -121,4 +125,10 @@ class PolshynWangHFState:
     def nk(self) -> int:
         return int(self.density.shape[2])
 
-__all__ = [name for name in globals() if not name.startswith('__')]
+__all__ = [
+    "PolshynDoubledCell",
+    "PolshynFillingSummary",
+    "PolshynProjectedBasis",
+    "PolshynWangHFState",
+    "polshyn_doubled_cell",
+]

@@ -31,6 +31,23 @@ class DensityUpdateResult:
 
 
 @dataclass(frozen=True)
+class FinalAcceptanceResult:
+    """Fail-closed final-state acceptance supplied by a system adapter."""
+
+    accepted: bool
+    reason: str = "accepted"
+    diagnostics: dict[str, float] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class InteractionEnergyResult:
+    """One-density interaction Hamiltonian and its matching scalar energy."""
+
+    interaction_h: np.ndarray
+    energy: float
+
+
+@dataclass(frozen=True)
 class HartreeFockStepResult:
     iteration: int
     previous_density: np.ndarray
@@ -179,12 +196,25 @@ def run_hartree_fock_iterations(
     interaction_builder: Callable[[np.ndarray], np.ndarray],
     density_builder: Callable[[np.ndarray], DensityUpdateResult],
     energy_functional: Callable[[np.ndarray, np.ndarray, np.ndarray], float],
+    interaction_energy_builder: Callable[
+        [np.ndarray, np.ndarray], InteractionEnergyResult
+    ]
+    | None = None,
     oda_parameterizer: Callable[[HartreeFockStateProtocol, np.ndarray], float] | None = None,
     oda_delta_interaction_builder: Callable[[np.ndarray], np.ndarray] | None = None,
     hamiltonian_postprocessor: Callable[[np.ndarray], None] | None = None,
     density_postprocessor: Callable[[np.ndarray], None] | None = None,
     step_callback: Callable[[HartreeFockStateProtocol, HartreeFockStepResult], None] | None = None,
+    iteration_convergence_gate: Callable[
+        [HartreeFockStateProtocol, HartreeFockStepResult, bool], bool
+    ]
+    | None = None,
     final_state_callback: Callable[[HartreeFockStateProtocol, DensityUpdateResult], None] | None = None,
+    final_acceptance: Callable[
+        [HartreeFockStateProtocol, DensityUpdateResult, float], FinalAcceptanceResult
+    ]
+    | None = None,
+    convergence_metric: Callable[[np.ndarray, np.ndarray], float] | None = None,
     convergence_rule: Literal["raw", "mixed"] = "raw",
     max_iter: int = 300,
     oda_stall_threshold: float = 1e-3,
@@ -192,6 +222,33 @@ def run_hartree_fock_iterations(
 ) -> HartreeFockRun:
     if convergence_rule not in {"raw", "mixed"}:
         raise ValueError(f"Unsupported convergence_rule={convergence_rule!r}")
+    solver_precision = float(state.precision)
+    if not np.isfinite(solver_precision) or solver_precision < 0.0:
+        raise ValueError(
+            f"state.precision must be finite and nonnegative, got {state.precision!r}"
+        )
+    engine_diagnostic_keys = {
+        "final_raw_norm",
+        "final_accepted",
+        "hf_energy",
+        "oda_parameter",
+        "iterations",
+    }
+
+    def invoke_protected_callback(callback: Callable[..., object], *args: object) -> object:
+        protected = {
+            key: state.diagnostics[key]
+            for key in engine_diagnostic_keys
+            if key in state.diagnostics
+        }
+        try:
+            return callback(*args)
+        finally:
+            state.precision = solver_precision
+            for key in engine_diagnostic_keys - protected.keys():
+                state.diagnostics.pop(key, None)
+            state.diagnostics.update(protected)
+
     if max_oda_lambda is not None and not (0.0 < float(max_oda_lambda) <= 1.0):
         raise ValueError(f"max_oda_lambda must be in (0, 1], got {max_oda_lambda!r}")
 
@@ -205,8 +262,21 @@ def run_hartree_fock_iterations(
         previous_density = state.density.copy()
         state.hamiltonian[:, :, :] = state.h0
         interaction_h_from_cache = cached_interaction_h is not None
+        interaction_energy: InteractionEnergyResult | None = None
         if cached_interaction_h is None:
-            interaction_h = interaction_builder(previous_density)
+            if interaction_energy_builder is None:
+                interaction_h = interaction_builder(previous_density)
+            else:
+                interaction_energy = interaction_energy_builder(
+                    previous_density, state.h0
+                )
+                if not isinstance(interaction_energy, InteractionEnergyResult):
+                    raise TypeError(
+                        "interaction_energy_builder must return InteractionEnergyResult"
+                    )
+                interaction_h = np.asarray(
+                    interaction_energy.interaction_h, dtype=np.complex128
+                )
         else:
             interaction_h = cached_interaction_h
         cached_interaction_h = None
@@ -216,7 +286,11 @@ def run_hartree_fock_iterations(
             hamiltonian_postprocessor(state.hamiltonian)
             oda_base_interaction_h = state.hamiltonian - state.h0
 
-        energy = float(energy_functional(interaction_h, state.h0, previous_density))
+        energy = (
+            float(interaction_energy.energy)
+            if interaction_energy is not None
+            else float(energy_functional(interaction_h, state.h0, previous_density))
+        )
         density_update = density_builder(state.hamiltonian)
         delta_density = density_update.density - previous_density
         delta_interaction_h: np.ndarray | None = None
@@ -237,14 +311,24 @@ def run_hartree_fock_iterations(
             oda_lambda = min(float(oda_lambda), float(max_oda_lambda))
         mixed_density = oda_lambda * density_update.density + (1.0 - oda_lambda) * previous_density
 
-        norm_raw = float(calculate_norm_convergence(density_update.density, previous_density))
-        norm_mixed = float(calculate_norm_convergence(mixed_density, previous_density))
+        metric = calculate_norm_convergence if convergence_metric is None else convergence_metric
+        norm_raw = float(metric(density_update.density, previous_density))
+        norm_mixed = float(metric(mixed_density, previous_density))
+        if not np.isfinite(norm_raw) or not np.isfinite(norm_mixed) or norm_raw < 0.0 or norm_mixed < 0.0:
+            raise ValueError(
+                "convergence_metric must return finite nonnegative values; "
+                f"got raw={norm_raw!r}, mixed={norm_mixed!r}"
+            )
         norm_selected = norm_raw if convergence_rule == "raw" else norm_mixed
 
         state.density[:, :, :] = mixed_density
         if density_postprocessor is not None:
             density_postprocessor(state.density)
-        elif delta_interaction_h is not None and hamiltonian_postprocessor is None:
+        elif (
+            delta_interaction_h is not None
+            and hamiltonian_postprocessor is None
+            and interaction_energy_builder is None
+        ):
             cached_interaction_h = interaction_h + oda_lambda * delta_interaction_h
         state.energies[:, :] = density_update.energies
         state.mu = float(density_update.mu)
@@ -268,24 +352,52 @@ def run_hartree_fock_iterations(
             interaction_h_from_cache=interaction_h_from_cache,
         )
         if step_callback is not None:
-            step_callback(state, step_result)
+            invoke_protected_callback(step_callback, state, step_result)
 
         iter_energy.append(energy)
         iter_err.append(norm_selected)
         iter_oda.append(oda_lambda)
 
-        raw_converged = norm_raw <= state.precision
-        mixed_converged = norm_mixed <= state.precision
-        converged = raw_converged if convergence_rule == "raw" else mixed_converged
+        raw_converged = norm_raw <= solver_precision
+        mixed_converged = norm_mixed <= solver_precision
+        density_converged = (
+            raw_converged if convergence_rule == "raw" else mixed_converged
+        )
+        gate_passed = True
+        if iteration_convergence_gate is not None:
+            gate_passed = invoke_protected_callback(
+                iteration_convergence_gate,
+                state,
+                step_result,
+                density_converged,
+            )
+            if type(gate_passed) is not bool:
+                raise TypeError(
+                    "iteration_convergence_gate must return an exact Boolean"
+                )
+        converged = density_converged and gate_passed
         if converged:
             exit_reason = "converged"
             break
-        if oda_lambda < oda_stall_threshold:
+        if not raw_converged and oda_lambda < oda_stall_threshold:
             exit_reason = "oda_stall"
             break
 
+    final_interaction_energy: InteractionEnergyResult | None = None
     if cached_interaction_h is None:
-        final_interaction_h = interaction_builder(state.density)
+        if interaction_energy_builder is None:
+            final_interaction_h = interaction_builder(state.density)
+        else:
+            final_interaction_energy = interaction_energy_builder(
+                state.density, state.h0
+            )
+            if not isinstance(final_interaction_energy, InteractionEnergyResult):
+                raise TypeError(
+                    "interaction_energy_builder must return InteractionEnergyResult"
+                )
+            final_interaction_h = np.asarray(
+                final_interaction_energy.interaction_h, dtype=np.complex128
+            )
     else:
         final_interaction_h = cached_interaction_h
     state.hamiltonian[:, :, :] = state.h0
@@ -295,14 +407,59 @@ def run_hartree_fock_iterations(
     final_density_update = density_builder(state.hamiltonian)
     state.energies[:, :] = final_density_update.energies
     state.mu = float(final_density_update.mu)
-    final_energy = float(energy_functional(final_interaction_h, state.h0, state.density))
+    final_energy = (
+        float(final_interaction_energy.energy)
+        if final_interaction_energy is not None
+        else float(energy_functional(final_interaction_h, state.h0, state.density))
+    )
     final_raw_density = np.asarray(final_density_update.density, dtype=np.complex128).copy()
     if density_postprocessor is not None:
         density_postprocessor(final_raw_density)
     state.diagnostics["hf_energy"] = final_energy
-    state.diagnostics["final_raw_norm"] = float(calculate_norm_convergence(final_raw_density, state.density))
+    final_metric = calculate_norm_convergence if convergence_metric is None else convergence_metric
+    final_norm = float(final_metric(final_raw_density, state.density))
+    if not np.isfinite(final_norm) or final_norm < 0.0:
+        raise ValueError(f"convergence_metric returned invalid final norm {final_norm!r}")
+    state.diagnostics["final_raw_norm"] = final_norm
     if final_state_callback is not None:
-        final_state_callback(state, final_density_update)
+        invoke_protected_callback(final_state_callback, state, final_density_update)
+
+    iteration_declared_converged = exit_reason == "converged"
+    final_accepted = final_norm <= solver_precision
+    final_rejection_reason = "final_raw_residual"
+    if final_acceptance is not None:
+        acceptance = invoke_protected_callback(
+            final_acceptance, state, final_density_update, final_norm
+        )
+        if not isinstance(acceptance, FinalAcceptanceResult):
+            raise TypeError("final_acceptance must return FinalAcceptanceResult")
+        if type(acceptance.accepted) is not bool:
+            raise TypeError("FinalAcceptanceResult.accepted must be an exact Boolean")
+        if type(acceptance.reason) is not str or not acceptance.reason:
+            raise ValueError("final_acceptance reason must be a nonempty exact string")
+        if not acceptance.accepted and acceptance.reason == "converged":
+            raise ValueError("a rejected final state cannot use reason='converged'")
+        for key, value in acceptance.diagnostics.items():
+            if not isinstance(key, str) or not key:
+                raise ValueError("final_acceptance diagnostic keys must be nonempty strings")
+            if key in engine_diagnostic_keys:
+                raise ValueError(
+                    f"final_acceptance diagnostic {key!r} collides with an engine-owned key"
+                )
+            scalar = float(value)
+            if not np.isfinite(scalar):
+                raise ValueError(
+                    f"final_acceptance diagnostic {key!r} must be finite, got {value!r}"
+                )
+            state.diagnostics[key] = scalar
+        if not acceptance.accepted:
+            if final_accepted:
+                final_rejection_reason = acceptance.reason
+            final_accepted = False
+    state.diagnostics["final_accepted"] = float(final_accepted)
+    final_converged = iteration_declared_converged and final_accepted
+    if iteration_declared_converged and not final_accepted:
+        exit_reason = final_rejection_reason
 
     return HartreeFockRun(
         state=state,
@@ -311,6 +468,6 @@ def run_hartree_fock_iterations(
         iter_oda=np.asarray(iter_oda, dtype=float),
         init_mode=init_mode,
         seed=int(seed),
-        converged=exit_reason == "converged",
+        converged=final_converged,
         exit_reason=exit_reason,
     )

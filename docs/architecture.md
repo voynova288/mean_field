@@ -16,7 +16,7 @@ The Julia codebase is optimized around script-driven workflows and shared mutabl
 src/mean_field/
   cli.py
   paths.py
-  benchmarks.py
+  reference_oracles.py
   core/
     lattice.py
     hf/
@@ -30,29 +30,32 @@ src/mean_field/
       zero_field/
         model.py
         overlap.py
-        hf.py
+        _hf_basis_overlap.py
+        _hf_restricted.py
+        _hf_full.py
+        _hf_diagnostics.py
         hf_runners.py
         path.py
-        plotting.py
-        runners.py
+        artifacts.py
 ```
 
 ## Layering rules
 
 - `core/` must not depend on a specific physical system.
-- `core/hf/` owns reusable Hartree-Fock bookkeeping and SCF iteration logic that should survive a future move from TBG to multilayer or other graphene stackings.
+- `core/hf/` owns reusable Hartree-Fock bookkeeping and SCF iteration logic that should survive a future move from TBG to multilayer or other graphene stackings. Its package root is an empty namespace: framework code imports explicit owner modules, while stable user-facing execution goes through `mean_field.api`.
 - `core/hf/problem.py` owns the reusable HF problem-definition surface: state initialization, interaction builders, projected-density solvers, and run composition.
 - `systems/tbg/` contains TBG-specific physics.
-- `systems/tbg/zero_field/hf.py` owns TBG zero-field state, initialization policy, and Hartree/Fock construction, but should consume reusable helpers from `core/hf/` instead of redefining them.
-- `systems/tbg/zero_field/{hf_runners,path,plotting,runners}.py` is the B0 workflow layer: path reconstruction, artifact export, plotting, and benchmark orchestration.
-- `benchmarks.py` knows how to load benchmark metadata, not how to solve physics.
-- CLI commands call high-level runners, not low-level kernels directly.
+- `systems/tbg/zero_field/_hf_basis_overlap.py`, `_hf_restricted.py`, `_hf_full.py`, and `_hf_diagnostics.py` own TBG zero-field state, overlap/interaction construction, initialization policy, solvers, and diagnostics. Callers import the required explicit owner rather than a compatibility aggregate.
+- `systems/tbg/zero_field/hf_runners.py` selects exact intersections with saved typed SCF grids; it must not reconstruct off-grid Hamiltonians, interpolate, or substitute nearest points.
+- `systems/tbg/zero_field/artifacts.py` owns only the strict typed complete-state archive. Benchmark sidecars, paper plots, and suite orchestration are retired.
+- `reference_oracles.py` is an internal loader for immutable external numerical fixtures; it is not a package-root API or workflow runner.
+- CLI commands call maintained typed APIs; historical B0 benchmark orchestration is not a CLI surface.
 
 ## Retirement archive policy
 
 Cleanup may retire system-specific implementation surfaces even when they could be useful as debugging references later. Before deleting or replacing substantial system-specific HF, topology, bands, band-plot, or Berry-curvature plotting code, copy the old tracked file or code slice into an ignored local archive such as `local_archive/retired_surface/<date-or-commit>/...`. The archive is intentionally not pushed to git and must not be imported by package code, tests, scripts, or docs examples. It is a recovery/reference stash only; the package surface and LOC metrics count only files tracked by git.
 
-After archival, keep only thin tracked adapters that connect system-owned Hamiltonian/basis/gauge/window choices to generic APIs such as `mean_field.api`, `mean_field.core.hf`, `mean_field.core.bands`, `mean_field.core.plotting`, and `analysis.topology`. Do not keep paper-panel plot writers, duplicated Berry/Chern loops, or system-local SCF/problem loops in tracked code merely as a backup; use the local archive or git history if a retired implementation must be consulted later.
+After archival, keep only thin tracked adapters that connect system-owned Hamiltonian/basis/gauge/window choices to generic APIs such as `mean_field.api`, explicit `mean_field.core.hf.<owner>` modules, `mean_field.core.bands`, `mean_field.core.plotting.bands`, and `analysis.topology`. Do not keep paper-panel plot writers, duplicated Berry/Chern loops, or system-local SCF/problem loops in tracked code merely as a backup; use the local archive or git history if a retired implementation must be consulted later.
 
 ## Unified topology / Berry-geometry layer
 
@@ -62,14 +65,23 @@ Berry connection, Berry curvature / plaquette flux, and Chern-number calculation
 src/analysis/topology/
 ```
 
-The architectural rule is that topology is system-independent after wavefunctions have been generated and selected.  System modules should provide:
+The architectural rule is:
 
-- a wavefunction mesh with shape `(mesh_1, mesh_2, basis_dim, n_states)`;
-- selected state/subspace indices;
-- `WavefunctionIndex` metadata that labels band, Chern-basis, flavor, valley, and system meaning;
-- optional boundary sewing transforms for non-periodic plane-wave gauges.
+```text
+system eigenstate grid
+  -> FHSState + band/flavor metadata + BlockSewingSpec
+  -> common generic sewing and FHS/Wilson links
+  -> Berry plaquette flux
+  -> Chern number
+```
 
-The common framework then builds FHS link variables, Berry-connection phases, plaquette flux, and Chern numbers.  Ordinary system topology wrappers should use `analysis.topology.make_topology_adapter(...)` to bind system labels, retry behavior, optional sewing transforms, orientation signs, and metadata while keeping Hamiltonian/grid construction in the system layer.  Do not duplicate `_unit_link`, `_subspace_link`, determinant-link, or plaquette loops in future system modules; extend `analysis.topology` instead.  See `docs/topology_framework.md` for conventions, validation status, and examples.
+System modules may construct the eigenstate mesh, select/map state labels, and
+provide basis metadata needed to instantiate `BlockSewingSpec`. They must return
+`FHSState` and must not expose topology-result calculators or private seam
+transforms. Only `analysis.topology.compute_lattice_topology(FHSState)` builds
+links, plaquette flux, and Chern numbers. Extend the common FHS core only when
+the shared algorithm itself needs a system-independent capability. See
+`docs/topology_framework.md` for conventions and examples.
 
 ## Common plotting surface
 
@@ -99,50 +111,82 @@ This module mirrors the WannierBerri/Wannier90 covariant-derivative convention f
 
 Do not implement response derivatives by differentiating raw eigenvector phases or raw `np.angle(A_mn)` in a system module.  If a response calculation needs more common derivative capability, extend `analysis.response_derivative_gauge` first and then call it from the system or analysis adapter.  See `src/analysis/RESPONSE_DERIVATIVE_GAUGE.md` for the local contract and validation notes.
 
+## Optical-response API status
+
+Reusable optical-response math is now organized as four layers:
+
+```text
+src/analysis/response_derivative_gauge.py   # Hamiltonian-gauge derivatives, Berry connection, generalized derivative
+src/analysis/shift_current/                # shift-current formula family
+src/analysis/injection_current/            # injection-current / CPGE formula family
+src/analysis/optical/                      # front-door dispatcher for future optical workflows
+```
+
+New system/workflow code should generally connect through `analysis.optical`. Transition-table workflows choose `kind="shift_current"` or `kind="injection_current"`/`"cpge"`; full k-point tensor workflows call `optical_response_from_kpoint_data` with `kind="linear_conductivity"`, `kind="kerr_faraday"`, `kind="shg"`, or `kind="thg"`. Kerr requires an explicit `si_prefactor` and typed normal-incidence geometry. Production SHG/THG uses `harmonic_response_from_kpoint_data` with a `PassosFiniteBandVelocityGauge(IndependentInputAdiabaticSwitching(...))` formulation, the complete finite-band covariant derivative tower through order `n+1`, and one exact full primitive-BZ grid; its SI conversion is derived from that typed payload, and selected-band windows are rejected. The Mikhailov one-gamma-per-cumulative-pole result used for Passos Figs. 1/2 remains a graphene analytical benchmark, not a generic scattering option. Never obtain it by changing only `r*gamma` in the velocity-gauge recursion; a generic scattering backend first needs a mesh-level non-Abelian length-gauge derivative/transport contract. Physical systems remain responsible for Hamiltonians, derivative provenance, basis/gauge choices, model multiplicity, and paper conventions. Plotting labels, colorbar normalization, and Slurm orchestration remain workflow-layer choices, not generic formula code.
+
 ## Shift-current workspace status
 
-The old directories `src/analysis/shift_current_htg` and `src/analysis/shift_current_tbg` have been retired.  Reusable response mathematics lives in `src/analysis/response_derivative_gauge.py` and `src/analysis/shift_current/`; reference/toy benchmarks live under `src/analysis/shift_current/toy_models/`; physical-system Hamiltonians, derivatives, basis/gauge conventions, and paper compatibility adapters belong under `src/mean_field/systems/<system>/`.  Historical audits and reproduction notes should stay in ignored local reports/internal workspaces rather than the public docs surface.
+The old directories `src/analysis/shift_current_htg` and `src/analysis/shift_current_tbg` have been retired.  Reusable response mathematics lives in `src/analysis/response_derivative_gauge.py`, `src/analysis/shift_current/`, `src/analysis/injection_current/`, and the front-door `src/analysis/optical/`; reference/toy benchmarks live under the relevant `toy_models/` subpackages; physical-system Hamiltonians, derivatives, basis/gauge conventions, and paper compatibility adapters belong under `src/mean_field/systems/<system>/`.  Historical audits and reproduction notes should stay in ignored local reports/internal workspaces rather than the public docs surface.
 
-When future systems need optical-response or shift-current analysis, connect the system model through a thin adapter that supplies Hamiltonians, derivatives, energies/eigenvectors, occupation data, units, and conventions to the common analysis helpers.  Keep paper-specific scans, plotting, and unresolved reproduction diagnostics out of the common framework until the relevant formula and convention gates have passed.
+When future systems need optical-response, shift-current, injection-current, or CPGE analysis, connect the system model through a thin adapter that supplies Hamiltonians, derivatives, energies/eigenvectors, occupation data, units, and conventions to `analysis.optical` or its underlying common analysis helpers.  Keep paper-specific scans, plotting, and unresolved reproduction diagnostics out of the common framework until the relevant formula and convention gates have passed.
+
+## Generic TDHF/RPA layer
+
+Reusable signed-momentum TDHF/RPA algebra lives in
+`src/mean_field/core/hf/tdhf_signed.py` and is exposed through
+`mean_field.api.run_tdhf` / `run_tdhf_typed`.  Physical-system modules must be
+thin providers: they build the HF-basis pair inventories and independent A/B
+blocks, preserve raw momentum/carry and gauge/sewing provenance, and return a
+typed generic or self-conjugate sector.  They must not implement their own
+Liouvillian eigensolver, Wang norm/sign assignment, static/dynamic classifier,
+or Ward acceptance logic.
+
+The framework intentionally distinguishes generic non-TRIM `{q,-q}` orbits
+from q=0 and sewn self-conjugate/Nyquist sectors.  Generic sectors carry
+independent `A(q)`, `A(-q)`, `B(q)`, and `B(-q)` plus an explicit anti-linear
+Nambu sewing.  Self-conjugate sectors require a canonical sewn A/B payload;
+raw boundary aliases are diagnostic inputs and are never averaged into one.
+Static-Hessian authority is typed separately from projected signed-A/B
+authority so a system adapter cannot silently promote a response regulator to
+a global scalar curvature.
+
+All new TDHF paper benchmarks must call the public API.  Benchmark-specific
+Hamiltonians, form factors, screening, HF sources, symmetry generators, and
+paper comparison remain under `systems/<system>/` or benchmark fixtures; the
+common solver and validation logic remain in `core/hf`.
 
 ## Current reusable HF split
 
 The zero-field TBG port now has three explicit layers instead of one large `hf.py` bucket:
 
 - `core/hf/`: flavor-sector indexing, band labeling, occupation helpers, and generic convergence utilities.
-- `core/magnetic_field.py`: system-agnostic finite-magnetic-field bookkeeping such as rational fluxes, magnetic mesh/orbit indexing, reciprocal-shell shifts, and Streda/Diophantine filling helpers. System layers should import/re-export these helpers rather than redefining them.
+- `core/magnetic_field.py`: system-agnostic finite-magnetic-field bookkeeping such as rational fluxes, magnetic mesh/orbit indexing, reciprocal-shell shifts, and Streda/Diophantine filling helpers. System layers should import these helpers directly rather than redefining or re-exporting them.
 - `core/hf/engine.py`: generic SCF iteration, ODA mixing, convergence-rule handling, and density-update plumbing. This layer should be reusable across moire systems even when the Coulomb kernel or projected basis changes.
 - `core/hf/problem.py`: generic HF problem definitions that let each physical system swap in its own non-interacting model, Coulomb kernel, projected basis, and initialization policy without rewriting the SCF loop.
-- `systems/tbg/zero_field/hf.py`: the TBG-specific interaction kernels, density builders, and initialization semantics that still depend on BM overlaps, Coulomb conventions, and Julia B0 benchmark rules.
+- `systems/tbg/zero_field/_hf_basis_overlap.py`, `_hf_restricted.py`, `_hf_full.py`, and `_hf_diagnostics.py`: explicit owners for the TBG-specific state, interaction kernels, density builders, initialization semantics, solver variants, and diagnostics that still depend on BM overlaps and Coulomb conventions.
 - `systems/tbg/finite_field/spectrum.py`: the finite-magnetic-field BM/LL spectrum adapter ported from the author `bmLL*.jl` modules for arXiv:2310.15982v3. It keeps author finite-B parameter conventions, LL translation matrix elements, magnetic-BZ Hamiltonian construction, central `2q` Hofstadter subbands, projected `PΣz`, and optional `Λ_(m,n)` overlaps in the TBG system layer.
 - `core/hf/finite_field.py`: the reusable finite-magnetic-field HF framework. It owns finite-B HF state/input bundles, stored-projector initialization and density updates, screened Coulomb kernels, full magnetic-BZ and magnetic-translation-reduced interaction contractions, SCF problem/run helpers, and summaries. It is system-agnostic: systems provide projected Hofstadter spectra, overlap blocks, k-vectors, normalization counts, and physical parameters.
 - `systems/tbg/finite_field/hf.py`: a thin TBG adapter. It computes/validates TBG K/K′ `MagneticSpectrumResult` objects, expands TBG valley overlaps into the generic spin/valley HF basis, supplies TBG magnetic k-vectors/normalization, and exposes paper/Fig.6 convenience APIs. It must not own the finite-B HF calculation itself; new finite-B HF capabilities should be added to `core/hf/finite_field.py` and then connected here.
-- `systems/tbg/zero_field/runners.py` and `hf_runners.py`: benchmark-facing orchestration and path-band diagnostics.
+- `systems/tbg/zero_field/hf_runners.py`: exact saved-SCF-grid band selection only; historical B0 benchmark orchestration and off-grid HF path reconstruction are retired.
 
-### Pinned-source parity compatibility exception
-
-`systems/tbg/zero_field/companion_hf_scf.py` may duplicate the pinned reference Aufbau and ODA sequence only because the current core HF engine cannot express the source branch order, pre-mix convergence norm, strict zero-based minimum-iteration condition, and finalization sequence exactly. This exception is confined to a diagnostic/test compatibility lane: it must not become a package front door, production path, or place for new physics. Any reusable SCF or ODA capability change still belongs in `core/hf/`.
-
-### Stage7A companion finite-q diagnostic exception
-
-`systems/tbg/zero_field/companion_tdhf.py` is a narrow system-local exception because the pinned companion source release contains no finite-q TDHF implementation, so its finite-q formula authority is Kwan et al. Eq. (90), not companion source code. It must remain unexported and diagnostic-only, with no production or paper-figure authority; reusable signed-q bookkeeping and eigensolver logic remain core responsibilities rather than expanding this exception.
+The former TBG companion parity/Stage7A diagnostic exceptions were never public APIs and have been retired to `local_archive/retired_surface/non_api_abc_tbg_oracles_20260915/`. New work must use the common HF/TDHF APIs rather than restoring system-local duplicate solvers.
 
 This is the intended direction for future systems. A new graphene stacking should first try to reuse `core/hf/`, then add its own `systems/<name>/...` physics layer, and only after that add benchmark or CLI workflows.
 
 ## Script and devtool surface
 
-The command surface should stay small.  Use `scripts/mean_field_tools.py`, `scripts/mean_field_tools.jl`, `scripts/submit_mean_field.sbatch`, and package CLI subcommands as the durable entrypoints.  `src/mean_field/devtools` should provide reusable implementation modules behind those entrypoints, not a growing collection of one-off runners.
+The command surface should stay small.  Use `scripts/mean_field_tools.py`, `scripts/submit_mean_field.sbatch`, and package CLI subcommands as the durable entrypoints.  `src/mean_field/devtools` should provide reusable implementation modules behind those entrypoints, not a growing collection of one-off runners. Historical B0 Julia exporters are archived provenance rather than maintained commands.
 
 Before adding a new tracked script or devtool, try to extend an existing command with an option, subcommand, or config input.  Per-run `.sbatch` files, timestamped launchers, narrow plotting scripts, and temporary parameter sweeps should normally stay in ignored scratch space.  See `script_surface_policy.md` for the detailed policy and cleanup target.
 
 ## Full-projector scalar-functional qualification boundary
 
-The reusable public ABI is `mean_field.core.hf.tdhf_scalar_functional`.  It uses
+The reusable public ABI is `mean_field.core.hf.tdhf_scalar_functional`. It uses
 conventional dense `complex128` matrices
 `P_ij = <c_j^dagger c_i>` and raw, unweighted identities
-`dE[P+tD]/dt = Tr(F[P]D)` and `dF[P+tD]/dt = dF[P,D]`.  Every registered
+`dE[P+tD]/dt = Tr(F[P]D)` and `dF[P+tD]/dt = dF[P,D]`. Every registered
 Hermitian direction is normalized internally to unit Frobenius norm and must
-clear the locked pre-normalization signal floor.  A receipt distinguishes:
+clear the locked pre-normalization signal floor. A receipt distinguishes:
 
 - `registered_probe_functional_consistency`: all preregistered E/F/dF probes
   passed;
@@ -151,26 +195,19 @@ clear the locked pre-normalization signal floor.  A receipt distinguishes:
   basis for a supported small dimension.
 
 An incomplete production inventory must never report full-projector
-consistency.  Optional generic dF informativeness becomes mandatory in the
-Vituri adapter.  Exact-unitary support is not an asserted Boolean: the plan
-contains explicit same-trace idempotent projector values, and the receipt
-records actual finite, nonmutating E and F execution for each value.  These
-gates do not compare or promote TDHF A/B or H+ authority.
+consistency. A system adapter may make optional generic dF informativeness
+mandatory for its own authority boundary. Exact-unitary support is not an
+asserted Boolean: the plan contains explicit same-trace idempotent projector
+values, and the receipt records actual finite, nonmutating E and F execution
+for each value. These gates do not compare or promote TDHF A/B or H+ authority.
 
-`mean_field.systems.abc_trilayer.vituri2024_tdhf_full_scalar` owns the Vituri
-storage adapter and evidence chain.  Native replay arrays store
-`rho_ab=<c_a^dagger c_b>`, so a k block maps as `P_ab=rho_ba`; Fock and h0
-operator blocks are not transposed.  Consequently
-`Tr(F_full P_full)=sum_abk F_abk rho_abk`.  The existing native replay pairing
-is per-k, so conversion to the ABI raw total multiplies by exactly `Nk`; it
-never silently divides by area.  The static status remains
-`candidate_bound_not_executed`, synthetic evidence is never Slurm eligible,
-and the repository currently provides no concrete immutable artifact
-authority.
+The former system-local Vituri storage/evidence adapter was not part of the
+common API and is preserved only in
+`local_archive/retired_surface/non_api_abc_tbg_oracles_20260915/`.
 
 Callback, dependency, source-byte, input-manifest, and verifier snapshots are
-a trusted-provider drift boundary only.  Python tracing and hashes are not a
-sandbox, hostile-code proof, or global completeness proof.  No full-space
+a trusted-provider drift boundary only. Python tracing and hashes are not a
+sandbox, hostile-code proof, or global completeness proof. No full-space
 functional receipt by itself establishes A/B scalar-Hessian equality,
 production readiness, or paper reproduction.
 

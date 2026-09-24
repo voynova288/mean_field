@@ -1,0 +1,4 @@
+# Fresh terminal scontrol query for job 517203
+# Queried UTC: 2026-09-22T20:23:29Z
+# Note: completed record has aged out of live scontrol; sacct remains authoritative terminal accounting.
+slurm_load_jobs error: Invalid job id specified

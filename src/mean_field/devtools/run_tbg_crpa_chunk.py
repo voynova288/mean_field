@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import math
 from pathlib import Path
+import sys
 
 import numpy as np
 
@@ -11,9 +12,9 @@ from mean_field.crpa import CRPACoulombParams, write_crpa_outputs
 from mean_field.crpa.band_classifier import classify_flat_bands
 from mean_field.crpa.bm import read_all_band_bm_solution
 from mean_field.crpa.grid import build_uniform_crpa_grid
-from mean_field.crpa.plotting import write_epsilon_vs_q_plot
 from mean_field.crpa.validation import validation_summary, write_validation_report
 from mean_field.crpa.workflow import compute_crpa_from_solution
+from mean_field.runtime import ensure_not_running_compute_on_login_node
 from mean_field.workflows import (
     WorkflowJobSpec,
     WorkflowJobState,
@@ -23,6 +24,10 @@ from mean_field.workflows import (
     write_workflow_manifest,
     write_workflow_run_state,
 )
+
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_DEVTOOL_DISPATCHER = (_REPO_ROOT / "scripts" / "mean_field_tools.py").resolve()
 
 
 def _parse_range(value: str) -> tuple[int, int]:
@@ -36,13 +41,46 @@ def _parse_range(value: str) -> tuple[int, int]:
 
 
 def _chunk_range(n_items: int, chunk_index: int, chunk_count: int) -> tuple[int, int]:
-    if chunk_count <= 0:
-        raise ValueError(f"chunk_count must be positive, got {chunk_count}")
+    if n_items <= 0:
+        raise ValueError(f"n_items must be positive, got {n_items}")
+    if chunk_count <= 0 or chunk_count > n_items:
+        raise ValueError(f"chunk_count must be in [1, {n_items}], got {chunk_count}")
     if chunk_index < 0 or chunk_index >= chunk_count:
         raise ValueError(f"chunk_index must be in [0, {chunk_count}), got {chunk_index}")
     start = (n_items * chunk_index) // chunk_count
     stop = (n_items * (chunk_index + 1)) // chunk_count
+    if stop <= start:
+        raise ValueError(f"Chunk {chunk_index}/{chunk_count} is empty for {n_items} q points")
     return start, stop
+
+
+def _select_q_flat_range(
+    nk: int,
+    *,
+    q_range: str | None,
+    chunk_index: int | None,
+    chunk_count: int | None,
+) -> tuple[int, int]:
+    """Resolve a q selector without clipping or touching caches/artifacts."""
+
+    nk = int(nk)
+    if nk <= 0:
+        raise ValueError(f"nk must be positive, got {nk}")
+    has_q_range = q_range is not None
+    has_chunk_index = chunk_index is not None
+    has_chunk_count = chunk_count is not None
+    if has_q_range and (has_chunk_index or has_chunk_count):
+        raise ValueError("--q-range is mutually exclusive with --chunk-index/--chunk-count")
+    if has_chunk_index != has_chunk_count:
+        raise ValueError("--chunk-index and --chunk-count must be supplied together")
+    if has_q_range:
+        start, stop = _parse_range(str(q_range))
+        if not (0 <= start < stop <= nk):
+            raise ValueError(f"q range must satisfy 0 <= start < stop <= {nk}, got {start}:{stop}")
+        return start, stop
+    if has_chunk_index:
+        return _chunk_range(nk, int(chunk_index), int(chunk_count))
+    return 0, nk
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -93,21 +131,64 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _validate_crpa_chunk_request(args: argparse.Namespace) -> None:
+    """Validate request-only constraints before the login guard or any I/O."""
+
+    has_q_range = args.q_range is not None
+    has_chunk_index = args.chunk_index is not None
+    has_chunk_count = args.chunk_count is not None
+    if has_q_range and (has_chunk_index or has_chunk_count):
+        raise ValueError("--q-range is mutually exclusive with --chunk-index/--chunk-count")
+    if has_chunk_index != has_chunk_count:
+        raise ValueError("--chunk-index and --chunk-count must be supplied together")
+    if has_q_range:
+        start, stop = _parse_range(str(args.q_range))
+        if start < 0:
+            raise ValueError(f"q range start must be nonnegative, got {start}:{stop}")
+    if has_chunk_count and int(args.chunk_count) <= 0:
+        raise ValueError(f"chunk_count must be positive, got {args.chunk_count}")
+    if has_chunk_index and int(args.chunk_index) < 0:
+        raise ValueError(f"chunk_index must be nonnegative, got {args.chunk_index}")
+
+    q_lg = int(args.q_lg)
+    if q_lg <= 0 or q_lg % 2 == 0:
+        raise ValueError(f"q_lg must be a positive odd integer, got {q_lg}")
+    epsilon_bn = float(args.epsilon_bn)
+    ds_angstrom = float(args.ds_angstrom)
+    eta_mev = float(args.eta_mev)
+    if not math.isfinite(epsilon_bn) or epsilon_bn <= 0.0:
+        raise ValueError(f"epsilon_bn must be finite and positive, got {args.epsilon_bn}")
+    if not math.isfinite(ds_angstrom) or ds_angstrom < 0.0:
+        raise ValueError(f"ds_angstrom must be finite and nonnegative, got {args.ds_angstrom}")
+    if not math.isfinite(eta_mev) or eta_mev < 0.0:
+        raise ValueError(f"eta_mev must be finite and nonnegative, got {args.eta_mev}")
+
+    overlap_lg = args.chi0_eq19_overlap_lg
+    if overlap_lg is not None:
+        if str(args.chi0_energy_mode) != "eq19_flat_remote":
+            raise ValueError("--chi0-eq19-overlap-lg is only valid with --chi0-energy-mode eq19_flat_remote")
+        overlap_lg = int(overlap_lg)
+        if overlap_lg <= 0 or overlap_lg % 2 == 0:
+            raise ValueError(f"chi0_eq19_overlap_lg must be a positive odd integer, got {overlap_lg}")
+    if bool(args.legacy_zero_fill_test) and bool(args.hf_compatible):
+        raise ValueError("--legacy-zero-fill-test cannot be combined with --hf-compatible.")
+
+
 def _crpa_chunk_command(args: argparse.Namespace) -> tuple[str, ...]:
     command: list[str] = [
-        "python",
-        "-m",
-        "mean_field.devtools.run_tbg_crpa_chunk",
+        sys.executable,
+        str(_DEVTOOL_DISPATCHER),
+        "run_tbg_crpa_chunk",
         "--bm-solution",
-        str(args.bm_solution),
+        str(Path(args.bm_solution).resolve()),
         "--q-lg",
         str(int(args.q_lg)),
         "--epsilon-bn",
-        f"{float(args.epsilon_bn):.12g}",
+        repr(float(args.epsilon_bn)),
         "--ds-angstrom",
-        f"{float(args.ds_angstrom):.12g}",
+        repr(float(args.ds_angstrom)),
         "--eta-mev",
-        f"{float(args.eta_mev):.12g}",
+        repr(float(args.eta_mev)),
         "--form-factor-mode",
         str(args.form_factor_mode),
         "--occupation-mode",
@@ -115,7 +196,7 @@ def _crpa_chunk_command(args: argparse.Namespace) -> tuple[str, ...]:
         "--chi0-energy-mode",
         str(args.chi0_energy_mode),
         "--output-dir",
-        str(args.output_dir),
+        str(Path(args.output_dir).resolve()),
     ]
     if args.q_range is not None:
         command.extend(["--q-range", str(args.q_range)])
@@ -133,7 +214,9 @@ def _crpa_chunk_command(args: argparse.Namespace) -> tuple[str, ...]:
 
 
 def _crpa_chunk_workflow_manifest(args: argparse.Namespace) -> WorkflowManifest:
-    output_dir = Path(args.output_dir)
+    launch_cwd = Path.cwd().resolve()
+    output_dir = Path(args.output_dir).resolve()
+    bm_solution = Path(args.bm_solution).resolve()
     return WorkflowManifest(
         name="tbg_crpa_chunk",
         root=output_dir,
@@ -144,18 +227,24 @@ def _crpa_chunk_workflow_manifest(args: argparse.Namespace) -> WorkflowManifest:
                 output_dir=output_dir,
                 metadata={
                     "kind": "crpa_chunk",
-                    "bm_solution": str(args.bm_solution),
+                    "bm_solution": str(bm_solution),
                     "q_range": "" if args.q_range is None else str(args.q_range),
                     "chunk_index": None if args.chunk_index is None else int(args.chunk_index),
                     "chunk_count": None if args.chunk_count is None else int(args.chunk_count),
                     "q_lg": int(args.q_lg),
+                    "working_directory": str(launch_cwd),
+                    "launch_cwd": str(launch_cwd),
+                    "replay_command_owner": str(_DEVTOOL_DISPATCHER),
                 },
             ),
         ),
         metadata={
             "system": "TBG",
             "workflow": "cRPA chunk",
-            "bm_solution": str(args.bm_solution),
+            "bm_solution": str(bm_solution),
+            "working_directory": str(launch_cwd),
+            "launch_cwd": str(launch_cwd),
+            "replay_command_owner": str(_DEVTOOL_DISPATCHER),
             "slurm_hint": "Run production cRPA chunks on compute nodes or through Slurm; do not run heavy chunks on login nodes.",
         },
     )
@@ -206,20 +295,13 @@ def _run_crpa_chunk(args: argparse.Namespace) -> None:
     if not np.allclose(grid.kvec, solution.lattice_kvec):
         raise ValueError("Cached BM k vectors do not match the reconstructed CRPA grid")
 
-    if args.q_range is not None:
-        start, stop = _parse_range(args.q_range)
-    elif args.chunk_index is not None and args.chunk_count is not None:
-        start, stop = _chunk_range(grid.nk, int(args.chunk_index), int(args.chunk_count))
-    else:
-        start, stop = 0, grid.nk
-    start = max(0, int(start))
-    stop = min(grid.nk, int(stop))
-    if stop <= start:
-        raise ValueError(f"Empty q chunk after clipping: {start}:{stop}")
-
+    start, stop = _select_q_flat_range(
+        grid.nk,
+        q_range=args.q_range,
+        chunk_index=args.chunk_index,
+        chunk_count=args.chunk_count,
+    )
     q_indices = [grid.unravel_index(iq) for iq in range(start, stop)]
-    if args.legacy_zero_fill_test and args.hf_compatible:
-        raise ValueError("--legacy-zero-fill-test cannot be combined with --hf-compatible.")
     if args.legacy_zero_fill_test:
         if bool(solution.periodic_g_grid):
             raise ValueError("Legacy zero-fill test chunks require a non-periodic-G BM cache.")
@@ -259,6 +341,8 @@ def _run_crpa_chunk(args: argparse.Namespace) -> None:
         chi0_eq19_overlap_lg=args.chi0_eq19_overlap_lg,
     )
     out = write_crpa_outputs(result, args.output_dir)
+    from mean_field.crpa.plotting import write_epsilon_vs_q_plot
+
     write_epsilon_vs_q_plot(result, out / "epsilon_vs_q.pdf")
     report_path = write_validation_report(result, out / "validation_report.md")
     summary = validation_summary(result)
@@ -272,9 +356,11 @@ def _run_crpa_chunk(args: argparse.Namespace) -> None:
     )
 
 
-
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
+    _validate_crpa_chunk_request(args)
+    ensure_not_running_compute_on_login_node("TBG cRPA chunk computation")
+
     output_dir = Path(args.output_dir)
     manifest = _crpa_chunk_workflow_manifest(args)
     _write_crpa_chunk_workflow_artifacts(
@@ -296,6 +382,7 @@ def main(argv: list[str] | None = None) -> None:
         manifest,
         _crpa_chunk_workflow_state(manifest, "succeeded", message="cRPA chunk outputs written"),
     )
+
 
 if __name__ == "__main__":
     main()

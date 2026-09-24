@@ -6,7 +6,7 @@ The package started as a benchmark-driven rewrite of a Julia `TBG_HartreeFock` w
 
 ## Scope
 
-- `mean_field.core.hf`: reusable projected Hartree-Fock machinery, including occupations, ODA iteration, Coulomb kernels, overlap contractions, flavor-sector helpers, and the generic TDHF/RPA core.
+- `mean_field.core.hf`: namespace for reusable projected Hartree-Fock owner modules, including occupations, ODA iteration, Coulomb kernels, overlap contractions, flavor-sector helpers, and the generic TDHF/RPA core. The package root is intentionally empty; use `mean_field.api` or an explicit owner module.
 - `mean_field.core.plotting.bands`: shared band/path plotting helpers used by system plot adapters.
 - `mean_field.systems.tbg`: zero-field TBG/BM benchmark and HF adapters.
 - `mean_field.systems.tmbg`: twisted monolayer-bilayer graphene continuum model, validation checks, and topology adapters.
@@ -54,16 +54,18 @@ Heavy self-consistent HF calculations, topology-grid eigensolver recomputations,
 
 The desired public script surface is intentionally small.  Prefer existing dispatchers over adding new standalone scripts; see `docs/script_surface_policy.md`.
 
-- `scripts/mean_field_tools.py`: Python command dispatcher for stable benchmark and reproduction tools.
-- `scripts/mean_field_tools.jl`: Julia helper dispatcher for benchmark-reference exports.
+- `python -m mean_field.cli`: canonical package CLI for stable user-facing workflows.
+- `scripts/mean_field_tools.py`: developer-tool-only dispatcher for the four maintained cRPA/TPT utilities.
 - `scripts/submit_mean_field.sbatch`: generic Slurm wrapper for numerical jobs.
+
+Historical B0 benchmark runners and Julia reference exporters are archived provenance, not maintained commands. Existing external numerical fixtures remain available only to focused oracle tests.
 
 Examples:
 
 ```bash
 python scripts/mean_field_tools.py help
-python scripts/mean_field_tools.py hf --help
-sbatch scripts/submit_mean_field.sbatch python scripts/mean_field_tools.py hf --help
+PYTHONPATH=src python -m mean_field.cli tdbg projected-hf --help
+sbatch scripts/submit_mean_field.sbatch python -m mean_field.cli tdbg projected-hf --help
 ```
 
 ## Repository Layout

@@ -15,9 +15,10 @@ Applies to physical-system implementations and adapters under `src/mean_field/sy
 
 - Each system owns its physical model: Hamiltonian, lattice/basis labels, parameters, gauge/sewing convention, screening choices, projected windows, and paper-specific compatibility wrappers.
 - Reuse `../core/hf` for generic HF iteration and projected-HF plumbing. Do not fork the SCF loop unless the generic framework is demonstrably insufficient.
-- Reuse `../../analysis/topology` for Berry links, plaquette flux, and Chern numbers. System topology modules should generate wavefunction meshes, choose/label states, supply sewing transforms, and map results to historical dataclasses.
+- Reuse `../../analysis/topology` for Berry links, plaquette flux, and Chern numbers. System topology modules may only package eigenstates, band/flavor labels, and `BlockSewingSpec` basis metadata into `FHSState`; do not expose result calculators, private sewing transforms, or historical topology-result dataclasses.
 - Reuse `../../analysis/response_derivative_gauge.py` for gauge-safe response derivatives when a system needs shift-vector or generalized-derivative logic.
 - Keep reproduction scripts and Slurm orchestration out of system core when possible; prefer `scripts/` or `src/mean_field/devtools/` for workflow glue.
+- Treat TPT monolayer and TPT bulk as separate physical systems. Existing `tpt/` code is monolayer-scoped; put future 40-atom/320-Wannier bulk code in a distinct `tpt_bulk/` package. Do not share structures, HR files, basis indices, meshes, reference densities, screening, or result paths without an explicit validated mapping.
 
 ## Safety
 

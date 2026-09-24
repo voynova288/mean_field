@@ -9,8 +9,12 @@ import pytest
 
 from mean_field import cli
 from mean_field.api import HFConfig, load_result, required_artifact_files
-from mean_field.systems.tdbg import TDBGInteractionSettings, TDBGProjectedHFConfig, TDBGProjectedHFResult
-from mean_field.systems.tdbg.projected_hf import TDBGStateLabel
+from mean_field.systems.tdbg import (
+    TDBGInteractionSettings,
+    TDBGProjectedHFConfig,
+)
+from mean_field.systems.tdbg.projected_hf_state import TDBGProjectedHFResult
+from mean_field.systems.tdbg.projected_hf_state import TDBGStateLabel
 
 
 def _tdbg_cli_config(output_dir: Path | None = None) -> dict[str, object]:

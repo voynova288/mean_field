@@ -1,0 +1,59 @@
+{
+  "N": 7,
+  "parent_hilbert_dimension": 120,
+  "quantization_decimals": 10,
+  "release_status": {
+    "bcs_authorized": false,
+    "hartree_fock_authorized": false,
+    "optical_response_authorized": false,
+    "physical_poisson_authorized": false
+  },
+  "adapter_full_sequence_quantized_sha256": "199c5f33b7fd695f2e356b673bcfcf2d96cb23765ea55ebfb20b44726aa78060",
+  "adapter_projected_operator_quantized_sha256": "dbeb6f468e70fe6187a09e3645c6b09538992cb71a1c6509ebb308024b55f35c",
+  "electron_potential_mev_quantized_sha256": "065bb94d662e23a12456e5bd8598404bf0a110c085661910d89411942a5840ab",
+  "grid_size": 65,
+  "k_cart_nm_inv": [
+    [
+      0.037,
+      -0.021
+    ],
+    [
+      -0.014,
+      0.029
+    ]
+  ],
+  "k_cart_sha256": "98095c50a3240d29127583bdfeaece69166d13fa89c762d7d6aa48893c48a706",
+  "max_source_adapter_full_matrix_difference_mev": 1.1368683772161603e-13,
+  "max_source_adapter_projected_difference_mev": 6.396215040447424e-16,
+  "origin_nm": 0.413,
+  "period_nm": 65.5,
+  "phi_v_quantized_sha256": "fa1d84bc5bac657357833d9e5703332ebd6a791555ad81850812ca229251b407",
+  "potential_definition": "U_meV=-1000*phi_V; phi_V=-1e-3*(0.37*cos(Gz+0.19)-0.11*sin(2Gz-0.07))",
+  "potential_quantity": "electron_potential_energy_U_equals_minus_e_times_electrostatic_voltage",
+  "profile_sha256": "c39f2bf971fad07b3fd4d38c462b48febec8ca72a6a43d9eba95059b04840dc5",
+  "schema": "teib-n7-plane-wave-parity-anchor-v1",
+  "source_archive": {
+    "member_paths": [
+      "teib/src/kane8.py",
+      "teib/src/materials.py",
+      "teib/src/poisson.py"
+    ],
+    "path": "reference/teib_20260720.tar.gz",
+    "sha256": "e250c0a3b8d58707d259868ef0be0a5993b0c31f9a3f8b615f4ab25f4691ee7a"
+  },
+  "source_hashes": {
+    "__init__.py": "aa2ea77f2e80f7c37c578a0667cd448ed1f2cfedc835a9de0aa46a7095459961",
+    "kane8.py": "3cbed9a4e8c25ae9dcb8f6616333687002996fb23ca40bd5f9a516b26e45dd6f",
+    "materials.py": "f2ad40d9837873669ecbaa4b45bf1e063a9d47c56939cde7f4aac9a7c3b070ed",
+    "poisson.py": "c53ad0b67d9628f3f1c9b8f82a0b93783d46d8ad5aac02f8697846037360b359"
+  },
+  "source_full_sequence_quantized_sha256": "199c5f33b7fd695f2e356b673bcfcf2d96cb23765ea55ebfb20b44726aa78060",
+  "source_projected_operator_quantized_sha256": "dbeb6f468e70fe6187a09e3645c6b09538992cb71a1c6509ebb308024b55f35c",
+  "source_variant": "byte-exact teib_20260720 src files; synthetic hash-bound empty fixture package init; not author-source attested",
+  "synthetic_initializer": {
+    "path": "tests/fixtures/teib_pw_n7_source/__init__.py",
+    "sha256": "aa2ea77f2e80f7c37c578a0667cd448ed1f2cfedc835a9de0aa46a7095459961"
+  },
+  "static_matrix_sequence_quantized_sha256": "5c3252eb7ff2bda8604c852179a466d0d71e2a146522c84c5023286cd34992cf",
+  "z_nm_sha256": "75230b06a15306ec32f110d161a93dff54500a1c7fbe8b4ddda6e9fb21e32859"
+}

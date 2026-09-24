@@ -1,0 +1,567 @@
+{
+  "N_values": [
+    79,
+    95
+  ],
+  "comparisons": [
+    {
+      "E1_minus_H1_change_mev": -0.034714622405218165,
+      "e1_N95_edge_shell_weight": 9.61491113143427e-06,
+      "e1_component_energy_changes_mev": [
+        -0.027237185609607195,
+        -0.027237185609607195
+      ],
+      "e1_maximum_absolute_component_energy_change_mev": 0.027237185609607195,
+      "e1_mean_energy_change_mev": -0.027237185609607195,
+      "e1_principal_values_N79_to_N95": [
+        0.9999848819187953,
+        0.9999848819187951
+      ],
+      "h1_N95_edge_shell_weight": 1.6257712089962999e-07,
+      "h1_component_energy_changes_mev": [
+        0.0074774367956536025,
+        0.007477436795525705
+      ],
+      "h1_maximum_absolute_component_energy_change_mev": 0.0074774367956536025,
+      "h1_mean_energy_change_mev": 0.00747743679561097,
+      "h1_principal_values_N79_to_N95": [
+        0.9999995901214737,
+        0.9999995901214727
+      ],
+      "k_nm1": 0.0
+    },
+    {
+      "E1_minus_H1_change_mev": -0.03342798172027983,
+      "e1_N95_edge_shell_weight": 9.385617440326315e-06,
+      "e1_component_energy_changes_mev": [
+        -0.027459423079505996,
+        -0.024828128205001576
+      ],
+      "e1_maximum_absolute_component_energy_change_mev": 0.027459423079505996,
+      "e1_mean_energy_change_mev": -0.026143775642239575,
+      "e1_principal_values_N79_to_N95": [
+        0.9999852252777517,
+        0.9999845800140487
+      ],
+      "h1_N95_edge_shell_weight": 2.3031637228090438e-07,
+      "h1_component_energy_changes_mev": [
+        0.007239605765647639,
+        0.007328806390390241
+      ],
+      "h1_maximum_absolute_component_energy_change_mev": 0.007328806390390241,
+      "h1_mean_energy_change_mev": 0.007284206078040256,
+      "h1_principal_values_N79_to_N95": [
+        0.9999995211630538,
+        0.9999994892134035
+      ],
+      "k_nm1": 0.03
+    },
+    {
+      "E1_minus_H1_change_mev": -0.03129823279566324,
+      "e1_N95_edge_shell_weight": 8.989783052964631e-06,
+      "e1_component_energy_changes_mev": [
+        -0.027403648621898924,
+        -0.021746337691524786
+      ],
+      "e1_maximum_absolute_component_energy_change_mev": 0.027403648621898924,
+      "e1_mean_energy_change_mev": -0.02457499315670475,
+      "e1_principal_values_N79_to_N95": [
+        0.9999854574093814,
+        0.999984100032064
+      ],
+      "h1_N95_edge_shell_weight": 4.288861219567445e-07,
+      "h1_component_energy_changes_mev": [
+        0.006378641333625978,
+        0.007067837944291
+      ],
+      "h1_maximum_absolute_component_energy_change_mev": 0.007067837944291,
+      "h1_mean_energy_change_mev": 0.006723239638958489,
+      "h1_principal_values_N79_to_N95": [
+        0.9999993781359025,
+        0.999999134210819
+      ],
+      "k_nm1": 0.06
+    },
+    {
+      "E1_minus_H1_change_mev": -0.0313579037067484,
+      "e1_N95_edge_shell_weight": 9.001672455527975e-06,
+      "e1_component_energy_changes_mev": [
+        -0.021018548408704874,
+        -0.030019026321696174
+      ],
+      "e1_maximum_absolute_component_energy_change_mev": 0.030019026321696174,
+      "e1_mean_energy_change_mev": -0.025518787365200524,
+      "e1_principal_values_N79_to_N95": [
+        0.9999847451661934,
+        0.999982869472681
+      ],
+      "h1_N95_edge_shell_weight": 7.461021617914237e-07,
+      "h1_component_energy_changes_mev": [
+        0.004736699408496747,
+        0.006941533274613221
+      ],
+      "h1_maximum_absolute_component_energy_change_mev": 0.006941533274613221,
+      "h1_mean_energy_change_mev": 0.005839116341547879,
+      "h1_principal_values_N79_to_N95": [
+        0.9999992380822258,
+        0.9999984733801492
+      ],
+      "k_nm1": 0.09
+    },
+    {
+      "E1_minus_H1_change_mev": -0.03594776322539417,
+      "e1_N95_edge_shell_weight": 1.0054127472078875e-05,
+      "e1_component_energy_changes_mev": [
+        -0.025866941679524302,
+        -0.036768792880067735
+      ],
+      "e1_maximum_absolute_component_energy_change_mev": 0.036768792880067735,
+      "e1_mean_energy_change_mev": -0.03131786727979602,
+      "e1_principal_values_N79_to_N95": [
+        0.9999814575599207,
+        0.9999805065991181
+      ],
+      "h1_N95_edge_shell_weight": 1.1718326629118467e-06,
+      "h1_component_energy_changes_mev": [
+        0.002162509034931759,
+        0.007097282856264542
+      ],
+      "h1_maximum_absolute_component_energy_change_mev": 0.007097282856264542,
+      "h1_mean_energy_change_mev": 0.00462989594559815,
+      "h1_principal_values_N79_to_N95": [
+        0.9999991254005395,
+        0.9999974599635486
+      ],
+      "k_nm1": 0.12
+    }
+  ],
+  "earliest_bulk_turning_nm1": 10.693682824827727,
+  "fractional_margin_below_turning": 0.1478130586982138,
+  "interpretation": "fixed Yang-Chang regulator for the low-energy Du2017 E1/H1 model; not an N-to-infinity or microscopic-band claim",
+  "kz_cutoff_selected": true,
+  "observed_cutoff_checks": {
+    "maximum_N95_edge_shell_weight": 1.0054127472078875e-05,
+    "maximum_component_energy_change_mev": 0.036768792880067735,
+    "minimum_N79_to_N95_principal_value": 0.9999805065991181
+  },
+  "period_nm": 65.5,
+  "physical_scope": "near-Fermi E1/H1 pocket k_parallel<=0.12 nm^-1",
+  "records": {
+    "79": [
+      {
+        "E1_minus_H1_mev": -35.52914810368277,
+        "N": 79,
+        "e1": {
+          "edge_shell_weight": 8.37221558516344e-06,
+          "energies_mev": [
+            90.27201781079091,
+            90.27201781079091
+          ],
+          "global_positions": [
+            952,
+            953
+          ],
+          "mean_energy_mev": 90.27201781079091,
+          "previous_k_principal_values": [
+            1.0,
+            1.0
+          ],
+          "splitting_mev": 0.0
+        },
+        "h1": {
+          "edge_shell_weight": 3.863835387399926e-07,
+          "energies_mev": [
+            125.8011659144715,
+            125.80116591447587
+          ],
+          "global_positions": [
+            954,
+            955
+          ],
+          "mean_energy_mev": 125.80116591447369,
+          "previous_k_principal_values": [
+            1.0,
+            1.0
+          ],
+          "splitting_mev": 4.385380947269368e-12
+        },
+        "k_nm1": 0.0
+      },
+      {
+        "E1_minus_H1_mev": -34.43324245787278,
+        "N": 79,
+        "e1": {
+          "edge_shell_weight": 8.207068542879066e-06,
+          "energies_mev": [
+            90.93219300667272,
+            91.00334184528974
+          ],
+          "global_positions": [
+            952,
+            953
+          ],
+          "mean_energy_mev": 90.96776742598122,
+          "previous_k_principal_values": [
+            0.9908530533509704,
+            0.9902478923525757
+          ],
+          "splitting_mev": 0.07114883861703003
+        },
+        "h1": {
+          "edge_shell_weight": 4.1937276604324776e-07,
+          "energies_mev": [
+            125.39112039376316,
+            125.41089937394484
+          ],
+          "global_positions": [
+            954,
+            955
+          ],
+          "mean_energy_mev": 125.401009883854,
+          "previous_k_principal_values": [
+            0.9989050073699334,
+            0.9987755999731226
+          ],
+          "splitting_mev": 0.01977898018168389
+        },
+        "k_nm1": 0.03
+      },
+      {
+        "E1_minus_H1_mev": -31.35275898866732,
+        "N": 79,
+        "e1": {
+          "edge_shell_weight": 7.946739983095522e-06,
+          "energies_mev": [
+            92.85099293932772,
+            92.90344605860723
+          ],
+          "global_positions": [
+            952,
+            953
+          ],
+          "mean_energy_mev": 92.87721949896748,
+          "previous_k_principal_values": [
+            0.9954754235327585,
+            0.9944679511290043
+          ],
+          "splitting_mev": 0.052453119279510796
+        },
+        "h1": {
+          "edge_shell_weight": 5.17963021465367e-07,
+          "energies_mev": [
+            124.15364764571585,
+            124.30630932955376
+          ],
+          "global_positions": [
+            954,
+            955
+          ],
+          "mean_energy_mev": 124.2299784876348,
+          "previous_k_principal_values": [
+            0.9988690228478068,
+            0.9985289422414116
+          ],
+          "splitting_mev": 0.15266168383790135
+        },
+        "k_nm1": 0.06
+      },
+      {
+        "E1_minus_H1_mev": -26.679311953037598,
+        "N": 79,
+        "e1": {
+          "edge_shell_weight": 8.02419174472173e-06,
+          "energies_mev": [
+            95.5823752347287,
+            95.82480469192053
+          ],
+          "global_positions": [
+            952,
+            953
+          ],
+          "mean_energy_mev": 95.70358996332462,
+          "previous_k_principal_values": [
+            0.9978242510382734,
+            0.9975771600136129
+          ],
+          "splitting_mev": 0.2424294571918284
+        },
+        "h1": {
+          "edge_shell_weight": 6.829949928735285e-07,
+          "energies_mev": [
+            122.14356728200961,
+            122.6222365507148
+          ],
+          "global_positions": [
+            954,
+            955
+          ],
+          "mean_energy_mev": 122.38290191636221,
+          "previous_k_principal_values": [
+            0.9983581868201129,
+            0.9981258707034386
+          ],
+          "splitting_mev": 0.4786692687051841
+        },
+        "k_nm1": 0.09
+      },
+      {
+        "E1_minus_H1_mev": -20.704506799412513,
+        "N": 79,
+        "e1": {
+          "edge_shell_weight": 8.831157947874676e-06,
+          "energies_mev": [
+            98.77490108178802,
+            99.92444132717537
+          ],
+          "global_positions": [
+            952,
+            953
+          ],
+          "mean_energy_mev": 99.3496712044817,
+          "previous_k_principal_values": [
+            0.9957154986071348,
+            0.9941918365463477
+          ],
+          "splitting_mev": 1.1495402453873538
+        },
+        "h1": {
+          "edge_shell_weight": 9.296992775388991e-07,
+          "energies_mev": [
+            119.56914592193945,
+            120.53921008584895
+          ],
+          "global_positions": [
+            954,
+            955
+          ],
+          "mean_energy_mev": 120.05417800389421,
+          "previous_k_principal_values": [
+            0.9974664107590803,
+            0.9957973832244356
+          ],
+          "splitting_mev": 0.9700641639094898
+        },
+        "k_nm1": 0.12
+      }
+    ],
+    "95": [
+      {
+        "E1_minus_H1_mev": -35.56386272608799,
+        "N": 95,
+        "e1": {
+          "edge_shell_weight": 9.61491113143427e-06,
+          "energies_mev": [
+            90.2447806251813,
+            90.2447806251813
+          ],
+          "global_positions": [
+            1144,
+            1145
+          ],
+          "mean_energy_mev": 90.2447806251813,
+          "previous_k_principal_values": [
+            1.0,
+            1.0
+          ],
+          "splitting_mev": 0.0
+        },
+        "h1": {
+          "edge_shell_weight": 1.6257712089962999e-07,
+          "energies_mev": [
+            125.80864335126715,
+            125.8086433512714
+          ],
+          "global_positions": [
+            1146,
+            1147
+          ],
+          "mean_energy_mev": 125.8086433512693,
+          "previous_k_principal_values": [
+            1.0,
+            1.0
+          ],
+          "splitting_mev": 4.246603069191224e-12
+        },
+        "k_nm1": 0.0
+      },
+      {
+        "E1_minus_H1_mev": -34.46667043959306,
+        "N": 95,
+        "e1": {
+          "edge_shell_weight": 9.385617440326315e-06,
+          "energies_mev": [
+            90.90473358359321,
+            90.97851371708474
+          ],
+          "global_positions": [
+            1144,
+            1145
+          ],
+          "mean_energy_mev": 90.94162365033898,
+          "previous_k_principal_values": [
+            0.9907717103756847,
+            0.9901615010750839
+          ],
+          "splitting_mev": 0.0737801334915189
+        },
+        "h1": {
+          "edge_shell_weight": 2.3031637228090438e-07,
+          "energies_mev": [
+            125.39835999952881,
+            125.41822818033523
+          ],
+          "global_positions": [
+            1146,
+            1147
+          ],
+          "mean_energy_mev": 125.40829408993204,
+          "previous_k_principal_values": [
+            0.9989020596462216,
+            0.9987725690965727
+          ],
+          "splitting_mev": 0.0198681808064316
+        },
+        "k_nm1": 0.03
+      },
+      {
+        "E1_minus_H1_mev": -31.38405722146298,
+        "N": 95,
+        "e1": {
+          "edge_shell_weight": 8.989783052964631e-06,
+          "energies_mev": [
+            92.82358929070583,
+            92.8816997209157
+          ],
+          "global_positions": [
+            1144,
+            1145
+          ],
+          "mean_energy_mev": 92.85264450581077,
+          "previous_k_principal_values": [
+            0.9954462186235031,
+            0.9944276412454025
+          ],
+          "splitting_mev": 0.058110430209867836
+        },
+        "h1": {
+          "edge_shell_weight": 4.288861219567445e-07,
+          "energies_mev": [
+            124.16002628704948,
+            124.31337716749805
+          ],
+          "global_positions": [
+            1146,
+            1147
+          ],
+          "mean_energy_mev": 124.23670172727375,
+          "previous_k_principal_values": [
+            0.9988668679956381,
+            0.9985261999750583
+          ],
+          "splitting_mev": 0.1533508804485717
+        },
+        "k_nm1": 0.06
+      },
+      {
+        "E1_minus_H1_mev": -26.710669856744346,
+        "N": 95,
+        "e1": {
+          "edge_shell_weight": 9.001672455527975e-06,
+          "energies_mev": [
+            95.56135668632,
+            95.79478566559884
+          ],
+          "global_positions": [
+            1144,
+            1145
+          ],
+          "mean_energy_mev": 95.67807117595942,
+          "previous_k_principal_values": [
+            0.9978289100413309,
+            0.9975765564145008
+          ],
+          "splitting_mev": 0.23342897927883244
+        },
+        "h1": {
+          "edge_shell_weight": 7.461021617914237e-07,
+          "energies_mev": [
+            122.14830398141811,
+            122.62917808398942
+          ],
+          "global_positions": [
+            1146,
+            1147
+          ],
+          "mean_energy_mev": 122.38874103270376,
+          "previous_k_principal_values": [
+            0.9983583432952583,
+            0.9981236006931142
+          ],
+          "splitting_mev": 0.4808741025713048
+        },
+        "k_nm1": 0.09
+      },
+      {
+        "E1_minus_H1_mev": -20.740454562637908,
+        "N": 95,
+        "e1": {
+          "edge_shell_weight": 1.0054127472078875e-05,
+          "energies_mev": [
+            98.74903414010849,
+            99.8876725342953
+          ],
+          "global_positions": [
+            1144,
+            1145
+          ],
+          "mean_energy_mev": 99.3183533372019,
+          "previous_k_principal_values": [
+            0.9957212866671661,
+            0.9942506624774397
+          ],
+          "splitting_mev": 1.1386383941868057
+        },
+        "h1": {
+          "edge_shell_weight": 1.1718326629118467e-06,
+          "energies_mev": [
+            119.57130843097438,
+            120.54630736870521
+          ],
+          "global_positions": [
+            1146,
+            1147
+          ],
+          "mean_energy_mev": 120.0588078998398,
+          "previous_k_principal_values": [
+            0.9974651599043405,
+            0.9958068413219685
+          ],
+          "splitting_mev": 0.9749989377308282
+        },
+        "k_nm1": 0.12
+      }
+    ]
+  },
+  "references": [
+    "W. Yang and K. Chang, Phys. Rev. B 72, 233309 (2005)",
+    "B. A. Foreman, Phys. Rev. B 56, R12748 (1997)",
+    "R. G. Veprek et al., Phys. Rev. B 76, 165320 (2007)"
+  ],
+  "remaining_hard_blockers_for_paper_model": [],
+  "schema": "du2017-yang-chang-kz-cutoff-finite-k-v2",
+  "selected_N": 95,
+  "selected_lambda_z_nm1": 9.113016857741385,
+  "selection_criteria": {
+    "maximum_N95_edge_shell_weight": 0.0001,
+    "maximum_component_energy_change_mev": 0.05,
+    "minimum_N79_to_N95_principal_value": 0.9999,
+    "selected_cutoff_must_be_below_bulk_turning": true
+  },
+  "source": {
+    "archive_sha256": "e250c0a3b8d58707d259868ef0be0a5993b0c31f9a3f8b615f4ab25f4691ee7a",
+    "convergence_report_sha256": "c83759836cd4fb2d55de3cf3088947b0430fe7a148494d902a9b59d117d6ec51",
+    "kane8_py_sha256": "3cbed9a4e8c25ae9dcb8f6616333687002996fb23ca40bd5f9a516b26e45dd6f",
+    "materials_py_sha256": "f2ad40d9837873669ecbaa4b45bf1e063a9d47c56939cde7f4aac9a7c3b070ed",
+    "runner_sha256": "22851defb36f85acef8a8c8fe0cb9f4206f595d1aa00ad103ca1e92c60eb4af5"
+  }
+}

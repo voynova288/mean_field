@@ -2,16 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from mean_field.systems import tdbg as tdbg_system
-from mean_field.systems.tdbg import projected_hf, projected_hf_config
+import mean_field.systems.tdbg.projected_hf_config as projected_hf_config
 
-
-def test_tdbg_projected_hf_config_exports_preserve_legacy_facade() -> None:
-    assert projected_hf.TDBGProjectedHFConfig is projected_hf_config.TDBGProjectedHFConfig
-    assert projected_hf.TDBGInteractionSettings is projected_hf_config.TDBGInteractionSettings
-    assert projected_hf.TDBGProjectedWindow is projected_hf_config.TDBGProjectedWindow
-    assert tdbg_system.TDBGProjectedHFConfig is projected_hf_config.TDBGProjectedHFConfig
-    assert tdbg_system.tdbg_delta_from_paper_ud_for_valley is projected_hf_config.tdbg_delta_from_paper_ud_for_valley
 
 
 def test_tdbg_projected_hf_config_valley_ud_mapping_and_validation() -> None:

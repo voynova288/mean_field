@@ -16,8 +16,9 @@ def load_rlg_hbn_tdhf_run_from_archive(
 ) -> RLGhBNHartreeFockRun:
     """Load a saved RLG/hBN HF archive as a TDHF-ready run object.
 
-    Archives written by ``run_rlg_hbn_paper_hf`` store final HF matrices plus
-    cache keys for the projected basis and layer-overlap blocks.  This loader
+    Archives written by ``save_rlg_hbn_hf_archive`` or the retired
+    ``run_rlg_hbn_paper_hf`` workflow store final HF matrices plus cache keys
+    for the projected basis and layer-overlap blocks.  This loader
     restores those cached objects and attaches the saved HF state without
     rerunning SCF.  It is intended for TDHF postprocessing jobs.
     """

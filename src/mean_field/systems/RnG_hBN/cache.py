@@ -10,7 +10,7 @@ import subprocess
 
 import numpy as np
 
-from ...core.hf import ProjectedWavefunctionBasis
+from mean_field.core.hf.overlap import ProjectedWavefunctionBasis
 from ...core.io import write_json_artifact
 from ._hf_basis import _regular_zero_shift_c3_reciprocal_shifts
 from .hf import (
@@ -686,151 +686,26 @@ def load_or_build_layer_overlap_blocks(
     return RLGhBNCacheResult(value=blocks, key=key, path=None if policy == "off" else path, hit=False, manifest=manifest)
 
 
-def hf_ground_state_archive_hash(path: Path) -> str:
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
-def path_cache_key(
-    model: RLGhBNModel,
-    interaction: RLGhBNInteractionParams,
-    *,
-    source_archive: Path,
-    path_payload: dict[str, object],
-    chunk_size: int,
-    beta: float,
-    spin_index: int,
-    panel: str,
-) -> tuple[str, dict[str, object]]:
-    extra = {
-        "source_hf_ground_state_archive": str(Path(source_archive).resolve()),
-        "source_hf_ground_state_archive_sha256": hf_ground_state_archive_hash(source_archive),
-        "path": path_payload,
-        "chunk_size": int(chunk_size),
-        "beta": float(beta),
-        "spin_index": int(spin_index),
-        "source_panel": str(panel),
-        "basis_periodic_gauge": RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
-        "basis_periodic_gauge_padding": int(RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING),
-        "form_factor_convention": RLG_HBN_FORM_FACTOR_CONVENTION_VERSION,
-    }
-    key = rlg_hbn_cache_key("path_bands", model, interaction, extra)
-    return key, _manifest_for("path_bands", model, interaction, extra=extra)
 
 
-def load_path_band_cache(cache_dir: Path, key: str) -> dict[str, object]:
-    path = _cache_path(cache_dir, "path_bands", key)
-    required = (
-        "manifest.json",
-        "path_hamiltonian.npy",
-        "path_energies.npy",
-        "path_kvec_complex_pairs.npy",
-        "kdist.npy",
-        "labels.json",
-        "hf_bands_path.npz",
-    )
-    missing = [name for name in required if not (path / name).exists()]
-    if missing:
-        raise RLGhBNCacheMiss(f"Path-band cache {path} is missing {missing}")
-    labels_payload = _read_json(path / "labels.json")
-    archive = np.load(path / "hf_bands_path.npz")
-    return {
-        "path": path,
-        "manifest": _read_json(path / "manifest.json"),
-        "hamiltonian": np.asarray(np.load(path / "path_hamiltonian.npy"), dtype=np.complex128),
-        "energies": np.asarray(np.load(path / "path_energies.npy"), dtype=float),
-        "kvec": _complex_from_pairs(np.load(path / "path_kvec_complex_pairs.npy")),
-        "kdist": np.asarray(np.load(path / "kdist.npy"), dtype=float),
-        "labels": labels_payload,
-        "hf_bands_path": {name: np.asarray(archive[name]) for name in archive.files},
-    }
 
 
-def save_path_band_cache(
-    cache_dir: Path,
-    key: str,
-    manifest: dict[str, object],
-    *,
-    path_hamiltonian: np.ndarray,
-    path_energies: np.ndarray,
-    path_kvec: np.ndarray,
-    kdist: np.ndarray,
-    labels_payload: dict[str, object],
-    hf_bands_payload: dict[str, object],
-) -> Path:
-    path = _cache_path(cache_dir, "path_bands", key)
-    tmp_path = _prepare_write_dir(path)
-    np.save(tmp_path / "path_hamiltonian.npy", np.asarray(path_hamiltonian, dtype=np.complex128))
-    np.save(tmp_path / "path_energies.npy", np.asarray(path_energies, dtype=float))
-    np.save(tmp_path / "path_kvec_complex_pairs.npy", _complex_pairs(path_kvec))
-    np.save(tmp_path / "kdist.npy", np.asarray(kdist, dtype=float))
-    _write_json(tmp_path / "labels.json", labels_payload)
-    np.savez(tmp_path / "hf_bands_path.npz", **hf_bands_payload)
-    _write_json(tmp_path / "manifest.json", manifest)
-    _finish_write_dir(tmp_path, path)
-    return path
 
 
-def update_cache_manifest_file(
-    output_manifest_path: Path,
-    *,
-    cache_dir: Path,
-    kind: str,
-    key: str,
-    hit: bool,
-    path: Path | None,
-    panel: str | None = None,
-    extra: dict[str, object] | None = None,
-) -> None:
-    if output_manifest_path.exists():
-        payload = _read_json(output_manifest_path)
-    else:
-        payload = {"cache_dir": str(Path(cache_dir).resolve()), "entries": [], "summary": {}}
-    entries = payload.setdefault("entries", [])
-    if not isinstance(entries, list):
-        entries = []
-        payload["entries"] = entries
-    entry = {
-        "kind": str(kind),
-        "key": str(key),
-        "hit": bool(hit),
-        "path": "" if path is None else str(path),
-        "panel": "" if panel is None else str(panel),
-    }
-    if extra:
-        entry.update(extra)
-    entries.append(entry)
-    summary = payload.setdefault("summary", {})
-    if not isinstance(summary, dict):
-        summary = {}
-        payload["summary"] = summary
-    kind_summary = summary.setdefault(str(kind), {"hit": 0, "miss": 0})
-    if not isinstance(kind_summary, dict):
-        kind_summary = {"hit": 0, "miss": 0}
-        summary[str(kind)] = kind_summary
-    key_name = "hit" if hit else "miss"
-    kind_summary[key_name] = int(kind_summary.get(key_name, 0)) + 1
-    _write_json(output_manifest_path, payload)
 
 
 __all__ = [
     "CACHE_POLICY_CHOICES",
     "RLGhBNCacheMiss",
     "RLGhBNCacheResult",
-    "hf_ground_state_archive_hash",
     "load_layer_overlap_blocks_cache",
     "load_or_build_layer_overlap_blocks",
     "load_or_build_projected_basis",
     "load_or_solve_screening",
-    "load_path_band_cache",
     "load_projected_basis_cache",
-    "path_cache_key",
     "rlg_hbn_cache_key",
     "save_layer_overlap_blocks_cache",
-    "save_path_band_cache",
     "save_projected_basis_cache",
-    "update_cache_manifest_file",
 ]

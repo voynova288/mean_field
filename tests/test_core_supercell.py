@@ -16,7 +16,7 @@ from mean_field.systems.tbg.zero_field.supercell import (
     occupation_counts_svp_8over3,
     zhang_sqrt3_tripled_supercell,
 )
-from mean_field.systems.tmbg.polshyn_supercell import polshyn_nu_7over2_filling_summary
+from mean_field.systems.tmbg._polshyn_filling import polshyn_nu_7over2_filling_summary
 
 
 def test_integer_supercell_geometry_matches_zhang_tripled_cell() -> None:

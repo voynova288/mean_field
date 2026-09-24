@@ -1,0 +1,7 @@
+# Fresh terminal Slurm accounting for job 517203
+# Queried UTC: 2026-09-22T20:22:59Z
+JobIDRaw|JobName|Partition|Account|State|ExitCode|Elapsed|Start|End|AllocCPUS|ReqMem|MaxRSS|NodeList
+517203|ptse2_phys_hole_cv_v3|regular256|hmt03|COMPLETED|0:0|00:06:07|2026-09-23T04:04:43|2026-09-23T04:10:50|64|250G||node039
+517203.batch|batch||hmt03|COMPLETED|0:0|00:06:07|2026-09-23T04:04:43|2026-09-23T04:10:50|64||2566456K|node039
+517203.0|hydra_bstrap_proxy||hmt03|COMPLETED|0:0|00:03:04|2026-09-23T04:04:43|2026-09-23T04:07:47|64||115315908K|node039
+517203.1|hydra_bstrap_proxy||hmt03|COMPLETED|0:0|00:06:07|2026-09-23T04:04:43|2026-09-23T04:10:50|64||133227056K|node039

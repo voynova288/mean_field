@@ -1,10 +1,41 @@
 from __future__ import annotations
 
-from ._hf_types import *  # noqa: F401,F403
-from ._hf_reference import *  # noqa: F401,F403
-from ._hf_initialization import *  # noqa: F401,F403
-from ._hf_basis import *  # noqa: F401,F403
-from ._hf_interaction_path import *  # noqa: F401,F403
+from collections.abc import Iterable
+
+import numpy as np
+
+from mean_field.core.hf.engine import DensityUpdateResult, HartreeFockStepResult
+from mean_field.core.hf.interaction import (
+    build_projected_hf_kernel,
+    build_projected_hf_problem,
+    compute_hf_energy,
+)
+from mean_field.core.hf.occupations import occupied_state_mask
+from mean_field.core.hf.overlap import HFOverlapBlockSet
+from mean_field.core.hf.problem import (
+    HartreeFockKernel,
+    HartreeFockProblem,
+    run_hartree_fock_problem,
+)
+from ._hf_basis import build_htg_overlap_blocks, build_htg_projected_basis
+from ._hf_initialization import (
+    HTGDensityBuilder,
+    HTGInitializer,
+    htg_flavor_occupation_counts_for_init_mode,
+    normalize_htg_init_mode,
+)
+from ._hf_reference import (
+    _validate_primitive_cell_integer_filling,
+    hermitian_residual,
+    htg_filling_from_density,
+    htg_gap_estimate,
+    htg_gap_from_occupation_mask,
+    htg_occupied_state_count,
+    projector_idempotency_residual,
+)
+from ._hf_types import HTGGroundStateScan, HTGHartreeFockRun, HTGHartreeFockState
+from .model import HTGModel
+from .params import InteractionParams
 
 def compute_background_density(diagonal_overlap: np.ndarray) -> complex:
     diagonal_overlap = np.asarray(diagonal_overlap, dtype=np.complex128)
@@ -256,4 +287,11 @@ def scan_htg_ground_state(
             )
     return HTGGroundStateScan(runs=tuple(runs))
 
-__all__ = [name for name in globals() if not name.startswith('__')]
+__all__ = [
+    "build_htg_hf_kernel",
+    "build_htg_hf_problem",
+    "compute_background_densities",
+    "compute_background_density",
+    "run_htg_hf",
+    "scan_htg_ground_state",
+]

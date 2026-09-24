@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import ast
+from importlib import import_module
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -9,26 +13,95 @@ from mean_field.core.contracts import (
     assert_hamiltonian_parts_consistent,
     assert_projected_basis_consistent,
 )
-from mean_field.core.hf import (
+from mean_field.core.hf.problem import (
     HartreeFockProblem,
-    conventional_projector_to_stored,
-    empty_overlap_block_set,
     run_hartree_fock_problem,
 )
+from mean_field.core.hf.occupations import conventional_projector_to_stored
+from mean_field.core.hf.interaction import empty_overlap_block_set
 from mean_field.systems.tmbg import TMBGModel, TMBGParameters
-from mean_field.systems.tmbg.polshyn_supercell import (
+from mean_field.systems.tmbg._polshyn_contracts import (
+    polshyn_wang_hf_bundle_to_hf_run_result,
+)
+from mean_field.systems.tmbg._polshyn_filling import (
+    cdw_density_blocks,
+    polshyn_nu_7over2_filling_summary,
+)
+from mean_field.systems.tmbg._polshyn_types import (
     PolshynDoubledCell,
     PolshynProjectedBasis,
     PolshynWangHFState,
+)
+from mean_field.systems.tmbg._polshyn_wang import (
     build_wang_hf_problem,
-    cdw_density_blocks,
     flatten_sector_blocks,
-    polshyn_nu_7over2_filling_summary,
-    polshyn_wang_hf_bundle_to_hf_run_result,
     translation_order_parameters,
     unflatten_sector_blocks,
     wang_sector_density_blocks,
 )
+
+_POLSHYN_OWNER_EXPORTS = {
+    "_polshyn_types": [
+        "PolshynDoubledCell",
+        "PolshynFillingSummary",
+        "PolshynProjectedBasis",
+        "PolshynWangHFState",
+        "polshyn_doubled_cell",
+    ],
+    "_polshyn_filling": [
+        "reference_diagonal_for_projected_indices",
+        "occupation_counts_nu_7over2",
+        "primitive_nu_from_counts",
+        "polshyn_nu_7over2_filling_summary",
+        "cdw_density_blocks",
+    ],
+    "_polshyn_wang": [
+        "wang_stored_density_from_sector_blocks",
+        "scaled_overlap_blocks",
+        "overlap_blocks_with_hartree_q0_zeroed",
+        "wang_projected_wavefunction_basis",
+        "flatten_sector_blocks",
+        "unflatten_sector_blocks",
+        "unflatten_sector_energies",
+        "wang_density_from_fixed_sector_occupations",
+        "build_wang_overlap_blocks",
+        "build_wang_hf_problem",
+        "run_projected_hf_scf_wang",
+        "wang_sector_density_blocks",
+        "wang_sector_hamiltonian_blocks",
+        "wang_sector_energy_blocks",
+        "translation_order_parameters",
+        "estimate_fermi_level_from_sector_energies",
+        "moire_cell_area_nm2",
+    ],
+    "_polshyn_contracts": ["polshyn_wang_hf_bundle_to_hf_run_result"],
+}
+
+
+def test_polshyn_owners_have_explicit_dependencies_and_exact_exports() -> None:
+    owner_dir = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "mean_field"
+        / "systems"
+        / "tmbg"
+    )
+    for module_name, expected in _POLSHYN_OWNER_EXPORTS.items():
+        module = import_module(f"mean_field.systems.tmbg.{module_name}")
+        assert module.__all__ == expected
+
+        tree = ast.parse((owner_dir / f"{module_name}.py").read_text(encoding="utf-8"))
+        assert not any(
+            isinstance(node, ast.ImportFrom)
+            and any(alias.name == "*" for alias in node.names)
+            for node in ast.walk(tree)
+        )
+        assert not any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "globals"
+            for node in ast.walk(tree)
+        )
 
 
 def test_polshyn_hf_filling_summary_matches_nu_7over2_convention() -> None:

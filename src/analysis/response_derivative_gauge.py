@@ -193,6 +193,92 @@ def matrix_in_eigenbasis(eigenvectors: np.ndarray, operators: np.ndarray) -> np.
     return np.einsum("bn,...bc,cm->...nm", u.conjugate(), ops, u, optimize=True)
 
 
+def projected_basis_connection(projected_basis: np.ndarray, projected_basis_derivative: np.ndarray) -> np.ndarray:
+    """Return the Berry connection of a k-dependent orthonormal basis.
+
+    For basis columns ``U(k)`` and derivatives ``partial_a U``, this returns
+
+    ``A_a = i U† partial_a U``
+
+    with shape ``(ndim,nproj,nproj)``.  ``U`` may be rectangular.  The result
+    is Hermitian when the supplied basis and derivative satisfy the
+    differentiated orthonormality identity exactly; this function deliberately
+    does not symmetrize it, so inconsistent derivatives remain visible.
+    """
+
+    U = np.asarray(projected_basis, dtype=np.complex128)
+    dU = np.asarray(projected_basis_derivative, dtype=np.complex128)
+    if U.ndim != 2:
+        raise ValueError(f"projected_basis must have shape (full,nproj), got {U.shape}")
+    if dU.ndim != 3 or dU.shape[1:] != U.shape:
+        raise ValueError(f"projected_basis_derivative must have shape (ndim,{U.shape[0]},{U.shape[1]}), got {dU.shape}")
+    return 1.0j * np.einsum("pn,apm->anm", U.conjugate(), dU, optimize=True)
+
+
+def projected_basis_covariant_hamiltonian_derivative(
+    hamiltonian_projected: np.ndarray,
+    hamiltonian_projected_derivative: np.ndarray,
+    basis_connection: np.ndarray,
+) -> np.ndarray:
+    """Return ``D_a H = partial_a H - i [A_a,H]`` in a moving basis.
+
+    ``hamiltonian_projected`` is ``H_proj = U† H_full U`` and
+    ``basis_connection`` uses :func:`projected_basis_connection`'s convention
+    ``A_a = i U† partial_a U``.  The derivative and connection use leading
+    Cartesian/coordinate axis order ``(ndim,nproj,nproj)``.
+
+    If the range of ``U`` is invariant under ``H_full`` (in particular for an
+    exactly reconstructed projected operator), the exact velocity identity is
+
+    ``D_a H_proj = U† (partial_a H_full) U``.
+
+    For a non-invariant truncated subspace there are additional leakage terms
+    involving ``(1-UU†) H_full U``; this helper does not silently discard or
+    estimate them.  Under a k-dependent frame change ``U -> U W``, the result
+    transforms covariantly as ``D_a H -> W† (D_a H) W``.
+    """
+
+    H = np.asarray(hamiltonian_projected, dtype=np.complex128)
+    dH = np.asarray(hamiltonian_projected_derivative, dtype=np.complex128)
+    A = np.asarray(basis_connection, dtype=np.complex128)
+    if H.ndim != 2 or H.shape[0] != H.shape[1]:
+        raise ValueError(f"hamiltonian_projected must have shape (nproj,nproj), got {H.shape}")
+    expected = (A.shape[0], H.shape[0], H.shape[1]) if A.ndim == 3 else None
+    if A.ndim != 3 or A.shape[1:] != H.shape:
+        raise ValueError(f"basis_connection must have shape (ndim,{H.shape[0]},{H.shape[1]}), got {A.shape}")
+    if dH.shape != expected:
+        raise ValueError(f"hamiltonian_projected_derivative has shape {dH.shape}, expected {expected}")
+    commutator = np.einsum("aij,jk->aik", A, H, optimize=True) - np.einsum(
+        "ij,ajk->aik", H, A, optimize=True
+    )
+    return dH - 1.0j * commutator
+
+
+def projected_basis_covariant_velocity(
+    hamiltonian_projected: np.ndarray,
+    hamiltonian_projected_derivative: np.ndarray,
+    basis_connection: np.ndarray,
+    *,
+    hbar: float,
+) -> np.ndarray:
+    """Return the physical projected velocity ``v_a = D_a H_proj / hbar``.
+
+    ``hbar`` is required so callers must choose units consistent with their
+    momentum coordinate and Hamiltonian.  The response code often calls
+    ``partial H/partial k`` a velocity matrix even before division by hbar;
+    this helper instead implements the literal physical-velocity definition.
+    """
+
+    hbar_value = float(hbar)
+    if not np.isfinite(hbar_value) or hbar_value == 0.0:
+        raise ValueError(f"hbar must be finite and nonzero, got {hbar}")
+    return projected_basis_covariant_hamiltonian_derivative(
+        hamiltonian_projected,
+        hamiltonian_projected_derivative,
+        basis_connection,
+    ) / hbar_value
+
+
 def hamiltonian_gauge_data(
     energies: np.ndarray,
     eigenvectors: np.ndarray,
@@ -207,6 +293,14 @@ def hamiltonian_gauge_data(
     ``dhdk`` must have shape ``(ndim,basis,basis)``.  ``d2hdk`` is optional and
     must have shape ``(ndim,ndim,basis,basis)`` when supplied.  Momentum units
     are whatever units the derivatives use; the caller must document them.
+
+    ``external_connection`` follows WannierBerri's additive ``Xbar('AA')``
+    decomposition.  Do not pass the projected-frame connection there when
+    ``dhdk`` is already ``projected_basis_covariant_hamiltonian_derivative``:
+    its off-diagonal contribution is then already contained in ``1j * dcov``
+    and adding it again would double count it.  A response adapter must choose
+    ordinary derivative plus external connection, or covariant derivative with
+    a consistently reduced external term.
     """
 
     e = np.asarray(energies, dtype=float)
@@ -612,7 +706,14 @@ def wannierberri_shift_current_group_trace(
     initial_group: np.ndarray | list[int] | tuple[int, ...],
     final_group: np.ndarray | list[int] | tuple[int, ...],
 ) -> np.ndarray:
-    """Trace/sum WannierBerri shift-current ``Imn`` over two band groups."""
+    """Sum WannierBerri ``Imn`` over complete initial/final band groups.
+
+    This mirrors ``dynamic.py::ShiftCurrentFormula.trace_ln`` exactly. For
+    strictly degenerate groups the sum is the expansion of the invariant
+    matrix product ``Tr_I[(A_;a)_IF A_FI]`` in a chosen band frame. Individual
+    ``(n,m)`` entries are not invariant under U(N) rotations, and this helper
+    must not be used to demand covariance after mixing nondegenerate bands.
+    """
 
     tensor = np.asarray(imn, dtype=float)
     inn = np.asarray(initial_group, dtype=int)
@@ -791,6 +892,9 @@ __all__ = [
     "matrix_in_eigenbasis",
     "random_block_unitary",
     "normalized_u1_link",
+    "projected_basis_connection",
+    "projected_basis_covariant_hamiltonian_derivative",
+    "projected_basis_covariant_velocity",
     "shift_integrand_from_generalized_derivative",
     "shift_integrand_from_pair_generalized_derivative",
     "shift_vector_from_generalized_derivative",

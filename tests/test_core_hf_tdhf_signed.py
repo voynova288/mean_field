@@ -6,11 +6,12 @@ import numpy as np
 import pytest
 
 from mean_field.api.tdhf import TDHFConfig, run_tdhf
-from mean_field.core.hf import (
-    ParticleHolePair,
+from mean_field.core.hf.tdhf import ParticleHolePair
+from mean_field.core.hf.tdhf_signed import (
     TDHFGenericSignedQ,
     TDHFGenericSignedQSector,
     TDHFNambuSewing,
+    TDHFTransitionLabelProtocol,
     TDHFSelfConjugateQ,
     TDHFSelfConjugateQSector,
     TDHFSignedQBlocks,
@@ -36,6 +37,69 @@ def _pairs(n: int, *, offset: int = 0) -> tuple[ParticleHolePair, ...]:
         )
         for index in range(n)
     )
+
+
+@dataclass(frozen=True)
+class _NeutralTransitionLabel:
+    particle: object
+    hole: object
+    particle_momentum: object = None
+    hole_momentum: object = None
+    particle_flavor: object = None
+    hole_flavor: object = None
+
+
+def test_typed_signed_labels_accept_legacy_pairs_and_validate_neutral_protocol() -> None:
+    legacy_pair = _pairs(1)[0]
+    neutral_label = _NeutralTransitionLabel(
+        particle=0,
+        hole=10,
+        particle_momentum=("higher-energy", 0),
+        hole_momentum=("lower-energy", 10),
+    )
+    assert isinstance(legacy_pair, TDHFTransitionLabelProtocol)
+    assert isinstance(neutral_label, TDHFTransitionLabelProtocol)
+    blocks = TDHFSignedQBlocks(
+        plus_pairs=(legacy_pair,),
+        minus_pairs=(neutral_label,),
+        A_plus=np.asarray([[2.0]]),
+        B_plus_minus=np.asarray([[0.0]]),
+        A_minus=np.asarray([[3.0]]),
+        B_minus_plus=np.asarray([[0.0]]),
+    )
+    sewing = build_standard_nambu_sewing(
+        blocks.plus_pairs,
+        blocks.minus_pairs,
+        source_fingerprint="neutral-label-test",
+    )
+    matrices = build_tdhf_signed_q_matrices(blocks, sewing)
+    assert matrices.H_plus.shape == (2, 2)
+    assert len(fingerprint_tdhf_pairs((legacy_pair, neutral_label))) == 64
+
+
+@pytest.mark.parametrize(
+    ("label", "error", "message"),
+    [
+        (object(), TypeError, "TDHFTransitionLabelProtocol"),
+        (_NeutralTransitionLabel(True, 0), TypeError, "integer endpoint"),
+        (_NeutralTransitionLabel(-1, 0), ValueError, "non-negative"),
+        (_NeutralTransitionLabel(2, 2), ValueError, "distinct"),
+    ],
+)
+def test_typed_signed_label_runtime_validation_fails_closed(
+    label: object,
+    error: type[Exception],
+    message: str,
+) -> None:
+    with pytest.raises(error, match=message):
+        TDHFSignedQBlocks(
+            plus_pairs=(label,),  # type: ignore[arg-type]
+            minus_pairs=_pairs(1),
+            A_plus=np.asarray([[1.0]]),
+            B_plus_minus=np.asarray([[0.0]]),
+            A_minus=np.asarray([[1.0]]),
+            B_minus_plus=np.asarray([[0.0]]),
+        )
 
 
 def _generic_sector(
@@ -162,6 +226,45 @@ def test_tdhf_signed_structure_uses_cross_partner_b_not_same_q_symmetry() -> Non
     assert matrices.structure.ok
     assert matrices.structure.B_partner_transpose == 0.0
     assert matrices.structure.signed_liouvillian_covariance < 1.0e-12
+
+    expected_H_plus = np.block(
+        [[A_plus, B_plus], [np.conj(B_plus.T), np.conj(A_minus)]]
+    )
+    expected_H_minus = np.block(
+        [[A_minus, B_plus.T], [np.conj(B_plus), np.conj(A_plus)]]
+    )
+    expected_eta = np.diag([1.0, 1.0, -1.0, -1.0])
+    expected_L_plus = expected_eta @ expected_H_plus
+    expected_L_minus = expected_eta @ expected_H_minus
+    np.testing.assert_allclose(matrices.H_plus, expected_H_plus)
+    np.testing.assert_allclose(matrices.H_minus, expected_H_minus)
+    np.testing.assert_allclose(matrices.L_plus, expected_L_plus)
+    np.testing.assert_allclose(matrices.L_minus, expected_L_minus)
+    np.testing.assert_array_equal(matrices.eta_plus, np.diag(expected_eta))
+    np.testing.assert_array_equal(matrices.eta_minus, np.diag(expected_eta))
+
+    identity = np.eye(2, dtype=np.complex128)
+    zeros = np.zeros((2, 2), dtype=np.complex128)
+    expected_plus_to_minus = np.block([[zeros, identity], [identity, zeros]])
+    expected_minus_to_plus = np.conj(expected_plus_to_minus.T)
+    np.testing.assert_array_equal(
+        sector.sewing.plus_to_minus, expected_plus_to_minus
+    )
+    np.testing.assert_array_equal(
+        sector.sewing.minus_to_plus, expected_minus_to_plus
+    )
+    np.testing.assert_allclose(
+        expected_L_minus @ expected_plus_to_minus
+        + expected_plus_to_minus @ np.conj(expected_L_plus),
+        np.zeros((4, 4)),
+        atol=1.0e-14,
+    )
+    np.testing.assert_allclose(
+        expected_L_plus @ expected_minus_to_plus
+        + expected_minus_to_plus @ np.conj(expected_L_minus),
+        np.zeros((4, 4)),
+        atol=1.0e-14,
+    )
 
 
 def test_tdhf_complex_phase_sewing_closes_covariance_and_metric() -> None:

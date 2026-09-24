@@ -9,11 +9,11 @@ import numpy as np
 from scipy.linalg import eigh
 
 from ....core.bands import GridBandsResult, PathBandsResult
-from ....core.hf import ComponentGroup
+from mean_field.core.hf.overlap import ComponentGroup
 from ....core.lattice import KPath, LatticeGrid
 from ..params import TBGParameters
 from .interaction import TBG_ZERO_FIELD_GRAPHENE_A_NM_SCHEMA_V1
-from .path import build_b0_benchmark_kpath, build_fig6_kpath, build_gamma_m_k_gamma_kprime_kpath
+from .path import build_fig6_kpath, build_gamma_m_k_gamma_kprime_kpath
 
 
 TBG_ZERO_FIELD_B0_COORDINATE_CONVENTION = (
@@ -866,8 +866,6 @@ class TBGZeroFieldBMModel:
         kind = str(path_kind).strip().lower().replace("-", "_")
         if kind in {"fig6", "m_k_gamma_m"}:
             return build_fig6_kpath(self.params, int(points_per_segment))
-        if kind in {"b0_benchmark", "benchmark"}:
-            return build_b0_benchmark_kpath(self.params, int(points_per_segment))
         if kind in {"gamma_m_k_gamma_kprime", "gamma_m_k_gamma_kp"}:
             return build_gamma_m_k_gamma_kprime_kpath(self.params, int(points_per_segment))
         raise ValueError(f"Unsupported TBG zero-field BM path_kind={path_kind!r}")

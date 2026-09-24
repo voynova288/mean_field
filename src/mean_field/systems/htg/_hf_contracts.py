@@ -1,11 +1,31 @@
 from __future__ import annotations
 
-from ._hf_types import *  # noqa: F401,F403
-from ._hf_reference import *  # noqa: F401,F403
-from ._hf_initialization import *  # noqa: F401,F403
-from ._hf_basis import *  # noqa: F401,F403
-from ._hf_interaction_path import *  # noqa: F401,F403
-from ._hf_runner import *  # noqa: F401,F403
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+import math
+from typing import Any
+
+import numpy as np
+
+from mean_field.core.contracts import (
+    DensityState as ContractDensityState,
+    HFRunResult as ContractHFRunResult,
+    HFState as ContractHFState,
+    HamiltonianParts as ContractHamiltonianParts,
+    ProjectedBasis as ContractProjectedBasis,
+    SingleParticleModel as ContractSingleParticleModel,
+)
+from mean_field.core.hf.contracts_bridge import density_state_from_delta
+from ._hf_reference import (
+    _htg_reference_density_blocks,
+    htg_band_reference_occupations,
+    htg_filling_from_density,
+    htg_occupied_state_count,
+)
+from ._hf_runner import run_htg_hf
+from ._hf_types import HTGHartreeFockRun, HTGProjectedBasisData, VALLEY_SEQUENCE
+from .model import HTGModel
+from .params import InteractionParams
 
 @dataclass(frozen=True)
 class HTGRunHFConfig:
@@ -100,7 +120,7 @@ def run_htg_hf_config_adapter(model: object, config: "HFConfig", **kwargs: Any) 
     the existing canonical HTG post-run adapter.
     """
 
-    if not isinstance(model, HTGModel):
+    if type(model) is not HTGModel:
         return None
     if "htg_config" in kwargs and "htg_supercell_config" in kwargs:
         raise TypeError("Pass only one of htg_config or htg_supercell_config")
@@ -112,7 +132,7 @@ def run_htg_hf_config_adapter(model: object, config: "HFConfig", **kwargs: Any) 
             "htg_config=HTGRunHFConfig(...); generic HFConfig -> HTG runner mapping is not implemented"
         )
     htg_config = kwargs.pop("htg_config")
-    if not isinstance(htg_config, HTGRunHFConfig):
+    if type(htg_config) is not HTGRunHFConfig:
         raise TypeError(f"htg_config must be HTGRunHFConfig, got {type(htg_config).__name__}")
     if kwargs:
         raise TypeError(f"Unsupported HTG primitive run_hf kwargs: {sorted(kwargs)}")
@@ -138,7 +158,7 @@ def run_htg_hf_config_adapter(model: object, config: "HFConfig", **kwargs: Any) 
         raw,
         config=config,
         observables={
-            "public_run_hf_adapter": "mean_field.systems.htg.mean_field_adapter.run_htg_hf_config_adapter",
+            "public_run_hf_adapter": "mean_field.systems.htg._hf_contracts.run_htg_hf_config_adapter",
             "explicit_config_type": "HTGRunHFConfig",
         },
     )
@@ -185,7 +205,7 @@ def _contract_single_particle_model(data: HTGProjectedBasisData) -> ContractSing
         "interaction_subtraction": str(interaction.subtraction),
         "interaction_g_shells": int(interaction.g_shells),
         "finite_zero_limit": bool(interaction.finite_zero_limit),
-        "source": "mean_field.systems.htg.mean_field_adapter",
+        "source": "mean_field.systems.htg._hf_contracts",
     }
     return ContractSingleParticleModel(
         system="htg",
@@ -345,7 +365,7 @@ def _contract_density_state(run: HTGHartreeFockRun) -> ContractDensityState:
             "raw_density_convention": "stored_delta",
             "density_delta_definition": "P-R",
             "density_axis_order": "abk",
-            "adapter": "mean_field.systems.htg.mean_field_adapter",
+            "adapter": "mean_field.systems.htg._hf_contracts",
             "filling_from_density": float(
                 htg_filling_from_density(
                     state.density,
@@ -579,12 +599,17 @@ def htg_hf_run_to_hf_result(
                 "schema_version": 1,
                 "workflow": "htg.primitive_hf.raw_run_result",
                 "system_name": "htg",
-                "adapter": "mean_field.systems.htg.mean_field_adapter.htg_hf_run_to_hf_result",
-                "canonical_adapter": "mean_field.systems.htg.mean_field_adapter.htg_hf_run_to_hf_run_result",
+                "adapter": "mean_field.systems.htg._hf_contracts.htg_hf_run_to_hf_result",
+                "canonical_adapter": "mean_field.systems.htg._hf_contracts.htg_hf_run_to_hf_run_result",
                 "raw_state_type": type(run).__name__,
             },
         ),
         canonical_run_result=canonical,
     )
 
-__all__ = [name for name in globals() if not name.startswith('__')]
+__all__ = [
+    "HTGRunHFConfig",
+    "htg_hf_run_to_hf_result",
+    "htg_hf_run_to_hf_run_result",
+    "run_htg_hf_config_adapter",
+]

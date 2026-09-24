@@ -75,7 +75,20 @@ E_CHARGE_C = 1.602176634e-19
 HBAR_J_S = 1.054571817e-34
 HBAR_EV_S = 6.582119569e-16
 KB_EV_PER_K = 8.617333262145e-5
+
+# Historical unsigned repository scale. It remains public for explicit
+# Joya/legacy conversions, but it is not by itself a complete response
+# convention and must not be guessed for WannierBerri positive-only sums.
 SHIFT_CURRENT_PREFAC_UA_NM_PER_V2 = math.pi * E_CHARGE_C**2 / HBAR_J_S * 1.0e6
+
+# Fixed WannierBerri uses +pi*e^2/(4*hbar) before summing both ordered band
+# pairs with f(E2)-f(E1). For each positive-energy initial->final transition,
+# Imn[final,initial] = -Imn[initial,final], so those two terms reduce to
+# -2*(f_initial-f_final)*Imn[initial,final]. Hence a positive-transition Imn
+# integral is converted by -pi*e^2/(2*hbar), not by historical +pi*e^2/hbar.
+WANNIERBERRI_POSITIVE_TRANSITION_PREFAC_UA_NM_PER_V2 = (
+    -0.5 * SHIFT_CURRENT_PREFAC_UA_NM_PER_V2
+)
 
 _AXIS_LABELS: Mapping[Any, int] = {"x": 0, "y": 1, "z": 2, "0": 0, "1": 1, "2": 2, 0: 0, 1: 1, 2: 2}
 _AXIS_NAMES = ("x", "y", "z")
@@ -365,7 +378,13 @@ def component_kernel_from_pair(
     optical_symmetrization: OpticalSymmetrization = "sum",
     convention: ShiftCurrentConvention | None = None,
 ) -> float:
-    """Return the real gauge-invariant kernel ``Im[component_amplitude]``."""
+    """Return the Abelian labeled-pair kernel ``Im[component_amplitude]``.
+
+    This scalar is gauge invariant for a nondegenerate pair (independent U(1)
+    phases). It is not invariant under arbitrary rotations of bands inside a
+    degenerate manifold. Use :func:`component_group_trace_kernel` for an
+    exact-degenerate transition between complete subspaces.
+    """
 
     return float(
         np.imag(
@@ -379,6 +398,237 @@ def component_kernel_from_pair(
                 convention=convention,
             )
         )
+    )
+
+
+def _validated_band_group(group: Iterable[int], nb: int, *, name: str) -> np.ndarray:
+    indices = np.asarray(tuple(int(index) for index in group), dtype=int)
+    if indices.ndim != 1 or indices.size == 0:
+        raise ValueError(f"{name} must contain at least one band index")
+    if np.unique(indices).size != indices.size:
+        raise ValueError(f"{name} contains duplicate band indices: {indices.tolist()}")
+    if np.any(indices < 0) or np.any(indices >= int(nb)):
+        raise ValueError(f"{name} indices {indices.tolist()} are outside [0,{int(nb)})")
+    return indices
+
+
+def component_group_trace_amplitude(
+    berry_connection: np.ndarray,
+    berry_connection_gen_derivative: np.ndarray,
+    *,
+    initial_group: Iterable[int],
+    final_group: Iterable[int],
+    component: ShiftCurrentComponent | Sequence[int] | str,
+    optical_symmetrization: OpticalSymmetrization = "sum",
+    convention: ShiftCurrentConvention | None = None,
+) -> complex:
+    r"""Return the proper subspace trace for one group-to-group transition.
+
+    For initial subspace ``I``, final subspace ``F``, and component
+    :math:`\sigma^a_{bc}`, the ordered amplitude is
+
+    .. math::
+
+       \operatorname{Tr}_{I}\!\left[(A^c_{;a})_{IF} A^b_{FI}\right].
+
+    If ``A_FI -> U_F^dagger A_FI U_I`` and its generalized derivative
+    ``G_IF -> U_I^dagger G_IF U_F``, the product transforms by similarity in
+    ``I`` and this trace is invariant. This is the matrix-product meaning of
+    WannierBerri ``ShiftCurrentFormula.trace_ln``; it is not a claim that its
+    individual labeled-band summands are invariant.
+
+    A single spectral transition may use this contraction only when every
+    band in each group has the same energy and occupation. Arbitrary rotations
+    mixing nondegenerate bands are not gauge changes and are outside this
+    contract. Use :func:`exact_degenerate_group_transition_weight` for strict
+    spectral validation and transition-energy bookkeeping.
+    """
+
+    comp = component_from_any(component)
+    if convention is not None:
+        optical_symmetrization = convention.optical_symmetrization
+    sym = _validate_optical_symmetrization(optical_symmetrization)
+    A = np.asarray(berry_connection, dtype=np.complex128)
+    G = np.asarray(berry_connection_gen_derivative, dtype=np.complex128)
+    if A.ndim != 3 or A.shape[1] != A.shape[2]:
+        raise ValueError(f"berry_connection must have shape (ndim,nb,nb), got {A.shape}")
+    ndim, nb, _ = A.shape
+    if G.shape != (ndim, ndim, nb, nb):
+        raise ValueError(f"berry_connection_gen_derivative has shape {G.shape}, expected {(ndim, ndim, nb, nb)}")
+    if not np.all(np.isfinite(A)) or not np.all(np.isfinite(G)):
+        raise ValueError("berry_connection and berry_connection_gen_derivative must be finite")
+    inn = _validated_band_group(initial_group, nb, name="initial_group")
+    out = _validated_band_group(final_group, nb, name="final_group")
+    if np.intersect1d(inn, out).size:
+        raise ValueError("initial_group and final_group must be disjoint")
+    a, b, c = comp.as_tuple
+    if min(a, b, c) < 0 or max(a, b, c) >= ndim:
+        raise ValueError(f"component {comp.as_tuple} is incompatible with ndim={ndim}")
+
+    def block_trace(connection_axis: int, optical_axis: int) -> complex:
+        gen_if = G[a, connection_axis][np.ix_(inn, out)]
+        connection_fi = A[optical_axis][np.ix_(out, inn)]
+        return complex(np.trace(gen_if @ connection_fi))
+
+    total = block_trace(c, b)
+    if sym != "none":
+        total += block_trace(b, c)
+        if sym == "average":
+            total *= 0.5
+    if convention is not None:
+        total *= float(convention.geometric_sign)
+    return complex(total)
+
+
+def component_group_trace_kernel(
+    berry_connection: np.ndarray,
+    berry_connection_gen_derivative: np.ndarray,
+    *,
+    initial_group: Iterable[int],
+    final_group: Iterable[int],
+    component: ShiftCurrentComponent | Sequence[int] | str,
+    optical_symmetrization: OpticalSymmetrization = "sum",
+    convention: ShiftCurrentConvention | None = None,
+) -> float:
+    """Return ``Im`` of :func:`component_group_trace_amplitude`."""
+
+    return float(
+        np.imag(
+            component_group_trace_amplitude(
+                berry_connection,
+                berry_connection_gen_derivative,
+                initial_group=initial_group,
+                final_group=final_group,
+                component=component,
+                optical_symmetrization=optical_symmetrization,
+                convention=convention,
+            )
+        )
+    )
+
+
+@dataclass(frozen=True)
+class ExactDegenerateGroupTransition:
+    """One strict exact-degenerate group transition.
+
+    ``geometric_amplitude`` is the unoccupied-weighted group trace, while
+    ``weight`` includes the common occupation difference. ``kernel`` is
+    ``Im(weight)``, the real local response accumulated into a spectrum by the
+    current conventions.
+    """
+
+    initial_group: tuple[int, ...]
+    final_group: tuple[int, ...]
+    initial_energy_ev: float
+    final_energy_ev: float
+    transition_energy_ev: float
+    occupation_difference: float
+    geometric_amplitude: complex
+    weight: complex
+    kernel: float
+
+
+def exact_degenerate_group_transition_weight(
+    tensors: ShiftCurrentTensors,
+    initial_group: Iterable[int],
+    final_group: Iterable[int],
+    component: ShiftCurrentComponent | Sequence[int] | str,
+    *,
+    optical_symmetrization: OpticalSymmetrization = "sum",
+    convention: ShiftCurrentConvention | None = None,
+    intragroup_velocity_atol: float = 1.0e-10,
+) -> ExactDegenerateGroupTransition:
+    """Build a strict exact-degenerate group transition and trace weight.
+
+    Each supplied group must be the complete maximal eigenspace at its energy;
+    energies and occupations must be bitwise equal inside it. For the local
+    bandwise generalized-derivative builder, scalar projected first-derivative
+    blocks are a necessary first-order condition for a smooth persistent
+    degeneracy. This condition is checked with ``intragroup_velocity_atol`` in
+    the caller's derivative units; the caller must still establish persistence
+    beyond one k point.
+
+    The strict energy check is deliberate: replacing distinct pair transition
+    energies by one cluster-average energy is an additional approximation and
+    does not make arbitrary rotations of nondegenerate bands a gauge symmetry.
+    Near-degenerate cluster spectra therefore remain outside this API.
+    """
+
+    energies = np.asarray(tensors.energies_ev, dtype=float)
+    occupations = np.asarray(tensors.occupations, dtype=float)
+    velocity_h = np.asarray(tensors.velocity_h, dtype=np.complex128)
+    if energies.ndim != 1 or occupations.shape != energies.shape:
+        raise ValueError(f"energies/occupations must have matching 1D shape, got {energies.shape} and {occupations.shape}")
+    if not np.all(np.isfinite(energies)) or not np.all(np.isfinite(occupations)):
+        raise ValueError("energies and occupations must be finite")
+    if velocity_h.ndim != 3 or velocity_h.shape[1:] != (energies.size, energies.size):
+        raise ValueError(f"velocity_h must have shape (ndim,{energies.size},{energies.size}), got {velocity_h.shape}")
+    if not np.all(np.isfinite(velocity_h)):
+        raise ValueError("velocity_h must be finite")
+    velocity_atol = float(intragroup_velocity_atol)
+    if not np.isfinite(velocity_atol) or velocity_atol < 0.0:
+        raise ValueError(f"intragroup_velocity_atol must be finite and non-negative, got {intragroup_velocity_atol}")
+
+    inn = _validated_band_group(initial_group, energies.size, name="initial_group")
+    out = _validated_band_group(final_group, energies.size, name="final_group")
+    if np.intersect1d(inn, out).size:
+        raise ValueError("initial_group and final_group must be disjoint")
+
+    initial_energy = float(energies[inn[0]])
+    final_energy = float(energies[out[0]])
+    initial_occupation = float(occupations[inn[0]])
+    final_occupation = float(occupations[out[0]])
+    if not np.all(energies[inn] == initial_energy):
+        raise ValueError(f"initial_group is not exactly degenerate: {energies[inn].tolist()}")
+    if not np.all(energies[out] == final_energy):
+        raise ValueError(f"final_group is not exactly degenerate: {energies[out].tolist()}")
+    maximal_initial = np.flatnonzero(energies == initial_energy)
+    maximal_final = np.flatnonzero(energies == final_energy)
+    if not np.array_equal(np.sort(inn), maximal_initial):
+        raise ValueError(f"initial_group must contain the complete exact eigenspace {maximal_initial.tolist()}, got {inn.tolist()}")
+    if not np.array_equal(np.sort(out), maximal_final):
+        raise ValueError(f"final_group must contain the complete exact eigenspace {maximal_final.tolist()}, got {out.tolist()}")
+    if not np.all(occupations[inn] == initial_occupation):
+        raise ValueError(f"initial_group occupations are not identical: {occupations[inn].tolist()}")
+    if not np.all(occupations[out] == final_occupation):
+        raise ValueError(f"final_group occupations are not identical: {occupations[out].tolist()}")
+
+    for name, indices in (("initial_group", inn), ("final_group", out)):
+        block = velocity_h[:, indices][:, :, indices]
+        scalar = np.trace(block, axis1=1, axis2=2) / indices.size
+        expected = scalar[:, None, None] * np.eye(indices.size, dtype=np.complex128)[None, :, :]
+        residual = float(np.max(np.abs(block - expected)))
+        if residual > velocity_atol:
+            raise ValueError(
+                f"{name} fails the necessary first-order exact-block condition: "
+                f"max non-scalar velocity residual {residual} exceeds {velocity_atol}"
+            )
+
+    transition_energy = final_energy - initial_energy
+    if not np.isfinite(transition_energy) or transition_energy <= 0.0:
+        raise ValueError(f"group transition must have finite positive E_final-E_initial, got {transition_energy}")
+
+    geometric = component_group_trace_amplitude(
+        tensors.berry_connection,
+        tensors.berry_connection_gen_derivative,
+        initial_group=inn,
+        final_group=out,
+        component=component,
+        optical_symmetrization=optical_symmetrization,
+        convention=convention,
+    )
+    occupation_difference = initial_occupation - final_occupation
+    weight = complex(occupation_difference * geometric)
+    return ExactDegenerateGroupTransition(
+        initial_group=tuple(int(index) for index in inn),
+        final_group=tuple(int(index) for index in out),
+        initial_energy_ev=initial_energy,
+        final_energy_ev=final_energy,
+        transition_energy_ev=float(transition_energy),
+        occupation_difference=float(occupation_difference),
+        geometric_amplitude=geometric,
+        weight=weight,
+        kernel=float(np.imag(weight)),
     )
 
 
@@ -498,7 +748,12 @@ def component_transition_weight(
     optical_symmetrization: OpticalSymmetrization = "sum",
     convention: ShiftCurrentConvention | None = None,
 ) -> complex:
-    """Return occupation-weighted full-tensor transition amplitude."""
+    """Return an occupation-weighted labeled-band transition amplitude.
+
+    This is the ordinary Abelian band-resolved formula. Inside an exact
+    degenerate manifold only a complete group trace is U(N)-invariant; use
+    :func:`exact_degenerate_group_transition_weight` there.
+    """
 
     n = int(initial_band)
     m = int(final_band)
@@ -562,7 +817,12 @@ def positive_transition_terms(
     optical_symmetrization: OpticalSymmetrization = "sum",
     convention: ShiftCurrentConvention | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Collect transition energies and complex weights for one k point."""
+    """Collect ordinary labeled-band transition terms for one k point.
+
+    The result is appropriate for nondegenerate bands (up to U(1) phases). It
+    must not be interpreted as a U(N)-invariant decomposition inside exact
+    degenerate blocks; aggregate such blocks with the strict group API.
+    """
 
     transitions: list[float] = []
     weights: list[complex] = []
@@ -645,13 +905,44 @@ def add_transitions_to_integral(
         )
 
 
+def wannierberri_positive_transition_conductivity_from_imn(
+    imn_integral: np.ndarray | float,
+) -> np.ndarray:
+    r"""Convert a positive-transition WannierBerri ``Imn`` integral.
+
+    The input must contain every positive-energy initial-to-final transition
+    exactly once, weighted by ``f_initial-f_final``, with the real local tensor
+    ``ShiftCurrentFormula.Imn[initial,final]``. For an ideal positive-frequency
+    delta function the spectral factor is
+    ``delta(E_final-E_initial-hbar*omega)``. To reproduce fixed WannierBerri's
+    finite-width calculator exactly, include both its resonant and antiresonant
+    broadened orientations in ``imn_integral`` before calling this helper.
+
+    The returned conversion is ``[-pi e^2/(2 hbar)] * integral`` in the
+    repository's ``microA*nm/V^2`` sheet-unit convention. The minus sign and
+    factor one half are the exact reduction of WannierBerri's two ordered group
+    pairs; they are not a plotting or material-specific sign.
+    """
+
+    values = np.asarray(imn_integral)
+    if np.iscomplexobj(values) and np.any(np.imag(values) != 0.0):
+        raise ValueError(
+            "imn_integral must be the real WannierBerri internal Imn integral; "
+            "take the explicitly audited imaginary part of a complex amplitude first"
+        )
+    return float(WANNIERBERRI_POSITIVE_TRANSITION_PREFAC_UA_NM_PER_V2) * np.asarray(
+        np.real(values), dtype=float
+    )
+
+
+
 def conductivity_from_integral(
     integral: np.ndarray,
     *,
-    prefactor: float = SHIFT_CURRENT_PREFAC_UA_NM_PER_V2,
-    phase: complex = -1.0j,
+    prefactor: float,
+    phase: complex,
 ) -> np.ndarray:
-    """Apply a caller-chosen conductivity prefactor to an integrated kernel."""
+    """Apply an explicit caller-chosen conversion to an integrated kernel."""
 
     return np.real(complex(phase) * float(prefactor) * np.asarray(integral))
 
@@ -662,13 +953,13 @@ def spectra_from_transition_table(
     *,
     k_weight_nm_inv_sq: float,
     eta_ev: float,
-    prefactor: float = SHIFT_CURRENT_PREFAC_UA_NM_PER_V2,
-    prefactor_phase: complex = -1.0j,
+    prefactor: float,
+    prefactor_phase: complex,
     normalized_lorentzian: bool = True,
     include_bz_factor: bool = True,
     convention: ShiftCurrentConvention | None = None,
 ) -> dict[str, np.ndarray]:
-    """Build spectra for several named components from transition arrays."""
+    """Build spectra using an explicit global prefactor and phase."""
 
     spectra: dict[str, np.ndarray] = {}
     for name, (transition_energies, weights) in transition_table.items():
@@ -684,7 +975,11 @@ def spectra_from_transition_table(
             include_bz_factor=include_bz_factor,
             convention=convention,
         )
-        spectra[name] = conductivity_from_integral(integral, prefactor=prefactor, phase=prefactor_phase)
+        spectra[name] = conductivity_from_integral(
+            integral,
+            prefactor=prefactor,
+            phase=prefactor_phase,
+        )
     return spectra
 
 
@@ -733,6 +1028,7 @@ __all__ = [
     "Axis",
     "Component",
     "E_CHARGE_C",
+    "ExactDegenerateGroupTransition",
     "HBAR_EV_S",
     "HBAR_J_S",
     "HTG_LEGACY_CONVENTION",
@@ -746,18 +1042,22 @@ __all__ = [
     "ShiftCurrentConvention",
     "ShiftCurrentTensors",
     "WANNIERBERRI_INTERNAL_IMN_CONVENTION",
+    "WANNIERBERRI_POSITIVE_TRANSITION_PREFAC_UA_NM_PER_V2",
     "accumulate_fermi_omega_heatmap",
     "add_transitions_to_integral",
     "axis_index",
     "berry_connection_matrix",
     "component_amplitude_from_pair",
     "component_from_any",
+    "component_group_trace_amplitude",
+    "component_group_trace_kernel",
     "component_kernel_from_gauge_pair",
     "component_kernel_from_pair",
     "component_label",
     "component_transition_weight",
     "component_transition_weight_from_gauge_pair",
     "conductivity_from_integral",
+    "exact_degenerate_group_transition_weight",
     "fermi_occupation",
     "fermi_window_indices",
     "generalized_derivative_from_velocity",
@@ -769,4 +1069,5 @@ __all__ = [
     "second_derivative_matrices",
     "spectra_from_transition_table",
     "velocity_matrices",
+    "wannierberri_positive_transition_conductivity_from_imn",
 ]

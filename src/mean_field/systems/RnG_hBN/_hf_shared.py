@@ -8,27 +8,33 @@ import os
 import numpy as np
 
 from ...core.lattice import KPath
-from ...core.hf import (
-    average_reference_density as core_average_reference_density,
+from mean_field.core.hf.archive import average_reference_density as core_average_reference_density
+from mean_field.core.hf.engine import (
     DensityUpdateResult,
-    HartreeFockKernel,
-    HartreeFockProblem,
     HartreeFockRun,
     HartreeFockStepResult,
+    compute_oda_parameter,
+)
+from mean_field.core.hf.problem import (
+    HartreeFockKernel,
+    HartreeFockProblem,
+    run_hartree_fock_problem,
+)
+from mean_field.core.hf.occupations import (
     apply_random_projector_rotation,
     random_unitary_from_hermitian,
+    find_chemical_potential,
+    occupied_state_mask,
+)
+from mean_field.core.hf.overlap import (
     ComponentGroup,
     component_group_indices,
-    compute_hf_energy,
-    compute_oda_parameter,
     ProjectedWavefunctionBasis,
     calculate_projected_overlap_between,
     compute_density_overlap_trace_from_diagonal,
-    find_chemical_potential,
-    occupied_state_mask,
-    run_hartree_fock_problem,
     shift_wavefunction_grid,
 )
+from mean_field.core.hf.interaction import compute_hf_energy
 from .hamiltonian import build_hamiltonian, diagonalize_hamiltonian, valence_band_count
 from .interaction import RLGhBNInteractionParams, VALID_INTERACTION_SCHEMES, layer_coulomb_matrix_mev_nm2
 from .lattice import RLGhBNLattice, build_moire_k_grid

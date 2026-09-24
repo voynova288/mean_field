@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import argparse
-import json
+from collections.abc import Callable
 from pathlib import Path
+import sys
+from typing import Mapping
 
-import matplotlib.pyplot as plt
 import numpy as np
 
+import mean_field.crpa.chunk_merge as chunk_merge
 from mean_field.core.io import write_text_artifact
 from mean_field.crpa.diagnostics import write_all_epsilon_diagnostics
 from mean_field.crpa.workflow import load_crpa_result
-from mean_field.devtools._runtime import write_json
+from mean_field.runtime import ensure_not_running_compute_on_login_node
 from mean_field.workflows import (
     WorkflowJobSpec,
     WorkflowJobState,
@@ -21,73 +23,92 @@ from mean_field.workflows import (
     write_workflow_run_state,
 )
 
-
-def _load_json(path: Path) -> dict[str, object]:
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _save_npz(path: Path, **arrays: np.ndarray) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(path, **arrays)
-
-
-def _metadata_for_compare(metadata: object) -> dict[str, object]:
-    normalized = dict(metadata) if isinstance(metadata, dict) else {}
-    normalized.setdefault("legacy_zero_fill_test", False)
-    return normalized
-
-
-def _values_match_for_key(key: str, left: object, right: object) -> bool:
-    if key == "metadata":
-        return _metadata_for_compare(left) == _metadata_for_compare(right)
-    return left == right
-
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_DEVTOOL_DISPATCHER = (_REPO_ROOT / "scripts" / "mean_field_tools.py").resolve()
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Merge q-point TBG cRPA chunk artifact directories.")
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--chunk", type=Path, action="append", required=True, help="Chunk artifact directory.")
+    parser.add_argument(
+        "--allow-partial",
+        action="store_true",
+        help="Allow a nonempty, in-bounds, duplicate-free subset instead of exact lk^2 q coverage.",
+    )
     return parser
 
 
-def _merge_command(output_dir: Path, chunks: tuple[Path, ...]) -> tuple[str, ...]:
+def _merge_command(output_dir: Path, chunks: tuple[Path, ...], *, allow_partial: bool) -> tuple[str, ...]:
     command: list[str] = [
-        "python",
-        "-m",
-        "mean_field.devtools.merge_tbg_crpa_chunks",
+        sys.executable,
+        str(_DEVTOOL_DISPATCHER),
+        "merge_tbg_crpa_chunks",
         "--output-dir",
-        str(output_dir),
+        str(output_dir.resolve()),
     ]
     for chunk in chunks:
-        command.extend(["--chunk", str(chunk)])
+        command.extend(["--chunk", str(chunk.resolve())])
+    if allow_partial:
+        command.append("--allow-partial")
     return tuple(command)
 
 
-def _merge_workflow_manifest(output_dir: Path, chunks: tuple[Path, ...]) -> WorkflowManifest:
+def _merge_workflow_manifest(
+    output_dir: Path,
+    chunks: tuple[Path, ...],
+    *,
+    allow_partial: bool,
+) -> WorkflowManifest:
+    coverage_policy = chunk_merge.coverage_policy(allow_partial)
+    launch_cwd = Path.cwd().resolve()
+    resolved_output_dir = output_dir.resolve()
+    resolved_chunks = tuple(chunk.resolve() for chunk in chunks)
     chunk_jobs = tuple(
         WorkflowJobSpec(
             name=f"input_chunk_{index}",
-            command=("external", str(chunk)),
+            command=("provenance-only", str(chunk)),
             output_dir=chunk,
-            metadata={"kind": "input_chunk", "chunk_dir": str(chunk)},
+            metadata={
+                "kind": "input_chunk",
+                "chunk_dir": str(chunk),
+                "provenance_only": True,
+                "executable": False,
+                "working_directory": str(launch_cwd),
+                "launch_cwd": str(launch_cwd),
+                "replay_command_owner": str(_DEVTOOL_DISPATCHER),
+            },
         )
-        for index, chunk in enumerate(chunks)
+        for index, chunk in enumerate(resolved_chunks)
     )
     merge_job = WorkflowJobSpec(
         name="merge",
-        command=_merge_command(output_dir, chunks),
-        output_dir=output_dir,
+        command=_merge_command(resolved_output_dir, resolved_chunks, allow_partial=allow_partial),
+        output_dir=resolved_output_dir,
         dependencies=tuple(job.name for job in chunk_jobs),
-        metadata={"kind": "crpa_merge", "chunk_count": len(chunks)},
+        metadata={
+            "kind": "crpa_merge",
+            "chunk_count": len(chunks),
+            "allow_partial": bool(allow_partial),
+            "coverage_policy": coverage_policy,
+            "working_directory": str(launch_cwd),
+            "launch_cwd": str(launch_cwd),
+            "replay_command_owner": str(_DEVTOOL_DISPATCHER),
+        },
     )
     return WorkflowManifest(
         name="tbg_crpa_merge",
-        root=output_dir,
+        root=resolved_output_dir,
         jobs=chunk_jobs + (merge_job,),
         metadata={
             "system": "TBG",
             "workflow": "cRPA merge",
             "chunk_count": len(chunks),
+            "allow_partial": bool(allow_partial),
+            "coverage_policy": coverage_policy,
+            "working_directory": str(launch_cwd),
+            "launch_cwd": str(launch_cwd),
+            "replay_command_owner": str(_DEVTOOL_DISPATCHER),
+            "input_jobs": "provenance-only; not executable workflow jobs",
             "slurm_hint": "Run production cRPA merge/diagnostics on compute nodes or through Slurm if inputs are large.",
         },
     )
@@ -97,19 +118,30 @@ def _merge_workflow_state(
     manifest: WorkflowManifest,
     merge_status: str,
     *,
+    inputs_validated: bool = False,
     message: str | None = None,
+    coverage: Mapping[str, object] | None = None,
 ) -> WorkflowRunState:
     slurm_metadata = collect_slurm_metadata()
     merge_metadata = {"slurm": slurm_metadata} if slurm_metadata and merge_status != "pending" else {}
     states: list[WorkflowJobState] = []
     for job in manifest.jobs:
         if job.name.startswith("input_chunk_"):
-            states.append(WorkflowJobState(name=job.name, status="succeeded", message="input chunk present"))
+            states.append(
+                WorkflowJobState(
+                    name=job.name,
+                    status="succeeded" if inputs_validated else "pending",
+                    message="input chunk loaded and validated" if inputs_validated else "awaiting input validation",
+                    metadata={"provenance_only": True, "executable": False},
+                )
+            )
         elif job.name == "merge":
             states.append(WorkflowJobState(name=job.name, status=merge_status, message=message, metadata=merge_metadata))
         else:
             states.append(WorkflowJobState(name=job.name, status="pending"))
     state_metadata: dict[str, object] = {"manifest": "workflow_manifest.json"}
+    if coverage is not None:
+        state_metadata["coverage"] = dict(coverage)
     if slurm_metadata:
         state_metadata["slurm"] = slurm_metadata
     return WorkflowRunState(
@@ -128,127 +160,45 @@ def _write_merge_workflow_artifacts(
     write_workflow_run_state(state, output_dir / "workflow_run_state.json")
     write_text_artifact(state.to_markdown() + "\n", output_dir / "workflow_run_state.md")
 
-
-def _run_merge(args: argparse.Namespace) -> None:
-    chunks = [Path(item) for item in args.chunk]
+def _run_merge(
+    args: argparse.Namespace,
+    *,
+    on_validated: Callable[[Mapping[str, object]], None] | None = None,
+) -> None:
+    chunks = tuple(Path(item) for item in args.chunk)
     output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    params = _load_json(chunks[0] / "crpa_params.json")
-    params["metadata"] = _metadata_for_compare(params.get("metadata", {}))
-    q_indices_list = []
-    q_tilde_real_list = []
-    q_tilde_imag_list = []
-    chi0_list = []
-    epsilon_list = []
-    epsilon_inv_list = []
-    screened_v_list = []
-    effective_list = []
-    q_real_list = []
-    q_imag_list = []
-    q_abs_list = []
-    q_abs_nm_inv_list = []
-    q_shifts_ref = None
-
-    for chunk in chunks:
-        chunk_params = _load_json(chunk / "crpa_params.json")
-        comparable_keys = ("theta_deg", "lk", "lg", "q_lg", "bands_per_valley", "eta_mev", "coulomb_params", "metadata")
-        for key in comparable_keys:
-            if not _values_match_for_key(key, chunk_params.get(key), params.get(key)):
-                raise ValueError(f"Chunk {chunk} has incompatible {key}: {chunk_params.get(key)!r} != {params.get(key)!r}")
-
-        with np.load(chunk / "chi0_q.npz") as chi0_npz:
-            q_indices_list.append(np.asarray(chi0_npz["q_indices"], dtype=int))
-            q_tilde_real_list.append(np.asarray(chi0_npz["q_tilde_real"], dtype=float))
-            q_tilde_imag_list.append(np.asarray(chi0_npz["q_tilde_imag"], dtype=float))
-            chi0_list.append(np.asarray(chi0_npz["chi0"], dtype=np.complex128))
-            q_shifts = np.asarray(chi0_npz["q_shifts"], dtype=int)
-            if q_shifts_ref is None:
-                q_shifts_ref = q_shifts
-            elif not np.array_equal(q_shifts_ref, q_shifts):
-                raise ValueError(f"Chunk {chunk} has incompatible q_shifts")
-
-        with np.load(chunk / "dielectric_matrix.npz") as eps_npz:
-            epsilon_list.append(np.asarray(eps_npz["epsilon"], dtype=np.complex128))
-            epsilon_inv_list.append(np.asarray(eps_npz["epsilon_inv"], dtype=np.complex128))
-
-        with np.load(chunk / "screened_coulomb.npz") as screened_npz:
-            screened_v_list.append(np.asarray(screened_npz["screened_v"], dtype=np.complex128))
-
-        with np.load(chunk / "effective_epsilon.npz") as effective_npz:
-            effective_list.append(np.asarray(effective_npz["effective_epsilon"], dtype=float))
-            q_real_list.append(np.asarray(effective_npz["q_real"], dtype=float))
-            q_imag_list.append(np.asarray(effective_npz["q_imag"], dtype=float))
-            q_abs_list.append(np.asarray(effective_npz["q_abs"], dtype=float))
-            q_abs_nm_inv_list.append(np.asarray(effective_npz["q_abs_nm_inv"], dtype=float))
-
-    if q_shifts_ref is None:
-        raise ValueError("No chunks supplied")
-
-    q_indices = np.concatenate(q_indices_list, axis=0)
-    order = np.lexsort((q_indices[:, 0], q_indices[:, 1]))
-    q_indices = q_indices[order]
-    q_tilde_real = np.concatenate(q_tilde_real_list, axis=0)[order]
-    q_tilde_imag = np.concatenate(q_tilde_imag_list, axis=0)[order]
-    chi0 = np.concatenate(chi0_list, axis=0)[order]
-    epsilon = np.concatenate(epsilon_list, axis=0)[order]
-    epsilon_inv = np.concatenate(epsilon_inv_list, axis=0)[order]
-    screened_v = np.concatenate(screened_v_list, axis=0)[order]
-    effective = np.concatenate(effective_list, axis=0)[order]
-    q_real = np.concatenate(q_real_list, axis=0)[order]
-    q_imag = np.concatenate(q_imag_list, axis=0)[order]
-    q_abs = np.concatenate(q_abs_list, axis=0)[order]
-    q_abs_nm_inv = np.concatenate(q_abs_nm_inv_list, axis=0)[order]
-
-    params["q_point_count"] = int(q_indices.shape[0])
-    params["q_shift_count"] = int(q_shifts_ref.shape[0])
-    write_json(output_dir / "crpa_params.json", params)
-
-    _save_npz(
-        output_dir / "chi0_q.npz",
-        chi0=chi0,
-        q_indices=q_indices,
-        q_tilde_real=q_tilde_real,
-        q_tilde_imag=q_tilde_imag,
-        q_shifts=q_shifts_ref,
+    params, arrays, coverage = chunk_merge.load_and_validate_chunks(
+        chunks, allow_partial=bool(args.allow_partial)
     )
-    _save_npz(
-        output_dir / "dielectric_matrix.npz",
-        epsilon=epsilon,
-        epsilon_inv=epsilon_inv,
-        q_indices=q_indices,
-        q_shifts=q_shifts_ref,
-    )
-    epsilon_bn = float(params["coulomb_params"]["epsilon_bn"])
-    _save_npz(
-        output_dir / "effective_epsilon.npz",
-        effective_epsilon=effective,
-        epsilon_times_bn=effective * epsilon_bn,
-        q_abs=q_abs,
-        q_abs_nm_inv=q_abs_nm_inv,
-        q_real=q_real,
-        q_imag=q_imag,
-        q_indices=q_indices,
-        q_shifts=q_shifts_ref,
-    )
-    _save_npz(
-        output_dir / "screened_coulomb.npz",
-        screened_v=screened_v,
-        effective_epsilon=effective,
-        q_indices=q_indices,
-        q_shifts=q_shifts_ref,
-        q_abs_nm_inv=q_abs_nm_inv,
-        q_vectors_real=q_real,
-        q_vectors_imag=q_imag,
-    )
+    if on_validated is not None:
+        on_validated(coverage)
+
+    chunk_merge.write_merged_crpa_base_artifacts(params, arrays, coverage, output_dir)
+
+    effective = arrays["effective_epsilon"]
+    q_abs = arrays["q_abs"]
+    q_abs_nm_inv = arrays["q_abs_nm_inv"]
+    coulomb_params = params["coulomb_params"]
+    if not isinstance(coulomb_params, dict):
+        raise ValueError("Validated coulomb_params unexpectedly ceased to be a mapping")
+    epsilon_bn = float(coulomb_params["epsilon_bn"])
 
     np.savetxt(
         output_dir / "epsilon_vs_q.tsv",
-        np.column_stack([q_abs.reshape(-1), q_abs_nm_inv.reshape(-1), effective.reshape(-1), (effective * epsilon_bn).reshape(-1)]),
+        np.column_stack(
+            [
+                q_abs.reshape(-1),
+                q_abs_nm_inv.reshape(-1),
+                effective.reshape(-1),
+                (effective * epsilon_bn).reshape(-1),
+            ]
+        ),
         delimiter="\t",
         header="q_abs_dimless\tq_abs_nm_inv\teffective_epsilon\teffective_epsilon_times_epsilon_bn",
         comments="",
     )
+
+    import matplotlib.pyplot as plt
 
     q_flat = q_abs_nm_inv.reshape(-1)
     eps_flat = (effective * epsilon_bn).reshape(-1)
@@ -273,6 +223,15 @@ def _run_merge(args: argparse.Namespace) -> None:
         f"- q_lg: {params['q_lg']}",
         f"- q_point_count: {params['q_point_count']}",
         "",
+        "## Coverage",
+        "",
+        f"- allow_partial: {str(bool(coverage['allow_partial'])).lower()}",
+        f"- policy: {coverage['policy']}",
+        f"- complete: {str(bool(coverage['complete'])).lower()}",
+        f"- expected_q_point_count: {coverage['expected_q_point_count']}",
+        f"- actual_q_point_count: {coverage['q_point_count']}",
+        f"- missing_canonical_flat_indices: {coverage['missing_flat_indices']}",
+        "",
         "## Convention Metadata",
         "",
     ]
@@ -294,7 +253,11 @@ def _run_merge(args: argparse.Namespace) -> None:
     write_text_artifact("\n".join(report) + "\n", output_dir / "validation_report.md")
     diagnostic_summary = write_all_epsilon_diagnostics(load_crpa_result(output_dir), output_dir)
     print(f"[crpa-merge] wrote merged artifact to {output_dir}", flush=True)
-    print(f"[crpa-merge] q_point_count={params['q_point_count']} chunks={len(chunks)}", flush=True)
+    print(
+        f"[crpa-merge] q_point_count={params['q_point_count']} chunks={len(chunks)} "
+        f"coverage={coverage['policy']} complete={str(bool(coverage['complete'])).lower()}",
+        flush=True,
+    )
     print(
         "[crpa-merge] diagnostics "
         f"q_peak_nm_inv={diagnostic_summary.q_peak_nm_inv:.6g} "
@@ -304,32 +267,62 @@ def _run_merge(args: argparse.Namespace) -> None:
         flush=True,
     )
 
-
-
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
+    ensure_not_running_compute_on_login_node("TBG cRPA chunk merge and diagnostics")
+
     chunks = tuple(Path(item) for item in args.chunk)
     output_dir = Path(args.output_dir)
-    manifest = _merge_workflow_manifest(output_dir, chunks)
+    manifest = _merge_workflow_manifest(output_dir, chunks, allow_partial=bool(args.allow_partial))
     _write_merge_workflow_artifacts(
         output_dir,
         manifest,
         _merge_workflow_state(manifest, "running", message="cRPA merge started"),
     )
+    validated_coverage: dict[str, object] | None = None
+
+    def record_validated_inputs(coverage: Mapping[str, object]) -> None:
+        nonlocal validated_coverage
+        validated_coverage = dict(coverage)
+        _write_merge_workflow_artifacts(
+            output_dir,
+            manifest,
+            _merge_workflow_state(
+                manifest,
+                "running",
+                inputs_validated=True,
+                message="all input chunks loaded and validated; cRPA merge running",
+                coverage=coverage,
+            ),
+        )
+
     try:
-        _run_merge(args)
+        _run_merge(args, on_validated=record_validated_inputs)
     except Exception as exc:
         _write_merge_workflow_artifacts(
             output_dir,
             manifest,
-            _merge_workflow_state(manifest, "failed", message=str(exc)),
+            _merge_workflow_state(
+                manifest,
+                "failed",
+                inputs_validated=validated_coverage is not None,
+                message=str(exc),
+                coverage=validated_coverage,
+            ),
         )
         raise
     _write_merge_workflow_artifacts(
         output_dir,
         manifest,
-        _merge_workflow_state(manifest, "succeeded", message="cRPA merge outputs written"),
+        _merge_workflow_state(
+            manifest,
+            "succeeded",
+            inputs_validated=True,
+            message="cRPA merge outputs written",
+            coverage=validated_coverage,
+        ),
     )
+
 
 if __name__ == "__main__":
     main()

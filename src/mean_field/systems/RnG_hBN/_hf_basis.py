@@ -858,14 +858,6 @@ def _remote_average_nt_weights(remote_basis_data: RLGhBNProjectedBasisData, weig
             nt_weights[idx[ispin, iflavor, :]] = weights
     return nt_weights
 
-def _remote_average_density_delta(remote_basis_data: RLGhBNProjectedBasisData, weights: np.ndarray) -> np.ndarray:
-    nt_weights = _remote_average_nt_weights(remote_basis_data, weights)
-    density = np.zeros((remote_basis_data.nt, remote_basis_data.nt, remote_basis_data.nk), dtype=np.complex128)
-    diagonal = np.arange(remote_basis_data.nt, dtype=int)
-    for ik in range(remote_basis_data.nk):
-        density[diagonal, diagonal, ik] = nt_weights
-    return density
-
 def _contract_remote_diagonal_fock_term(
     left_overlap: np.ndarray,
     nt_weights: np.ndarray,

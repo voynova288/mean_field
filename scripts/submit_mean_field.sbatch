@@ -1,7 +1,6 @@
 #!/bin/bash
 # Usage:
-#   sbatch scripts/submit_mean_field.sbatch python scripts/mean_field_tools.py hf compare-case theta_120_nu_-1_ivc_ground --output-dir results/demo
-#   sbatch -p test -c 8 --mem=32G scripts/submit_mean_field.sbatch julia scripts/mean_field_tools.jl export_b0_parameter_reference_from_julia
+#   sbatch scripts/submit_mean_field.sbatch python scripts/mean_field_tools.py <command> [args...]
 
 #SBATCH -J mean_field
 #SBATCH --account=hmt03
@@ -11,7 +10,6 @@
 #SBATCH --cpus-per-task=56
 #SBATCH --mem=0
 #SBATCH --exclusive
-#SBATCH -t 04:00:00
 #SBATCH -o logs/mean_field_%j.out
 #SBATCH -e logs/mean_field_%j.err
 

@@ -11,7 +11,7 @@ into the `Mean_Field` layered framework.
 
 Reference: `/data/home/ziyuzhu/TBG_HartreeFock/2310.15982v3.pdf`, SI Sec. III.
 
-Generic finite-magnetic-field bookkeeping — rational fluxes, magnetic meshes, reciprocal-shell shifts, and Streda/Diophantine fillings — lives in `mean_field.core.magnetic_field`. Generic finite-B Hartree-Fock calculation — state/input bundles, stored-projector initialization, density updates, screened interaction contractions, full and tL/IKS reduced kernels, SCF/run helpers, and summaries — lives in `mean_field.core.hf.finite_field`. This TBG package re-exports those helpers for backward compatibility while keeping only BM/LL spectrum construction, TBG projected-overlap assembly, spectrum-to-core adapter APIs, and Fig. 6 paper bookkeeping in the TBG system layer.
+Generic finite-magnetic-field bookkeeping — rational fluxes, magnetic meshes, reciprocal-shell shifts, and Streda/Diophantine fillings — lives in `mean_field.core.magnetic_field`. Generic finite-B Hartree-Fock calculation — state/input bundles, stored-projector initialization, density updates, screened interaction contractions, full and tL/IKS reduced kernels, SCF/run helpers, and summaries — lives in `mean_field.core.hf.finite_field`. The TBG package root exposes only typed spectrum/HF lifecycle inputs and results. Formula helpers and generic finite-B operations must be imported from their explicit `spectrum` or common-core owner.
 
 ## Layering
 
@@ -32,7 +32,7 @@ Generic finite-magnetic-field bookkeeping — rational fluxes, magnetic meshes, 
   - supplies TBG magnetic k-vectors and normalization counts from `mean_field.core.magnetic_field`;
   - provides no-I/O assembly helpers for finite-B HF inputs from K/K′ spectra or BM parameters: `build_finite_field_hf_state_from_spectra`, `build_full_flavor_overlap_data_from_spectra`, and `build_finite_field_hf_inputs_from_spectra` / `build_finite_field_hf_inputs_from_parameters`;
   - keeps only TBG/paper Fig. 6 Streda-line conveniences (`paper_fig6_finite_b_fluxes`, `paper_fig6_branch_cases`).
-  Use `reduced_translation=True` on the unified builders for the reduced tL-symmetric/IKS path; the older `build_tl_symmetric_*` names are compatibility wrappers.
+  Use `reduced_translation=True` on the unified builders for the reduced tL-symmetric/IKS path; system-level `build_tl_symmetric_*` forwarding wrappers are retired.
 - JLD2 metadata production remains outside this module; adapters should save/load the returned arrays in workflow code rather than putting file I/O in the core physics layer.
 
 ## Formula map
@@ -55,34 +55,18 @@ The Python implementation keeps the same stored-projector contraction used by th
 from mean_field.systems.tbg.finite_field import (
     FiniteFieldBMParameters,
     MagneticFlux,
-    compute_magnetic_spectrum,
-    compute_magnetic_spectrum_sweep,
-    paper_hofstadter_fluxes,
-    red_chern_minus_one_group_mask,
-    compute_coulomb_overlap,
-    compute_coulomb_overlap_fast,
-    FiniteFieldHartreeFockInputBundle,
+    MagneticSpectrumResult,
     FiniteFieldHartreeFockInputs,
     FiniteFieldHartreeFockState,
-    FiniteFieldTLSymmetricHartreeFockInputs,
     MagneticOverlapData,
-    magnetic_shell_shifts,
-    finite_field_diophantine_filling,
-    paper_fig6_finite_b_fluxes,
-    paper_fig6_branch_cases,
-    build_h0_from_hofstadter_metadata,
-    build_finite_field_hf_state_from_spectra,
-    build_full_flavor_overlap_data_from_spectra,
-    build_finite_field_hf_inputs_from_spectra,
+    compute_magnetic_spectrum,
     build_finite_field_hf_inputs_from_parameters,
-    build_finite_field_hf_kernel,
-    build_finite_field_hf_kernel_from_inputs,
-    build_tl_symmetric_finite_field_hf_kernel,
-    run_finite_field_hartree_fock,
     run_finite_field_hartree_fock_from_inputs,
     summarize_finite_field_hartree_fock,
 )
 ```
+
+Import lower-level LL/spectrum formulas from `mean_field.systems.tbg.finite_field.spectrum`, TBG spectrum-to-core adapters and Fig. 6 helpers from `mean_field.systems.tbg.finite_field.hf`, generic magnetic bookkeeping from `mean_field.core.magnetic_field`, and generic finite-B HF kernels from `mean_field.core.hf.finite_field`.
 
 Use `compute_magnetic_spectrum` for a single non-interacting Hofstadter spectrum corresponding to `bmLL.jl` / `bmLL_IKS.jl`. Use `compute_magnetic_spectrum_sweep` for Fig.3(a)-style magnetic spectra over the paper flux grid (`q<=12`, `phi<=1/2` by default) with author `nLL=25*q/p`, author `nq`, and the red C=-1 subband-group mask. The returned `MagneticSpectrumSweepResult.as_point_table()` gives flattened arrays ready for paper-style scatter plots without doing file I/O.
 

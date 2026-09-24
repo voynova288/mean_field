@@ -26,14 +26,16 @@ from mean_field.core.hf.contracts_bridge import density_state_from_delta
 
 from .model import HTGModel
 from .params import InteractionParams
-from .supercell import (
-    HTGSupercell,
-    HTGSupercellHartreeFockRun,
-    HTGSupercellProjectedBasisData,
+from ._supercell_basis import (
     _supercell_reference_density_blocks,
     htg_supercell_filling_from_density,
     htg_supercell_occupied_count_per_k,
-    run_htg_supercell_hf,
+)
+from ._supercell_runner import run_htg_supercell_hf
+from ._supercell_types import (
+    HTGSupercell,
+    HTGSupercellHartreeFockRun,
+    HTGSupercellProjectedBasisData,
 )
 
 if TYPE_CHECKING:
@@ -414,7 +416,7 @@ def _validate_public_hf_config_matches_supercell_config(
 def run_htg_supercell_hf_config_adapter(model: object, config: "HFConfig", **kwargs: Any) -> "HFResult | None":
     """Run folded-supercell HTG HF from an explicit system config."""
 
-    if not isinstance(model, HTGModel):
+    if type(model) is not HTGModel:
         return None
     if "htg_config" in kwargs and "htg_supercell_config" in kwargs:
         raise TypeError("Pass only one of htg_config or htg_supercell_config")
@@ -426,7 +428,7 @@ def run_htg_supercell_hf_config_adapter(model: object, config: "HFConfig", **kwa
             "htg_supercell_config=HTGSupercellRunHFConfig(...); generic HFConfig -> HTG supercell runner mapping is not implemented"
         )
     htg_supercell_config = kwargs.pop("htg_supercell_config")
-    if not isinstance(htg_supercell_config, HTGSupercellRunHFConfig):
+    if type(htg_supercell_config) is not HTGSupercellRunHFConfig:
         raise TypeError(
             "htg_supercell_config must be HTGSupercellRunHFConfig, got "
             f"{type(htg_supercell_config).__name__}"

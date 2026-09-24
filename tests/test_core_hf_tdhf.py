@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mean_field.core.hf import (
+from mean_field.core.hf.tdhf import (
     ParticleHolePair,
     TDHFMatrices,
     TDHFStructureResiduals,

@@ -8,8 +8,6 @@ from typing import Literal, Mapping
 from mean_field.core.io import write_json_artifact
 
 WorkflowJobStatus = Literal["pending", "running", "succeeded", "failed", "skipped"]
-TERMINAL_WORKFLOW_STATUSES: tuple[WorkflowJobStatus, ...] = ("succeeded", "failed", "skipped")
-SUCCESS_WORKFLOW_STATUSES: tuple[WorkflowJobStatus, ...] = ("succeeded",)
 
 
 _SLURM_METADATA_KEYS: dict[str, str] = {
@@ -132,10 +130,6 @@ class WorkflowJobState:
             object.__setattr__(self, "return_code", int(self.return_code))
 
     @property
-    def is_terminal(self) -> bool:
-        return self.status in TERMINAL_WORKFLOW_STATUSES
-
-    @property
     def failed(self) -> bool:
         return self.status == "failed"
 
@@ -164,9 +158,6 @@ class WorkflowRunState:
         duplicates = sorted({name for name in names if names.count(name) > 1})
         if duplicates:
             raise ValueError(f"Duplicate workflow state names: {duplicates}")
-
-    def by_name(self) -> dict[str, WorkflowJobState]:
-        return {job.name: job for job in self.jobs}
 
     def failed_jobs(self) -> tuple[WorkflowJobState, ...]:
         return tuple(job for job in self.jobs if job.failed)
@@ -198,50 +189,10 @@ class WorkflowRunState:
         return "\n".join(lines)
 
 
-def _state_map(states: Mapping[str, WorkflowJobState] | WorkflowRunState | tuple[WorkflowJobState, ...]) -> dict[str, WorkflowJobState]:
-    if isinstance(states, WorkflowRunState):
-        return states.by_name()
-    if isinstance(states, Mapping):
-        return dict(states)
-    return {state.name: state for state in states}
 
 
-def ready_workflow_jobs(
-    manifest: WorkflowManifest,
-    states: Mapping[str, WorkflowJobState] | WorkflowRunState | tuple[WorkflowJobState, ...] = (),
-    *,
-    success_statuses: tuple[WorkflowJobStatus, ...] = SUCCESS_WORKFLOW_STATUSES,
-) -> tuple[WorkflowJobSpec, ...]:
-    """Return jobs not yet started whose dependencies have succeeded."""
-
-    by_name = _state_map(states)
-    successes = set(success_statuses)
-    ready: list[WorkflowJobSpec] = []
-    for job in manifest.jobs:
-        current = by_name.get(job.name)
-        if current is not None and current.status != "pending":
-            continue
-        if all((state := by_name.get(dep)) is not None and state.status in successes for dep in job.dependencies):
-            ready.append(job)
-    return tuple(ready)
 
 
-def blocked_workflow_jobs(
-    manifest: WorkflowManifest,
-    states: Mapping[str, WorkflowJobState] | WorkflowRunState | tuple[WorkflowJobState, ...] = (),
-) -> tuple[WorkflowJobSpec, ...]:
-    """Return pending jobs with at least one failed or skipped direct dependency."""
-
-    by_name = _state_map(states)
-    blockers = {"failed", "skipped"}
-    blocked: list[WorkflowJobSpec] = []
-    for job in manifest.jobs:
-        current = by_name.get(job.name)
-        if current is not None and current.status != "pending":
-            continue
-        if any((state := by_name.get(dep)) is not None and state.status in blockers for dep in job.dependencies):
-            blocked.append(job)
-    return tuple(blocked)
 
 
 def write_workflow_manifest(manifest: WorkflowManifest, path: str | Path) -> Path:
@@ -253,16 +204,12 @@ def write_workflow_run_state(state: WorkflowRunState, path: str | Path) -> Path:
 
 
 __all__ = [
-    "SUCCESS_WORKFLOW_STATUSES",
-    "TERMINAL_WORKFLOW_STATUSES",
     "WorkflowJobSpec",
     "WorkflowJobState",
     "WorkflowJobStatus",
     "WorkflowManifest",
     "WorkflowRunState",
     "collect_slurm_metadata",
-    "blocked_workflow_jobs",
-    "ready_workflow_jobs",
     "write_workflow_manifest",
     "write_workflow_run_state",
 ]

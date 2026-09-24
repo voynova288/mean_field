@@ -24,7 +24,7 @@ from typing import Any
 
 import numpy as np
 
-from mean_field.core.hf import ParticleHolePair
+from mean_field.core.hf.tdhf import ParticleHolePair
 from mean_field.core.hf.tdhf_signed import (
     TDHFGenericSignedQ,
     TDHFGenericSignedQSector,

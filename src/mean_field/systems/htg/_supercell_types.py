@@ -1,6 +1,16 @@
 from __future__ import annotations
 
-from ._supercell_shared import *  # noqa: F401,F403
+from dataclasses import dataclass, field
+
+import numpy as np
+
+from mean_field.core.hf.engine import HartreeFockRun
+from mean_field.core.hf.overlap import HFOverlapBlockSet, ProjectedWavefunctionBasis
+from mean_field.core.supercell import IntegerSupercell
+
+from .lattice import HTGLattice, KPath
+from .model import HTGModel
+from .params import InteractionParams
 
 class HTGSupercell(IntegerSupercell):
     """Integer supercell for folded-BZ HTG projected Hartree-Fock."""
@@ -161,4 +171,13 @@ class HTGSupercellHFWavefunctionGrid:
     band_indices: tuple[int, ...]
     basis_data: HTGSupercellProjectedBasisData
 
-__all__ = [name for name in globals() if not name.startswith('__')]
+__all__ = [
+    "HTGSupercell",
+    "HTGSupercellProjectedBasisData",
+    "HTGSupercellHartreeFockState",
+    "HTGSupercellHartreeFockRun",
+    "HTGSupercellGroundStateScan",
+    "HTGSupercellPathResult",
+    "HTGSupercellSCFGridPathSamples",
+    "HTGSupercellHFWavefunctionGrid",
+]

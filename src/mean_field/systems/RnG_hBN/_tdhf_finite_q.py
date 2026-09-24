@@ -1192,27 +1192,4 @@ def _filter_rlg_hbn_tdhf_finite_q_pairs(
         raise ValueError(f"finite-q channel must be one of {tuple(groups)}, got {channel!r}")
     return tuple(ph_pairs[index] for index in groups[str(channel)])
 
-def _filter_rlg_hbn_tdhf_finite_q_shortcut_pairs(
-    all_pairs: Sequence[ParticleHolePair],
-    channel: str,
-) -> tuple[ParticleHolePair, ...]:
-    ph_pairs = tuple(all_pairs)
-    if channel not in {"intervalley", "interspin", "inter_spin_valley"}:
-        raise ValueError(f"finite-q shortcut channel must be a flavor-flip channel, got {channel!r}")
-    groups: dict[str, list[int]] = {"intervalley": [], "interspin": [], "inter_spin_valley": []}
-    for index, pair in enumerate(ph_pairs):
-        particle = pair.particle_flavor
-        hole = pair.hole_flavor
-        if not isinstance(particle, SpinValleyFlavor) or not isinstance(hole, SpinValleyFlavor):
-            raise ValueError("finite-q pairs must carry SpinValleyFlavor metadata")
-        same_spin = particle.spin == hole.spin
-        same_valley = particle.valley == hole.valley
-        if same_spin and not same_valley:
-            groups["intervalley"].append(index)
-        elif not same_spin and same_valley:
-            groups["interspin"].append(index)
-        elif not same_spin and not same_valley:
-            groups["inter_spin_valley"].append(index)
-    return tuple(ph_pairs[index] for index in groups[str(channel)])
-
 __all__ = [name for name in globals() if not name.startswith('__')]

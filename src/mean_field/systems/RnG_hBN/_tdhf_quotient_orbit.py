@@ -5,7 +5,11 @@ from typing import Any
 
 import numpy as np
 
-from mean_field.core.hf import ParticleHolePair, TDHFMatrices, TDHFStructureResiduals
+from mean_field.core.hf.tdhf import (
+    ParticleHolePair,
+    TDHFMatrices,
+    TDHFStructureResiduals,
+)
 
 from ._hf_interaction_path import build_rlg_hbn_layer_overlap_blocks
 from ._hf_types import (

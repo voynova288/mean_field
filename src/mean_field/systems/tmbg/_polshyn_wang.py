@@ -1,8 +1,40 @@
 from __future__ import annotations
 
-from ._polshyn_shared import *  # noqa: F401,F403
-from ._polshyn_types import *  # noqa: F401,F403
-from ._polshyn_filling import *  # noqa: F401,F403
+from collections.abc import Iterable
+from typing import Any
+
+import numpy as np
+
+from mean_field.core.hf.coulomb import (
+    real_space_cell_area_nm2_from_reciprocal,
+    screened_coulomb,
+    screened_coulomb_matrix,
+)
+from mean_field.core.hf.engine import DensityUpdateResult
+from mean_field.core.hf.interaction import (
+    build_projected_interaction_hamiltonian,
+    compute_hf_energy,
+)
+from mean_field.core.hf.occupations import (
+    flat_sector_indices as _core_flat_sector_indices,
+    flatten_sector_blocks as _core_flatten_sector_blocks,
+    unflatten_sector_blocks as _core_unflatten_sector_blocks,
+    unflatten_sector_energies as _core_unflatten_sector_energies,
+)
+from mean_field.core.hf.overlap import (
+    HFOverlapBlockSet,
+    ProjectedWavefunctionBasis,
+    calculate_projected_overlap_between,
+    diagonal_overlap_blocks,
+)
+from mean_field.core.hf.problem import (
+    HartreeFockKernel,
+    HartreeFockProblem,
+    run_hartree_fock_problem,
+)
+
+from ._polshyn_types import PolshynProjectedBasis, PolshynWangHFState
+from .lattice import TMBGLattice
 
 def wang_stored_density_from_sector_blocks(density_blocks: np.ndarray) -> np.ndarray:
     """Convert conventional sector density blocks to Wang/Xiaoyu stored layout."""
@@ -432,4 +464,22 @@ def moire_cell_area_nm2(lattice: TMBGLattice, *, area_ratio: int = 1) -> float:
     primitive_area = real_space_cell_area_nm2_from_reciprocal(lattice.g_m1, lattice.g_m2)
     return float(area_ratio) * float(primitive_area)
 
-__all__ = [name for name in globals() if not name.startswith('__')]
+__all__ = [
+    "wang_stored_density_from_sector_blocks",
+    "scaled_overlap_blocks",
+    "overlap_blocks_with_hartree_q0_zeroed",
+    "wang_projected_wavefunction_basis",
+    "flatten_sector_blocks",
+    "unflatten_sector_blocks",
+    "unflatten_sector_energies",
+    "wang_density_from_fixed_sector_occupations",
+    "build_wang_overlap_blocks",
+    "build_wang_hf_problem",
+    "run_projected_hf_scf_wang",
+    "wang_sector_density_blocks",
+    "wang_sector_hamiltonian_blocks",
+    "wang_sector_energy_blocks",
+    "translation_order_parameters",
+    "estimate_fermi_level_from_sector_energies",
+    "moire_cell_area_nm2",
+]

@@ -1,7 +1,14 @@
 from __future__ import annotations
 
-from ._polshyn_shared import *  # noqa: F401,F403
-from ._polshyn_types import *  # noqa: F401,F403
+import numpy as np
+
+from ...core.supercell import (
+    fixed_sector_occupation_counts,
+    folded_indices_for_primitive_band,
+    folded_reference_diagonal_by_primitive_index,
+    primitive_filling_from_occupation_counts,
+)
+from ._polshyn_types import PolshynFillingSummary
 
 def reference_diagonal_for_projected_indices(projected_indices: tuple[int, ...], target_band_index: int) -> np.ndarray:
     """Reference density for Polshyn's conduction-band filling convention.
@@ -137,4 +144,10 @@ def cdw_density_blocks(
                 density[ispin, ieta, :, :, ik] = projector - reference
     return density
 
-__all__ = [name for name in globals() if not name.startswith('__')]
+__all__ = [
+    "reference_diagonal_for_projected_indices",
+    "occupation_counts_nu_7over2",
+    "primitive_nu_from_counts",
+    "polshyn_nu_7over2_filling_summary",
+    "cdw_density_blocks",
+]

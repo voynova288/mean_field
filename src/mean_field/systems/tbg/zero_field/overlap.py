@@ -2,15 +2,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from ....core.hf import (
-    OverlapDiagnostics,
+from mean_field.core.hf.overlap import (
     ProjectedWavefunctionBasis,
     calculate_projected_overlap,
     calculate_projected_overlap_between,
     calculate_projected_overlap_compact,
-    compute_density_overlap_trace,
-    summarize_overlap,
-    validate_projected_basis_compatibility,
 )
 from .model import BMSolution
 
@@ -24,13 +20,6 @@ def projected_basis_from_bm_solution(solution: BMSolution) -> ProjectedWavefunct
         local_basis_size=solution.nlocal,
         name="tbg_bm",
         boundary_mode=boundary_mode,
-    )
-
-
-def _validate_overlap_compatibility(target: BMSolution, source: BMSolution) -> None:
-    validate_projected_basis_compatibility(
-        projected_basis_from_bm_solution(target),
-        projected_basis_from_bm_solution(source),
     )
 
 

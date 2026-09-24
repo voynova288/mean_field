@@ -1,0 +1,453 @@
+{
+  "artifact_closure": {
+    "actual_output_names": [
+      "COMPLETION_RECORD_V7.json",
+      "FORMULA_NOTE_V7.md",
+      "OUTPUT_MANIFEST_V7.json",
+      "PARTITION_INDEPENDENT_FOURIER_METRICS.csv",
+      "PARTITION_INDEPENDENT_PHASE_PAIRS.csv",
+      "PARTITION_SPECIFIC_NONCANONICAL_WS_ULT.csv",
+      "REPORT_V7.md",
+      "analysis_arrays_v7.npz",
+      "analysis_v7.json",
+      "covariance_phase_diagnostics.png",
+      "tsb_charge_3x3.png",
+      "tsb_total_physical_spin_3x3.png"
+    ],
+    "all_execution_binding_hash_checks_pass": true,
+    "all_manifest_hash_size_mode_checks_pass": true,
+    "completion_record_matches_sentinel": true,
+    "completion_record_mode": "0444",
+    "completion_record_sha256": "7f2fe81ff2ea72b4176efa0aa7bb818df52e0ae4c11d010092ebdac536807d39",
+    "execution_binding_hash_checks": {
+      "approval_sha256": {
+        "expected": "65aa78935328065dd21fc9b2a44690fa8c190c791b9f59cb4232f0ce0762a2d9",
+        "matches": true,
+        "observed": "65aa78935328065dd21fc9b2a44690fa8c190c791b9f59cb4232f0ce0762a2d9",
+        "path": "/data/home/ziyuzhu/Mean_Field/reviews/ptse2_partition_independent_tsb_v7/REVIEW_APPROVAL.json"
+      },
+      "attested_chain_sha256": {
+        "expected": "34c220c59aeadc0b294f5b335a590917f1238de59ebcc1e4dbd079007ac44eff",
+        "matches": true,
+        "observed": "34c220c59aeadc0b294f5b335a590917f1238de59ebcc1e4dbd079007ac44eff",
+        "path": "/data/home/ziyuzhu/Mean_Field/results/ptse2_openmx_screened_hf/source_data/ptse2_fractional_fillings_v1/7p340993_epsilon5_15_fillings_v1/partition_independent_tsb_v7/runtime/control/ATTESTED_CHAIN.json"
+      },
+      "release_verification_sha256": {
+        "expected": "25a2b38720ea4080b61b5cd5658894cceae5047aa5c3661fe1fa13ff0a9e5bdc",
+        "matches": true,
+        "observed": "25a2b38720ea4080b61b5cd5658894cceae5047aa5c3661fe1fa13ff0a9e5bdc",
+        "path": "/data/home/ziyuzhu/Mean_Field/results/ptse2_openmx_screened_hf/source_data/ptse2_fractional_fillings_v1/7p340993_epsilon5_15_fillings_v1/partition_independent_tsb_v7/runtime/control/analysis.RELEASE_VERIFICATION.json"
+      },
+      "resource_gate_sha256": {
+        "expected": "8a7dc8e2a3bb637588180517027d56d7c3c2932c67ca29ccfa8ef84ce5c02a67",
+        "matches": true,
+        "observed": "8a7dc8e2a3bb637588180517027d56d7c3c2932c67ca29ccfa8ef84ce5c02a67",
+        "path": "/data/home/ziyuzhu/Mean_Field/results/ptse2_openmx_screened_hf/source_data/ptse2_fractional_fillings_v1/7p340993_epsilon5_15_fillings_v1/partition_independent_tsb_v7/runtime/job_516988/resource_gate.json"
+      },
+      "running_receipt_sha256": {
+        "expected": "ad4186b3e8e0691984834b90369c473edd5771fbd203cee6b8463364f1e7a1bb",
+        "matches": true,
+        "observed": "ad4186b3e8e0691984834b90369c473edd5771fbd203cee6b8463364f1e7a1bb",
+        "path": "/data/home/ziyuzhu/Mean_Field/results/ptse2_openmx_screened_hf/source_data/ptse2_fractional_fillings_v1/7p340993_epsilon5_15_fillings_v1/partition_independent_tsb_v7/runtime/control/analysis.RUNNING_RECEIPT.json"
+      },
+      "runtime_attestation_sha256": {
+        "expected": "3410a0ffff3d8738a81338672a71e84518638112c6ad61595ae43d90fc632c37",
+        "matches": true,
+        "observed": "3410a0ffff3d8738a81338672a71e84518638112c6ad61595ae43d90fc632c37",
+        "path": "/data/home/ziyuzhu/Mean_Field/results/ptse2_openmx_screened_hf/source_data/ptse2_fractional_fillings_v1/7p340993_epsilon5_15_fillings_v1/partition_independent_tsb_v7/runtime/job_516988/RUNTIME_ATTESTATION_V7.json"
+      },
+      "source_frozen_sha256": {
+        "expected": "1c7e2955a2c4d3842f647b6faa8632789b0a565be9c06b8ce4dd196b14261217",
+        "matches": true,
+        "observed": "1c7e2955a2c4d3842f647b6faa8632789b0a565be9c06b8ce4dd196b14261217",
+        "path": "/data/home/ziyuzhu/Mean_Field/results/ptse2_openmx_screened_hf/source_data/ptse2_fractional_fillings_v1/7p340993_epsilon5_15_fillings_v1/partition_independent_tsb_v7/SOURCE_FROZEN.json"
+      },
+      "submission_receipt_sha256": {
+        "expected": "4f6eda5923d94dafab13a16792b1e3c32fb4056500a608b5013062defdeadec5",
+        "matches": true,
+        "observed": "4f6eda5923d94dafab13a16792b1e3c32fb4056500a608b5013062defdeadec5",
+        "path": "/data/home/ziyuzhu/Mean_Field/results/ptse2_openmx_screened_hf/source_data/ptse2_fractional_fillings_v1/7p340993_epsilon5_15_fillings_v1/partition_independent_tsb_v7/runtime/control/analysis.SUBMISSION_RECEIPT.json"
+      }
+    },
+    "execution_bindings_equal_across_manifest_completion_sentinel_analysis": true,
+    "figures": {
+      "covariance_phase_diagnostics.png": {
+        "bit_depth": 8,
+        "color_type": 6,
+        "compression": 0,
+        "filter": 0,
+        "height": 2338,
+        "interlace": 0,
+        "mode": "0444",
+        "sha256": "4ff89d2c6023ba3db7dc35307e7b5cf5511e3565ceabe69748d81fe36f349e22",
+        "size_bytes": 250964,
+        "software": "source-bound partition_independent_tsb_v7",
+        "width": 3168
+      },
+      "tsb_charge_3x3.png": {
+        "bit_depth": 8,
+        "color_type": 6,
+        "compression": 0,
+        "filter": 0,
+        "height": 1258,
+        "interlace": 0,
+        "mode": "0444",
+        "sha256": "929234b7cc33596707479f38bc031d0d0b349895dfd4e2c667b5e896dba4ca02",
+        "size_bytes": 583779,
+        "software": "source-bound partition_independent_tsb_v7",
+        "width": 2555
+      },
+      "tsb_total_physical_spin_3x3.png": {
+        "bit_depth": 8,
+        "color_type": 6,
+        "compression": 0,
+        "filter": 0,
+        "height": 1558,
+        "interlace": 0,
+        "mode": "0444",
+        "sha256": "69e877ab09687b0eb759a5e05dcf7bc9869d0f54543e572f4b323c6b028b68ff",
+        "size_bytes": 622621,
+        "software": "source-bound partition_independent_tsb_v7",
+        "width": 1254
+      }
+    },
+    "manifest_file_checks": {
+      "FORMULA_NOTE_V7.md": {
+        "mode": "0444",
+        "regular_no_symlink": true,
+        "sha256_matches": true,
+        "size_matches": true
+      },
+      "PARTITION_INDEPENDENT_FOURIER_METRICS.csv": {
+        "mode": "0444",
+        "regular_no_symlink": true,
+        "sha256_matches": true,
+        "size_matches": true
+      },
+      "PARTITION_INDEPENDENT_PHASE_PAIRS.csv": {
+        "mode": "0444",
+        "regular_no_symlink": true,
+        "sha256_matches": true,
+        "size_matches": true
+      },
+      "PARTITION_SPECIFIC_NONCANONICAL_WS_ULT.csv": {
+        "mode": "0444",
+        "regular_no_symlink": true,
+        "sha256_matches": true,
+        "size_matches": true
+      },
+      "REPORT_V7.md": {
+        "mode": "0444",
+        "regular_no_symlink": true,
+        "sha256_matches": true,
+        "size_matches": true
+      },
+      "analysis_arrays_v7.npz": {
+        "mode": "0444",
+        "regular_no_symlink": true,
+        "sha256_matches": true,
+        "size_matches": true
+      },
+      "analysis_v7.json": {
+        "mode": "0444",
+        "regular_no_symlink": true,
+        "sha256_matches": true,
+        "size_matches": true
+      },
+      "covariance_phase_diagnostics.png": {
+        "mode": "0444",
+        "regular_no_symlink": true,
+        "sha256_matches": true,
+        "size_matches": true
+      },
+      "tsb_charge_3x3.png": {
+        "mode": "0444",
+        "regular_no_symlink": true,
+        "sha256_matches": true,
+        "size_matches": true
+      },
+      "tsb_total_physical_spin_3x3.png": {
+        "mode": "0444",
+        "regular_no_symlink": true,
+        "sha256_matches": true,
+        "size_matches": true
+      }
+    },
+    "manifest_matches_completion": true,
+    "manifest_matches_sentinel": true,
+    "output_directory_exact_inventory": true,
+    "output_directory_mode": "0555",
+    "output_manifest_mode": "0444",
+    "output_manifest_sha256": "d129112501964c4aee3c4a2be6c6da25a3e3755e42a94989f9bc5edd9181bf76",
+    "scientific_input_hashes": {
+      "matched_R6.npz": "a83e89e760f4af9e3d177282e49d890725d10620428ce3b59a1e8dbfb866c3f8",
+      "regional_integrals_exact.json": "92f88127d67a79f1e5e9757e7e394e8fbb61c579232c22d16617df1f16d13977",
+      "summary.json": "4e9e7705e56bf02ae15f1ca9d224c0b8d77a5c6ca6bfbe25b9d25b5239fc86a1"
+    },
+    "scientific_input_hashes_equal_across_config_completion_analysis": true,
+    "sentinel_claims_last_namespace_operation": true,
+    "sentinel_mode": "0400",
+    "sentinel_output_directory_exact": true,
+    "source_inputs_used_by_recompute_match_config": true,
+    "stderr_zero_bytes": true
+  },
+  "independent_recompute": {
+    "area_nm2": 21.809962662515687,
+    "corrected_WS_ULT": {
+      "A_hbar": [
+        -0.2946147717171304,
+        -0.15709977547258847,
+        3.7505419831042436e-05
+      ],
+      "B_hbar": [
+        0.264574933807452,
+        0.20366223360132063,
+        -5.840352727247019e-05
+      ],
+      "C_hbar": [
+        0.030434241226038918,
+        -0.04717377922977333,
+        5.289232102754862e-05
+      ],
+      "L_hbar": [
+        -0.27959485276229123,
+        -0.18038100453695455,
+        4.7954473551756316e-05
+      ],
+      "L_norm_hbar": 0.3327320104657195,
+      "T_hbar": [
+        -0.015151386726959372,
+        0.02348500276471314,
+        -2.1113791582754165e-05
+      ],
+      "T_norm_hbar": 0.027948350942419833,
+      "T_norm_over_L_norm": 0.0839965800203623,
+      "U_hbar": [
+        0.0003944033163605157,
+        -0.0006113211010411665,
+        3.199421358612087e-05
+      ],
+      "U_norm_hbar": 0.0007282108858272797,
+      "angle_A_B_deg": 170.4801813215809,
+      "angle_L_to_principal_axis_acute_deg": 0.006833601335245021,
+      "angle_L_to_principal_axis_raw_deg": 179.99316639866475,
+      "inverse_reconstruction_max_abs_hbar": 5.551115123125783e-17,
+      "source_contract": {
+        "canonical_ABC": false,
+        "owner_labels": [
+          "owner0",
+          "owner1",
+          "owner2"
+        ]
+      },
+      "task_assignment": {
+        "A": "owner0",
+        "B": "owner2",
+        "C": "owner1"
+      }
+    },
+    "full_R6": {
+      "all_pair_z2": {
+        "canonical_pair_count": 129,
+        "exact_zero_weight_channel_count": 0,
+        "maximum_charge_reverse_conjugacy_abs": 4.335559509131367e-16,
+        "maximum_longitudinal_spin_reverse_conjugacy_abs": 3.387999773988765e-16,
+        "positive_weight_channel_count": 258,
+        "total_weight": 1.8275246682059592,
+        "z2": {
+          "imag": -8.503308072312686e-17,
+          "real": -0.9987116872910504
+        },
+        "z2_abs": 0.9987116872910504,
+        "z2_phase_deg": -180.0
+      },
+      "covariance": {
+        "eigenfractions_descending": [
+          0.9767443756553523,
+          0.0188298909679484,
+          0.004425733376699143
+        ],
+        "eigenvalues_descending": [
+          0.003972933405556925,
+          7.659107614452624e-05,
+          1.8001786766961174e-05
+        ],
+        "lambda1_over_trace": 0.9767443756553523,
+        "lambda3_over_trace": 0.004425733376699143,
+        "matrix": [
+          [
+            0.0028277717383674863,
+            0.0017750271860100262,
+            -1.70209435157754e-06
+          ],
+          [
+            0.0017750271860100262,
+            0.0012216000254177527,
+            2.4569708377413587e-06
+          ],
+          [
+            -1.70209435157754e-06,
+            2.4569708377413587e-06,
+            1.8154504683174262e-05
+          ]
+        ],
+        "principal_axis_x_positive": [
+          0.8403003600104473,
+          0.542121115940486,
+          -2.485466987574562e-05
+        ],
+        "trace": 0.004067526268468413
+      },
+      "rms": {
+        "electron_n_tsb_rms_e_nm2": 0.061028510310492085,
+        "electron_n_tsb_rms_over_22_over_A": 0.06050134232821755,
+        "hole_n_tsb_rms_e_nm2": 0.061028510310492085,
+        "hole_n_tsb_rms_over_2_over_A": 0.6655147656103929,
+        "physical_S_tsb_vector_rms_hbar_nm2": 0.06377716102546747
+      }
+    },
+    "input_sha256s": {
+      "matched_R6.npz": "a83e89e760f4af9e3d177282e49d890725d10620428ce3b59a1e8dbfb866c3f8",
+      "regional_integrals_exact.json": "92f88127d67a79f1e5e9757e7e394e8fbb61c579232c22d16617df1f16d13977"
+    },
+    "primitive_count": 127,
+    "residue_counts_0_1_2": [
+      127,
+      129,
+      129
+    ],
+    "seven_mode": {
+      "all_pair_z2": {
+        "canonical_pair_count": 3,
+        "exact_zero_weight_channel_count": 0,
+        "maximum_charge_reverse_conjugacy_abs": 4.335559509131367e-16,
+        "maximum_longitudinal_spin_reverse_conjugacy_abs": 3.387999773988765e-16,
+        "positive_weight_channel_count": 6,
+        "total_weight": 1.2689758783828036,
+        "z2": {
+          "imag": -1.975353090226601e-16,
+          "real": -0.999961921624874
+        },
+        "z2_abs": 0.999961921624874,
+        "z2_phase_deg": -180.0
+      },
+      "covariance": {
+        "eigenfractions_descending": [
+          0.9783311116239987,
+          0.01961092852996258,
+          0.002057959846038931
+        ],
+        "eigenvalues_descending": [
+          0.0027035606780508358,
+          5.4193651416913135e-05,
+          5.687051398705539e-06
+        ],
+        "lambda1_over_trace": 0.9783311116239987,
+        "lambda3_over_trace": 0.002057959846038931,
+        "matrix": [
+          [
+            0.001924923527785411,
+            0.0012069059941136253,
+            -4.785250571417861e-07
+          ],
+          [
+            0.0012069059941136253,
+            0.0008328277189688938,
+            1.4857989861688867e-07
+          ],
+          [
+            -4.785250571417861e-07,
+            1.4857989861688867e-07,
+            5.690134112149433e-06
+          ]
+        ],
+        "principal_axis_x_positive": [
+          0.8403004311926466,
+          0.5421209930738996,
+          -0.00011918901386360571
+        ],
+        "trace": 0.002763441380866454
+      },
+      "definition": "Q0 plus six shell-1 TSB channels; TSB metrics use those six channels",
+      "rms": {
+        "electron_n_tsb_rms_e_nm2": 0.05130686718668697,
+        "electron_n_tsb_rms_over_22_over_A": 0.050863675348740645,
+        "hole_n_tsb_rms_e_nm2": 0.05130686718668697,
+        "hole_n_tsb_rms_over_2_over_A": 0.559500428836147,
+        "physical_S_tsb_vector_rms_hbar_nm2": 0.0525684447255809
+      },
+      "selected_count": 7,
+      "tsb_count": 6
+    },
+    "seven_over_full": {
+      "electron_tsb_rms_ratio": 0.8407032537031506,
+      "hole_tsb_rms_ratio": 0.8407032537031506,
+      "lambda1_fraction_difference": 0.0015867359686463356,
+      "lambda3_fraction_difference": -0.0023677735306602116,
+      "principal_axis_absolute_dot": 0.9999999955505056,
+      "spin_tsb_rms_ratio": 0.8242518776367184,
+      "z2_difference": {
+        "imag": -1.1250222829953323e-16,
+        "real": -0.001250234333823541
+      }
+    },
+    "tsb_count": 258
+  },
+  "method": {
+    "coefficient_space_only": true,
+    "covariance_formula": "C_ab=Re sum_TSB S_aQ S_bQ*/A^2",
+    "production_analysis_arrays_read": false,
+    "production_analyze_tsb_imported_or_executed": false,
+    "production_formula_core_imported": false,
+    "real_space_reconstruction": false,
+    "rms_formula": "sqrt(sum_TSB |f_Q|^2)/A; spin sums Cartesian components after S=sigma/2",
+    "ult_formula": "U=A+B+C; L=(A-B)/2; T=(A+B-2C)/6",
+    "z2_formula": "both members of every canonical +/-Q pair; w=|n_Q||ell.S_Q|; term=w*(n_Q s_Q*/|n_Q s_Q*|)^2"
+  },
+  "production_absolute_differences": {
+    "corrected_WS_ULT": {
+      "L_max_abs_delta": 0.0,
+      "T_max_abs_delta": 0.0,
+      "T_over_L_abs_delta": 0.0,
+      "U_max_abs_delta": 0.0,
+      "U_norm_abs_delta": 0.0,
+      "acute_axis_angle_abs_delta_deg": 1.0663825378287584e-10,
+      "angle_A_B_abs_delta_deg": 0.0,
+      "raw_axis_angle_abs_delta_deg": 1.0663825378287584e-10
+    },
+    "full": {
+      "covariance_max_abs_delta": 2.168404344971009e-18,
+      "eigenvalues_max_abs_delta": 2.6020852139652106e-18,
+      "electron_rms_normalized_abs_delta": 0.0,
+      "hole_rms_normalized_abs_delta": 0.0,
+      "lambda1_fraction_abs_delta": 3.3306690738754696e-16,
+      "lambda3_fraction_abs_delta": 3.469446951953614e-18,
+      "principal_axis_max_abs_delta": 1.1102230246251565e-16,
+      "spin_rms_abs_delta": 1.3877787807814457e-17,
+      "z2_abs_delta": 2.2211696984263403e-16,
+      "z2_pair_count_exact": true,
+      "z2_positive_terms_exact": true
+    },
+    "residue_counts_exact": true,
+    "seven": {
+      "covariance_max_abs_delta": 2.168404344971009e-19,
+      "electron_rms_abs_delta": 0.0,
+      "hole_rms_abs_delta": 0.0,
+      "principal_axis_max_abs_delta": 1.1102230246251565e-16,
+      "selected_count_exact": true,
+      "spin_rms_abs_delta": 0.0,
+      "tsb_count_exact": true,
+      "z2_abs_delta": 2.220446049250313e-16
+    },
+    "seven_over_full": {
+      "electron_rms_ratio_abs_delta": 0.0,
+      "hole_rms_ratio_abs_delta": 0.0,
+      "lambda1_difference_abs_delta": 3.3306690738754696e-16,
+      "lambda3_difference_abs_delta": 4.336808689942018e-18,
+      "principal_axis_dot_abs_delta": 2.220446049250313e-16,
+      "spin_rms_ratio_abs_delta": 2.220446049250313e-16,
+      "z2_difference_abs_delta": 5.6693664337706005e-18
+    }
+  },
+  "schema": "ptse2_partition_independent_tsb_v7_independent_coefficient_postflight/v1"
+}

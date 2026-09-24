@@ -1,0 +1,42 @@
+{
+  "paper": "Passos et al., Phys. Rev. B 97, 235446 (2018)",
+  "arxiv": "1712.04924v2",
+  "source_vector_npz_sha256": "3405af8f3f2984c75ac8d597c82d5d58526ad6d14755e5d0316accdb87fb8eb1",
+  "source_metadata_sha256": "e09b0fc5acd8d4e175199eeeeb7ed65cb73a304b4981a31d1fdd4a657e560ffc",
+  "source_panel_pdf_sha256": {
+    "E1": "56ca345df39ffd0bded08182c78ff193d3b9d6525685482f1a2f72fc3103ea3b",
+    "E2": "55bde8e003fc92bae52c8aff19aad0e0ba570152f00fcde88cd6ee24887e1599",
+    "E3": "b6d02adeba40c64f647011f0d06fdb6781146189735a1100fec6c06849b4e715"
+  },
+  "axis_calibration": "official standalone panel vectors; printed ticks only; no curve alignment",
+  "parameters": {
+    "mu_over_t": 0.1,
+    "temperature": 0.0
+  },
+  "checkpoints": [
+    {
+      "panel": "1a",
+      "photon_energy_over_t": 0.05,
+      "gamma_over_t": 0.011,
+      "source_re": 2.2529857169051457,
+      "source_im": 7.932500547347075,
+      "absolute_tolerance": 0.02
+    },
+    {
+      "panel": "1b",
+      "photon_energy_over_t": 0.05,
+      "gamma_over_t": 0.001,
+      "source_re": 0.21625027367353766,
+      "source_im": 8.640064656907661,
+      "absolute_tolerance": 0.02
+    },
+    {
+      "panel": "2",
+      "photon_energy_over_t": 0.06670014542264294,
+      "gamma_over_t": 0.001,
+      "source_re": 73.48940619199581,
+      "source_im": 41.77086061417734,
+      "absolute_tolerance": 0.12
+    }
+  ]
+}

@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from ...core.hf import HartreeFockKernel, HartreeFockProblem, run_hartree_fock_problem
+from mean_field.core.hf.problem import (
+    HartreeFockKernel,
+    HartreeFockProblem,
+    run_hartree_fock_problem,
+)
 from .projected_hf_config import TDBGProjectedHFConfig
 from .projected_hf_interactions import (
     TDBGProjectedHFInteractionBuilder,

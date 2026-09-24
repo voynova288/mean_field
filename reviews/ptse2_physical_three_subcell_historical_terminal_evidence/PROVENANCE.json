@@ -1,0 +1,1 @@
+{"command":["ssh","login002","sacct -j 511413,511566,511567 --noheader --parsable2 -o JobIDRaw,JobName,State,ExitCode,Submit,Start,End,Elapsed,Account,Partition,NodeList"],"observed_on":"login002","purpose":"terminal evidence for failed held-only v4/v5 submissions","scientific_compute":false,"scheduler_mutation":false,"status":"captured_exact_stdout"}

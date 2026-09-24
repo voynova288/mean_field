@@ -15,7 +15,7 @@ from mean_field.core.contracts import (
     ReferenceDensity,
     SingleParticleModel,
 )
-from mean_field.core.hf import (
+from mean_field.core.hf.tdhf_boundary import (
     TDHFCanonicalOrbitals,
     canonical_tdhf_orbitals_from_hf_run_result,
     canonical_tdhf_orbitals_from_hf_state,

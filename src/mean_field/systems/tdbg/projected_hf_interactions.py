@@ -5,7 +5,10 @@ import math
 
 import numpy as np
 
-from ...core.hf import HFOverlapBlockSet, diagonal_overlap_blocks
+from mean_field.core.hf.overlap import (
+    HFOverlapBlockSet,
+    diagonal_overlap_blocks,
+)
 from .lattice import TDBGLattice
 from .projected_hf_config import SPIN_LABELS, TDBG_LOCAL_LABELS, validate_tdbg_interaction_settings
 from .projected_hf_geometry import _tdbg_projected_wavefunction_basis, _tdbg_total_overlap_from_bases, tdbg_moire_area_nm2
@@ -136,7 +139,7 @@ def build_tdbg_interaction_components(
     ``P - P_ref``, not with the absolute occupied projector.
     """
 
-    from ...core.hf import build_projected_interaction_hamiltonian
+    from mean_field.core.hf.interaction import build_projected_interaction_hamiltonian
 
     validate_tdbg_interaction_settings(data.config.interaction)
     settings = data.config.interaction

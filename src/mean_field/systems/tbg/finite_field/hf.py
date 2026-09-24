@@ -3,8 +3,8 @@
 The actual finite-B HF state, initialization, interaction contractions, kernels,
 SCF problem assembly, and summaries live in :mod:`mean_field.core.hf.finite_field`.
 This module is intentionally thin: it converts TBG ``MagneticSpectrumResult``
-objects or TBG finite-field parameters into the generic finite-B HF input
-bundles and re-exports the stable historical API.
+objects or TBG finite-field parameters into generic finite-B HF input bundles.
+Generic magnetic and HF operations are imported from their common-core owners.
 """
 
 from __future__ import annotations
@@ -16,48 +16,18 @@ from ....core.magnetic_field import (
     MagneticFlux,
     choose_magnetic_nq,
     diophantine_branch_cases,
-    in_hex_shell,
     magnetic_k_vectors,
     magnetic_normalization_count,
-    magnetic_orbit_indices,
-    magnetic_r_orbit_positions,
-    magnetic_reciprocal_vector,
     magnetic_shell_shifts,
 )
 from ....core.hf.finite_field import (
     FiniteFieldHartreeFockInputBundle,
     FiniteFieldHartreeFockInputs,
     FiniteFieldHartreeFockState,
-    FiniteFieldHartreeFockSummary,
     FiniteFieldTLSymmetricHartreeFockInputs,
-    InitMode,
     MagneticOverlapData,
-    apply_iks_phase_to_transposed_density,
-    build_finite_field_hf_kernel,
-    build_finite_field_hf_kernel_from_inputs,
-    build_finite_field_hf_problem,
     build_h0_from_hofstadter_metadata,
-    build_magnetic_interaction_hamiltonian,
-    build_tl_symmetric_finite_field_hf_kernel,
-    build_tl_symmetric_finite_field_hf_kernel_from_inputs,
-    build_tl_symmetric_magnetic_interaction_hamiltonian,
-    calculate_valley_spin_order_parameters,
-    compute_finite_field_hf_energy,
-    coulomb_unit_from_lattice,
-    density_update_from_hamiltonian,
     expand_valley_overlap_data_to_flavors,
-    finite_field_diophantine_filling,
-    finite_field_filling,
-    finite_field_occupied_state_count,
-    initialize_density_from_h0,
-    normalize_finite_field_init_mode,
-    run_finite_field_hartree_fock,
-    run_finite_field_hartree_fock_from_inputs,
-    run_tl_symmetric_finite_field_hartree_fock_from_inputs,
-    screened_coulomb_finite_b,
-    state_index,
-    summarize_finite_field_hartree_fock,
-    zeeman_unit_from_area,
 )
 
 
@@ -289,133 +259,13 @@ def build_finite_field_hf_inputs_from_parameters(
     )
 
 
-def build_tl_symmetric_finite_field_hf_inputs_from_spectra(
-    valley_k_spectrum,
-    valley_kprime_spectrum,
-    *,
-    nu: float,
-    v0: float,
-    shifts: Sequence[tuple[int, int]] | None = None,
-    shell_ng: int | None = None,
-    zeeman_unit: float = 0.0,
-    precision: float = 1e-5,
-    fast_overlap: bool = True,
-) -> FiniteFieldTLSymmetricHartreeFockInputs:
-    """Assemble reduced tL-symmetric generic finite-B HF inputs from TBG spectra."""
-
-    inputs = build_finite_field_hf_inputs_from_spectra(
-        valley_k_spectrum,
-        valley_kprime_spectrum,
-        nu=nu,
-        v0=v0,
-        shifts=shifts,
-        shell_ng=shell_ng,
-        zeeman_unit=zeeman_unit,
-        precision=precision,
-        fast_overlap=fast_overlap,
-        reduced_translation=True,
-    )
-    if not isinstance(inputs, FiniteFieldTLSymmetricHartreeFockInputs):  # pragma: no cover - construction guards this.
-        raise TypeError("Expected reduced tL-symmetric finite-field inputs")
-    return inputs
-
-
-def build_tl_symmetric_finite_field_hf_inputs_from_parameters(
-    params,
-    *,
-    flux: MagneticFlux,
-    n_landau: int,
-    nu: float,
-    v0: float,
-    nq: int | None = None,
-    shifts: Sequence[tuple[int, int]] | None = None,
-    shell_ng: int | None = None,
-    zeeman_unit: float = 0.0,
-    precision: float = 1e-5,
-    fast_overlap: bool = True,
-    sigma_rotation: bool = False,
-    hbn: bool = False,
-    include_strain: bool = True,
-    mesh_shift: float = 0.0,
-    kprime_mesh_shift: float | None = None,
-    kprime_q0: complex = 0.0 + 0.0j,
-) -> FiniteFieldTLSymmetricHartreeFockInputs:
-    """Compatibility wrapper for reduced tL-symmetric/IKS HF inputs."""
-
-    inputs = build_finite_field_hf_inputs_from_parameters(
-        params,
-        flux=flux,
-        n_landau=n_landau,
-        nq=nq,
-        nu=nu,
-        v0=v0,
-        shifts=shifts,
-        shell_ng=shell_ng,
-        zeeman_unit=zeeman_unit,
-        precision=precision,
-        fast_overlap=fast_overlap,
-        sigma_rotation=sigma_rotation,
-        hbn=hbn,
-        include_strain=include_strain,
-        mesh_shift=mesh_shift,
-        kprime_mesh_shift=kprime_mesh_shift,
-        kprime_q0=kprime_q0,
-        reduced_translation=True,
-    )
-    if not isinstance(inputs, FiniteFieldTLSymmetricHartreeFockInputs):  # pragma: no cover - construction guards this.
-        raise TypeError("Expected reduced tL-symmetric finite-field inputs")
-    return inputs
 
 
 __all__ = [
-    "FiniteFieldHartreeFockInputBundle",
-    "FiniteFieldHartreeFockInputs",
-    "FiniteFieldHartreeFockState",
-    "FiniteFieldHartreeFockSummary",
-    "FiniteFieldTLSymmetricHartreeFockInputs",
-    "InitMode",
-    "MagneticFlux",
-    "MagneticOverlapData",
-    "apply_iks_phase_to_transposed_density",
     "build_finite_field_hf_inputs_from_parameters",
     "build_finite_field_hf_inputs_from_spectra",
-    "build_finite_field_hf_kernel",
-    "build_finite_field_hf_kernel_from_inputs",
-    "build_finite_field_hf_problem",
     "build_finite_field_hf_state_from_spectra",
     "build_full_flavor_overlap_data_from_spectra",
-    "build_tl_symmetric_finite_field_hf_inputs_from_parameters",
-    "build_tl_symmetric_finite_field_hf_inputs_from_spectra",
-    "build_h0_from_hofstadter_metadata",
-    "build_magnetic_interaction_hamiltonian",
-    "build_tl_symmetric_finite_field_hf_kernel",
-    "build_tl_symmetric_finite_field_hf_kernel_from_inputs",
-    "build_tl_symmetric_magnetic_interaction_hamiltonian",
-    "calculate_valley_spin_order_parameters",
-    "choose_magnetic_nq",
-    "compute_finite_field_hf_energy",
-    "coulomb_unit_from_lattice",
-    "density_update_from_hamiltonian",
-    "expand_valley_overlap_data_to_flavors",
-    "finite_field_diophantine_filling",
-    "finite_field_filling",
-    "finite_field_occupied_state_count",
-    "in_hex_shell",
-    "initialize_density_from_h0",
-    "magnetic_k_vectors",
-    "magnetic_normalization_count",
-    "magnetic_orbit_indices",
-    "magnetic_r_orbit_positions",
-    "magnetic_reciprocal_vector",
-    "magnetic_shell_shifts",
-    "normalize_finite_field_init_mode",
     "paper_fig6_branch_cases",
     "paper_fig6_finite_b_fluxes",
-    "run_finite_field_hartree_fock",
-    "run_finite_field_hartree_fock_from_inputs",
-    "run_tl_symmetric_finite_field_hartree_fock_from_inputs",
-    "screened_coulomb_finite_b",
-    "state_index",
-    "summarize_finite_field_hartree_fock",
-    "zeeman_unit_from_area",
 ]

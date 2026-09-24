@@ -6,9 +6,13 @@ import numpy as np
 import pytest
 
 from mean_field.api import load_result, required_artifact_files
-from mean_field.systems.tdbg import TDBGInteractionSettings, TDBGProjectedHFConfig, TDBGProjectedHFResult
+from mean_field.systems.tdbg import (
+    TDBGInteractionSettings,
+    TDBGProjectedHFConfig,
+)
+from mean_field.systems.tdbg.projected_hf_state import TDBGProjectedHFResult
 from mean_field.systems.tdbg.artifacts import write_tdbg_projected_hf_artifacts
-from mean_field.systems.tdbg.projected_hf import TDBGStateLabel
+from mean_field.systems.tdbg.projected_hf_state import TDBGStateLabel
 
 
 def _fake_tdbg_result() -> TDBGProjectedHFResult:

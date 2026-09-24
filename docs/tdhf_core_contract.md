@@ -115,20 +115,11 @@ infers Goldstone type from eigenvalue sorting.  A typed analysis accepts the
 certificate only after rebinding source/interaction/sector and exact H/L,
 generator-basis, and `rho` fingerprints and recomputing its action/null gates.
 
-The first typed consumer is the diagnostic-only Kwan companion adapter in
-`systems/tbg/zero_field/companion_tdhf.py`.  Its unit canary independently
-assembles `K(q)` and `K(-q)` on a 2x3 fixture, exercises a true generic
-`q=(0,1)` orbit and a separate exact-boundary `q=(1,0)` orbit, consumes the
-explicit transition conjugation map, and requires matrix parity with the core
-H blocks.  Exact-boundary aliases are never averaged: distinct raw kernels
-must be byte-identical before one branch can be certified as the canonical
-self-conjugate payload.  The saved N=10 Fig. 8(a) q=+/-1 triplet and singlet
-matrices were replayed through commit `9faf9b8` in sealed Slurm job `205051`.
-Both sectors retained 400 modes at each assigned sign, remained dynamically
-real and statically positive definite, and matched saved raw/assigned spectra
-at about `1e-15 eV`.  This is saved-matrix/API parity only: it does not rebuild
-BM, HF, or the Eq. (90) contractions and does not upgrade the single-seed
-K-IVC diagnostic to a global-ground-state claim.
+The former diagnostic-only TBG companion consumer was not part of the public
+API and has been retired to
+`local_archive/retired_surface/non_api_abc_tbg_oracles_20260915/`. The typed
+signed-q API remains validated independently by common-core tests and retained
+system adapters.
 
 The first independent exact oracle is
 `systems/hubbard_1d/tdhf_alavirad_sau.py`.  It projects the literal periodic
@@ -205,11 +196,11 @@ Implemented in the RLG/hBN system adapter:
 - q=0 particle-hole pair construction with particle and hole constrained to the same mBZ grid point;
 - on-demand `V_hf(a,b,c,d)` backed by layer-resolved form factors and the full transfer-momentum Coulomb tensor stored in `RLGhBNLayerOverlapBlockSet`;
 - dense q=0 TDHF matrix construction for small smoke tests and guarded checkpoint pilots;
-- loading historical HF archives formerly written by the retired `run_rlg_hbn_paper_hf` workflow through `load_rlg_hbn_tdhf_run_from_archive(...)`, using cached projected basis / layer-overlap blocks rather than rerunning HF, and rejecting archives marked with the diagnostic `MEAN_FIELD_RLG_HBN_ZERO_LITERAL_Q0_FOCK=1` convention;
-- historical command-surface access via the retired `run_rlg_hbn_tdhf_q0` devtool; tracked code now keeps only sidecar/shortcut compatibility helpers, while dense q=0 TDHF workflow code is archived under ignored `local_archive/`;
+- writing typed TDHF-ready HF archives through `save_rlg_hbn_hf_archive(...)` and loading those or historical archives formerly written by the retired `run_rlg_hbn_paper_hf` workflow through `load_rlg_hbn_tdhf_run_from_archive(...)`, using cached projected basis / layer-overlap blocks rather than rerunning HF, and rejecting archives marked with the diagnostic `MEAN_FIELD_RLG_HBN_ZERO_LITERAL_Q0_FOCK=1` convention;
+- historical q=0 command-surface access is fully retired under ignored `local_archive/`; maintained q=0 and finite-q behavior is exposed through the RLG/hBN package APIs rather than devtool compatibility helpers;
 - vectorized q=0 dense assembly via `build_rlg_hbn_tdhf_q0_matrices_from_pairs(..., assembly="vectorized")`, grouping ph pairs by k and using NumPy/BLAS compiled kernels for layer form-factor contractions instead of calling `V_hf` element-by-element in Python;
-- q=0 runner dense-memory guard (`--max-pairs`, `--max-dense-memory-gb`) and shortcut guard so the fully polarized simplification is not applied to mixed `--channel all` blocks;
-- local lightweight regression coverage for fixed-q pair construction, dense q=0 smoke assembly, vectorized-vs-generic assembly parity (including multi-k synthetic blocks), direct HF-basis form-factor contraction against a manual expression, distinct Umklapp/full-Q kernel contributions, momentum conservation, all-channel shortcut blocking, and q=0 Fock-diagnostic env/archive guard;
+- fail-closed package guards reject mixed finite-q `channel="all"` shortcut assembly and HF archives marked with the diagnostic q=0 Fock convention before cache reconstruction;
+- local lightweight regression coverage for fixed-q pair construction, dense q=0 smoke assembly, vectorized-vs-generic assembly parity (including multi-k synthetic blocks), direct HF-basis form-factor contraction against a manual expression, distinct Umklapp/full-Q kernel contributions, momentum conservation, live all-channel rejection, archive q=0-Fock rejection, and generic shortcut legality;
 - finite-q support introspection via `rlg_hbn_tdhf_finite_q_mode_support(...)`; RLG/hBN form factors, wrapping, quotient branches, and signed q/-q policy remain system-layer responsibilities;
 - typed-provenance variational-v2 finite-q assembly via `build_rlg_hbn_tdhf_finite_q_quotient_context(...)`, `build_rlg_hbn_tdhf_finite_q_quotient_matrix_pair_from_pairs(...)`, and the +q-only compatibility wrapper `build_rlg_hbn_tdhf_finite_q_quotient_matrices_from_pairs(...)`: ordinary wrapped legs use analytic periodic relabelling, fixed endpoints use three same-puncture-copy branches with tangent weight `1/3`, and the two Hessian legs are independently summed;
 - independently returned +q/-q Liouvillians without post-hoc Hermitization/symmetrization, with legacy pair assembly still fail-closed for typed quotient archives;
@@ -332,174 +323,9 @@ code, not a sandbox: closure cells, default arguments, global state, semantic
 normalization, and hostile-provider behavior are not proved.  Every certificate
 continues to set `static_hessian_authority_promoted=False`.
 
-The Vituri-2024 readiness adapter requires the exact
-`Vituri2024HalfMetalHFReplayPayload` bound to the factory array receipt,
-re-derives every ordered transition's exact mesh and flavor indices, energies,
-occupations `(particle=0,hole=1)`, source artifact/state/branch, and
-pair-to-tangent readiness, and binds exact area, `Delta1`, interaction, and
-caller-attested kinematics context.  Readiness rejects an assembly whose own
-`structure_tolerance` exceeds the locked `1e-10` threshold, then independently
-rebuilds the signed matrices with `structure_tolerance=1e-10` and
-`raise_on_structure_error=True`.  Its factory receipt records both that locked
-threshold and the maximum independently recomputed structure residual, and
-validates `max_structure_residual <= locked_structure_threshold`.  Readiness
-authority remains `projected_signed_ab` / `not_established`; there is no
-synthetic scalar bridge.
-
-The separate Vituri actual-code-path restricted oracle lives at
-`src/mean_field/systems/abc_trilayer/vituri2024_tdhf_restricted_scalar.py`.
-It is capped at eight ordered orbitals before any rank-four or fixed-particle
-Fock allocation and uses exactly `assembly.orbital_id_map`.  For each quartet
-it calls `vituri2024_antisymmetrized_projected_vertex` only when the local
-momentum residual is exactly `(0.0,0.0)` and divides by the area exactly once;
-all other tensor entries are exact zero.  The independently evaluated raw
-tensor must pass both index-pair antisymmetries and pair Hermiticity.  Failure
-aborts: entries are never copied, symmetrized, Hermitized, or repaired.
-
-With `P_ij=<c_j^dagger c_i>`, this adapter fixes
-
-```text
-Sigma[P]_ij = sum_bg wbar[i,b,g,j] P[g,b]
-h = F0 - Sigma[P0]
-E[P] = Tr(hP) + 1/2 sum_abgd wbar[abgd] P[da] P[gb]
-A[aA,bB] = gap*delta - wbar[a,B,A,b]
-B[aA,bB] = -wbar[a,b,A,B].
-```
-
-It compares those formulas entrywise to all four actual C9 lanes.  A second,
-independent fixed-`Ne` bitstring Hamiltonian uses
-`1/4*wbar_ab;gd*c_a^dagger*c_b^dagger*c_g*c_d` with literal action order
-`d,g,create b,create a`; its Slater expectation is compared to the Wick scalar
-at `P0` and every registered generic-certificate stencil projector, and its
-four exact double-commutator blocks are compared to C9 without using a
-production A/B builder.  The existing `core/hf` approval/certificate then
-checks all canonical `2d` stationarity directions and `d^2` curvatures with
-raw target `E''=2 v^dagger H+ v`, including the lower-lane `v=(x,y*)`
-imaginary convention.
-
-Evidence is the focused test
-`tests/test_abc_trilayer_vituri2024_tdhf_restricted_scalar.py`. It consumes the
-synthetic, hash-bound predecessor `_chain()` fixture from
-`tests/test_abc_trilayer_vituri2024_tdhf_scalar.py`, then constructs a
-task-local six-orbital 2x2 inventory through the actual Vituri vertex and C9
-code paths. It is not a real source/provider artifact. Even when every check
-passes, the permanent authority is
-`restricted_finite_orbital_algebra_oracle_only`: actual vertex/C9 algebra is
-compared, but real-full-provider, source-scalar, global authority, promotion,
-production, and paper-parity claims remain false.  The original sector stays
-`projected_signed_ab`.  The unresolved boundary is therefore physical source
-and full-space authority, not this finite-orbital algebra identity.
-
-The system-local factorized full-space algebra kernel now lives at
-`src/mean_field/systems/abc_trilayer/vituri2024_tdhf_full_functional.py`.
-It acts on the complete `4*Nk` active-band space and fixes
-
-```text
-Q = P - R
-Sigma[X]_ij = sum_bg wbar[i,b,g,j] X[g,b]
-E[P] = Tr(h0 P) + 1/2 Tr(Q Sigma[Q])
-F[P] = h0 + Sigma[Q]
-dF[P;D] = Sigma[D].
-```
-
-The direct/exchange contractions consume explicit source-gauge active-band
-spinors, a literal local
-`k_alpha+k_beta-k_gamma-k_delta == (0,0)` mask, one explicit normal-reference
-matrix `R`, and the area-normalized Vituri interaction.  They allocate an
-`Nk^4` Boolean mask but no `(4Nk)^4` complex tensor.  Dimension-8 tests compare
-the factorized action entrywise to the actual `vituri2024_vertex` rank-four
-oracle; separate tests cover E/F/dF finite differences, self-adjoint pairing,
-source-gauge covariance, nonzero `R`, exact-local rejection, immutable live
-state, and a dimension-80 execution path.
-
-This kernel is not a real-source provider.  The pinned supplementary material
-displays the active `n=3` projected Hamiltonian as an explicit quartic
-`c-dagger c-dagger c c` term plus `Delta mu * N`, with the latter absorbed into
-the chemical potential.  The separate
-`vituri2024_projected_hamiltonian_reference.py` adapter therefore supplies the
-canonical empty-active-electron Fock-vacuum representative `R=0` as an explicit
-bytes-backed matrix.  `R=0` is explicitly not labeled as the physical neutral
-reference; the CNP active-band density lies outside this narrow receipt.  This
-paper-direct statement does not fix the unresolved global one-body
-identity/chemical-potential gauge, select the provider's HF subtraction or q=0
-background, or prove that replay arrays use this representative.
-
-An analytic `VTF(0)` value still does not establish the HF q=0 background, and
-no immutable artifact yet proves that replay spinors, h0, interaction arrays,
-reference, and saved Fock belong to one gauge/functional.  The general bridge
-comparison therefore remains `caller_supplied_array_consistency_only`; the
-opt-in paper-reference bridge adds only projected-Hamiltonian `R=0` operator
-semantics plus absolute saved-array parity in the selected `R=0`/identity-gauge
-representative.  Neither establishes source
-closure/stationarity, absolute Fock-zero authority, full-projector
-qualification, TDHF H-plus parity, scalar-Hessian authority, production
-readiness, or paper reproduction.
-
-The additive provider adapter is split between
-`vituri2024_tdhf_full_provider_callbacks.py` and
-`vituri2024_tdhf_full_provider_bridge.py`.  Three distinct closure-free plain
-callbacks consume explicit immutable `h0`, `R`, source-gauge form factors,
-mesh-pair interaction values, exact-local mask, and area arrays; they do not
-receive replay `interaction_h`, Fock, A/B, or Hessian targets.  The factory-only
-replay bridge separately compares `Sigma[P0-R]` and `F[P0]` with the saved
-operator arrays and binds all source-input, reference-policy, q0-policy, and
-interaction identities.  The complete replay fingerprint remains on the
-bridge, while callback source fingerprints exclude saved target arrays.
-
-Reduced evidence has two distinct scopes.  An `Nk=2`, dimension-8 fixture
-compares generic complex/off-k factorized actions against an independently
-assembled actual rank-four Vituri vertex with nonzero `P0-R`.  A separate
-`Nk=1`, dimension-4 fixture executes the generic ABI on the exact 16-direction
-Hermitian basis and may report complete **reduced callback-functional**
-consistency.  Neither result upgrades the bridge: the actual replay schema
-still lacks a lineage-bound proof that its source uses the paper `R=0`
-representative, an absolute `Delta mu`/Fock-zero convention, and an executable
-HF q=0-background action.  Source closure, N=80 full consistency, TDHF H-plus
-parity, scalar-Hessian authority, Slurm eligibility, production, and paper
-status therefore all remain false.
-
-A second opt-in path treats the unresolved `Delta mu * N` only as a quotient
-by one common real global identity.  Its target-free candidate builds the
-paper-`R=0` callbacks from mesh, source-gauge states, `h0`, `P0`, interaction,
-area, and policy inputs without reading replay `interaction_h`, Fock, energies,
-or `source_state_sha256`.  A separate target-bearing receipt executes F exactly
-once through the generic guarded executor, which enforces callback tracing,
-argument immutability, output non-aliasing, and source/dependency stability.  It
-then requires, with one shared fitted scalar `lambda_fit_ev`,
-
-```text
-interaction_h_saved - Sigma_R0[P0]       = lambda_fit * I
-F_saved - (h0 + Sigma_R0[P0])            = lambda_fit * I
-energies_saved - diag(F_R0[P0])          = lambda_fit
-F_saved - h0 - interaction_h_saved       = 0
-```
-
-entrywise within the locked absolute tolerance.  Separate flavor-, k-, block-,
-interaction-, Fock-, or energy-dependent shifts are rejected.  Passing this
-receipt establishes only selected-`R=0` fixed-rank operator parity modulo a
-single identity.  It does not identify physical `Delta mu`, prove absolute
-energy/Fock parity, compare different-rank sectors, establish q=0/source/dF or
-functional qualification, or promote TDHF, production, or paper authority.
-
-`vituri2024_full_provider_artifact.py` adds a candidate-only immutable envelope
-for the replay arrays, explicit conventional `R`, area, complete typed
-interaction receipt, reference/q0 evidence content, and declared branch/source
-lineage.  A detached expectation pins canonical duplicate-free JSON and a
-byte-deterministic uncompressed NPZ.  Loading rejects symlink path components,
-non-regular files, noncanonical ZIP/NPY metadata, inventory/dtype/shape/hash
-changes, nonfinite values, nested JSON type drift, unreconstructible
-source-state context, and runtime fingerprint drift.  It reconstructs the typed
-payload and interaction, reruns payload algebra diagnostics, and calls the
-existing absolute replay bridge.
-
-The artifact proves direct exclusion of saved `interaction_h`, Fock, and
-energies from callback inputs.  The existing bridge source-input fingerprint
-still retains `source_commit` and replay-loader lineage, so this is not claimed
-to be strict transitive target independence; the exact scope is machine-bound
-in the manifest.  Provider implementation bytes and source artifact/state stay
-on the target-bearing artifact/bridge side.  A
-loaded synthetic fixture is explicitly not a provider candidate.  Even a
-`provider_candidate` artifact establishes only bytes/schema integrity and
-candidate saved-array parity: source generation/closure/stationarity,
-normal-order and q0-background authority, TDHF/Hessian parity, Slurm
-eligibility, production readiness, and paper reproduction remain false.
+The former ABC/Vituri readiness, replay, restricted/full scalar, provider, and
+artifact adapters were system-local scientific oracles rather than common API
+implementations. They have been retired together with their dedicated tests to
+`local_archive/retired_surface/non_api_abc_tbg_oracles_20260915/`. Their
+retirement does not change the generic scalar-functional certificate defined
+above and does not constitute a physical validation claim.

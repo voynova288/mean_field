@@ -14,7 +14,12 @@ DEFAULT_U_EV = 0.0797
 DEFAULT_U_PRIME_EV = 0.0975
 DEFAULT_BETA = 3.14
 DEFAULT_POISSON_RATIO = 0.16
-VALID_STACKINGS = ("AB-AB", "AB-BA")
+# Names follow the physical top-bilayer / bottom-bilayer order used by
+# ``layer_potentials_from_delta`` and ``build_site_block``.  ``BA-AB`` is the
+# opposite AB-BA domain; it is symmetry-equivalent for scalar spectra at zero
+# displacement but must remain distinguishable for orientation-sensitive
+# rank-3 optical tensors.
+VALID_STACKINGS = ("AB-AB", "AB-BA", "BA-AB")
 VALID_VALLEYS = (-1, 1)
 
 
@@ -137,6 +142,39 @@ class TDBGParameters:
             phi_deg=phi_deg,
             epsilon=epsilon,
             model_name="full",
+        )
+
+    @classmethod
+    def liu_dai2020_eq16(
+        cls,
+        *,
+        stacking: str = "BA-AB",
+        valley: int = 1,
+        Delta: float = 0.0,
+        phi_deg: float = 0.0,
+        epsilon: float = 0.0,
+        exact_structure_factor: bool = False,
+    ) -> "TDBGParameters":
+        """Liu-Dai 2020 Methods Eq.(16) TDBG parameters.
+
+        The paper Bernal block gives ``gamma1=t_perp-3*t3=0.33 eV`` and
+        ``gamma3=gamma4=t2=0.21 eV`` with no ``delta_prime`` term. Its
+        ``H_{+,-}`` domain is bottom AB/top BA, i.e. code top-bottom
+        ``BA-AB``. Set ``exact_structure_factor=True`` to retain the printed
+        graphene ``f(k)`` instead of its continuum linearization.
+        """
+
+        return cls(
+            stacking=stacking,
+            valley=valley,
+            Delta=Delta,
+            phi_deg=phi_deg,
+            epsilon=epsilon,
+            gamma1=0.48 - 3.0 * 0.05,
+            gamma3=0.21,
+            gamma4=0.21,
+            delta_prime=0.0,
+            model_name="liu_dai2020_eq16_exact_f" if exact_structure_factor else "liu_dai2020_eq16",
         )
 
     @classmethod

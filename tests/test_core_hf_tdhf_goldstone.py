@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from mean_field.api import TDHFConfig, analyze_tdhf_sector
-from mean_field.core.hf import ParticleHolePair
+from mean_field.core.hf.tdhf import ParticleHolePair
 from mean_field.core.hf.tdhf_goldstone import (
     TDHFSymplecticProvenance,
     analyze_tdhf_goldstone_symplectic_matrix,

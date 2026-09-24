@@ -1,0 +1,11 @@
+Detached postflight numerical host: test001
+Reviewed UTC: 2026-09-22T20:26:12Z
+Python: /data/home/ziyuzhu/miniconda3/envs/moirekp/bin/python3.11
+NumPy: 1.26.4
+Independent script: reviews/ptse2_physical_operator_hole_crosscheck_v3_postflight/recompute_npz_csv.py
+Inputs: immutable job517203 crosscheck_arrays.npz and coefficients.csv
+Production modules imported/executed: no
+OpenMX/projector contraction rerun: no (outside requested NPZ/CSV postflight scope)
+Login-node numerical work: none
+Execution shape: one-thread-scale 192x192 seven-mode reconstruction and hash audit on test001; direct SSH completed promptly, so tmux was unnecessary
+Capsule mutation: none; only this detached review directory was created

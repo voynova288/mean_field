@@ -6,31 +6,20 @@ import importlib
 from pathlib import Path
 import sys
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from mean_field.cli import main as cli_main
-
-
-CLI_GROUPS = {"benchmarks", "bm", "hf"}
-CLI_ALIASES = {
-}
 MODULE_COMMANDS = {
-    "backfill_canonical_hf_sidecars": ("mean_field.devtools.backfill_canonical_hf_sidecars", ()),
-
-
     "merge_tbg_crpa_chunks": ("mean_field.devtools.merge_tbg_crpa_chunks", ()),
-
-    "run_rlg_hbn_tdhf_finite_q": ("mean_field.devtools.run_rlg_hbn_tdhf_finite_q", ()),
+    "qualify_tpt_bulk_parent_wavefunctions": (
+        "mean_field.devtools.qualify_tpt_bulk_parent_wavefunctions",
+        (),
+    ),
     "run_tbg_crpa_chunk": ("mean_field.devtools.run_tbg_crpa_chunk", ()),
-
-
-
-
-
+    "tpt_bulk_paw_oracle": ("mean_field.devtools.tpt_bulk_paw_oracle", ()),
+    "tpt_wannier_q0_hf": ("mean_field.devtools.tpt_wannier_q0_hf", ()),
 }
 
 
@@ -40,18 +29,9 @@ def _normalize_command(text: str) -> str:
 
 def _print_help() -> int:
     print("Usage: python scripts/mean_field_tools.py <command> [args...]")
-    print("")
-    print("CLI groups:")
-    for name in sorted(CLI_GROUPS):
-        print(f"  {name}")
-    print("")
-    print("Tool commands:")
+    print("\nDeveloper-tool commands:")
     for name in sorted(MODULE_COMMANDS):
         print(f"  {name}")
-    print("")
-    print("CLI aliases:")
-    for name, prefix in sorted(CLI_ALIASES.items()):
-        print(f"  {name} -> {' '.join(prefix)}")
     return 0
 
 
@@ -77,14 +57,6 @@ def main(argv: list[str] | None = None) -> int:
 
     command = _normalize_command(args[0])
     rest = args[1:]
-
-    if command in CLI_GROUPS:
-        return int(cli_main([command, *rest]))
-
-    if command in CLI_ALIASES:
-        prefix = CLI_ALIASES[command]
-        return int(cli_main([*prefix, *rest]))
-
     if command in MODULE_COMMANDS:
         module_name, argv_prefix = MODULE_COMMANDS[command]
         return _run_module(module_name, argv_prefix, rest)

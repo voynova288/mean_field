@@ -35,17 +35,5 @@ def validate_physics(model: RLGhBNModel) -> ValidationReport:
     return ValidationReport(title="RLG/hBN validation", checks=checks)
 
 
-def reproduce_paper_checkpoints(model: RLGhBNModel) -> ValidationReport:
-    checks = list(validate_physics(model).checks)
-    checks.append(
-        ValidationCheck(
-            "paper checkpoints retired",
-            "skipped",
-            "Archived paper-checkpoint validation is kept under ignored local_archive; tracked validation is smoke-only.",
-            val="retired_surface",
-        )
-    )
-    return ValidationReport(title="RLG/hBN paper checkpoints", checks=tuple(checks))
 
-
-__all__ = ["ValidationCheck", "ValidationReport", "reproduce_paper_checkpoints", "validate_physics"]
+__all__ = ["ValidationCheck", "ValidationReport", "validate_physics"]

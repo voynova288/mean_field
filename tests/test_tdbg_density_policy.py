@@ -4,9 +4,12 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from mean_field.core.hf import DensityConvention, density_to_stored_delta
+from mean_field.core.hf.density import (
+    DensityConvention,
+    density_to_stored_delta,
+)
 from mean_field.systems.tdbg import TDBGInteractionSettings, TDBGProjectedHFConfig
-from mean_field.systems.tdbg.projected_hf import (
+from mean_field.systems.tdbg.projected_hf_state import (
     _fock_density_for_policy,
     _hartree_density_for_policy,
     _reference_subtracted_tdbg_density,

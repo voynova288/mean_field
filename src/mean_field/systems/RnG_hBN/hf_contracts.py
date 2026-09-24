@@ -626,7 +626,7 @@ def run_rlg_hbn_hf_config_adapter(model: object, config: "HFConfig", **kwargs: A
     truth and is wrapped by the canonical RnG/hBN post-run adapter.
     """
 
-    if not isinstance(model, RLGhBNModel):
+    if type(model) is not RLGhBNModel:
         return None
     if "rlg_hbn_config" not in kwargs:
         raise NotImplementedError(
@@ -634,7 +634,7 @@ def run_rlg_hbn_hf_config_adapter(model: object, config: "HFConfig", **kwargs: A
             "rlg_hbn_config=RLGhBNRunHFConfig(...); generic HFConfig -> RnG/hBN runner mapping is not implemented"
         )
     rlg_config = kwargs.pop("rlg_hbn_config")
-    if not isinstance(rlg_config, RLGhBNRunHFConfig):
+    if type(rlg_config) is not RLGhBNRunHFConfig:
         raise TypeError(f"rlg_hbn_config must be RLGhBNRunHFConfig, got {type(rlg_config).__name__}")
     if kwargs:
         raise TypeError(f"Unsupported RnG/hBN run_hf kwargs: {sorted(kwargs)}")

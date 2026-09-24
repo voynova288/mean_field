@@ -5,16 +5,32 @@ import math
 
 import numpy as np
 
-from ...core.hf import (
+from mean_field.core.hf.overlap import (
     ComponentGroup,
     ProjectedWavefunctionBasis,
     calculate_projected_overlap_between,
-    real_space_cell_area_nm2_from_reciprocal,
 )
+from mean_field.core.hf.coulomb import real_space_cell_area_nm2_from_reciprocal
 from .lattice import TDBGLattice
 from .projected_hf_config import SPIN_LABELS, TDBGProjectedWindow, VALLEY_SEQUENCE
 from .projected_hf_state import TDBGProjectedHFData
-from .topology import translation_srcmap
+
+
+def translation_srcmap(lattice: TDBGLattice, gvec: complex, *, atol: float = 1.0e-8) -> np.ndarray:
+    q_sites = np.asarray(lattice.q_sites, dtype=float)
+    if q_sites.ndim != 2 or q_sites.shape[1] < 3:
+        raise ValueError(f"Expected lattice.q_sites shape (n, >=3), got {q_sites.shape}")
+    coords, sectors, shift = q_sites[:, :2], q_sites[:, 2], complex(gvec)
+    out = np.full((q_sites.shape[0],), -1, dtype=int)
+    for isite, (xy, sector) in enumerate(zip(coords, sectors, strict=True)):
+        target = xy + np.asarray([shift.real, shift.imag], dtype=float)
+        matches = np.flatnonzero(
+            np.isclose(sectors, sector, atol=atol)
+            & (np.linalg.norm(coords - target[None, :], axis=1) <= float(atol))
+        )
+        if matches.size:
+            out[isite] = int(matches[0])
+    return out
 
 def tdbg_band_window_indices(matrix_dim: int, window: TDBGProjectedWindow | str = "two_flat") -> tuple[int, ...]:
     if isinstance(window, str):

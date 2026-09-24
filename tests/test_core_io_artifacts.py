@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -7,12 +8,50 @@ import numpy as np
 import pytest
 
 from mean_field.core.io import (
+    file_object_sha256,
+    file_sha256,
+    open_stable_binary_file,
+    parse_json_artifact,
+    publish_staged_file_noreplace,
+    read_json_artifact,
     read_npz_scalar,
     summarize_npz_artifact,
+    unique_staging_path,
     write_json_artifact,
     write_npz_artifact,
     write_text_artifact,
 )
+
+
+def test_file_sha256_streams_exact_bytes_and_validates_chunk_size(tmp_path) -> None:
+    path = tmp_path / "payload.bin"
+    payload = b"abc" * 1000 + b"tail"
+    path.write_bytes(payload)
+
+    assert file_sha256(path, chunk_bytes=17) == hashlib.sha256(payload).hexdigest()
+    with pytest.raises(ValueError, match="positive integer"):
+        file_sha256(path, chunk_bytes=0)
+    with pytest.raises(ValueError, match="positive integer"):
+        file_sha256(path, chunk_bytes=1.5)
+    with pytest.raises(ValueError, match="positive integer"):
+        file_sha256(path, chunk_bytes=True)
+
+
+def test_stable_binary_file_binds_one_inode_and_rejects_path_replacement(
+    tmp_path,
+) -> None:
+    path = tmp_path / "stable.bin"
+    path.write_bytes(b"original")
+    with open_stable_binary_file(path) as handle:
+        assert file_object_sha256(handle) == hashlib.sha256(b"original").hexdigest()
+        assert handle.read() == b"original"
+
+    replacement = tmp_path / "replacement.bin"
+    replacement.write_bytes(b"replacement")
+    with pytest.raises(RuntimeError, match="artifact path changed while open"):
+        with open_stable_binary_file(path) as handle:
+            assert handle.read() == b"original"
+            replacement.replace(path)
 
 
 def test_npz_artifact_summary_and_scalar_reader(tmp_path) -> None:
@@ -65,12 +104,65 @@ def test_write_npz_artifact_requires_string_keys(tmp_path) -> None:
         write_npz_artifact({"": np.asarray([1])}, tmp_path / "bad.npz")
 
 
+def test_read_json_artifact_rejects_duplicates_and_nonstandard_constants(tmp_path) -> None:
+    assert parse_json_artifact(b'{"value": 3}') == {"value": 3}
+    with pytest.raises(ValueError, match="duplicate JSON object key 'x'"):
+        parse_json_artifact(b'{"x": 1, "x": 2}')
+
+    duplicate = tmp_path / "duplicate.json"
+    duplicate.write_text('{"outer": {"x": 1, "x": 2}}')
+    with pytest.raises(ValueError, match="duplicate JSON object key 'x'"):
+        read_json_artifact(duplicate)
+
+    nonstandard = tmp_path / "nonstandard.json"
+    nonstandard.write_text('{"x": NaN}')
+    with pytest.raises(ValueError, match="nonstandard JSON constant 'NaN'"):
+        read_json_artifact(nonstandard)
+
+
+def test_staged_noreplace_publication_preserves_inode_and_exact_bytes(tmp_path) -> None:
+    destination = tmp_path / "nested" / "payload.bin"
+    staged = unique_staging_path(destination)
+    assert staged.parent == destination.parent
+    assert staged.name.startswith(".payload.bin.stage-")
+    assert not staged.exists()
+
+    payload = b"validated payload"
+    staged.write_bytes(payload)
+    staged_stat = staged.stat()
+    identity = publish_staged_file_noreplace(staged, destination)
+
+    assert identity == (staged_stat.st_dev, staged_stat.st_ino)
+    assert destination.read_bytes() == payload
+    assert destination.stat().st_ino == staged_stat.st_ino
+    assert not staged.exists()
+
+
+def test_staged_noreplace_publication_rejects_replacement_and_cross_directory(
+    tmp_path,
+) -> None:
+    destination = tmp_path / "payload.bin"
+    destination.write_bytes(b"existing")
+    staged = unique_staging_path(destination)
+    staged.write_bytes(b"new")
+    with pytest.raises(FileExistsError):
+        publish_staged_file_noreplace(staged, destination)
+    assert destination.read_bytes() == b"existing"
+    assert staged.read_bytes() == b"new"
+
+    other_destination = tmp_path / "other" / "payload.bin"
+    with pytest.raises(ValueError, match="share one directory"):
+        publish_staged_file_noreplace(staged, other_destination)
+    staged.unlink()
+
+
 def test_write_json_and_text_artifacts_are_stable_and_create_parents(tmp_path) -> None:
     json_path = write_json_artifact({"b": 2, "a": 1}, tmp_path / "nested" / "payload.json")
     text_path = write_text_artifact("hello\n", tmp_path / "nested" / "note.md")
 
     assert json.loads(json_path.read_text(encoding="utf-8")) == {"a": 1, "b": 2}
     assert json_path.read_text(encoding="utf-8").splitlines()[1].strip() == '"a": 1,'
+    assert json_path.read_text(encoding="utf-8").endswith("\n")
     assert text_path.read_text(encoding="utf-8") == "hello\n"
     assert not (tmp_path / "nested" / "payload.json.tmp").exists()
 

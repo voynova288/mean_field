@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from ._hf_shared import *  # noqa: F401,F403
-from ._hf_types import *  # noqa: F401,F403
+from importlib import import_module
+from typing import Any, Callable
+
+from ._hf_types import HFAdapterInfo, HFAdapterType
 
 
 _HF_ADAPTER_REGISTRY: tuple[HFAdapterInfo, ...] = (
@@ -18,8 +20,8 @@ _HF_ADAPTER_REGISTRY: tuple[HFAdapterInfo, ...] = (
         name="tdbg_explicit_projected_run_hf",
         system_name="tdbg",
         adapter_type="run_hf",
-        import_path="mean_field.api.hf:run_hf",
-        description="Public run_hf dispatch for an explicit TDBGProjectedHFConfig plus init_mode.",
+        import_path="mean_field.systems.tdbg.projected_hf_contracts:run_tdbg_hf_config_adapter",
+        description="System-owned run_hf adapter for an explicit TDBGProjectedHFConfig plus init_mode.",
         supports_run_hf_config=True,
         requires_explicit_inputs=("tdbg_config=TDBGProjectedHFConfig", "init_mode"),
         run_hf_config_reason="Requires explicit tdbg_config=TDBGProjectedHFConfig plus init_mode; generic HFConfig inference is not implemented.",
@@ -28,7 +30,7 @@ _HF_ADAPTER_REGISTRY: tuple[HFAdapterInfo, ...] = (
         name="htg_hf_run_to_hf_run_result",
         system_name="htg",
         adapter_type="canonical_hf_run_result",
-        import_path="mean_field.systems.htg.mean_field_adapter:htg_hf_run_to_hf_run_result",
+        import_path="mean_field.systems.htg._hf_contracts:htg_hf_run_to_hf_run_result",
         description="Post-run canonical HFRunResult view for an existing primitive-cell HTG HF run.",
         requires_explicit_inputs=("HTGHartreeFockRun",),
         run_hf_config_reason="Post-run converter only; use htg_explicit_primitive_run_hf for explicit HTG config dispatch.",
@@ -37,7 +39,7 @@ _HF_ADAPTER_REGISTRY: tuple[HFAdapterInfo, ...] = (
         name="htg_hf_run_to_hf_result",
         system_name="htg",
         adapter_type="hf_result",
-        import_path="mean_field.systems.htg.mean_field_adapter:htg_hf_run_to_hf_result",
+        import_path="mean_field.systems.htg._hf_contracts:htg_hf_run_to_hf_result",
         description="Public HFResult view of an existing primitive-cell HTG HF run.",
         requires_explicit_inputs=("HTGHartreeFockRun",),
         run_hf_config_reason="Post-run HFResult converter only; use htg_explicit_primitive_run_hf for explicit HTG config dispatch.",
@@ -46,7 +48,7 @@ _HF_ADAPTER_REGISTRY: tuple[HFAdapterInfo, ...] = (
         name="htg_explicit_primitive_run_hf",
         system_name="htg",
         adapter_type="run_hf",
-        import_path="mean_field.systems.htg.mean_field_adapter:run_htg_hf_config_adapter",
+        import_path="mean_field.systems.htg._hf_contracts:run_htg_hf_config_adapter",
         description="Public run_hf dispatch for an explicit primitive-cell HTGRunHFConfig.",
         supports_run_hf_config=True,
         requires_explicit_inputs=("htg_config=HTGRunHFConfig",),
@@ -109,15 +111,6 @@ _HF_ADAPTER_REGISTRY: tuple[HFAdapterInfo, ...] = (
         run_hf_config_reason="Requires explicit tbg_zero_field_config=TBGZeroFieldRunHFConfig carrying the matching BMSolution; generic HFConfig to B0 grid inference is not implemented.",
     ),
     HFAdapterInfo(
-        name="b0_hf_benchmark_run_to_hf_run_result",
-        system_name="tbg_zero_field",
-        adapter_type="canonical_hf_run_result",
-        import_path="mean_field.systems.tbg.zero_field.hf_contracts:b0_hf_benchmark_run_to_hf_run_result",
-        description="Post-run canonical HFRunResult view for a B0 HF benchmark result carrying the matching grid_solution.",
-        requires_explicit_inputs=("B0HFBenchmarkRun-like result",),
-        run_hf_config_reason="Post-run benchmark converter only; no generic public HFConfig to B0 benchmark runner is frozen.",
-    ),
-    HFAdapterInfo(
         name="rlg_hbn_hf_run_to_hf_run_result",
         system_name="rlg_hbn",
         adapter_type="canonical_hf_run_result",
@@ -149,13 +142,17 @@ _HF_ADAPTER_REGISTRY: tuple[HFAdapterInfo, ...] = (
         name="polshyn_wang_hf_bundle_to_hf_run_result",
         system_name="tmbg_polshyn",
         adapter_type="canonical_hf_run_result",
-        import_path="mean_field.systems.tmbg.polshyn_supercell:polshyn_wang_hf_bundle_to_hf_run_result",
+        import_path="mean_field.systems.tmbg._polshyn_contracts:polshyn_wang_hf_bundle_to_hf_run_result",
         description="Post-run canonical HFRunResult view for an explicit TMBG Polshyn-Wang (basis, state, info) bundle.",
         requires_explicit_inputs=("PolshynProjectedBasis", "PolshynWangHFState", "info"),
         run_hf_config_reason="Post-run bundle converter only; basis/state/info must be explicit and are not inferred from HFConfig.",
     ),
 )
-_HF_ADAPTERS_BY_NAME: dict[str, HFAdapterInfo] = {info.name: info for info in _HF_ADAPTER_REGISTRY}
+_HF_ADAPTERS_BY_NAME: dict[str, HFAdapterInfo] = {
+    info.name: info for info in _HF_ADAPTER_REGISTRY
+}
+if len(_HF_ADAPTERS_BY_NAME) != len(_HF_ADAPTER_REGISTRY):
+    raise RuntimeError("HF adapter registry contains duplicate names")
 
 
 def list_hf_adapters(
@@ -165,10 +162,10 @@ def list_hf_adapters(
 ) -> tuple[HFAdapterInfo, ...]:
     """Return registered safe public HF boundary adapters.
 
-    The registry is intentionally descriptive. Entries with
-    ``supports_run_hf_config=False`` are conversion helpers for already-computed
-    system HF artifacts and must not be treated as generic ``run_hf(config)``
-    support.
+    Run adapters are the sole dispatch authority for public ``run_hf``.
+    Entries with ``supports_run_hf_config=False`` are conversion helpers for
+    already-computed system HF artifacts and must not be treated as generic
+    ``run_hf(config)`` support.
     """
 
     adapters = _HF_ADAPTER_REGISTRY
@@ -208,46 +205,13 @@ def _call_registered_hf_adapter(name: str, *args: Any, **kwargs: Any) -> Any:
     return resolve_hf_adapter(name)(*args, **kwargs)
 
 
-def tdbg_projected_hf_result_to_hf_run_result(*args: Any, **kwargs: Any) -> ContractHFRunResult:
-    return _call_registered_hf_adapter("tdbg_projected_hf_result_to_hf_run_result", *args, **kwargs)
 
 
-def htg_hf_run_to_hf_run_result(*args: Any, **kwargs: Any) -> ContractHFRunResult:
-    return _call_registered_hf_adapter("htg_hf_run_to_hf_run_result", *args, **kwargs)
 
 
-def htg_hf_run_to_hf_result(*args: Any, **kwargs: Any) -> Any:
-    return _call_registered_hf_adapter("htg_hf_run_to_hf_result", *args, **kwargs)
 
 
-def htg_supercell_hf_run_to_hf_run_result(*args: Any, **kwargs: Any) -> ContractHFRunResult:
-    return _call_registered_hf_adapter("htg_supercell_hf_run_to_hf_run_result", *args, **kwargs)
 
 
-def htg_supercell_hf_run_to_hf_result(*args: Any, **kwargs: Any) -> Any:
-    return _call_registered_hf_adapter("htg_supercell_hf_run_to_hf_result", *args, **kwargs)
-
-
-def tbg_zero_field_hf_run_to_hf_run_result(*args: Any, **kwargs: Any) -> ContractHFRunResult:
-    return _call_registered_hf_adapter("tbg_zero_field_hf_run_to_hf_run_result", *args, **kwargs)
-
-
-def tbg_zero_field_hf_run_to_hf_result(*args: Any, **kwargs: Any) -> Any:
-    return _call_registered_hf_adapter("tbg_zero_field_hf_run_to_hf_result", *args, **kwargs)
-
-
-def b0_hf_benchmark_run_to_hf_run_result(*args: Any, **kwargs: Any) -> ContractHFRunResult:
-    return _call_registered_hf_adapter("b0_hf_benchmark_run_to_hf_run_result", *args, **kwargs)
-
-
-def rlg_hbn_hf_run_to_hf_run_result(*args: Any, **kwargs: Any) -> ContractHFRunResult:
-    return _call_registered_hf_adapter("rlg_hbn_hf_run_to_hf_run_result", *args, **kwargs)
-
-def rlg_hbn_hf_run_to_hf_result(*args: Any, **kwargs: Any) -> Any:
-    return _call_registered_hf_adapter("rlg_hbn_hf_run_to_hf_result", *args, **kwargs)
-
-
-def polshyn_wang_hf_bundle_to_hf_run_result(*args: Any, **kwargs: Any) -> ContractHFRunResult:
-    return _call_registered_hf_adapter("polshyn_wang_hf_bundle_to_hf_run_result", *args, **kwargs)
 
 __all__ = [name for name in globals() if not name.startswith('__')]

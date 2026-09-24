@@ -17,11 +17,16 @@ from mean_field.systems.htg import (
     HTGModel,
     HTGParams,
     InteractionParams,
+)
+from mean_field.systems.htg.supercell_contracts import (
     htg_supercell_hf_run_to_hf_result,
     htg_supercell_hf_run_to_hf_run_result,
-    run_htg_hf,
 )
-from mean_field.systems.htg.mean_field_adapter import htg_hf_run_to_hf_result, htg_hf_run_to_hf_run_result
+from mean_field.systems.htg._hf_contracts import (
+    htg_hf_run_to_hf_result,
+    htg_hf_run_to_hf_run_result,
+)
+from mean_field.systems.htg._hf_runner import run_htg_hf
 from mean_field.systems.htg.supercell import run_htg_supercell_hf
 
 

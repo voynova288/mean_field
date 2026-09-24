@@ -1,7 +1,28 @@
 from __future__ import annotations
 
-from ._hf_types import *  # noqa: F401,F403
-from ._hf_reference import *  # noqa: F401,F403
+from dataclasses import dataclass
+
+import numpy as np
+
+from mean_field.core.hf.engine import DensityUpdateResult
+from mean_field.core.hf.occupations import (
+    apply_random_projector_rotation,
+    find_chemical_potential,
+    occupied_state_mask,
+    random_unitary_from_hermitian,
+)
+from ._hf_reference import (
+    _central_projected_band_indices,
+    _htg_reference_density_blocks,
+    _remote_band_count_per_side,
+    _validate_primitive_cell_integer_filling,
+    htg_band_reference_occupations,
+    htg_filling_from_density,
+    htg_occupied_bands_per_k,
+    htg_occupied_state_count,
+    projector_idempotency_residual,
+)
+from ._hf_types import HTGHartreeFockState, HTGSeedOccupationSummary
 
 
 def _update_htg_diagnostics_from_density(state: HTGHartreeFockState) -> None:
@@ -428,4 +449,12 @@ def build_htg_density_from_hamiltonian(
 
     return density, energies, sigma_z_expectation, float(mu), occ_mask
 
-__all__ = [name for name in globals() if not name.startswith('__')]
+__all__ = [
+    "HTGDensityBuilder",
+    "HTGInitializer",
+    "build_htg_density_from_hamiltonian",
+    "htg_flavor_occupation_counts_for_init_mode",
+    "htg_seed_occupation_summary",
+    "initialize_htg_density",
+    "normalize_htg_init_mode",
+]

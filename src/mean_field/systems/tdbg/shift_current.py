@@ -157,23 +157,17 @@ def shift_current_point_data(
     params: TDBGParameters,
     *,
     valley: int | None = None,
-    fd_step_nm_inv: float = 1.0e-6,
     denominator_cutoff_ev: float = 1.0e-10,
 ) -> TDBGShiftCurrentPoint:
-    """Diagonalize TDBG and prepare Hamiltonian-gauge response data.
+    """Prepare response data using analytic lab-frame ``dH/dk``.
 
-    The response path uses analytic lab-frame ``dH/dk`` by default.  The
-    ``fd_step_nm_inv`` argument is retained for backward-compatible callers of
-    this adapter; use :func:`finite_difference_dhdk` directly for derivative
-    validation.
+    Use :func:`finite_difference_dhdk` directly for derivative validation.
     """
-
-    _ = fd_step_nm_inv
     resolved_valley = int(params.valley if valley is None else valley)
     h0 = build_hamiltonian(complex(k_tilde), lattice, params, valley=resolved_valley)
     evals, evecs = eigh(h0)
-    dh = build_hamiltonian_dhdk(lattice, params, valley=resolved_valley)
-    d2h = build_hamiltonian_d2hdk2(lattice)
+    dh = build_hamiltonian_dhdk(lattice, params, valley=resolved_valley, k_tilde=complex(k_tilde))
+    d2h = build_hamiltonian_d2hdk2(lattice, params, valley=resolved_valley, k_tilde=complex(k_tilde))
     gauge = hamiltonian_gauge_data(evals, evecs, dh, denominator_cutoff=float(denominator_cutoff_ev), d2hdk=d2h)
     return TDBGShiftCurrentPoint(
         k_tilde=complex(k_tilde),
@@ -192,7 +186,6 @@ def shift_current_tensors_at_k(
     params: TDBGParameters,
     *,
     valley: int | None = None,
-    fd_step_nm_inv: float = 1.0e-6,
     denominator_cutoff_ev: float = 1.0e-10,
     principal_value_eta_ev: float | None = None,
     mu_ev: float = 0.0,
@@ -210,7 +203,6 @@ def shift_current_tensors_at_k(
         lattice,
         params,
         valley=valley,
-        fd_step_nm_inv=fd_step_nm_inv,
         denominator_cutoff_ev=denominator_cutoff_ev,
     )
     return precompute_shift_current_tensors(
@@ -234,7 +226,6 @@ def component_kernel_at_k(
     component: ShiftCurrentComponent | tuple[int, int, int] | str,
     *,
     valley: int | None = None,
-    fd_step_nm_inv: float = 1.0e-6,
     denominator_cutoff_ev: float = 1.0e-10,
     principal_value_eta_ev: float | None = None,
     convention: ShiftCurrentConvention = JOYA_EQ7_GEOMETRIC_CONVENTION,
@@ -246,7 +237,6 @@ def component_kernel_at_k(
         lattice,
         params,
         valley=valley,
-        fd_step_nm_inv=fd_step_nm_inv,
         denominator_cutoff_ev=denominator_cutoff_ev,
     )
     return component_kernel_from_gauge_pair(
@@ -268,7 +258,6 @@ def model_shift_current_point_data(
     k_tilde: complex,
     *,
     valley: int | None = None,
-    fd_step_nm_inv: float = 1.0e-6,
     denominator_cutoff_ev: float = 1.0e-10,
 ) -> TDBGShiftCurrentPoint:
     return shift_current_point_data(
@@ -276,6 +265,5 @@ def model_shift_current_point_data(
         model.lattice,
         model.params,
         valley=valley,
-        fd_step_nm_inv=fd_step_nm_inv,
         denominator_cutoff_ev=denominator_cutoff_ev,
     )

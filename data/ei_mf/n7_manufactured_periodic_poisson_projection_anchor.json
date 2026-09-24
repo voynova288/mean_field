@@ -1,0 +1,94 @@
+{
+  "N": 7,
+  "bandlimit_fingerprint": "ec32e83e59422839f6b1caec5b4b3fbcca7a43caba839c7ee433d7267fa4d705",
+  "boundary_family": "periodic_zero_mean",
+  "charge_receipt_fingerprint": "9615fd8012eafb2d58a8a158e0faf3a9d931b66810570f65ae2d658e3b530394",
+  "coefficients_nm3_real_imag": [
+    [
+      2.7977138935013107e-06,
+      -3.9902040010131186e-05
+    ],
+    [
+      8.347035998496798e-05,
+      -1.605300607300255e-05
+    ],
+    [
+      8.347035998496798e-05,
+      1.605300607300255e-05
+    ],
+    [
+      2.7977138935013107e-06,
+      3.9902040010131186e-05
+    ]
+  ],
+  "epsilon_r": 15.0,
+  "equation": "d_z(epsilon_r*d_z U)=4*pi*C*(n_h-n_e); U=-eV; U_0=0",
+  "evidence_scope": "constant-epsilon neutral periodic manufactured Fourier source only",
+  "harmonic_indices": [
+    -2,
+    -1,
+    1,
+    2
+  ],
+  "origin_nm": 0.413,
+  "period_nm": 65.5,
+  "quadrature_ladder": [
+    {
+      "charge_fourier_roundoff_bound_nm3_quantized": 0.0,
+      "charge_nm3_quantized_sha256": "67816e02183c841c9c024fe2bfcff8b1daf15496ecc3318e2044736b0141ef70",
+      "diagnostic_quantized_fingerprint": "0402a5813089fcc7978c5f0f39e9b90377d8e7471a9501da4079f0e58a9e6863",
+      "electrostatic_energy_density_mev_nm2_quantized": 0.0654748324,
+      "grid_size": 29,
+      "integrated_charge_imbalance_nm2_quantized": 0.0,
+      "maximum_outside_support_coefficient_nm3_quantized": 0.0,
+      "potential_mean_mev_quantized": 0.0,
+      "projected_potential_quantized_sha256": "6318ef3a2878d57a6e93a4e459f9e8810ac320e04fc1c2d040265b4c5de171ca",
+      "real_space_energy_density_mev_nm2_quantized": 0.0654748324,
+      "spectral_poisson_residual_mev_nm2_quantized": 0.0,
+      "z_nm_quantized_sha256": "03ab22f097bd430ed1e4cfac79e115fcb5860567406119c30ddfc66e7bd6a745"
+    },
+    {
+      "charge_fourier_roundoff_bound_nm3_quantized": 0.0,
+      "charge_nm3_quantized_sha256": "5802960a92cbf7c230df249841ba42d3e782822fb03a0ffb7ebf2085c8c1dce1",
+      "diagnostic_quantized_fingerprint": "99f1a93ae30969c3adf4b16471c3f0fc902ce2962ab8792d96e8dbfde331341c",
+      "electrostatic_energy_density_mev_nm2_quantized": 0.0654748324,
+      "grid_size": 57,
+      "integrated_charge_imbalance_nm2_quantized": 0.0,
+      "maximum_outside_support_coefficient_nm3_quantized": 0.0,
+      "potential_mean_mev_quantized": 0.0,
+      "projected_potential_quantized_sha256": "6318ef3a2878d57a6e93a4e459f9e8810ac320e04fc1c2d040265b4c5de171ca",
+      "real_space_energy_density_mev_nm2_quantized": 0.0654748324,
+      "spectral_poisson_residual_mev_nm2_quantized": 0.0,
+      "z_nm_quantized_sha256": "0232e99221967f4475fb6534e16209b35bea63a73bf7fd6243347450543579ff"
+    },
+    {
+      "charge_fourier_roundoff_bound_nm3_quantized": 0.0,
+      "charge_nm3_quantized_sha256": "95103f2c81e24650119d86595f546def165efafab5454b3141471093085b5128",
+      "diagnostic_quantized_fingerprint": "e45e57edfb4bdb9cdfed1823385c91164c132429a2803702d2530419fb8459f7",
+      "electrostatic_energy_density_mev_nm2_quantized": 0.0654748324,
+      "grid_size": 113,
+      "integrated_charge_imbalance_nm2_quantized": 0.0,
+      "maximum_outside_support_coefficient_nm3_quantized": 0.0,
+      "potential_mean_mev_quantized": 0.0,
+      "projected_potential_quantized_sha256": "6318ef3a2878d57a6e93a4e459f9e8810ac320e04fc1c2d040265b4c5de171ca",
+      "real_space_energy_density_mev_nm2_quantized": 0.0654748324,
+      "spectral_poisson_residual_mev_nm2_quantized": 0.0,
+      "z_nm_quantized_sha256": "163913292e43055c9205f940eb899bd4378dda7716a3450c3ba6188824fb13fb"
+    }
+  ],
+  "quantization_decimals": 10,
+  "release_status": {
+    "bcs_authorized": false,
+    "carrier_occupations_authorized": false,
+    "density_authorized": false,
+    "hartree_fock_authorized": false,
+    "jdos_authorized": false,
+    "normal_reference_authorized": false,
+    "optical_response_authorized": false,
+    "physical_cutoff_authorized": false,
+    "physical_identity_attested": false,
+    "physical_poisson_authorized": false
+  },
+  "schema": "n7-manufactured-periodic-poisson-projection-v2",
+  "source_label": "rho=1.7e-4*cos(Gz+0.19)-0.8e-4*sin(2Gz-0.07) nm^-3"
+}

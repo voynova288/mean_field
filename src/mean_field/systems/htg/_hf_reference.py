@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from ._hf_types import *  # noqa: F401,F403
+import numpy as np
+
+from mean_field.core.hf.coulomb import real_space_cell_area_nm2_from_reciprocal
+from .lattice import HTGLattice
 
 def moire_cell_area_nm2(lattice: HTGLattice) -> float:
     return real_space_cell_area_nm2_from_reciprocal(lattice.b_m1, lattice.b_m2)
@@ -224,4 +227,16 @@ def htg_occupation_mask_from_density(
         mask[:, ik] = occupations > float(threshold)
     return mask
 
-__all__ = [name for name in globals() if not name.startswith('__')]
+__all__ = [
+    "hermitian_residual",
+    "htg_band_reference_occupations",
+    "htg_filling_from_density",
+    "htg_gap_estimate",
+    "htg_gap_from_occupation_mask",
+    "htg_occupation_mask_from_density",
+    "htg_occupied_bands_per_k",
+    "htg_occupied_state_count",
+    "htg_projector_from_density",
+    "moire_cell_area_nm2",
+    "projector_idempotency_residual",
+]

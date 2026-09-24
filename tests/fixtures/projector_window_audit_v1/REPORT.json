@@ -1,0 +1,469 @@
+{
+  "gamma_patch": {
+    "kx_abs_max_angstrom_inv": 0.15,
+    "ky_abs_max_angstrom_inv": 0.05,
+    "point_count": 135
+  },
+  "gamma_wannier_index_block_weights": {
+    "57": {
+      "energy_ev": -1.0111019835872341,
+      "indices_1_20_weight": 0.2251206827392237,
+      "indices_21_50_weight": 0.6369602567612657,
+      "indices_51_80_weight": 0.1379190604995113,
+      "largest_wannier_indices_1_based": [
+        22,
+        25,
+        49,
+        46,
+        37,
+        34,
+        67,
+        62
+      ],
+      "largest_weights": [
+        0.12296902787526685,
+        0.12264533611766264,
+        0.058498071420869685,
+        0.05839527822445914,
+        0.05483905546600125,
+        0.05467130996863405,
+        0.051523923963496,
+        0.051228890191564264
+      ]
+    },
+    "58": {
+      "energy_ev": -0.7443300094644714,
+      "indices_1_20_weight": 0.7822130683179067,
+      "indices_21_50_weight": 0.13937073635437183,
+      "indices_51_80_weight": 0.07841619532772158,
+      "largest_wannier_indices_1_based": [
+        1,
+        11,
+        6,
+        16,
+        13,
+        18,
+        3,
+        8
+      ],
+      "largest_weights": [
+        0.15223106123296237,
+        0.15070214155920675,
+        0.1398535397610656,
+        0.13874559727722963,
+        0.03745919911149943,
+        0.0360892577300564,
+        0.03303700614273197,
+        0.0324040013703471
+      ]
+    },
+    "59": {
+      "energy_ev": -0.6932391054891277,
+      "indices_1_20_weight": 0.7666943585604713,
+      "indices_21_50_weight": 0.13239354930272096,
+      "indices_51_80_weight": 0.10091209213680757,
+      "largest_wannier_indices_1_based": [
+        6,
+        16,
+        1,
+        11,
+        19,
+        9,
+        14,
+        4
+      ],
+      "largest_weights": [
+        0.14641850236460174,
+        0.14451019358216521,
+        0.1337765990207084,
+        0.13187920851474727,
+        0.05035851321333935,
+        0.0484268761070944,
+        0.047677424445046884,
+        0.04632774009821526
+      ]
+    },
+    "60": {
+      "energy_ev": -0.5005148303371365,
+      "indices_1_20_weight": 0.3945503276058483,
+      "indices_21_50_weight": 0.3471535029044678,
+      "indices_51_80_weight": 0.2582961694896844,
+      "largest_wannier_indices_1_based": [
+        22,
+        25,
+        62,
+        67,
+        5,
+        10,
+        20,
+        15
+      ],
+      "largest_weights": [
+        0.16957780534380584,
+        0.16956682232009615,
+        0.09357323078264065,
+        0.09356526389362939,
+        0.05774233621206255,
+        0.05774057314137408,
+        0.056170830401414296,
+        0.0561649818708965
+      ]
+    },
+    "61": {
+      "energy_ev": -0.405371149212337,
+      "indices_1_20_weight": 0.7889255091506945,
+      "indices_21_50_weight": 0.0718769452835277,
+      "indices_51_80_weight": 0.13919754556577835,
+      "largest_wannier_indices_1_based": [
+        6,
+        1,
+        11,
+        16,
+        13,
+        18,
+        14,
+        19
+      ],
+      "largest_weights": [
+        0.16073156856017085,
+        0.16071348867436047,
+        0.15330079275672565,
+        0.15316233020146178,
+        0.02154814023083594,
+        0.021526152540490045,
+        0.02150559503933871,
+        0.021480494274187266
+      ]
+    },
+    "62": {
+      "energy_ev": -0.25104577985367,
+      "indices_1_20_weight": 0.7212255757919767,
+      "indices_21_50_weight": 0.11769776113781164,
+      "indices_51_80_weight": 0.16107666307021165,
+      "largest_wannier_indices_1_based": [
+        6,
+        1,
+        16,
+        11,
+        14,
+        19,
+        9,
+        4
+      ],
+      "largest_weights": [
+        0.14679196827359325,
+        0.1467002777116568,
+        0.14030025391721485,
+        0.14027725461659962,
+        0.036577164116873666,
+        0.03655377828235357,
+        0.03652414956361886,
+        0.03648587002709441
+      ]
+    },
+    "63": {
+      "energy_ev": 0.030033847567811158,
+      "indices_1_20_weight": 0.008211935254087456,
+      "indices_21_50_weight": 0.8537177179823574,
+      "indices_51_80_weight": 0.1380703467635534,
+      "largest_wannier_indices_1_based": [
+        31,
+        28,
+        43,
+        40,
+        49,
+        46,
+        34,
+        37
+      ],
+      "largest_weights": [
+        0.11873355435041874,
+        0.1187326647981849,
+        0.11797632176173507,
+        0.11797304957318575,
+        0.09611843000447778,
+        0.09611601477270919,
+        0.09401034368578932,
+        0.09400876253458322
+      ]
+    },
+    "64": {
+      "energy_ev": 0.2913452352202613,
+      "indices_1_20_weight": 0.6846624012763929,
+      "indices_21_50_weight": 0.24103274100163213,
+      "indices_51_80_weight": 0.07430485772197466,
+      "largest_wannier_indices_1_based": [
+        18,
+        13,
+        8,
+        3,
+        4,
+        9,
+        14,
+        19
+      ],
+      "largest_weights": [
+        0.12181820058956673,
+        0.12180451948740276,
+        0.10635453772131859,
+        0.10634284062283492,
+        0.0628510730143071,
+        0.06277390813101291,
+        0.046409352857244825,
+        0.04639536694280607
+      ]
+    }
+  },
+  "grid": {
+    "periodic": true,
+    "points": 2601,
+    "shape": [
+      51,
+      51
+    ]
+  },
+  "interpretation_boundary": "Spectral isolation and subspace transport can reject unstable raw band windows, but they do not define the Coulomb vertex, Wannier centers, screening, or a self-consistent mean-field model.",
+  "neutral_active_space_occupied_bands": 60,
+  "orbital_provenance_warning": "The 1:20/21:50/51:80 index blocks are reported only as numerical blocks. Mapping them to Ta-d/Te-p/Pd-d remains inferred, not source-bound, until matching Wannier90 metadata are supplied.",
+  "saved_energy_replay_max_abs_ev": 1.9095836023552692e-14,
+  "schema": "tpt-band-projector-window-audit-v1",
+  "source_grid": "/data/home/ziyuzhu/Mean_Field/results/tpt_monolayer_excitons/noninteracting_preflight_v2/TPT_NONINTERACTING_WANNIER_BANDS_V2.npz",
+  "source_hr": "/data/home/ziyuzhu/Mean_Field/results/tpt_monolayer_excitons/source_bundle_v1/input/wannier90_hr_TPT_monolayer_lmbj.dat",
+  "source_hr_sha256": "46aa589893d1d24670fce5872aeef6b0b18f75a488b6c0fcec4da9ccaaf5a54d",
+  "window_results": {
+    "bands_57_64": {
+      "band_indices_1_based": [
+        57,
+        64
+      ],
+      "full_bz_boundary_direct_gap_ev": {
+        "lower_min": 0.0018923559417922675,
+        "minimum": 0.000599761392487963,
+        "upper_min": 0.000599761392487963
+      },
+      "gamma_patch_boundary_direct_gap_ev": {
+        "lower_min": 0.024227500872402663,
+        "minimum": 0.024227500872402663,
+        "upper_min": 0.20370165083989838
+      },
+      "neighbor_link_min_singular_full_bz": {
+        "count": 5202,
+        "median": 0.9916003852887239,
+        "min": 0.000430844619408799,
+        "p01": 0.003229341310992742,
+        "p05": 0.05767333097973241
+      },
+      "neighbor_link_min_singular_gamma_patch": {
+        "count": 246,
+        "median": 0.9936969834844183,
+        "min": 0.6518836689447082,
+        "p01": 0.6529731415427315,
+        "p05": 0.6927598329399545
+      },
+      "periodic_seam_link_min_singular": {
+        "count": 102,
+        "median": 0.9950378941020697,
+        "min": 0.9807659386219483,
+        "p01": 0.9809668893320297,
+        "p05": 0.9824435335035374
+      },
+      "rank_spinless": 8,
+      "rank_with_explicit_spin_if_spin_degenerate": 16
+    },
+    "bands_58_63": {
+      "band_indices_1_based": [
+        58,
+        63
+      ],
+      "full_bz_boundary_direct_gap_ev": {
+        "lower_min": 0.0008524964608993546,
+        "minimum": 0.0008524964608993546,
+        "upper_min": 0.0011876044989488355
+      },
+      "gamma_patch_boundary_direct_gap_ev": {
+        "lower_min": 0.10494807385538496,
+        "minimum": 0.01241880648664051,
+        "upper_min": 0.01241880648664051
+      },
+      "neighbor_link_min_singular_full_bz": {
+        "count": 5202,
+        "median": 0.9933898531385479,
+        "min": 0.0017519271688911688,
+        "p01": 0.004543721914965447,
+        "p05": 0.07522560382668568
+      },
+      "neighbor_link_min_singular_gamma_patch": {
+        "count": 246,
+        "median": 0.9985531490073598,
+        "min": 0.0021930726984577572,
+        "p01": 0.0023488782067754366,
+        "p05": 0.003091038353838893
+      },
+      "periodic_seam_link_min_singular": {
+        "count": 102,
+        "median": 0.05358002005210931,
+        "min": 0.029610400448860912,
+        "p01": 0.031204202160856443,
+        "p05": 0.031665524688708376
+      },
+      "rank_spinless": 6,
+      "rank_with_explicit_spin_if_spin_degenerate": 12
+    },
+    "bands_59_62": {
+      "band_indices_1_based": [
+        59,
+        62
+      ],
+      "full_bz_boundary_direct_gap_ev": {
+        "lower_min": 0.0031511459828409416,
+        "minimum": 0.0001476903324635348,
+        "upper_min": 0.0001476903324635348
+      },
+      "gamma_patch_boundary_direct_gap_ev": {
+        "lower_min": 0.04691371927929189,
+        "minimum": 0.04691371927929189,
+        "upper_min": 0.22130644559563323
+      },
+      "neighbor_link_min_singular_full_bz": {
+        "count": 5202,
+        "median": 0.9957490306648584,
+        "min": 0.0003589971304306503,
+        "p01": 0.01701117537196891,
+        "p05": 0.9530920672429817
+      },
+      "neighbor_link_min_singular_gamma_patch": {
+        "count": 246,
+        "median": 0.9980606734365942,
+        "min": 0.939452541475929,
+        "p01": 0.9398968942540058,
+        "p05": 0.9435971873466747
+      },
+      "periodic_seam_link_min_singular": {
+        "count": 102,
+        "median": 0.9967362017448129,
+        "min": 0.9916027331133627,
+        "p01": 0.9916053358488298,
+        "p05": 0.9922994442072891
+      },
+      "rank_spinless": 4,
+      "rank_with_explicit_spin_if_spin_degenerate": 8
+    },
+    "bands_59_63": {
+      "band_indices_1_based": [
+        59,
+        63
+      ],
+      "full_bz_boundary_direct_gap_ev": {
+        "lower_min": 0.0031511459828409416,
+        "minimum": 0.0011876044989488355,
+        "upper_min": 0.0011876044989488355
+      },
+      "gamma_patch_boundary_direct_gap_ev": {
+        "lower_min": 0.04691371927929189,
+        "minimum": 0.01241880648664051,
+        "upper_min": 0.01241880648664051
+      },
+      "neighbor_link_min_singular_full_bz": {
+        "count": 5202,
+        "median": 0.9944086354104815,
+        "min": 0.0015182446230860396,
+        "p01": 0.0045300260498466255,
+        "p05": 0.8530806172161498
+      },
+      "neighbor_link_min_singular_gamma_patch": {
+        "count": 246,
+        "median": 0.9983165704791442,
+        "min": 0.00213456420037329,
+        "p01": 0.0024344922914874877,
+        "p05": 0.0031232256226851594
+      },
+      "periodic_seam_link_min_singular": {
+        "count": 102,
+        "median": 0.05407522572926285,
+        "min": 0.02978326289532207,
+        "p01": 0.031533285332371846,
+        "p05": 0.032164496428017574
+      },
+      "rank_spinless": 5,
+      "rank_with_explicit_spin_if_spin_degenerate": 10
+    },
+    "bands_60_61": {
+      "band_indices_1_based": [
+        60,
+        61
+      ],
+      "full_bz_boundary_direct_gap_ev": {
+        "lower_min": 0.000652149570453342,
+        "minimum": 0.000652149570453342,
+        "upper_min": 0.0007664184078482981
+      },
+      "gamma_patch_boundary_direct_gap_ev": {
+        "lower_min": 0.024946217094229506,
+        "minimum": 0.024946217094229506,
+        "upper_min": 0.14052984456327217
+      },
+      "neighbor_link_min_singular_full_bz": {
+        "count": 5202,
+        "median": 0.9962835916013695,
+        "min": 0.0010456148021907475,
+        "p01": 0.009661302947663795,
+        "p05": 0.32457134952714933
+      },
+      "neighbor_link_min_singular_gamma_patch": {
+        "count": 246,
+        "median": 0.9985550204892387,
+        "min": 0.003184107995633922,
+        "p01": 0.003213459642514184,
+        "p05": 0.005287634396285508
+      },
+      "periodic_seam_link_min_singular": {
+        "count": 102,
+        "median": 0.11741382123481309,
+        "min": 0.03424064323193996,
+        "p01": 0.034828386946945115,
+        "p05": 0.04342861472399569
+      },
+      "rank_spinless": 2,
+      "rank_with_explicit_spin_if_spin_degenerate": 4
+    },
+    "bands_60_62": {
+      "band_indices_1_based": [
+        60,
+        62
+      ],
+      "full_bz_boundary_direct_gap_ev": {
+        "lower_min": 0.000652149570453342,
+        "minimum": 0.0001476903324635348,
+        "upper_min": 0.0001476903324635348
+      },
+      "gamma_patch_boundary_direct_gap_ev": {
+        "lower_min": 0.024946217094229506,
+        "minimum": 0.024946217094229506,
+        "upper_min": 0.22130644559563323
+      },
+      "neighbor_link_min_singular_full_bz": {
+        "count": 5202,
+        "median": 0.9963767671386303,
+        "min": 0.00034019116364133924,
+        "p01": 0.0067798506800490765,
+        "p05": 0.19754034247769306
+      },
+      "neighbor_link_min_singular_gamma_patch": {
+        "count": 246,
+        "median": 0.99848128048901,
+        "min": 0.0029897109260001134,
+        "p01": 0.003052728822542592,
+        "p05": 0.005060715499446813
+      },
+      "periodic_seam_link_min_singular": {
+        "count": 102,
+        "median": 0.3545527098710444,
+        "min": 0.03985754563347214,
+        "p01": 0.03996517101847104,
+        "p05": 0.040608453796877574
+      },
+      "rank_spinless": 3,
+      "rank_with_explicit_spin_if_spin_degenerate": 6
+    }
+  }
+}

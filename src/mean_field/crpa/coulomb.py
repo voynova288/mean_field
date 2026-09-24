@@ -5,7 +5,10 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..systems.tbg.params import TBGParameters
-from ..systems.tbg.zero_field.hf import coulomb_unit, screened_coulomb
+from mean_field.systems.tbg.zero_field._hf_basis_overlap import (
+    coulomb_unit,
+    screened_coulomb,
+)
 
 
 @dataclass(frozen=True)

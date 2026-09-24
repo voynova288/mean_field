@@ -5,7 +5,8 @@ import hashlib
 
 import numpy as np
 
-from mean_field.core.hf import compute_hf_energy, compute_oda_parameter
+from mean_field.core.hf.interaction import compute_hf_energy
+from mean_field.core.hf.engine import compute_oda_parameter
 
 from ._hf_shared import _rlg_hbn_zero_literal_q0_fock
 from ._hf_interaction_path import (

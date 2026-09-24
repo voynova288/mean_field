@@ -27,14 +27,14 @@ from typing import Any, Literal, Sequence
 
 import numpy as np
 
-from ....core.hf import (
-    HFOverlapBlockSet,
+from mean_field.core.hf.overlap import HFOverlapBlockSet
+from mean_field.core.hf.tdhf import (
     ParticleHolePair,
     TDHFMatrices,
     assemble_tdhf_liouvillian,
-    build_projected_interaction_hamiltonian,
     validate_tdhf_structures,
 )
+from mean_field.core.hf.interaction import build_projected_interaction_hamiltonian
 from ._hf_basis_overlap import (
     RestrictedHartreeFockRun,
     TBGZeroFieldHFRunProvenance,

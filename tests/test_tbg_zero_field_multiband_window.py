@@ -4,7 +4,9 @@ import numpy as np
 import pytest
 
 from mean_field.systems.tbg.params import TBGParameters
-from mean_field.systems.tbg.zero_field import solve_bm_model_band_window_on_torus
+from mean_field.systems.tbg.zero_field.model import (
+    solve_bm_model_band_window_on_torus,
+)
 from mean_field.systems.tbg.zero_field.model import (
     BMSolution,
     _c2t_operator,

@@ -281,10 +281,14 @@ def _shift_wavefunction_grid(values: np.ndarray, dm: int, dn: int, *, boundary_m
 
 
 def validate_projected_basis_compatibility(target: ProjectedWavefunctionBasis, source: ProjectedWavefunctionBasis) -> None:
+    """Validate the physical basis needed for target/source overlaps.
+
+    Target and source band counts may differ: the resulting overlap is then
+    rectangular in their flattened projected-state dimensions.
+    """
+
     if target.local_basis_size != source.local_basis_size:
         raise ValueError(f"local_basis_size mismatch: {target.local_basis_size} != {source.local_basis_size}")
-    if target.n_band != source.n_band:
-        raise ValueError(f"n_band mismatch: {target.n_band} != {source.n_band}")
     if target.n_flavor != source.n_flavor:
         raise ValueError(f"n_flavor mismatch: {target.n_flavor} != {source.n_flavor}")
     if target.n_spin != source.n_spin:
@@ -409,7 +413,7 @@ def build_projected_overlap_block_set(
     gvecs: Iterable[complex] | np.ndarray | None = None,
     target_component_group: ComponentGroupSelector = None,
     source_component_group: ComponentGroupSelector = None,
-    include_diagonal_overlaps: bool = True,
+    include_diagonal_overlaps: bool | None = None,
     hartree_screening: Mapping[tuple[int, int], float] | None = None,
     fock_screening: Mapping[tuple[int, int], np.ndarray] | None = None,
 ) -> HFOverlapBlockSet:
@@ -423,6 +427,9 @@ def build_projected_overlap_block_set(
 
     resolved_source = target if source is None else source
     validate_projected_basis_compatibility(target, resolved_source)
+    resolved_include_diagonal = source is None if include_diagonal_overlaps is None else bool(
+        include_diagonal_overlaps
+    )
     resolved_shifts = tuple((int(shift[0]), int(shift[1])) for shift in shifts)
     if gvecs is None:
         resolved_gvecs = np.zeros((len(resolved_shifts),), dtype=np.complex128)
@@ -449,7 +456,12 @@ def build_projected_overlap_block_set(
         else:
             overlap = calculate_projected_overlap_between(target, resolved_source, shift[0], shift[1])
         overlaps[shift] = overlap
-        if include_diagonal_overlaps:
+        if resolved_include_diagonal:
+            if (target.nt, target.nk) != (resolved_source.nt, resolved_source.nk):
+                raise ValueError(
+                    "Diagonal overlaps require identical target/source projected dimensions; "
+                    "pass include_diagonal_overlaps=False for a rectangular bridge."
+                )
             diagonal[shift] = diagonal_overlap_blocks(overlap, nt=target.nt, nk=target.nk)
 
     return HFOverlapBlockSet(
@@ -506,14 +518,21 @@ def contract_fock_term_from_overlap(
     *,
     use_numba: bool | None = None,
 ) -> np.ndarray:
+    """Contract a source density into a possibly different target basis.
+
+    ``overlap`` has shape ``(nt_target,nk_target,nt_source,nk_source)``.
+    The square-basis case remains the special case ``nt_target == nt_source``.
+    """
+
     overlap = np.asarray(overlap, dtype=np.complex128)
     density = np.asarray(density, dtype=np.complex128)
     coeff_matrix = np.asarray(coeff_matrix)
-    nt, nk_target, nt_rhs, nk_source = overlap.shape
-    if nt != nt_rhs:
-        raise ValueError(f"Expected square flavor dimensions in overlap, got {overlap.shape}")
-    if density.shape != (nt, nt, nk_source):
-        raise ValueError(f"Expected density shape {(nt, nt, nk_source)}, got {density.shape}")
+    nt_target, nk_target, nt_source, nk_source = overlap.shape
+    if density.shape != (nt_source, nt_source, nk_source):
+        raise ValueError(
+            f"Expected source density shape {(nt_source, nt_source, nk_source)}, "
+            f"got {density.shape} for target/source overlap {overlap.shape}"
+        )
     if coeff_matrix.shape != (nk_target, nk_source):
         raise ValueError(f"Expected coeff_matrix shape {(nk_target, nk_source)}, got {coeff_matrix.shape}")
 
@@ -526,6 +545,69 @@ def contract_fock_term_from_overlap(
     intermediate = np.einsum("tsac,scd->tsad", lambda_blocks, density_t, optimize=True)
     fock = np.einsum("ts,tsad,tsbd->tab", coeff_matrix, intermediate, np.conj(lambda_blocks), optimize=True)
     return np.transpose(fock, (1, 2, 0))
+
+
+def contract_fock_action_from_overlap(
+    overlap: np.ndarray,
+    density: np.ndarray,
+    coeff_matrix: np.ndarray,
+    vectors: np.ndarray,
+) -> np.ndarray:
+    """Apply the stored-projector Fock contraction without forming the dense Fock matrix.
+
+    ``overlap`` has shape ``(nt_target, nk_target, nt_source, nk_source)`` and
+    ``vectors`` has shape ``(nt_target, n_vector, nk_target)``. Real or complex
+    numeric inputs are evaluated in complex128 precision.
+    """
+
+    arrays: dict[str, np.ndarray] = {}
+    for name, value in (
+        ("overlap", overlap),
+        ("density", density),
+        ("coeff_matrix", coeff_matrix),
+        ("vectors", vectors),
+    ):
+        array = np.asarray(value)
+        if not np.issubdtype(array.dtype, np.number):
+            raise TypeError(f"{name} must have a real or complex numeric dtype, got {array.dtype}")
+        arrays[name] = array
+
+    overlap_array = arrays["overlap"]
+    if overlap_array.ndim != 4:
+        raise ValueError(
+            "Expected overlap shape (nt_target, nk_target, nt_source, nk_source), "
+            f"got {overlap_array.shape}"
+        )
+    nt_target, nk_target, nt_source, nk_source = overlap_array.shape
+
+    density_array = arrays["density"]
+    expected_density_shape = (nt_source, nt_source, nk_source)
+    if density_array.shape != expected_density_shape:
+        raise ValueError(f"Expected density shape {expected_density_shape}, got {density_array.shape}")
+
+    coeff_array = arrays["coeff_matrix"]
+    expected_coeff_shape = (nk_target, nk_source)
+    if coeff_array.shape != expected_coeff_shape:
+        raise ValueError(f"Expected coeff_matrix shape {expected_coeff_shape}, got {coeff_array.shape}")
+
+    vectors_array = arrays["vectors"]
+    if vectors_array.ndim != 3 or vectors_array.shape[0] != nt_target or vectors_array.shape[2] != nk_target:
+        raise ValueError(
+            f"Expected vectors shape ({nt_target}, n_vector, {nk_target}), got {vectors_array.shape}"
+        )
+
+    lambda_blocks = np.transpose(np.asarray(overlap_array, dtype=np.complex128), (1, 3, 0, 2))
+    density_t = np.transpose(np.asarray(density_array, dtype=np.complex128), (2, 1, 0))
+    vectors_t = np.transpose(np.asarray(vectors_array, dtype=np.complex128), (2, 0, 1))
+    coeff_array = np.asarray(coeff_array, dtype=np.complex128)
+
+    # (t,s,d,r) = sum_b conj(Lambda[t,s,b,d]) X[t,b,r]
+    projected_vectors = np.einsum("tsbd,tbr->tsdr", np.conj(lambda_blocks), vectors_t, optimize=True)
+    # (t,s,c,r) = sum_d density[d,c,s] projected_vectors[t,s,d,r]
+    density_projected_vectors = np.einsum("scd,tsdr->tscr", density_t, projected_vectors, optimize=True)
+    # (t,a,r) = sum_s,c coeff[t,s] Lambda[t,s,a,c] density_projected_vectors[t,s,c,r]
+    action = np.einsum("ts,tsac,tscr->tar", coeff_array, lambda_blocks, density_projected_vectors, optimize=True)
+    return np.transpose(action, (1, 2, 0))
 
 
 def _coerce_fock_coeff_matrix_for_numba(coeff_matrix: np.ndarray) -> np.ndarray:
@@ -580,23 +662,24 @@ if njit is not None:  # pragma: no branch
         density: np.ndarray,
         coeff_matrix: np.ndarray,
     ) -> np.ndarray:
-        nt = overlap.shape[0]
+        nt_target = overlap.shape[0]
         nk_target = overlap.shape[1]
+        nt_source = overlap.shape[2]
         nk_source = overlap.shape[3]
-        out = np.zeros((nt, nt, nk_target), dtype=np.complex128)
+        out = np.zeros((nt_target, nt_target, nk_target), dtype=np.complex128)
         for ik_target in prange(nk_target):
             for ik_source in range(nk_source):
                 coeff = coeff_matrix[ik_target, ik_source]
                 if coeff == 0.0:
                     continue
-                for a in range(nt):
-                    for b in range(nt):
+                for a in range(nt_target):
+                    for b in range(nt_target):
                         total = 0.0 + 0.0j
-                        for c in range(nt):
+                        for c in range(nt_source):
                             left = overlap[a, ik_target, c, ik_source]
                             if left == 0.0:
                                 continue
-                            for d in range(nt):
+                            for d in range(nt_source):
                                 right = overlap[b, ik_target, d, ik_source]
                                 if right == 0.0:
                                     continue

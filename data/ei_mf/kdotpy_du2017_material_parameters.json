@@ -1,0 +1,54 @@
+{
+  "classification": "kdotpy material parameters for the NC EI Stage-B attempt",
+  "paper_source": "Du et al. 2017 Supplementary Table 1",
+  "units": {
+    "energy": "meV except Ac",
+    "Ac": "eV nm^2",
+    "lattice_constant": "nm"
+  },
+  "materials": {
+    "InAs": {
+      "Eg_meV": 417.0,
+      "Ev_meV": -417.0,
+      "Ec_meV": 0.0,
+      "Delta_so_meV": 390.0,
+      "Ac_eV_nm2": -0.26,
+      "gamma1": 2.01,
+      "gamma2": -0.49,
+      "gamma3": 0.21,
+      "dielectric": 14.55,
+      "Ep_meV": 22500.0,
+      "lattice_constant_nm_external_approximation": 0.60583
+    },
+    "GaSb": {
+      "Eg_meV": 812.0,
+      "Ev_meV": 143.0,
+      "Ec_meV": 955.0,
+      "Delta_so_meV": 760.0,
+      "Ac_eV_nm2": 0.09,
+      "gamma1": 4.16,
+      "gamma2_printed": 8.18,
+      "gamma2_inferred_model": 0.08,
+      "gamma2_policy": "Du2017 table typo correction inferred from gamma2_L - Ep/(6 Eg); not author-confirmed",
+      "gamma3": 1.38,
+      "dielectric": 15.69,
+      "Ep_meV": 22500.0,
+      "lattice_constant_nm_external_approximation": 0.60959
+    },
+    "AlSb": {
+      "Eg_meV": 2386.0,
+      "Ev_meV": -237.0,
+      "Ec_meV": 2149.0,
+      "Delta_so_meV": 676.0,
+      "Ac_eV_nm2": -0.06,
+      "gamma1": 2.04,
+      "gamma2": -0.38,
+      "gamma3": 0.40,
+      "dielectric": 14.4,
+      "Ep_meV": 22500.0,
+      "lattice_constant_nm_external_approximation": 0.61355
+    }
+  },
+  "Ep_source": "Li, Yang, and Chang, Phys. Rev. B 80, 035303 (2009), cited as Ref. 7 by the Nature supplement: Ep=22.5 eV for each material",
+  "caveat": "Supplementary Table 1 does not itself list P/Ep, lattice/elastic constants, kappa, or BIA parameters. Ep is author-method-reference supplied; lattice/elastic constants remain external approximations and unsupported BIA/deformation terms are zeroed. GaSb gamma2=8.18 is retained as the printed value, while the optional inferred model uses 0.08 from 4.7 - 22.5/(6*0.812) = 0.0817734; this correction is not author-confirmed and must be selected explicitly."
+}

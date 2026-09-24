@@ -45,10 +45,6 @@ def validate_hamiltonian_static(lattice: HTQGLattice, params: HTQGParams, *, dom
     )
 
 
-def validate_decoupled_dirac_limit(lattice: HTQGLattice, params: HTQGParams, *, k_tilde: complex | None = None, atol: float = 1.0e-10) -> tuple[ValidationCheck, ...]:
-    del k_tilde
-    return validate_hamiltonian_static(lattice, params, atol=atol)
-
 
 def validate_time_reversal(lattice: HTQGLattice, params: HTQGParams, *, k_tilde: complex | None = None, domain: str = "alpha_beta_alpha", atol: float = 1.0e-10) -> tuple[ValidationCheck, ...]:
     del k_tilde
@@ -58,14 +54,6 @@ def validate_time_reversal(lattice: HTQGLattice, params: HTQGParams, *, k_tilde:
     return (make_validation_check("time-reversal Γ spectrum", residual <= float(atol), residual, tolerance=float(atol)),)
 
 
-def validate_chiral_limit(lattice: HTQGLattice, *, domain: str = "alpha_beta_alpha", atol: float = 1.0e-10) -> tuple[ValidationCheck, ...]:
-    del domain, atol
-    return (make_validation_check("chiral-limit smoke", int(lattice.matrix_dim) > 0, int(lattice.matrix_dim)),)
-
-
-def validate_internal_symmetry_matrices(*, domain: str = "alpha_beta_alpha", atol: float = 1.0e-12) -> tuple[ValidationCheck, ...]:
-    del atol
-    return (make_validation_check("symmetry-domain label present", bool(str(domain)), str(domain)),)
 
 
 def run_lightweight_validation(lattice: HTQGLattice, params: HTQGParams, *, domain: str = "alpha_beta_alpha") -> ValidationReport:
@@ -82,11 +70,8 @@ __all__ = [
     "ValidationCheck",
     "ValidationReport",
     "run_lightweight_validation",
-    "validate_chiral_limit",
-    "validate_decoupled_dirac_limit",
     "validate_domains",
     "validate_hamiltonian_static",
-    "validate_internal_symmetry_matrices",
     "validate_lattice",
     "validate_params",
     "validate_time_reversal",

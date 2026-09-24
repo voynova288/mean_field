@@ -7,17 +7,19 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from ...core.hf import (
+from mean_field.core.hf.density import (
     DensityConvention,
-    DensityUpdateResult,
-    conventional_projector_to_stored,
     density_to_stored_delta,
+)
+from mean_field.core.hf.engine import DensityUpdateResult
+from mean_field.core.hf.occupations import (
+    conventional_projector_to_stored,
     stored_projector_to_conventional,
 )
 from .projected_hf_config import SPIN_LABELS, TDBGProjectedHFConfig, VALLEY_LABELS
 
 if TYPE_CHECKING:
-    from ...core.hf import HartreeFockRun
+    from mean_field.core.hf.engine import HartreeFockRun
     from .model import TDBGModel
     from .params import TDBGParameters
 

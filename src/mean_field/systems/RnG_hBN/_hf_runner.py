@@ -374,7 +374,7 @@ def build_rlg_hbn_hf_problem(
     The RLG/hBN system layer still owns the projected basis, layer-resolved
     Coulomb tables, filling convention, and ODA functional.  This adapter only
     packages those system-specific callables behind the shared
-    :class:`mean_field.core.hf.HartreeFockProblem` interface.
+    :class:`mean_field.core.hf.problem.HartreeFockProblem` interface.
     """
 
     def initialize_state(state_obj: RLGhBNHartreeFockState, *, init_mode: str, seed: int) -> None:

@@ -1,9 +1,37 @@
 from __future__ import annotations
 
-from ._supercell_shared import *  # noqa: F401,F403
-from ._supercell_types import *  # noqa: F401,F403
-from ._supercell_geometry import *  # noqa: F401,F403
-from ._supercell_basis import *  # noqa: F401,F403
+from collections.abc import Iterable
+from dataclasses import dataclass
+
+import numpy as np
+
+from mean_field.core.hf.engine import DensityUpdateResult
+from mean_field.core.hf.interaction import (
+    build_projected_hf_kernel,
+    build_projected_hf_problem,
+    compute_hf_energy,
+)
+from mean_field.core.hf.occupations import find_chemical_potential, random_unitary_from_hermitian
+from mean_field.core.hf.overlap import HFOverlapBlockSet
+from mean_field.core.hf.problem import HartreeFockProblem, run_hartree_fock_problem
+
+from ._hf_reference import hermitian_residual
+from .model import HTGModel
+from .params import InteractionParams
+from ._supercell_basis import (
+    _supercell_reference_density_blocks,
+    build_htg_supercell_overlap_blocks,
+    build_htg_supercell_projected_basis,
+    htg_supercell_filling_from_density,
+    htg_supercell_occupied_count_per_k,
+)
+from ._supercell_geometry import htg_minimal_fractional_supercell
+from ._supercell_types import (
+    HTGSupercell,
+    HTGSupercellGroundStateScan,
+    HTGSupercellHartreeFockRun,
+    HTGSupercellHartreeFockState,
+)
 
 def _density_from_hamiltonian(
     hamiltonian: np.ndarray,
@@ -380,4 +408,12 @@ def scan_htg_supercell_ground_state(
             )
     return HTGSupercellGroundStateScan(runs=tuple(runs))
 
-__all__ = [name for name in globals() if not name.startswith('__')]
+__all__ = [
+    "HTGSupercellDensityBuilder",
+    "HTGSupercellInitializer",
+    "initialize_htg_supercell_density",
+    "build_htg_supercell_hf_kernel",
+    "build_htg_supercell_hf_problem",
+    "run_htg_supercell_hf",
+    "scan_htg_supercell_ground_state",
+]

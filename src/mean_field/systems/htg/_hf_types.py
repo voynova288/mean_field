@@ -18,28 +18,40 @@ from mean_field.core.contracts import (
 )
 from mean_field.core.hf.contracts_bridge import density_state_from_delta
 
-from ...core.hf import (
+from mean_field.core.hf.engine import (
     DensityUpdateResult,
-    FlavorBandData,
-    HFOverlapBlockSet,
-    HartreeFockKernel,
-    HartreeFockProblem,
     HartreeFockRun,
     HartreeFockStepResult,
+)
+from mean_field.core.hf.flavors import (
+    FlavorBandData,
+    build_flavor_band_data,
+)
+from mean_field.core.hf.overlap import (
+    HFOverlapBlockSet,
     ProjectedWavefunctionBasis,
+    calculate_projected_overlap_between,
+)
+from mean_field.core.hf.problem import (
+    HartreeFockKernel,
+    HartreeFockProblem,
+    run_hartree_fock_problem,
+)
+from mean_field.core.hf.occupations import (
     apply_random_projector_rotation,
     random_unitary_from_hermitian,
-    build_flavor_band_data,
+    find_chemical_potential,
+    occupied_state_mask,
+)
+from mean_field.core.hf.interaction import (
     build_projected_hf_kernel,
     build_projected_hf_problem,
     build_projected_interaction_hamiltonian,
     build_projected_target_hamiltonian,
-    calculate_projected_overlap_between,
     compute_hf_energy,
-    find_chemical_potential,
-    occupied_state_mask,
+)
+from mean_field.core.hf.coulomb import (
     real_space_cell_area_nm2_from_reciprocal,
-    run_hartree_fock_problem,
     screened_coulomb_matrix,
 )
 from .hamiltonian import build_hamiltonian, centered_band_indices
@@ -225,4 +237,14 @@ class HTGHartreeFockState:
             occupation_counts=occupation_counts,
         )
 
-__all__ = [name for name in globals() if not name.startswith('__')]
+__all__ = [
+    "HTGGroundStateScan",
+    "HTGHFPathResult",
+    "HTGHartreeFockRun",
+    "HTGHartreeFockState",
+    "HTGInteractionComponents",
+    "HTGInteractionPathResult",
+    "HTGProjectedBasisData",
+    "HTGSeedOccupationSummary",
+    "VALLEY_SEQUENCE",
+]

@@ -13,16 +13,20 @@ from mean_field.core.contracts import (
     assert_no_screened_diag_h0_for_RnG,
     assert_projected_basis_consistent,
 )
-from mean_field.core.hf import ProjectedWavefunctionBasis
-from mean_field.systems.RnG_hBN import (
+from mean_field.core.hf.overlap import ProjectedWavefunctionBasis
+from mean_field.systems.RnG_hBN.hf import (
     RLGhBNHartreeFockRun,
     RLGhBNHartreeFockState,
-    RLGhBNInteractionParams,
-    RLGhBNModel,
     RLGhBNProjectedBasisData,
     active_band_indices_for_interaction,
-    rlg_hbn_hf_run_to_hf_run_result,
     rlg_hbn_reference_density,
+)
+from mean_field.systems.RnG_hBN import (
+    RLGhBNInteractionParams,
+    RLGhBNModel,
+)
+from mean_field.systems.RnG_hBN.hf_contracts import (
+    rlg_hbn_hf_run_to_hf_run_result,
 )
 
 

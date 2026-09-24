@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ...core.hf import compute_density_overlap_trace_from_diagonal
+from mean_field.core.hf.overlap import compute_density_overlap_trace_from_diagonal
 from ._hf_basis import (
     _build_c3_fixed_remote_representative_source,
     _c3_transform_raw_components,

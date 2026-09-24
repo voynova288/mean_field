@@ -120,240 +120,20 @@ not author raw numerical arrays.
   - a square k-torus is only a C3 candidate until a typed receipt binds the
     reciprocal basis, C3 map, orbit map, reciprocal carries, and quadrature
     weights;
-  - `systems/tbg/zero_field/kumar2010.py` records this preflight and binds
-    metadata receipts only; it does not implement HF/TDHFA and deliberately
-    exposes no execution-readiness claim.
+  - the retired `kumar2010.py` metadata preflight is preserved at
+    `local_archive/retired_surface/tbg_zero_field_paper_preflights_20260915/`
+    (manifest SHA-256 `53f462404083e7b8c52602e6607d591a6f95e81ed52a956c8a4285e0c02a5380`);
+    it binds metadata receipts only, implements no HF/TDHFA, and provides no
+    execution-readiness claim.
 
 ### Vituri et al., *Incommensurate inter-valley coherent states in ABC graphene: collective modes and superconductivity*
 
-- Local PDF: `reference/2408.10309v1.pdf`
-- arXiv: <https://arxiv.org/abs/2408.10309v1>
-- Journal: Phys. Rev. B 111, 075103 (2025)
-- SHA256: `ec761a2b494a8e5983ff3fb6cfb842e114526cc0ba8b3e7cdc7c128f5d204bc8`
-- Cross-system finite-q instability benchmark:
-- Supplement Sec. III, Eqs. (12)-(24), gives the generalized-RPA/TDHF
-  susceptibility and the Hermitian H / non-Hermitian `Sigma_z H` construction;
-- Eqs. (22)-(23) give explicit finite-q intervalley excitation and
-  de-excitation contractions;
-- Figs. 3 and 8 connect C3-related finite-q susceptibility maxima, mode
-  softening, and the onset of imaginary frequencies;
-- the intravalley magnon supplies a separate small spin-stiffness checkpoint.
-- Scope limitation: this is dual-gated ABC trilayer graphene with a single
-  active band, not MA-TBG. Use it to validate generic finite-q IVC
-  susceptibility/instability logic, not numerical equality to the TBG spectrum.
-- Authority and implementation status:
-  - the source gives the complete six-band parent matrix, hopping/onsite
-    parameters, third-lowest active band, Thomas-Fermi screening form,
-    unrestricted-HF/optimal-damping logic and generalized-RPA equations;
-  - it does not give gate distance `d`, UV domain/cutoff, interaction q=0
-    policy, exact meshes/quadrature, CDW harmonic cutoff/q scan, SCF seeds and
-    tolerances, or raw HF/TDHF arrays;
-  - the displayed basis `(A1,B3,B1,A2,B2,A3)` puts B3 at index 2, while the
-    gauge paragraph calls B3 `psi_6/U_6,3`; the paper phase gauge is therefore
-    unresolved and must not be guessed;
-  - the source's `780 meV*a0^2`, `n=6e11 cm^-2 per valley`, and
-    `rho_s=0.28 meV` imply a factor-two density-normalization ambiguity; these
-    values remain source-reported context, not acceptance thresholds;
-  - `systems/abc_trilayer/vituri2024.py` implements the pinned six-band
-    Hamiltonian and a locally nondegenerate, gauge-independent third-band
-    projector with C3/TR covariance;
-  - `systems/abc_trilayer/vituri2024_interaction.py` implements the paper's
-    scalar `V0/VTF` formulas and same-valley third-band density form factor.
-    Gate distance and the numerical `e^2` realization require explicit
-    non-paper receipts; q=0 can only be rejected or evaluated as the analytic
-    kernel limit, which does not establish a neutralizing/HF background;
-  - arXiv-v1 and published Eq. C3 repeat the direct form-factor product in
-    the exchange term, contradicting the antisymmetry stated immediately
-    afterward. `vituri2024_vertex.py` therefore derives the ordered coefficient
-    from the earlier projected Hamiltonian and constructs `vbar=U-U_swap`,
-    rather than treating literal C3 as executable authority. It requires exact
-    local momentum conservation and records distinct omitted reconstruction
-    prefactors: `1/(2A)` for the full ordered sum and `1/(4A)` for the full
-    antisymmetrized sum;
-  - `vituri2024_rpa.py` maps the derived vertex to the local C9 scalar-Hessian
-    elements
-    `A=(epsilon_a-epsilon_A)delta-vbar_(aB;Ab)/Area` and
-    `B=-vbar_(ab;AB)/Area`. The mapping is independently checked against a
-    normalized-Slater-chart energy expansion and applies the area division
-    exactly once, without post-Hermitization;
-  - `vituri2024_tdhf.py` accepts explicit, source-bound nonzero `+q/-q`
-    transition inventories and independently assembles `A+`, `B+-`, `A-`,
-    and `B-+` without copying, averaging or Hermitization. It maps the ordered
-    inventories to the common typed signed-q core with authority
-    `projected_signed_ab`, so static status remains `not_established`;
-  - `vituri2024_hf_preflight.py` now defines a receipt-only source contract
-    for the spin-polarized half metal. It binds a uniform finite-volume k
-    state sum compatible with the generic core ODA, fixed-density canonical
-    reference and q=0 background, exact SCF seeds/exit semantics, the shared
-    `E -> F -> dF` functional chain, equal two-valley hole counts, metallicity,
-    one connected hole pocket per valley, and branch-energy provenance;
-  - `vituri2024_hf_replay.py` provides the first partial execution gate. It
-    calls only the immutable source-array loader and independently recomputes
-    canonical mesh/index/state/H0/interaction/Fock/projector hashes, active-band
-    state normalization, Fock decomposition, Hermiticity/idempotency,
-    `[F,P]`, diagonal occupation/energy closure, Aufbau and chemical-potential
-    closure, density/spin/valley counts, and base-mesh pocket connectivity;
-  - `vituri2024_hf_functional_replay.py` adds a detached, versioned local
-    probe gate. Before any provider call, its approval binds the exact choice
-    fingerprint (including all tolerances/conventions), a versioned verifier
-    implementation/schema fingerprint, and a separate independently generated
-    SHA256 of the canonical full-module `ast.dump(..., include_attributes=False)`.
-    The detached approval stores that current AST manifest, the contract binds
-    it, replay recomputes it immediately before its first provider call and
-    rejects stale source, and the final receipt records it. Because the full
-    `ast.Module` is hashed without an embedded self-digest, replay logic, q
-    validation, numerical bounds, the call recorder, and registered constants
-    are covered while formatting and comments may vary. The approval also
-    binds the expected source-array manifest derived from attested source
-    hashes, three affine anchors (source,
-    imaginary off-diagonal coherence, and dense complex Hermitian), five q=0
-    directions, six signed probes, and two distinct typed horizontal/vertical
-    nonzero no-wrap q charts. The later array replay must equal that
-    pre-approved manifest; no prior array-replay receipt is an input to the
-    contract;
-  - every q=0 direction must be informative at one or more registered anchors.
-    The source-anchor Fock, interaction, and energy checks separately record
-    result scale, unsuppressed termwise magnitude, operation count, roundoff
-    contribution, and registered bound; the termwise magnitudes are
-    `max(|F_eval|+|F_saved|)`,
-    `max(|F_eval|+|h0|+|interaction_saved|)`, and
-    `|E_eval|+|E_selected|`. Every `(anchor, q0 probe)` slope and every
-    `(q, signed probe, active response lane)` derivative has its own
-    informativeness, all-step stability, scale, termwise roundoff, and
-    registered bound. Pairing remains
-    `real(sum(F_abk X_abk))/Nk` with no conjugation or transpose. Reciprocity
-    bounds use termwise absolute sums and explicit operation counts rather than
-    a cancellation-suppressed final scalar or global maximum;
-  - each q chart contains a plus-only boundary probe, a minus-only boundary
-    probe, and a mixed interior probe. Replay requires every chart's
-    `mesh_shape` to equal `spec.geometry.mesh_shape`, then checks every valid
-    signed edge directly against the source mesh:
-    `mesh[target]-mesh[source]=+/-cartesian_q` within the preregistered
-    inverse-angstrom coordinate tolerance. Direct and analytic-Hessian
-    synthetic implementations separately consume each chart's q index,
-    Cartesian q, mesh displacement, target map, and reverse-edge map and route
-    the two signs independently, with invalid slots exactly zero and no
-    inferred, conjugated, copied, or averaged output lane;
-  - the direct displaced-Fock implementation and finite-q Hessian must have
-    different fingerprints. Each direct call returns a nonce-bound typed
-    response plus a source-closed dependency trace containing interaction and
-    full-Fock builder fingerprints, exact target/reverse-map hashes and read
-    counts, at least one interaction/full-Fock builder call, and exactly zero
-    Hessian calls. This is an **honest-provider trace**, useful for rejecting
-    truthful delegation and accidental dependency drift; it is not a proof
-    against hostile code that lies in its trace;
-  - successful local probes set only
-    `local_registered_functional_probes_replayed=True`, with exact counts
-    `anchors=3`, `q0_probes=5`, `signed_q_probes=6`, and `q_charts=2`.
-    `global_functional_chain_verified`, SCF trajectory, branch-table evidence,
-    pocket refinement, scientific execution, and paper reproduction remain
-    false. The synthetic tests are contract/formula validation, not a
-    real-source Vituri execution. No provider/metadata readiness label,
-    reciprocal-torus/carry authority, scalar-Hessian production certification,
-    or TDHF eigensolve is implied;
-  - `vituri2024_hf_scf_replay.py` is the separate uninterrupted multi-seed
-    trajectory gate. It hard-binds clean baseline commit
-    `0f7d9b9190001d2bdb6f6ec8f6e36a16864667dc`, source-byte/canonical-AST and
-    runtime-callable identities for `core/hf/problem.py`, `engine.py`, and
-    `occupations.py`, plus package/Python/NumPy versions. A detached approval
-    and contract bind the full verifier AST, exact policy/seed order, a complete
-    ordered snapshot of all inherited-functional plus SCF live-provider
-    metadata, and source/AST/code manifests for both live builders and every
-    returned problem callback. A distinct archive-authority object separately
-    binds its authority fingerprint, source artifact, loader implementation,
-    schema, expected immutable historical-archive manifest, and original
-    branch-table bytes hash. The archive is loaded and validated before either
-    live builder runs; same-object identity and shared authority fingerprints
-    are rejected. These controls prevent accidental same-object coupling only,
-    not archive/live computation dependence: a trusted same-class/same-code
-    provider can still read or copy archive data into unmanifested instance,
-    closure, default, global, or input-dependency state;
-  - each historical seed trajectory stores two transfer-source receipts,
-    pre/post-initializer states, every core-visible step field (including ODA,
-    raw/mixed/selected norms, optional delta interaction and cache provenance),
-    deterministic `state.diagnostics` manifests, a distinct final
-    recomputation, callback sequence and exact exit. Replay calls the actual
-    generic `run_hartree_fock_problem` once per seed, in policy order, while
-    wrappers call each allowed provider callback exactly once per core call.
-    Provider step/final callbacks are forbidden in v1 and replaced only by
-    verifier observers. For every branch row, exit, iteration count, terminal
-    raw/mixed/selected norms, terminal ODA lambda, final raw metric, and energy
-    must close separately to the archive and actual run before the converged
-    set is derived. It then recomputes tolerance-degenerate minima
-    and closes selected H0/effective interaction/Fock/projector/energies/mu to
-    the canonical source using locked v1 tolerances; selected canonical hashes
-    are mandatory and neither tolerance values nor hash flags are caller
-    configurable. The receipt records the exact effective tolerance/hash
-    inventory;
-  - the immutable status and receipt declare
-    `evidence_model='trusted_live_provider_distinct_archive_object'`,
-    `archive_data_independence_verified=False`,
-    `hostile_provider_resistance_verified=False`, and
-    `live_builder_dependency_state_independently_pinned=False`. The positive
-    SCF-replay fields `uninterrupted_registered_seed_trajectories_replayed`,
-    `all_attested_seed_branches_replayed`, `branch_table_replayed`, and
-    `selected_final_source_reproduced` mean deterministic parity only under
-    that trusted-provider model; they do not establish archive/live dependency
-    separation. The same-class/same-code archive-copy injection canary intentionally
-    passes while all limitation flags remain false. This does **not** establish
-    a global or unique ground state, transfer-learning physics, checkpoint
-    publication, scientific execution, or paper reproduction. The tracked
-    provider is a local synthetic generic-core fixture with nonzero `gD`, fixed
-    branch-specific projectors, and a manually constructed two-step oracle; it
-    is not real Vituri numerical evidence. A real provider and real source
-    replay remain Slurm-only;
-  - exact restart remains blocked on current HEAD. `HartreeFockProblem` and
-    `run_hartree_fock_problem` expose no public continuation/restart input,
-    while `run_hartree_fock_iterations` keeps `cached_interaction_h` local and
-    does not expose complete RNG or callback continuation state. Consequently
-    `checkpoint_snapshot_hash_verified`, `atomic_checkpoint_publication_verified`,
-    `exact_restart_verified`, and
-    `interrupted_vs_uninterrupted_trajectory_equivalent` remain false even when
-    an uninterrupted trajectory replay succeeds.
-
-#### Frozen-source pocket-refinement replay boundary
-
-- `vituri2024_hf_pocket_replay.py` adds a separate factory-only gate requiring
-  `Vituri2024HalfMetalHFReplayReceipt`, exact `Vituri2024SCFReplayApproval`, and
-  its `Vituri2024SCFReplayReceipt`. The receipt must bind that approval exactly,
-  and SCF provider/source/spec/state plus contract/archive/core identities are
-  rebound to the current source;
-- replay ingress reconstructs every derivable pocket-approval field before any
-  delegated call, including selected spin, receipt fingerprints, base hashes,
-  preflight mesh/count/evidence/margins/tolerances, and callable/metadata
-  manifests. Only the expected archive manifest and non-scientific provenance
-  note are detached; the manifest closes immediately on the loaded archive;
-- live evaluator/archive-loader implementation fingerprints are derived from
-  callable manifests, schemas are locked, provider/authority fingerprints are
-  recomputed with their helpers, source/spec/state identities are current, and
-  these semantic checks are repeated after delegated calls;
-- v1 accepts only row-major affine same-domain nested rectangular meshes with
-  strict integer subdivisions and exact embedding. The synthetic fixture is
-  `4x5 -> 7x9` (20 -> 63 points), with both preflight pockets updated to the
-  actual refined mesh/evidence hashes, counts, raw margins, and uncertainties;
-- the archive is loaded before one trusted live frozen-source call. That call
-  returns only complex128 H0/interaction/Fock arrays shaped `(4,4,Nref)`.
-  Energies, strict occupations, projectors, topology, and margins are verifier
-  outputs. Embedded-base and archive/live field parity use locked v1 bounds;
-- selected-spin holes use four-neighbor finite-domain no-wrap connectivity;
-  non-annularity counts enclosed eight-neighbor complement components. Each
-  valley in order `(-1,+1)` must have one nonempty interior non-annular pocket,
-  while opposite-spin holes are forbidden;
-- the discrete Lifshitz value is the minimum distance from `mu` to the lower
-  and upper critical grouped energy levels bounding the maximal consecutive
-  accepted open-threshold intervals. It is not `min|E-mu|`, a continuum saddle,
-  or a convergence certificate. The certified value subtracts registered
-  threshold uncertainty and the maximum archive/live energy residual;
-- evidence model
-  `trusted_live_selected_source_evaluator_distinct_refinement_archive_object`
-  records distinct objects/fingerprints, metadata/callable/full-module AST
-  manifests, archive-first call order, immutable disjoint storage, and an
-  archive-free request. Same-code hidden archive copying is still not excluded,
-  so independence/hostile/hidden-dependency flags remain false;
-- detailed contract: `docs/methods/vituri2024_pocket_refinement_replay.md`.
-  Current evidence is synthetic only. No real Vituri refinement artifact,
-  refined SCF/fixed-density solve, continuum/refinement stability, ground
-  state, scientific/paper reproduction, or TDHF readiness is established.
+The paper PDF remains a reference asset. The former ABC/Vituri code, preflight,
+replay, and dedicated validation suite had no common-API registration and was
+retired to `local_archive/retired_surface/non_api_abc_tbg_oracles_20260915/`
+(manifest SHA-256
+`cd22482bf7111f66ca2a4333045a4806b1dcdc46375b77671a69e00638bfc3a8`).
+It is historical provenance only and no longer a maintained TDHF benchmark.
 
 ### Wang et al., *Putting a new spin on the incommensurate Kekule spiral: from spin-valley locking and collective modes to fermiology and implications for superconductivity*
 
@@ -389,10 +169,11 @@ not author raw numerical arrays.
     but uses `theta=1.08 deg`, `wAA=70 meV` and contains no EPC,
     intervalley-Coulomb or TDHF implementation, so it is not target-run
     authority;
-  - `systems/tbg/zero_field/wang2025.py` records this metadata-only
-    preflight, keeps ground-state `qIKS` distinct from TDHF transfer q, and
-    preserves independently raw `+M/-M` aliases under the common
-    self-conjugate exact-M classification.
+  - the retired `wang2025.py` metadata-only preflight is preserved at
+    `local_archive/retired_surface/tbg_zero_field_paper_preflights_20260915/`
+    (manifest SHA-256 `53f462404083e7b8c52602e6607d591a6f95e81ed52a956c8a4285e0c02a5380`);
+    it kept ground-state `qIKS` distinct from TDHF transfer q and preserved raw
+    `+M/-M` aliases under the common self-conjugate exact-M classification.
 - Priority interpretation: Appendix-A algebra is already implemented in the
   typed core. Full strained-IKS production remains fail-closed until a shared
   scalar-energy/SCF-derivative/finite-q-Hessian source/provider is certified.
@@ -442,11 +223,7 @@ not author raw numerical arrays.
      norm/sign spectral assignment;
    - a full numerical strained-IKS target remains separate and requires its own
      HF source, perturbations, and reference conventions.
-7. **Vituri ABC finite-q instability benchmark**
-   - reproduce susceptibility enhancement at three C3-related q vectors,
-     real-mode softening, and the onset of imaginary frequency using one shared
-     HF/TDHF interaction source.
-8. **TBG/hBN benchmark**
+7. **TBG/hBN benchmark**
    - compare active-band and full-HF collective excitations after pristine TBG
      passes.
 

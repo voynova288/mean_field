@@ -4,9 +4,13 @@ from dataclasses import replace
 
 import numpy as np
 
-from ..core.hf import HFOverlapBlockSet, ProjectedWavefunctionBasis, calculate_projected_overlap_between
+from mean_field.core.hf.overlap import (
+    HFOverlapBlockSet,
+    ProjectedWavefunctionBasis,
+    calculate_projected_overlap_between,
+)
 from ..core.hf.overlap import compute_density_overlap_trace_from_diagonal, contract_fock_term_from_overlap
-from ..systems.tbg.zero_field.hf import (
+from ..systems.tbg.zero_field._hf_basis_overlap import (
     _hex_shell_contains,
     _precompute_overlap_screening,
     coulomb_unit,

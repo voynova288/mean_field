@@ -1,12 +1,29 @@
 from __future__ import annotations
 
-from ._polshyn_shared import *  # noqa: F401,F403
-from ._polshyn_types import *  # noqa: F401,F403
+from collections.abc import Mapping, Sequence
+from typing import Any
+
+import numpy as np
+
+from ...core.contracts import (
+    DensityState as ContractDensityState,
+    HFRunResult as ContractHFRunResult,
+    HFState as ContractHFState,
+    HamiltonianParts as ContractHamiltonianParts,
+    ProjectedBasis as ContractProjectedBasis,
+    SingleParticleModel as ContractSingleParticleModel,
+)
+from ...core.hf.contracts_bridge import density_state_from_delta
+from ...core.hf.occupations import (
+    flatten_sector_blocks as _core_flatten_sector_blocks,
+)
+from ._polshyn_types import PolshynProjectedBasis, PolshynWangHFState
+from .params import TMBGParameters
 
 def _unavailable_polshyn_hamiltonian_builder(_kvec: np.ndarray) -> np.ndarray:
     raise NotImplementedError(
         "Polshyn-Wang canonical contract records an already-built projected basis; "
-        "use mean_field.systems.tmbg.polshyn_supercell builders for fresh Hamiltonians."
+        "use mean_field.systems.tmbg._polshyn_contracts for canonical post-run conversion."
     )
 
 def _unavailable_polshyn_diagonalizer(_kvec: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -51,7 +68,7 @@ def _polshyn_single_particle_model(basis: PolshynProjectedBasis) -> ContractSing
         hamiltonian_builder=_unavailable_polshyn_hamiltonian_builder,
         diagonalizer=_unavailable_polshyn_diagonalizer,
         metadata={
-            "source": "mean_field.systems.tmbg.polshyn_supercell",
+            "source": "mean_field.systems.tmbg._polshyn_contracts",
             "theta_deg": float(basis.model.theta_deg),
             "n_shells": int(basis.model.n_shells),
             "supercell": basis.supercell.as_dict(),
@@ -222,7 +239,7 @@ def _polshyn_wang_density_state(basis: PolshynProjectedBasis, state: PolshynWang
             "density_axis_order": "abk",
             "raw_density_projector_orientation": "wang_xiaoyu_stored_P_star",
             "canonical_density_orientation": "stored_abk",
-            "adapter": "mean_field.systems.tmbg.polshyn_supercell.polshyn_wang_hf_bundle_to_hf_run_result",
+            "adapter": "mean_field.systems.tmbg._polshyn_contracts.polshyn_wang_hf_bundle_to_hf_run_result",
             "primitive_nu_from_density": primitive_nu,
             "primitive_nu_per_k_max_deviation": max_nu_deviation,
         },
@@ -382,4 +399,4 @@ def polshyn_wang_hf_bundle_to_hf_run_result(
         archive_manifest={} if archive_manifest is None else dict(archive_manifest),
     )
 
-__all__ = [name for name in globals() if not name.startswith('__')]
+__all__ = ["polshyn_wang_hf_bundle_to_hf_run_result"]

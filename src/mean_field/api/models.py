@@ -153,7 +153,32 @@ def make_model(system_name: str, **kwargs: Any) -> object:
         params = options.pop("params", None)
         _reject_unknown_options(system_name, options, allowed=set())
         return ATMGModel.from_config(n_layers, theta_deg, n_shells=n_shells, params=params)
-    raise ValueError(f"Unsupported system_name={system_name!r}; supported: htg, htqg, rlg_hbn, tbg, tdbg, tmbg, atmg")
+    if key in {"inas_gasb", "inasgasb"}:
+        from mean_field.systems.inas_gasb import build_inas_gasb_model
+
+        variant = options.pop("variant", None)
+        if variant is None:
+            raise TypeError(
+                "InAs/GaSb requires explicit variant='xue2018_q0_bhz' or "
+                "variant='zeng2022_folded_bhz'"
+            )
+        recognized = {
+            "eg_ry",
+            "hybridization_ab_ry",
+            "q_ab_inv",
+            "d_over_ab",
+            "mass_e_over_reduced",
+            "mass_h_over_reduced",
+            "slab_indices",
+            "path_extent_ab_inv",
+            "params",
+        }
+        _reject_unknown_options(system_name, options, allowed=recognized)
+        return build_inas_gasb_model(variant=str(variant), **options)
+    raise ValueError(
+        f"Unsupported system_name={system_name!r}; supported: htg, htqg, rlg_hbn, "
+        "tbg, tdbg, tmbg, atmg, inas_gasb"
+    )
 
 
 def _reject_unknown_options(system_name: str, options: dict[str, Any], *, allowed: set[str]) -> None:

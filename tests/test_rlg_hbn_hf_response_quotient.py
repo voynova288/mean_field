@@ -9,29 +9,33 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from mean_field.systems.RnG_hBN import (
+from mean_field.systems.RnG_hBN.hf import (
     RLG_HBN_BASIS_PERIODIC_GAUGE_PADDING,
     RLG_HBN_BASIS_PERIODIC_GAUGE_VERSION,
     RLG_HBN_FORM_FACTOR_CONVENTION_VERSION,
     RLGhBNHFInteractionProvenance,
     RLGhBNHartreeFockRun,
     RLGhBNHartreeFockState,
-    RLGhBNInteractionParams,
-    RLGhBNModel,
     build_rlg_hbn_hf_c3_quotient_interaction_components,
     build_rlg_hbn_hf_c3_quotient_interaction_context,
     build_rlg_hbn_hf_problem,
     build_rlg_hbn_layer_overlap_blocks,
     build_rlg_hbn_projected_basis,
+    rlg_hbn_flavor_occupation_counts_for_init_mode,
+)
+from mean_field.systems.RnG_hBN import (
+    RLGhBNInteractionParams,
+    RLGhBNModel,
+)
+from mean_field.systems.RnG_hBN.tdhf import (
     build_rlg_hbn_tdhf_c3_quotient_cycle,
     build_rlg_hbn_tdhf_finite_q_exchange_matrices_from_pairs,
- build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs,
- build_rlg_hbn_tdhf_finite_q_quotient_context,
- build_rlg_hbn_tdhf_finite_q_quotient_matrix_pair_from_pairs,
- build_rlg_hbn_tdhf_finite_q_quotient_matrices_from_pairs,
- build_rlg_hbn_tdhf_orbitals,
+    build_rlg_hbn_tdhf_finite_q_intraflavor_matrices_from_pairs,
+    build_rlg_hbn_tdhf_finite_q_quotient_context,
+    build_rlg_hbn_tdhf_finite_q_quotient_matrix_pair_from_pairs,
+    build_rlg_hbn_tdhf_finite_q_quotient_matrices_from_pairs,
+    build_rlg_hbn_tdhf_orbitals,
     build_rlg_hbn_tdhf_q_pairs,
-    rlg_hbn_flavor_occupation_counts_for_init_mode,
 )
 from mean_field.systems.RnG_hBN._hf_c3_quotient import (
     RLG_HBN_HF_INTERACTION_CONVENTION_VERSION,
@@ -46,7 +50,7 @@ from mean_field.systems.RnG_hBN._hf_response_finite_q import (
 from mean_field.systems.RnG_hBN._tdhf_archive import (
     _archive_interaction_provenance,
 )
-from mean_field.systems.RnG_hBN import _tdhf_fixed_quotient as fixed_quotient_module
+import mean_field.systems.RnG_hBN._tdhf_fixed_quotient as fixed_quotient_module
 from mean_field.systems.RnG_hBN._tdhf_fixed_quotient import (
  _expanded_node_transfer_vector,
  fixed_role_masks,

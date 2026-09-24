@@ -244,8 +244,9 @@ def run_finite_field_hartree_fock_from_inputs(
 ) -> HartreeFockRun:
     """Run finite-B HF from a full or reduced no-I/O input bundle.
 
-    The generic SCF/ODA loop still lives in :mod:`mean_field.core.hf`; this
-    adapter only builds the correct finite-B TBG kernel for the provided bundle.
+    The generic SCF/ODA loop lives in :mod:`mean_field.core.hf.engine` and
+    :mod:`mean_field.core.hf.problem`; this adapter only builds the correct
+    finite-B kernel for the provided bundle.
     """
 
     kernel = build_finite_field_hf_kernel_from_inputs(

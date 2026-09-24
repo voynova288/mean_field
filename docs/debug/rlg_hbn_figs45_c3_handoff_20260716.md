@@ -2,8 +2,19 @@
 
 **Branch:** `debug/rlg-hbn-figs45-c3-quotient-20260716`
 **Base commit:** `7e937c3`
-**Status:** debug checkpoint; **not merge-ready and not a Fig. S45 reproduction**
+**Original status:** debug checkpoint; **not merge-ready and not a Fig. S45 reproduction**
+**Current status (2026-09-16):** historical/read-only/unsupported; the maintained finite-q entrypoint is retired
 **Date:** 2026-07-16
+
+## 0. Final retirement notice (2026-09-16)
+
+This document preserves the 2026-07-16 debug checkpoint without changing the interpretation of what was known at that date. The entrypoint lifecycle was: an early retirement, a temporary restoration on the debug branch, and final retirement after the orchestration surface was superseded by typed system APIs.
+
+- At this handoff checkpoint the full-mesh, Goldstone, instability, and global C3 steps recorded below were incomplete; they are not maintained workflow instructions.
+- Subsequent source-bound typed work did complete the 12x12 intraflavor/intervalley/interspin validation and concluded **validated nonreproduction**: structure and q/-q gates passed, but the quantitative paper-raster comparison failed. See `../tdhf_core_contract.md`, `rlg_hbn_fixed_quotient_hf_response_plan_20260716.md`, and `FIXED_QUOTIENT_DERIVATION.md`.
+- The reusable core/system typed TDHF capabilities and later evidence remain in place; retirement removes only the obsolete one-off entrypoint and dispatcher command.
+- Neither this historical checkpoint nor the retirement establishes Fig. S45 reproduction authority, and the retirement does not revoke the later validated-nonreproduction result.
+- All `tmp/tdhf/**` scratch data, oracles, and evidence remain untouched. They are historical, read-only, and unsupported, not maintained workflow inputs.
 
 ## 1. 总任务：我们到底在做什么
 
@@ -355,20 +366,9 @@ src/mean_field/systems/RnG_hBN/_tdhf_finite_q.py
 src/mean_field/systems/RnG_hBN/tdhf.py
 ```
 
-### Full-mesh entry point
+### Historical full-mesh entry point (retired)
 
-```text
-src/mean_field/devtools/run_rlg_hbn_tdhf_finite_q.py
-scripts/mean_field_tools.py
-```
-
-The devtool exposes opt-in flag：
-
-```text
---c3-quotient-provider
-```
-
-它按 C3 orbit 从一个 canonical microscopic source 建完整 cycle，并缓存同 orbit matrices。
+The former one-off devtool and its `mean_field_tools.py` dispatcher command are archived and no longer maintained. No shim or replacement CLI was introduced. Its historical `--c3-quotient-provider` behavior built a complete cycle from one canonical microscopic source for each C3 orbit and cached matrices within the orbit; this description is provenance only, not current execution guidance.
 
 ## 6. 当前验证
 
@@ -406,7 +406,9 @@ branch-visible tests 包含 basis-cache metadata roundtrip/legacy-v3 recovery、
 9. **性能/缓存仍可改进。** Corrected HF 约 18.3 小时；每个 dense TDHF orbit 约 40 分钟、峰值约 30 GiB。Full mesh 需要 Slurm array/orbit sharding。
 10. **该分支建立于一个有大量并行未提交改动的工作树。** Commit 只应包含本 debug 任务的 selected paths；其他 topology/optical/other-system 修改必须保持在分支之外。
 
-## 8. 下一步验收顺序
+## 8. Historical, uncompleted 下一步验收顺序（不再维护）
+
+The following was the debug branch's proposed sequence. It was not completed and must not be treated as a maintained finite-q workflow.
 
 1. 等待并解析 `184106`；要求 patched `(3,7)` cycle A/B/L closure `<=1e-9 meV`，并确认具体 direct terms 已恢复。
 2. 解析 `184033_2..4`；要求 q=0、`(4,8)`、`(8,4)` actual self gates 通过。
@@ -423,4 +425,4 @@ branch-visible tests 包含 basis-cache metadata roundtrip/legacy-v3 recovery、
 2. active-density HF Fock 的 actual-node/fixed-source C3 covariance；
 3. TDHF repeated-zone multi-edge direct-shell composition。
 
-前两项已有 actual-κ production gates；第三项已修代码但等待 heavy gate。当前最重要的事实是：**我们已经得到一个 C3-compatible、收敛的 actual-κ HF source，并在 `(1,0)`、`(6,0)` cycles 上通过；但 full mesh 和 Fig. S45 仍未完成。**
+前两项已有 actual-κ production gates；第三项已修代码但等待 heavy gate。当前最重要的事实是：**我们已经得到一个 C3-compatible、收敛的 actual-κ HF source，并在 `(1,0)`、`(6,0)` cycles 上通过；但 full mesh 和 Fig. S45 仍未完成。** This remains a historical debug conclusion only: the retained typed capabilities do not promote these incomplete checks to production or Fig. S45 validation authority.

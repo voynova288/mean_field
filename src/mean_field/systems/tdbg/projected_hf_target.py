@@ -5,7 +5,11 @@ import math
 
 import numpy as np
 
-from ...core.hf import HFOverlapBlockSet, build_projected_target_hamiltonian, diagonal_overlap_blocks
+from mean_field.core.hf.overlap import (
+    HFOverlapBlockSet,
+    diagonal_overlap_blocks,
+)
+from mean_field.core.hf.interaction import build_projected_target_hamiltonian
 from .projected_hf_config import SPIN_LABELS, VALLEY_SEQUENCE, validate_tdbg_interaction_settings
 from .projected_hf_data import _projected_onebody_and_wavefunctions
 from .projected_hf_geometry import _tdbg_projected_wavefunction_basis, _tdbg_total_overlap_from_bases

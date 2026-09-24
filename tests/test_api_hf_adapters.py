@@ -11,7 +11,8 @@ import mean_field.api.hf as hf_api
 from mean_field.api import HFConfig, HFResult, make_model, run_hf
 from mean_field.api.hf import get_hf_adapter_info, list_hf_adapters, resolve_hf_adapter
 from mean_field.core.contracts import HFRunResult as ContractHFRunResult
-from mean_field.systems import tdbg as tdbg_system
+import mean_field.systems.tdbg.projected_hf_data as tdbg_projected_hf_data
+import mean_field.systems.tdbg.projected_hf_run as tdbg_projected_hf_run
 from mean_field.systems.RnG_hBN import RLGhBNInteractionParams, RLGhBNRunHFConfig
 from mean_field.systems.htg import HTGRunHFConfig, HTGSupercellRunHFConfig, InteractionParams
 from mean_field.systems.tbg.params import TBGParameters
@@ -20,9 +21,14 @@ from mean_field.systems.tbg.zero_field import (
     TBGZeroFieldInteractionSpec,
     TBGZeroFieldRunHFConfig,
     solve_bm_model_on_torus,
+)
+from mean_field.systems.tbg.zero_field.hf_contracts import (
     tbg_zero_field_hf_run_to_hf_result,
 )
 from mean_field.systems.tdbg import TDBGInteractionSettings, TDBGProjectedHFConfig, TDBGProjectedWindow
+from mean_field.systems.tmbg._polshyn_contracts import (
+    polshyn_wang_hf_bundle_to_hf_run_result,
+)
 
 
 def _tiny_tdbg_config() -> TDBGProjectedHFConfig:
@@ -82,7 +88,6 @@ def test_public_hf_adapter_registry_exposes_post_run_converters_without_run_disp
         "tbg_zero_field_hf_run_to_hf_run_result",
         "tbg_zero_field_hf_run_to_hf_result",
         "tbg_zero_field_explicit_run_hf",
-        "b0_hf_benchmark_run_to_hf_run_result",
         "rlg_hbn_hf_run_to_hf_run_result",
         "rlg_hbn_hf_run_to_hf_result",
         "rlg_hbn_explicit_run_hf",
@@ -117,24 +122,115 @@ def test_public_hf_adapter_registry_filters_and_resolves_existing_helpers() -> N
         "htg_supercell_hf_run_to_hf_result",
         "htg_explicit_supercell_run_hf",
     }
+    expected_htg_supercell_paths = {
+        "htg_supercell_hf_run_to_hf_run_result": (
+            "mean_field.systems.htg.supercell_contracts:"
+            "htg_supercell_hf_run_to_hf_run_result"
+        ),
+        "htg_supercell_hf_run_to_hf_result": (
+            "mean_field.systems.htg.supercell_contracts:"
+            "htg_supercell_hf_run_to_hf_result"
+        ),
+        "htg_explicit_supercell_run_hf": (
+            "mean_field.systems.htg.supercell_contracts:"
+            "run_htg_supercell_hf_config_adapter"
+        ),
+    }
+    for name, import_path in expected_htg_supercell_paths.items():
+        assert get_hf_adapter_info(name).import_path == import_path
+        assert resolve_hf_adapter(name).__module__ == (
+            "mean_field.systems.htg.supercell_contracts"
+        )
     canonical = {info.name for info in list_hf_adapters(adapter_type="canonical_hf_run_result")}
     assert "tdbg_explicit_projected_run_hf" not in canonical
     assert "polshyn_wang_hf_bundle_to_hf_run_result" in canonical
+    polshyn_info = get_hf_adapter_info("polshyn_wang_hf_bundle_to_hf_run_result")
+    assert polshyn_info.import_path == (
+        "mean_field.systems.tmbg._polshyn_contracts:"
+        "polshyn_wang_hf_bundle_to_hf_run_result"
+    )
+    assert resolve_hf_adapter("polshyn_wang_hf_bundle_to_hf_run_result") is (
+        polshyn_wang_hf_bundle_to_hf_run_result
+    )
 
     adapter = resolve_hf_adapter("htg_supercell_hf_run_to_hf_run_result")
     assert adapter.__name__ == "htg_supercell_hf_run_to_hf_run_result"
     assert adapter.__module__ == "mean_field.systems.htg.supercell_contracts"
-    assert get_hf_adapter_info("tdbg_explicit_projected_run_hf").supports_run_hf_config is True
+    tdbg_run_info = get_hf_adapter_info("tdbg_explicit_projected_run_hf")
+    assert tdbg_run_info.supports_run_hf_config is True
+    assert tdbg_run_info.import_path == (
+        "mean_field.systems.tdbg.projected_hf_contracts:"
+        "run_tdbg_hf_config_adapter"
+    )
+    expected_htg_paths = {
+        "htg_hf_run_to_hf_run_result": (
+            "mean_field.systems.htg._hf_contracts:htg_hf_run_to_hf_run_result"
+        ),
+        "htg_hf_run_to_hf_result": (
+            "mean_field.systems.htg._hf_contracts:htg_hf_run_to_hf_result"
+        ),
+        "htg_explicit_primitive_run_hf": (
+            "mean_field.systems.htg._hf_contracts:run_htg_hf_config_adapter"
+        ),
+    }
+    for name, import_path in expected_htg_paths.items():
+        assert get_hf_adapter_info(name).import_path == import_path
+        assert resolve_hf_adapter(name).__module__ == "mean_field.systems.htg._hf_contracts"
     assert get_hf_adapter_info("htg_explicit_primitive_run_hf").supports_run_hf_config is True
     assert "HTGRunHFConfig" in get_hf_adapter_info("htg_explicit_primitive_run_hf").run_hf_config_reason
     assert "RLGhBNRunHFConfig" in get_hf_adapter_info("rlg_hbn_explicit_run_hf").run_hf_config_reason
     assert "TBGZeroFieldRunHFConfig" in get_hf_adapter_info("tbg_zero_field_explicit_run_hf").run_hf_config_reason
-    assert "htg_supercell_hf_run_to_hf_result" in hf_api.__all__
-    assert "rlg_hbn_hf_run_to_hf_result" in hf_api.__all__
-    assert "tbg_zero_field_hf_run_to_hf_result" in hf_api.__all__
+    retired_forwarding_aliases = {
+        "tdbg_projected_hf_result_to_hf_run_result",
+        "htg_hf_run_to_hf_run_result",
+        "htg_hf_run_to_hf_result",
+        "htg_supercell_hf_run_to_hf_run_result",
+        "htg_supercell_hf_run_to_hf_result",
+        "tbg_zero_field_hf_run_to_hf_run_result",
+        "tbg_zero_field_hf_run_to_hf_result",
+        "rlg_hbn_hf_run_to_hf_run_result",
+        "rlg_hbn_hf_run_to_hf_result",
+        "polshyn_wang_hf_bundle_to_hf_run_result",
+    }
+    assert retired_forwarding_aliases.isdisjoint(hf_api.__all__)
+    assert all(
+        not info.import_path.startswith("mean_field.api.hf:")
+        for info in list_hf_adapters(adapter_type="run_hf")
+    )
 
     with pytest.raises(KeyError, match="Unknown HF adapter"):
         get_hf_adapter_info("not_a_registered_hf_adapter")
+
+
+def test_public_run_hf_rejects_unregistered_duck_typed_model_hook() -> None:
+    class UnregisteredModel:
+        def run_hf(self, config: HFConfig, **kwargs: object) -> HFResult:
+            raise AssertionError("unregistered model hook must not execute")
+
+    with pytest.raises(NotImplementedError, match=r"no run_hf\(config\) adapter"):
+        run_hf(UnregisteredModel(), HFConfig(filling=0, mesh=(1, 1)))
+
+
+def test_public_run_hf_rejects_hf_config_subclass_authority() -> None:
+    class ExtendedHFConfig(HFConfig):
+        pass
+
+    with pytest.raises(TypeError, match="exact public HFConfig type"):
+        run_hf(
+            make_model("htg", theta_deg=1.8, n_shells=0),
+            ExtendedHFConfig(filling=0, mesh=(1, 1)),
+        )
+
+
+def test_public_run_hf_rejects_unregistered_model_subclass_authority() -> None:
+    model = make_model("htg", theta_deg=1.8, n_shells=0)
+
+    class UnregisteredHTGModel(type(model)):
+        pass
+
+    subclass_model = UnregisteredHTGModel(**vars(model))
+    with pytest.raises(NotImplementedError, match=r"no run_hf\(config\) adapter"):
+        run_hf(subclass_model, HFConfig(filling=0, mesh=(1, 1)))
 
 
 def test_public_run_hf_tbg_bm_requires_explicit_system_workflow() -> None:
@@ -747,7 +843,21 @@ def test_public_run_hf_htg_primitive_explicit_config_attaches_canonical_contract
     assert result.model.system_name == "htg"
     assert isinstance(result.canonical_run_result, ContractHFRunResult)
     assert result.state.seed == 2
-    assert result.observables["public_run_hf_adapter"].endswith("run_htg_hf_config_adapter")
+    assert result.observables["public_run_hf_adapter"] == (
+        "mean_field.systems.htg._hf_contracts.run_htg_hf_config_adapter"
+    )
+    assert result.canonical_run_result.final_state.basis.physical_model.metadata["source"] == (
+        "mean_field.systems.htg._hf_contracts"
+    )
+    assert result.canonical_run_result.final_state.density.metadata["adapter"] == (
+        "mean_field.systems.htg._hf_contracts"
+    )
+    assert result.artifacts.metadata["adapter"] == (
+        "mean_field.systems.htg._hf_contracts.htg_hf_run_to_hf_result"
+    )
+    assert result.artifacts.metadata["canonical_adapter"] == (
+        "mean_field.systems.htg._hf_contracts.htg_hf_run_to_hf_run_result"
+    )
     assert result.canonical_run_result.final_state.density.reference.metadata["raw_density_convention"] == "stored_delta"
     assert result.canonical_run_result.final_state.hamiltonian.metadata["supports_crpa"] is False
 
@@ -783,9 +893,44 @@ def test_public_run_hf_htg_supercell_explicit_config_attaches_canonical_contract
     assert isinstance(result.canonical_run_result, ContractHFRunResult)
     assert result.state.seed == 1
     assert result.observables["supercell_area_ratio"] == 2
-    assert result.observables["public_run_hf_adapter"].endswith("run_htg_supercell_hf_config_adapter")
+    assert result.observables["public_run_hf_adapter"] == (
+        "mean_field.systems.htg.supercell_contracts."
+        "run_htg_supercell_hf_config_adapter"
+    )
+    assert result.canonical_run_result.final_state.basis.physical_model.metadata["source"] == (
+        "mean_field.systems.htg.supercell"
+    )
+    assert result.canonical_run_result.final_state.density.metadata["adapter"] == (
+        "mean_field.systems.htg.supercell_contracts"
+    )
+    assert result.artifacts.metadata["adapter"] == (
+        "mean_field.systems.htg.supercell_contracts."
+        "htg_supercell_hf_run_to_hf_result"
+    )
+    assert result.artifacts.metadata["canonical_adapter"] == (
+        "mean_field.systems.htg.supercell_contracts."
+        "htg_supercell_hf_run_to_hf_run_result"
+    )
     assert result.canonical_run_result.final_state.density.reference.metadata["raw_density_convention"] == "stored_delta"
     assert result.canonical_run_result.final_state.hamiltonian.metadata["supports_crpa"] is False
+
+
+def test_public_run_hf_tdbg_rejects_retired_projected_config_alias() -> None:
+    model = make_model("tdbg", theta_deg=1.38, cut=1.0)
+    cfg = HFConfig(
+        filling=2,
+        mesh=(1, 1),
+        max_iter=1,
+        precision=1.0e-7,
+        density_convention="projector",
+    )
+    with pytest.raises(TypeError, match="projected_config compatibility alias is retired"):
+        run_hf(
+            model,
+            cfg,
+            projected_config=_tiny_tdbg_config(),
+            init_mode="sp",
+        )
 
 
 def test_public_run_hf_tdbg_explicit_config_dispatches_without_guessing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -814,8 +959,8 @@ def test_public_run_hf_tdbg_explicit_config_dispatches_without_guessing(monkeypa
         calls["seed"] = seed
         return FakeTDBGResult()
 
-    monkeypatch.setattr(tdbg_system, "build_tdbg_projected_hf_data", fake_build_data)
-    monkeypatch.setattr(tdbg_system, "run_tdbg_projected_hf", fake_run)
+    monkeypatch.setattr(tdbg_projected_hf_data, "build_tdbg_projected_hf_data", fake_build_data)
+    monkeypatch.setattr(tdbg_projected_hf_run, "run_tdbg_projected_hf", fake_run)
 
     result = run_hf(model, cfg, tdbg_config=tdbg_cfg, init_mode="sp", seed=7)
 

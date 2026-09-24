@@ -49,13 +49,7 @@ def make_validation_check(
 
 @dataclass(frozen=True, init=False)
 class ValidationCheck:
-    """Status/detail validation record shared by system validation modules.
-
-    The historical system modules used both ``value=`` and ``val=`` for the
-    numerical payload.  This class accepts both spellings and exposes both
-    ``.value`` and the compatibility alias ``.val`` so wrappers can migrate
-    without changing every call site at once.
-    """
+    """Status/detail validation record shared by system validation modules."""
 
     name: str
     status: ValidationStatus
@@ -70,20 +64,13 @@ class ValidationCheck:
         detail: str,
         value: ValidationValue = None,
         *,
-        val: ValidationValue = None,
         tolerance: float | None = None,
     ) -> None:
-        if value is not None and val is not None:
-            raise ValueError("Pass either value= or val=, not both.")
         object.__setattr__(self, "name", str(name))
         object.__setattr__(self, "status", status)
         object.__setattr__(self, "detail", str(detail))
-        object.__setattr__(self, "value", val if value is None else value)
+        object.__setattr__(self, "value", value)
         object.__setattr__(self, "tolerance", None if tolerance is None else float(tolerance))
-
-    @property
-    def val(self) -> ValidationValue:
-        return self.value
 
     @property
     def passed(self) -> bool:

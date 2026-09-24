@@ -1,7 +1,9 @@
+"""Strict complete-state archive for typed TBG zero-field HF runs."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass, is_dataclass
+from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path
@@ -9,8 +11,7 @@ from typing import Any
 
 import numpy as np
 
-from ....api.artifacts import ModelRecord, write_contract_artifacts
-from ....core.hf import HFOverlapBlockSet
+from mean_field.core.hf.overlap import HFOverlapBlockSet
 from ....core.io import write_npz_artifact
 from ..params import TBGParameters
 from ._hf_basis_overlap import (
@@ -24,106 +25,41 @@ from ._hf_basis_overlap import (
     tbg_zero_field_overlap_kernel_inventory_fingerprint,
     tbg_zero_field_reference_projector_sha256,
 )
+from mean_field.systems.tbg.zero_field._hf_basis_overlap import (
+    RestrictedHartreeFockRun,
+    restricted_filling,
+)
+from mean_field.systems.tbg.zero_field._hf_full import normalize_full_init_mode
+from mean_field.systems.tbg.zero_field._hf_restricted import normalize_restricted_init_mode
 from .hf_contracts import validate_tbg_zero_field_typed_hf_run_source
 from .interaction import (
     TBG_ZERO_FIELD_GRAPHENE_A_NM_SCHEMA_V1,
     TBGZeroFieldInteractionSpec,
 )
 from .model import (
-    TBG_ZERO_FIELD_B0_COORDINATE_CONVENTION,
-    TBG_ZERO_FIELD_PHYSICAL_COORDINATE_CONVENTION,
+    BMSolution,
     TBGZeroFieldTorusMesh,
-    _b0_real_to_nm,
-    _b0_reciprocal_to_nm_inv,
     tbg_zero_field_bm_generation_fingerprint,
 )
 
-_CONTRACT_FILENAMES = (
-    "manifest.json",
-    "model.json",
-    "config.yaml",
-    "conventions.json",
-    "environment.json",
-    "validation.json",
-    "observables.json",
+TBG_ZERO_FIELD_COMPLETE_HF_STATE_ARCHIVE_SCHEMA = (
+    "mean_field.tbg.zero_field.validated_complete_hf_state_archive"
 )
-TBG_ZERO_FIELD_COMPLETE_HF_STATE_ARCHIVE_SCHEMA = "mean_field.tbg.zero_field.validated_complete_hf_state_archive"
 TBG_ZERO_FIELD_COMPLETE_HF_STATE_ARCHIVE_SCHEMA_VERSION = 1
-TBG_ZERO_FIELD_COMPLETE_HF_STATE_ARCHIVE_FILENAME = "validated_complete_hf_state_archive.npz"
-TBG_ZERO_FIELD_COMPLETE_HF_STATE_ARCHIVE_ARTIFACT_KEY = "validated_complete_hf_state_archive_npz"
+TBG_ZERO_FIELD_COMPLETE_HF_STATE_ARCHIVE_FILENAME = (
+    "validated_complete_hf_state_archive.npz"
+)
+TBG_ZERO_FIELD_COMPLETE_HF_STATE_ARCHIVE_ARTIFACT_KEY = (
+    "validated_complete_hf_state_archive_npz"
+)
 TBG_ZERO_FIELD_STORED_DENSITY_DEFINITION = (
     "D_stored[a,b]=<c_a† c_b>-0.5*delta_ab"
-)
-_TYPED_B0_HF_SIDECAR_ARTIFACT_KEYS = frozenset(
-    {
-        "advisor_selection_txt",
-        TBG_ZERO_FIELD_COMPLETE_HF_STATE_ARCHIVE_ARTIFACT_KEY,
-        "path_limitation_txt",
-        "runtime_summary_txt",
-        "scf_band_plot_pdf",
-        "scf_band_plot_png",
-        "scf_path_tsv",
-    }
 )
 
 
 def complex_to_pair(value: complex) -> list[float]:
     z = complex(value)
     return [float(z.real), float(z.imag)]
-
-
-def _optional_float(value: object) -> float | None:
-    if value is None:
-        return None
-    return float(value)
-
-
-def _resolve_artifact_input_path(root: Path, raw_path: str | Path) -> Path:
-    path = Path(raw_path)
-    if path.is_absolute():
-        return path
-    if path.exists():
-        return path.resolve()
-    return (root / path).resolve()
-
-
-def _relative_artifact_files(root: Path, artifact_paths: Mapping[str, str | Path] | None) -> dict[str, str]:
-    files: dict[str, str] = {}
-    for key, raw_path in dict(artifact_paths or {}).items():
-        path = Path(raw_path)
-        if not path.is_absolute():
-            files[str(key)] = path.as_posix()
-            continue
-        try:
-            files[str(key)] = path.resolve().relative_to(root.resolve()).as_posix()
-        except ValueError:
-            files[str(key)] = str(path)
-    return files
-
-
-def _ensure_contract_sidecars_absent(root: Path, *, overwrite: bool) -> None:
-    if overwrite:
-        return
-    existing = [name for name in _CONTRACT_FILENAMES if (root / name).exists()]
-    if existing:
-        raise FileExistsError(
-            f"Refusing to overwrite existing TBG zero-field contract sidecars in {root}: {existing}. "
-            "Pass overwrite=True only when replacing this workflow's sidecars intentionally."
-        )
-
-
-def _dataclass_payload(value: object) -> dict[str, object]:
-    if value is None:
-        return {}
-    if is_dataclass(value):
-        return dict(asdict(value))
-    if isinstance(value, Mapping):
-        return dict(value)
-    return {
-        key: getattr(value, key)
-        for key in dir(value)
-        if not key.startswith("_") and not callable(getattr(value, key))
-    }
 
 
 def _json_safe(value: object) -> object:
@@ -140,252 +76,6 @@ def _json_safe(value: object) -> object:
     if isinstance(value, (tuple, list)):
         return [_json_safe(item) for item in value]
     return value
-
-
-def _runtime_environment_payload(runtime: object) -> dict[str, object]:
-    environment = getattr(runtime, "environment", None)
-    payload = {str(key): _json_safe(value) for key, value in _dataclass_payload(environment).items()}
-    for key in (
-        "start_time",
-        "end_time",
-        "bm_elapsed_sec",
-        "hf_elapsed_sec",
-        "path_elapsed_sec",
-        "grid_elapsed_sec",
-        "total_elapsed_sec",
-    ):
-        if hasattr(runtime, key):
-            payload[key] = _json_safe(getattr(runtime, key))
-    return payload
-
-
-def _tbg_model_record(params: TBGParameters, *, system_name: str = "tbg", extra: Mapping[str, object] | None = None) -> ModelRecord:
-    param_payload = {
-        "dtheta_rad": float(params.dtheta_rad),
-        "convention": str(params.convention),
-        "vf": float(params.vf),
-        "chemical_potential": float(params.chemical_potential),
-        "w0": float(params.w0),
-        "w1": float(params.w1),
-        "delta": float(params.delta),
-        "strain": float(params.strain),
-        "strain_angle_rad": float(params.strain_angle_rad),
-        "poisson": float(params.poisson),
-        "beta_g": float(params.beta_g),
-        "alpha": float(params.alpha),
-        "deformation_potential": float(params.deformation_potential),
-    }
-    param_payload.update(dict(extra or {}))
-    lattice = {
-        "coordinate_convention": TBG_ZERO_FIELD_B0_COORDINATE_CONVENTION,
-        "physical_coordinate_convention": TBG_ZERO_FIELD_PHYSICAL_COORDINATE_CONVENTION,
-        "graphene_a_nm": TBG_ZERO_FIELD_GRAPHENE_A_NM_SCHEMA_V1,
-        "g1_b0_code_pair": complex_to_pair(params.g1),
-        "g2_b0_code_pair": complex_to_pair(params.g2),
-        "a1_b0_code_pair": complex_to_pair(params.a1),
-        "a2_b0_code_pair": complex_to_pair(params.a2),
-        "kt_b0_code_pair": complex_to_pair(params.kt),
-        "kb_point_b0_code_pair": complex_to_pair(params.kb_point),
-        "g1_nm_inv_pair": complex_to_pair(_b0_reciprocal_to_nm_inv(params.g1)),
-        "g2_nm_inv_pair": complex_to_pair(_b0_reciprocal_to_nm_inv(params.g2)),
-        "a1_nm_pair": complex_to_pair(_b0_real_to_nm(params.a1)),
-        "a2_nm_pair": complex_to_pair(_b0_real_to_nm(params.a2)),
-        "theta12_rad": float(params.theta12),
-        "kt_nm_inv_pair": complex_to_pair(_b0_reciprocal_to_nm_inv(params.kt)),
-        "kb_point_nm_inv_pair": complex_to_pair(_b0_reciprocal_to_nm_inv(params.kb_point)),
-    }
-    return ModelRecord(system_name=system_name, params=param_payload, lattice=lattice)
-
-
-def _bm_solution_summary(solution: object | None) -> dict[str, object] | None:
-    if solution is None:
-        return None
-    spectrum = np.asarray(getattr(solution, "spectrum"), dtype=float)
-    return {
-        "lg": int(getattr(solution, "lg")),
-        "nk": int(getattr(solution, "nk")),
-        "nt": int(getattr(solution, "nt")),
-        "n_eta": int(getattr(solution, "n_eta")),
-        "n_spin": int(getattr(solution, "n_spin")),
-        "nb": int(getattr(solution, "nb")),
-        "periodic_g_grid": bool(getattr(solution, "periodic_g_grid", True)),
-        "spectrum_shape": [int(value) for value in spectrum.shape],
-        "energy_min_mev": float(np.min(spectrum)) if spectrum.size else float("nan"),
-        "energy_max_mev": float(np.max(spectrum)) if spectrum.size else float("nan"),
-    }
-
-
-def _kpath_payload(path: object) -> dict[str, object]:
-    kvec = np.asarray(getattr(path, "kvec"), dtype=np.complex128)
-    kdist = np.asarray(getattr(path, "kdist"), dtype=float)
-    return {
-        "point_count": int(kvec.size),
-        "labels": list(getattr(path, "labels")),
-        "node_indices": [int(value) for value in getattr(path, "node_indices")],
-        "kdist_min": float(np.min(kdist)) if kdist.size else 0.0,
-        "kdist_max": float(np.max(kdist)) if kdist.size else 0.0,
-    }
-
-
-def _bm_unstrained_validation_payload(result: object) -> dict[str, object]:
-    parity = getattr(result, "parity")
-    runtime_parity = getattr(result, "runtime_parity", None)
-    payload: dict[str, object] = {
-        "status": "recorded",
-        "parity": {
-            "kdist_max_abs_diff": float(parity.kdist_max_abs_diff),
-            "max_abs_band_diff_mev": float(parity.max_abs_band_diff_mev),
-            "rms_band_diff_mev": float(parity.rms_band_diff_mev),
-            "mean_abs_band_diff_mev": float(parity.mean_abs_band_diff_mev),
-            "k_middle_gap_diff_mev": float(parity.k_middle_gap_diff_mev),
-            "valence_bandwidth_diff_mev": _optional_float(parity.valence_bandwidth_diff_mev),
-            "conduction_bandwidth_diff_mev": _optional_float(parity.conduction_bandwidth_diff_mev),
-        },
-    }
-    if runtime_parity is not None:
-        payload["runtime_parity"] = _json_safe(_dataclass_payload(runtime_parity))
-    return payload
-
-
-def _bm_unstrained_observables(result: object) -> dict[str, object]:
-    run = getattr(result, "run")
-    return {
-        "theta_deg": float(getattr(getattr(result, "reference"), "theta_deg")),
-        "k_middle_gap_mev": float(run.k_middle_gap_mev),
-        "valence_bandwidth_mev": _optional_float(run.valence_bandwidth_mev),
-        "conduction_bandwidth_mev": _optional_float(run.conduction_bandwidth_mev),
-        "path": _kpath_payload(run.path),
-        "path_solution": _bm_solution_summary(run.path_solution),
-        "grid_solution": _bm_solution_summary(run.grid_solution),
-    }
-
-
-def _hf_state_shapes(state: object) -> dict[str, object]:
-    return {
-        "density": [int(value) for value in np.asarray(getattr(state, "density")).shape],
-        "hamiltonian": [int(value) for value in np.asarray(getattr(state, "hamiltonian")).shape],
-        "h0": [int(value) for value in np.asarray(getattr(state, "h0")).shape],
-        "energies": [int(value) for value in np.asarray(getattr(state, "energies")).shape],
-    }
-
-
-def _diagnostics_payload(diagnostics: Mapping[str, object]) -> dict[str, object]:
-    payload: dict[str, object] = {}
-    for key, value in diagnostics.items():
-        if isinstance(value, (str, int, float, bool)) or value is None:
-            payload[str(key)] = _json_safe(value)
-    return payload
-
-
-def _is_typed_hf_run(hf_run: object) -> bool:
-    state = getattr(hf_run, "state")
-    receipt = getattr(state, "hf_source_receipt", None)
-    return (
-        getattr(state, "interaction_spec", None) is not None
-        or getattr(hf_run, "screened_block_bundle", None) is not None
-        or getattr(hf_run, "provenance", None) is not None
-        or getattr(receipt, "interaction_contract", None) == "typed"
-    )
-
-def _validated_typed_b0_hf_source(result: object):
-    hf_run = getattr(result, "hf_run")
-    if not _is_typed_hf_run(hf_run):
-        return None
-    grid_solution = getattr(result, "grid_solution", None)
-    if grid_solution is None:
-        raise ValueError(
-            "Typed TBG zero-field artifact export requires the exact grid_solution"
-        )
-    return validate_tbg_zero_field_typed_hf_run_source(hf_run, grid_solution)
-
-@dataclass(frozen=True)
-class _ExactSavedSCFPathCoverage:
-    exact_point_count: int
-    distinct_coordinate_count: int
-    represented_segment_indices: tuple[int, ...]
-    segment_distinct_coordinate_counts: tuple[int, ...]
-    missing_interior_node_labels: tuple[str, ...]
-    path_sample_indices: np.ndarray
-    grid_indices: np.ndarray
-    distance_to_path: np.ndarray
-    meaningful: bool
-
-
-def _exact_saved_scf_path_coverage(
-    result: object,
-    *,
-    path_tolerance: float = 1.0e-12,
-) -> _ExactSavedSCFPathCoverage:
-    """Recompute the saved-grid-only path coverage directly from a result."""
-
-    path = getattr(result, "path")
-    grid_solution = getattr(result, "grid_solution")
-    path_kvec = np.asarray(getattr(path, "kvec"), dtype=np.complex128).reshape(-1)
-    grid_kvec = np.asarray(
-        getattr(grid_solution, "lattice_kvec"), dtype=np.complex128
-    ).reshape(-1)
-    if path_kvec.size == 0 or grid_kvec.size == 0:
-        raise ValueError("Exact saved-SCF path coverage requires non-empty path and grid coordinates")
-
-    distance_matrix = np.abs(path_kvec[:, None] - grid_kvec[None, :])
-    nearest_grid_indices = np.argmin(distance_matrix, axis=1).astype(int)
-    nearest_distances = distance_matrix[
-        np.arange(path_kvec.size), nearest_grid_indices
-    ]
-    path_sample_indices = np.flatnonzero(
-        nearest_distances <= float(path_tolerance)
-    ).astype(int)
-    grid_indices = nearest_grid_indices[path_sample_indices].astype(int)
-    exact_grid_kvec = np.asarray(grid_kvec[grid_indices], dtype=np.complex128)
-    coordinate_keys = tuple(
-        (float(value.real), float(value.imag)) for value in exact_grid_kvec
-    )
-
-    node_indices = tuple(int(index) - 1 for index in getattr(path, "node_indices"))
-    segment_sets: list[set[tuple[float, float]]] = [
-        set() for _ in range(max(len(node_indices) - 1, 0))
-    ]
-    for path_index, coordinate_key in zip(
-        path_sample_indices, coordinate_keys, strict=True
-    ):
-        for segment_index, (start, stop) in enumerate(
-            zip(node_indices[:-1], node_indices[1:], strict=True)
-        ):
-            if start <= int(path_index) <= stop:
-                segment_sets[segment_index].add(coordinate_key)
-    segment_counts = tuple(len(values) for values in segment_sets)
-    represented_segments = tuple(
-        index for index, count in enumerate(segment_counts) if count >= 2
-    )
-    selected_indices = set(int(value) for value in path_sample_indices)
-    missing_interior_labels = tuple(
-        str(label)
-        for label, index in zip(
-            getattr(path, "labels")[1:-1],
-            node_indices[1:-1],
-            strict=True,
-        )
-        if index not in selected_indices
-    )
-    distinct_count = len(set(coordinate_keys))
-    meaningful = (
-        distinct_count >= 3
-        and len(represented_segments) >= 2
-        and not missing_interior_labels
-    )
-    return _ExactSavedSCFPathCoverage(
-        exact_point_count=int(path_sample_indices.size),
-        distinct_coordinate_count=int(distinct_count),
-        represented_segment_indices=represented_segments,
-        segment_distinct_coordinate_counts=segment_counts,
-        missing_interior_node_labels=missing_interior_labels,
-        path_sample_indices=path_sample_indices,
-        grid_indices=grid_indices,
-        distance_to_path=np.asarray(
-            nearest_distances[path_sample_indices], dtype=float
-        ),
-        meaningful=bool(meaningful),
-    )
 
 
 @dataclass(frozen=True)
@@ -730,6 +420,70 @@ def _validate_provenance_metadata(provenance: Mapping[str, object]) -> str:
     payload.pop("fingerprint")
     if _sha256_json_payload(payload) != supplied:
         raise ValueError("Typed HF run provenance fingerprint does not match its metadata")
+    if provenance.get("schema") != "mean_field.tbg.zero_field.hf_run_provenance":
+        raise ValueError("Unsupported typed HF run provenance schema")
+    schema_version = provenance.get("schema_version")
+    if type(schema_version) is not int or schema_version != 2:
+        raise ValueError("Unsupported typed HF run provenance schema version")
+    if provenance.get("issuer") != "TBGZeroFieldFullRestrictedRunner/v2":
+        raise ValueError("Typed HF run provenance issuer is not authoritative")
+    if provenance.get("hf_mode") not in {"full", "restricted"}:
+        raise ValueError("Typed HF run provenance hf_mode is invalid")
+    for name in ("beta", "nu", "filling", "precision", "oda_stall_threshold"):
+        value = provenance.get(name)
+        if (
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or not np.isfinite(float(value))
+        ):
+            raise ValueError(f"Typed HF run provenance {name} must be finite real")
+    if float(provenance["filling"]) != float(provenance["nu"]):
+        raise ValueError("Typed HF run provenance filling does not equal nu")
+    if float(provenance["precision"]) <= 0.0:
+        raise ValueError("Typed HF run provenance precision must be positive")
+    if float(provenance["oda_stall_threshold"]) <= 0.0:
+        raise ValueError("Typed HF run provenance oda_stall_threshold must be positive")
+    requested = provenance.get("requested_max_iterations")
+    if not isinstance(requested, int) or isinstance(requested, bool) or requested < 0:
+        raise ValueError("Typed HF run provenance requested_max_iterations is invalid")
+    seed = provenance.get("seed")
+    if not isinstance(seed, int) or isinstance(seed, bool):
+        raise ValueError("Typed HF run provenance seed must be an integer")
+    if not isinstance(provenance.get("converged"), bool):
+        raise ValueError("Typed HF run provenance converged must be bool")
+    init_mode = provenance.get("normalized_init_mode")
+    if not isinstance(init_mode, str) or not init_mode:
+        raise ValueError("Typed HF run provenance normalized_init_mode is invalid")
+    try:
+        normalized_mode = (
+            normalize_full_init_mode(init_mode)
+            if provenance["hf_mode"] == "full"
+            else normalize_restricted_init_mode(init_mode)
+        )
+    except ValueError as exc:
+        raise ValueError(
+            "Typed HF run provenance normalized_init_mode is invalid for hf_mode"
+        ) from exc
+    if normalized_mode != init_mode:
+        raise ValueError("Typed HF run provenance normalized_init_mode is not canonical")
+    exit_reason = provenance.get("exit_reason")
+    if (
+        not isinstance(exit_reason, str)
+        or not exit_reason
+        or exit_reason != exit_reason.strip()
+    ):
+        raise ValueError("Typed HF run provenance exit_reason is invalid")
+    for name in (
+        "typed_receipt_fingerprint",
+        "interaction_spec_fingerprint",
+        "bm_generation_fingerprint",
+        "mesh_fingerprint",
+        "iter_energy_sha256",
+        "iter_err_sha256",
+        "iter_oda_sha256",
+        "state_source_sha256",
+    ):
+        _validate_sha256_text(provenance.get(name), name=f"hf_run_provenance.{name}")
     return supplied
 
 
@@ -815,6 +569,22 @@ def load_tbg_zero_field_complete_hf_state_archive_npz(
     _validate_provenance_metadata(provenance_metadata)
     mesh_metadata = _npz_json_mapping(arrays, "mesh_json")
     diagnostics = _npz_json_mapping(arrays, "state_diagnostics_json")
+    for provenance_name, diagnostics_name in (
+        ("beta", "beta"),
+        ("oda_stall_threshold", "oda_stall_threshold"),
+        ("requested_max_iterations", "requested_max_iterations"),
+    ):
+        diagnostic_value = diagnostics.get(diagnostics_name)
+        if (
+            not isinstance(diagnostic_value, (int, float))
+            or isinstance(diagnostic_value, bool)
+            or not np.isfinite(float(diagnostic_value))
+            or float(diagnostic_value) != float(provenance_metadata[provenance_name])
+        ):
+            raise ValueError(
+                "Validated complete HF state archive provenance "
+                f"{provenance_name} does not match state diagnostics"
+            )
 
     mesh_shape = mesh_metadata.get("mesh_shape")
     g1_pair = mesh_metadata.get("g1")
@@ -972,6 +742,25 @@ def load_tbg_zero_field_complete_hf_state_archive_npz(
         int(dimensions.get("nk", 0)),
     ) != (n_spin, n_eta, n_band, mesh.nk):
         raise ValueError("Validated complete HF state archive state dimensions do not match BM source")
+    diagnostic_filling = diagnostics.get("filling")
+    density_filling = restricted_filling(state.density)
+    if (
+        not isinstance(diagnostic_filling, (int, float))
+        or isinstance(diagnostic_filling, bool)
+        or not np.isfinite(float(diagnostic_filling))
+        or not np.isclose(
+            float(diagnostic_filling), density_filling, rtol=1.0e-12, atol=1.0e-12
+        )
+    ):
+        raise ValueError(
+            "Validated complete HF state archive diagnostic filling does not "
+            "match density-derived filling"
+        )
+    if not np.isclose(density_filling, state.nu, rtol=1.0e-12, atol=1.0e-12):
+        raise ValueError(
+            "Validated complete HF state archive density-derived filling does "
+            "not match requested nu"
+        )
     bm_spectrum = np.asarray(arrays["bm_spectrum"], dtype=np.float64)
     if bm_spectrum.shape != (n_band, n_eta, state.nk):
         raise ValueError("Validated complete HF state archive BM spectrum shape does not match state dimensions")
@@ -1095,10 +884,16 @@ def load_tbg_zero_field_complete_hf_state_archive_npz(
         raise ValueError("Validated complete HF state archive provenance does not match half-open mesh")
     if float(provenance_metadata.get("beta", np.nan)) != receipt.beta:
         raise ValueError("Validated complete HF state archive provenance does not match receipt beta")
+    if provenance_metadata.get("hf_mode") != receipt.hf_mode:
+        raise ValueError("Validated complete HF state archive provenance does not match receipt hf_mode")
 
     iter_energy = np.asarray(arrays["iter_energy"], dtype=np.float64)
     iter_err = np.asarray(arrays["iter_err"], dtype=np.float64)
     iter_oda = np.asarray(arrays["iter_oda"], dtype=np.float64)
+    if not (iter_energy.shape == iter_err.shape == iter_oda.shape):
+        raise ValueError("Validated complete HF state archive history shapes differ")
+    if int(provenance_metadata["requested_max_iterations"]) < int(iter_energy.size):
+        raise ValueError("Validated complete HF state archive history exceeds requested iterations")
     for name, values in (
         ("iter_energy", iter_energy),
         ("iter_err", iter_err),
@@ -1142,18 +937,22 @@ def load_tbg_zero_field_complete_hf_state_archive_npz(
 
 def write_tbg_zero_field_complete_hf_state_archive_npz(
     path: str | Path,
-    result: object,
+    *,
+    hf_run: RestrictedHartreeFockRun,
+    grid_solution: BMSolution,
 ) -> Path:
-    """Atomically publish a validated complete HF state archive/checkpoint; no resume authority is implied."""
+    """Atomically publish a validated complete HF state archive.
 
-    typed_source = _validated_typed_b0_hf_source(result)
-    if typed_source is None:
-        raise ValueError("Complete TBG zero-field HF state archive writer rejects legacy/untyped runs")
-    interaction_spec, bundle, receipt = typed_source
-    hf_run = getattr(result, "hf_run")
+    The archive preserves complete arrays and source lineage but grants no
+    trajectory-resume authority.  Both typed inputs are explicit; benchmark
+    wrapper objects are intentionally unsupported.
+    """
+
+    interaction_spec, bundle, receipt = validate_tbg_zero_field_typed_hf_run_source(
+        hf_run, grid_solution
+    )
     state = hf_run.state
     provenance = hf_run.provenance
-    grid_solution = getattr(result, "grid_solution")
     mesh = grid_solution.torus_mesh
     source_attestation = grid_solution.source_attestation
     if not isinstance(mesh, TBGZeroFieldTorusMesh) or source_attestation is None or provenance is None:
@@ -1262,809 +1061,13 @@ def write_tbg_zero_field_complete_hf_state_archive_npz(
         raise
     return output
 
-
-def _validate_typed_b0_hf_artifact_paths(
-    artifact_paths: Mapping[str, str | Path] | None,
-    *,
-    coverage: _ExactSavedSCFPathCoverage,
-) -> None:
-    paths = {str(key): value for key, value in dict(artifact_paths or {}).items()}
-    unsupported = sorted(
-        key for key in paths if key not in _TYPED_B0_HF_SIDECAR_ARTIFACT_KEYS
-    )
-    if unsupported:
-        raise ValueError(
-            "Typed TBG zero-field sidecars reject off-grid/path/parity artifact "
-            f"keys; unsupported keys: {unsupported}"
-        )
-    required = {
-        "advisor_selection_txt",
-        TBG_ZERO_FIELD_COMPLETE_HF_STATE_ARCHIVE_ARTIFACT_KEY,
-        "runtime_summary_txt",
-        "scf_path_tsv",
-    }
-    missing = sorted(required - set(paths))
-    if missing:
-        raise ValueError(
-            "Typed TBG zero-field sidecars require exact-SCF evidence artifacts; "
-            f"missing keys: {missing}"
-        )
-    plot_keys = {"scf_band_plot_pdf", "scf_band_plot_png"}
-    present_plot_keys = plot_keys & set(paths)
-    if present_plot_keys and present_plot_keys != plot_keys:
-        raise ValueError("Typed exact-SCF plots must provide both PNG and PDF artifacts")
-    if present_plot_keys and not coverage.meaningful:
-        raise ValueError(
-            "Typed exact-SCF sidecars reject fabricated PNG/PDF plot keys because "
-            "the recomputed coverage gate failed"
-        )
-    if present_plot_keys and "path_limitation_txt" in paths:
-        raise ValueError("Typed exact-SCF artifacts cannot claim both a plot and a path limitation")
-    if not present_plot_keys and "path_limitation_txt" not in paths:
-        raise ValueError("Typed exact-SCF artifacts without a plot require a limitation report")
-
-
-def _resolve_typed_b0_hf_artifact_paths(
-    root: Path,
-    artifact_paths: Mapping[str, str | Path] | None,
-) -> dict[str, Path]:
-    root_resolved = root.resolve()
-    resolved: dict[str, Path] = {}
-    for key, raw_path in dict(artifact_paths or {}).items():
-        candidate = Path(raw_path)
-        if not candidate.is_absolute():
-            rooted_candidate = root_resolved / candidate
-            candidate = rooted_candidate if rooted_candidate.exists() else candidate
-        try:
-            path = candidate.resolve(strict=True)
-            path.relative_to(root_resolved)
-        except (FileNotFoundError, ValueError) as exc:
-            raise ValueError(
-                f"Typed artifact {key!r} must reference an existing file under output root {root_resolved}"
-            ) from exc
-        if not path.is_file():
-            raise ValueError(
-                f"Typed artifact {key!r} must reference a regular file under output root {root_resolved}"
-            )
-        resolved[str(key)] = path
-    return resolved
-
-
-def _validate_exact_saved_scf_path_tsv(
-    root: Path,
-    result: object,
-    coverage: _ExactSavedSCFPathCoverage,
-    path: Path,
-) -> dict[str, object]:
-    data = path.read_bytes()
-    try:
-        text = data.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise ValueError("Exact saved-SCF path TSV must be UTF-8") from exc
-    lines = text.splitlines()
-    if not lines:
-        raise ValueError("Exact saved-SCF path TSV is empty")
-    header = lines[0].split("\t")
-    expected_prefix = [
-        "path_index",
-        "path_k_dist",
-        "k_dist",
-        "distance_to_path",
-        "path_kx",
-        "path_ky",
-        "projected_kx",
-        "projected_ky",
-        "grid_index",
-        "grid_kx",
-        "grid_ky",
-    ]
-    if header[: len(expected_prefix)] != expected_prefix:
-        raise ValueError("Exact saved-SCF path TSV header does not match the typed lineage schema")
-
-    rows = [line.split("\t") for line in lines[1:]]
-    if len(rows) != coverage.exact_point_count:
-        raise ValueError(
-            "Exact saved-SCF path TSV row count does not match coverage recomputed from result"
-        )
-    state = getattr(getattr(result, "hf_run"), "state")
-    state_energies = np.asarray(getattr(state, "energies"), dtype=float)
-    path_spec = getattr(result, "path")
-    path_kvec = np.asarray(getattr(path_spec, "kvec"), dtype=np.complex128)
-    path_kdist = np.asarray(getattr(path_spec, "kdist"), dtype=float)
-    grid_kvec = np.asarray(
-        getattr(getattr(result, "grid_solution"), "lattice_kvec"),
-        dtype=np.complex128,
-    )
-    expected_column_count = len(expected_prefix) + int(state_energies.shape[0])
-    for row_number, (row, path_index, grid_index, distance) in enumerate(
-        zip(
-            rows,
-            coverage.path_sample_indices,
-            coverage.grid_indices,
-            coverage.distance_to_path,
-            strict=True,
-        ),
-        start=2,
-    ):
-        if len(row) != expected_column_count or len(header) != expected_column_count:
-            raise ValueError(
-                f"Exact saved-SCF path TSV column count is inconsistent at row {row_number}"
-            )
-        path_coordinate = path_kvec[int(path_index)]
-        grid_coordinate = grid_kvec[int(grid_index)]
-        expected_row_prefix = [
-            str(int(path_index) + 1),
-            f"{float(path_kdist[int(path_index)]):.16f}",
-            f"{float(path_kdist[int(path_index)]):.16f}",
-            f"{float(distance):.16f}",
-            f"{float(path_coordinate.real):.16f}",
-            f"{float(path_coordinate.imag):.16f}",
-            f"{float(path_coordinate.real):.16f}",
-            f"{float(path_coordinate.imag):.16f}",
-            str(int(grid_index) + 1),
-            f"{float(grid_coordinate.real):.16f}",
-            f"{float(grid_coordinate.imag):.16f}",
-        ]
-        if row[: len(expected_prefix)] != expected_row_prefix:
-            raise ValueError(
-                f"Exact saved-SCF path TSV lineage differs from result at row {row_number}"
-            )
-        try:
-            observed_energies = np.asarray(
-                [float(value) for value in row[len(expected_prefix) :]], dtype=float
-            )
-        except ValueError as exc:
-            raise ValueError(
-                f"Exact saved-SCF path TSV has invalid band data at row {row_number}"
-            ) from exc
-        expected_energies = np.sort(state_energies[:, int(grid_index)])
-        if not np.allclose(
-            observed_energies,
-            expected_energies,
-            rtol=0.0,
-            atol=1.0e-10,
-        ):
-            raise ValueError(
-                f"Exact saved-SCF path TSV band data differs from saved HF state at row {row_number}"
-            )
-
-    relative_path = path.relative_to(root.resolve()).as_posix()
-    return {
-        "artifact_key": "scf_path_tsv",
-        "relative_path": relative_path,
-        "sha256": hashlib.sha256(data).hexdigest(),
-        "byte_count": int(len(data)),
-        "row_count": int(len(rows)),
-    }
-
-
-def _exact_saved_scf_path_coverage_payload(
-    coverage: _ExactSavedSCFPathCoverage,
-    *,
-    tsv_lineage: Mapping[str, object],
-) -> dict[str, object]:
-    return {
-        "source": "recomputed_from_result_path_and_saved_scf_grid",
-        "exact_point_count": int(coverage.exact_point_count),
-        "distinct_coordinate_count": int(coverage.distinct_coordinate_count),
-        "represented_segment_count": int(len(coverage.represented_segment_indices)),
-        "represented_segment_indices_zero_based": [
-            int(index) for index in coverage.represented_segment_indices
-        ],
-        "segment_distinct_coordinate_counts": [
-            int(count) for count in coverage.segment_distinct_coordinate_counts
-        ],
-        "missing_interior_node_labels": list(coverage.missing_interior_node_labels),
-        "coverage_gate": {
-            "minimum_distinct_coordinates": 3,
-            "minimum_represented_segments": 2,
-            "requires_all_interior_nodes": True,
-            "passed": bool(coverage.meaningful),
-        },
-        "tsv_lineage": dict(tsv_lineage),
-    }
-
-def _reject_typed_b0_hf_suite_outputs(suite_result: object) -> None:
-    typed_case_ids: list[str] = []
-    for result in tuple(getattr(suite_result, "case_results")):
-        if _validated_typed_b0_hf_source(result) is None:
-            continue
-        typed_case_ids.append(str(getattr(result, "case").benchmark_id))
-    if typed_case_ids:
-        raise ValueError(
-            "Typed TBG zero-field suite/summary writers reject off-grid/path/parity "
-            f"data; write exact saved-SCF-grid case artifacts instead: {typed_case_ids}"
-        )
-
-def _typed_runtime_environment_payload(runtime: object) -> dict[str, object]:
-    environment = getattr(runtime, "environment", None)
-    payload = {
-        str(key): _json_safe(value)
-        for key, value in _dataclass_payload(environment).items()
-    }
-    for key in ("start_time", "end_time", "bm_elapsed_sec", "hf_elapsed_sec"):
-        if hasattr(runtime, key):
-            payload[key] = _json_safe(getattr(runtime, key))
-    return payload
-
-def _b0_reported_grid_descriptor(result: object) -> dict[str, object]:
-    """Return legacy square ``lk`` or an explicit rectangular mesh shape."""
-
-    grid_solution = getattr(result, "grid_solution", None)
-    mesh = None if grid_solution is None else getattr(grid_solution, "torus_mesh", None)
-    if mesh is None:
-        return {"lk": int(getattr(result, "path_result").lk)}
-    n1, n2 = (int(value) for value in mesh.mesh_shape)
-    if n1 == n2:
-        return {"lk": n1}
-    return {"mesh_shape": [n1, n2]}
-
-def _b0_hf_validation_payload(
-    result: object,
-    *,
-    artifact_paths: Mapping[str, str | Path] | None = None,
-    coverage: _ExactSavedSCFPathCoverage | None = None,
-    tsv_lineage: Mapping[str, object] | None = None,
-) -> dict[str, object]:
-    hf_run = getattr(result, "hf_run")
-    payload: dict[str, object] = {
-        "status": "converged" if bool(hf_run.converged) else "not_converged",
-        "converged": bool(hf_run.converged),
-        "exit_reason": str(hf_run.exit_reason),
-        "iterations": int(hf_run.iterations),
-    }
-    if _is_typed_hf_run(hf_run):
-        _validated_typed_b0_hf_source(result)
-        if coverage is None or tsv_lineage is None:
-            raise ValueError(
-                "Typed HF validation payload requires recomputed coverage and TSV lineage"
-            )
-        plot_written = {
-            "scf_band_plot_pdf",
-            "scf_band_plot_png",
-        } <= set(dict(artifact_paths or {}))
-        payload.update(
-            {
-                "artifact_mode": "typed_exact_saved_scf_grid_only",
-                "path_status": (
-                    "exact_saved_scf_plot_written"
-                    if plot_written
-                    else "limitation_report_only"
-                ),
-                "exact_saved_scf_path": _exact_saved_scf_path_coverage_payload(
-                    coverage,
-                    tsv_lineage=tsv_lineage,
-                ),
-                "advisor_status": "unavailable",
-                "complete_hf_state_archive_status": "validated",
-                "typed_resume_trajectory": "not_implemented_fail_closed",
-            }
-        )
-        return payload
-
-    parity = getattr(result, "parity")
-    payload["parity"] = {
-        "kdist_max_abs_diff": float(parity.kdist_max_abs_diff),
-        "max_abs_band_diff_mev": float(parity.max_abs_band_diff_mev),
-        "rms_band_diff_mev": float(parity.rms_band_diff_mev),
-        "mean_abs_band_diff_mev": float(parity.mean_abs_band_diff_mev),
-        "energy_sorting": str(parity.energy_sorting),
-    }
-    runtime_parity = getattr(result, "runtime_parity", None)
-    if runtime_parity is not None:
-        payload["runtime_parity"] = _json_safe(_dataclass_payload(runtime_parity))
-    return payload
-
-
-def _b0_hf_observables(
-    result: object,
-    *,
-    artifact_paths: Mapping[str, str | Path] | None = None,
-    coverage: _ExactSavedSCFPathCoverage | None = None,
-    tsv_lineage: Mapping[str, object] | None = None,
-) -> dict[str, object]:
-    case = getattr(result, "case")
-    hf_run = getattr(result, "hf_run")
-    state = hf_run.state
-    typed_source = _validated_typed_b0_hf_source(result)
-    if typed_source is not None:
-        if coverage is None or tsv_lineage is None:
-            raise ValueError(
-                "Typed HF observables require recomputed coverage and TSV lineage"
-            )
-        interaction_spec, screened_block_bundle, receipt = typed_source
-        provenance = hf_run.provenance
-        grid_solution = getattr(result, "grid_solution")
-        plot_written = {
-            "scf_band_plot_pdf",
-            "scf_band_plot_png",
-        } <= set(dict(artifact_paths or {}))
-        return {
-            "benchmark_id": str(case.benchmark_id),
-            "theta_deg": float(grid_solution.params.dtheta_rad * 180.0 / np.pi),
-            "nu": float(provenance.nu),
-            "mu_mev": float(state.mu),
-            "hf_mode": str(provenance.hf_mode),
-            "init_mode": str(provenance.normalized_init_mode),
-            "normalized_init_mode": str(provenance.normalized_init_mode),
-            "seed": int(provenance.seed),
-            "iterations": int(hf_run.iterations),
-            "exit_reason": str(hf_run.exit_reason),
-            "converged": bool(hf_run.converged),
-            "diagnostics": _diagnostics_payload(getattr(state, "diagnostics", {})),
-            "artifact_mode": "typed_exact_saved_scf_grid_only",
-            "path": {
-                "status": (
-                    "exact_saved_scf_plot_written"
-                    if plot_written
-                    else "limitation_report_only"
-                ),
-                "evidence": "exact matched saved-SCF points TSV",
-                "coverage": _exact_saved_scf_path_coverage_payload(
-                    coverage,
-                    tsv_lineage=tsv_lineage,
-                ),
-            },
-            "advisor": {"status": "unavailable"},
-            "complete_hf_state_archive": {
-                "status": "validated",
-                "description": "validated complete HF state archive/checkpoint",
-                "resume_authority": "none",
-                "typed_resume_trajectory": "not_implemented_fail_closed",
-                "schema": TBG_ZERO_FIELD_COMPLETE_HF_STATE_ARCHIVE_SCHEMA,
-                "schema_version": TBG_ZERO_FIELD_COMPLETE_HF_STATE_ARCHIVE_SCHEMA_VERSION,
-            },
-            "bands": {
-                "source": "saved_scf_grid_hamiltonian",
-                "energy_shape": [
-                    int(value) for value in np.asarray(state.energies).shape
-                ],
-            },
-            "state_shapes": _hf_state_shapes(state),
-            "hf_source_receipt": receipt.to_metadata(),
-            "hf_run_provenance": provenance.to_metadata(),
-            "interaction_spec": interaction_spec.to_metadata(),
-            "screened_block_bundle": screened_block_bundle.to_metadata(),
-        }
-
-    path_result = getattr(result, "path_result")
-    band_data = getattr(path_result, "band_data")
-    payload: dict[str, object] = {
-        "benchmark_id": str(case.benchmark_id),
-        "theta_deg": float(case.theta_deg),
-        "nu": float(path_result.nu),
-        "mu_mev": float(state.mu),
-        "init_mode": str(path_result.init_mode),
-        "normalized_init_mode": str(path_result.normalized_init_mode),
-        "seed": int(path_result.seed),
-        "iterations": int(hf_run.iterations),
-        "exit_reason": str(hf_run.exit_reason),
-        "converged": bool(hf_run.converged),
-        "diagnostics": _diagnostics_payload(getattr(state, "diagnostics", {})),
-        "path": _kpath_payload(path_result.path),
-        "bands": {
-            "labels": list(getattr(band_data, "band_labels")),
-            "energy_shape": [int(value) for value in np.asarray(getattr(band_data, "energies")).shape],
-            "mean_weights_shape": [int(value) for value in np.asarray(getattr(band_data, "mean_weights")).shape],
-        },
-        "state_shapes": _hf_state_shapes(state),
-    }
-
-
-    receipt = getattr(state, "hf_source_receipt", None)
-    if receipt is not None:
-        if not isinstance(receipt, TBGZeroFieldHFSourceReceipt):
-            raise TypeError("hf_source_receipt must be a TBGZeroFieldHFSourceReceipt")
-        payload["hf_source_receipt"] = receipt.to_metadata()
-    return payload
-
-
-def write_bm_unstrained_benchmark_contract_sidecars(
-    output_dir: str | Path,
-    result: object,
-    *,
-    artifact_paths: Mapping[str, str | Path] | None = None,
-    overwrite: bool = False,
-) -> dict[str, Path]:
-    """Write public contract sidecars for a zero-field BM benchmark result.
-
-    This is metadata-only: it references existing TSV/plot/text artifacts and
-    summarizes in-memory result shapes/scalars, but never writes numerical
-    arrays or reruns BM/HF computations.
-    """
-
-    root = Path(output_dir)
-    root.mkdir(parents=True, exist_ok=True)
-    _ensure_contract_sidecars_absent(root, overwrite=overwrite)
-    run = getattr(result, "run")
-    reference = getattr(result, "reference")
-    files = _relative_artifact_files(root, artifact_paths)
-    model = _tbg_model_record(
-        run.params,
-        extra={
-            "theta_deg": float(reference.theta_deg),
-            "lg": int(getattr(run.path_solution, "lg")),
-            "periodic_g_grid": bool(getattr(run.path_solution, "periodic_g_grid", True)),
-        },
-    )
-    return write_contract_artifacts(
-        root,
-        workflow="tbg.zero_field.bm_unstrained_benchmark",
-        system_name="tbg",
-        model=model,
-        config={
-            "implementation": "python_b0",
-            "runner_kind": "bm_unstrained_benchmark",
-            "theta_deg": float(reference.theta_deg),
-            "lg": int(getattr(run.path_solution, "lg")),
-            "grid_lk": None if run.grid_solution is None else int(round(np.sqrt(int(getattr(run.grid_solution, "nk"))) - 1)),
-            "points_per_segment": None,
-            "reference_path_tsv": str(getattr(reference, "path_tsv_path", "")),
-        },
-        conventions={
-            "energy_unit": "meV",
-            "momentum_unit": "dimensionless_b0_code",
-            "length_unit": "a_graphene_units",
-            "coordinate_convention": TBG_ZERO_FIELD_B0_COORDINATE_CONVENTION,
-            "physical_coordinate_convention": TBG_ZERO_FIELD_PHYSICAL_COORDINATE_CONVENTION,
-            "graphene_a_nm": TBG_ZERO_FIELD_GRAPHENE_A_NM_SCHEMA_V1,
-            "density_convention": "not_applicable",
-            "wavefunction_axis_order": "basis_band_valley_k",
-            "hamiltonian_axis_order": "basis_basis_valley_k",
-            "gauge": "tbg_zero_field_bm_c2t_symmetrized_system_defined",
-        },
-        environment=_runtime_environment_payload(run.runtime),
-        validation=_bm_unstrained_validation_payload(result),
-        observables=_bm_unstrained_observables(result),
-        files=files,
-        metadata={
-            "runner_kind": "bm_unstrained_benchmark",
-            "adapter": "mean_field.systems.tbg.zero_field.artifacts",
-        },
-        array_files=(),
-    )
-
-
-def _b0_hf_suite_case_summary(result: object) -> dict[str, object]:
-    case = getattr(result, "case")
-    hf_run = getattr(result, "hf_run")
-    parity = getattr(result, "parity")
-    state = hf_run.state
-    return {
-        "benchmark_id": str(case.benchmark_id),
-        "theta_deg": float(case.theta_deg),
-        "nu": int(case.nu),
-        "init_mode": str(getattr(result, "path_result").init_mode),
-        "normalized_init_mode": str(getattr(result, "path_result").normalized_init_mode),
-        "seed": int(getattr(result, "path_result").seed),
-        **_b0_reported_grid_descriptor(result),
-        "lg": int(getattr(result, "path_result").lg),
-        "converged": bool(hf_run.converged),
-        "exit_reason": str(hf_run.exit_reason),
-        "iterations": int(hf_run.iterations),
-        "mu_mev": float(state.mu),
-        "max_abs_band_diff_mev": float(parity.max_abs_band_diff_mev),
-        "kdist_max_abs_diff": float(parity.kdist_max_abs_diff),
-        "runtime_total_elapsed_sec": float(getattr(result, "runtime").total_elapsed_sec),
-    }
-
-
-def _b0_hf_suite_validation_payload(suite_result: object) -> dict[str, object]:
-    case_results = tuple(getattr(suite_result, "case_results"))
-    converged_count = sum(1 for result in case_results if bool(getattr(result, "hf_run").converged))
-    return {
-        "status": "all_converged" if converged_count == len(case_results) else "not_all_converged",
-        "case_count": int(len(case_results)),
-        "converged_count": int(converged_count),
-        "max_kdist_max_abs_diff": 0.0
-        if not case_results
-        else float(max(getattr(result, "parity").kdist_max_abs_diff for result in case_results)),
-        "max_abs_band_diff_mev": 0.0
-        if not case_results
-        else float(max(getattr(result, "parity").max_abs_band_diff_mev for result in case_results)),
-    }
-
-
-def _b0_hf_suite_observables(suite_result: object) -> dict[str, object]:
-    case_results = tuple(getattr(suite_result, "case_results"))
-    return {
-        "case_count": int(len(case_results)),
-        "total_elapsed_sec": float(sum(getattr(result, "runtime").total_elapsed_sec for result in case_results)),
-        "case_results": [_b0_hf_suite_case_summary(result) for result in case_results],
-    }
-
-
-def write_b0_hf_benchmark_contract_sidecars(
-    output_dir: str | Path,
-    result: object,
-    *,
-    artifact_paths: Mapping[str, str | Path] | None = None,
-    overwrite: bool = False,
-) -> dict[str, Path]:
-    """Write public contract sidecars for a zero-field B0 HF benchmark result.
-
-    Legacy sidecars remain metadata-only. Typed production sidecars require and
-    validate the separately written complete HF state archive, recompute exact
-    saved-path coverage, and bind the matching TSV lineage without rerunning HF.
-    The archive is a checkpoint for analysis, not authority to resume a typed
-    solver trajectory.
-    """
-
-    typed_source = _validated_typed_b0_hf_source(result)
-    root = Path(output_dir)
-    _ensure_contract_sidecars_absent(root, overwrite=overwrite)
-    root.mkdir(parents=True, exist_ok=True)
-    case = getattr(result, "case")
-    hf_run = getattr(result, "hf_run")
-    coverage: _ExactSavedSCFPathCoverage | None = None
-    tsv_lineage: Mapping[str, object] | None = None
-    if typed_source is not None:
-        coverage = _exact_saved_scf_path_coverage(result)
-        _validate_typed_b0_hf_artifact_paths(
-            artifact_paths,
-            coverage=coverage,
-        )
-        normalized_artifact_paths = _resolve_typed_b0_hf_artifact_paths(
-            root,
-            artifact_paths,
-        )
-        tsv_lineage = _validate_exact_saved_scf_path_tsv(
-            root,
-            result,
-            coverage,
-            normalized_artifact_paths["scf_path_tsv"],
-        )
-    else:
-        normalized_artifact_paths = {
-            str(key): _resolve_artifact_input_path(root, value)
-            for key, value in dict(artifact_paths or {}).items()
-        }
-    files = _relative_artifact_files(root, normalized_artifact_paths)
-    array_files: tuple[str | Path, ...] = ()
-    if typed_source is not None:
-        complete_archive_path = normalized_artifact_paths[
-            TBG_ZERO_FIELD_COMPLETE_HF_STATE_ARCHIVE_ARTIFACT_KEY
-        ]
-        complete_hf_state_archive = load_tbg_zero_field_complete_hf_state_archive_npz(complete_archive_path)
-        _interaction_spec, live_bundle, live_receipt = typed_source
-        grid_solution = getattr(result, "grid_solution")
-        source_attestation = grid_solution.source_attestation
-        if (
-            complete_hf_state_archive.receipt.fingerprint != live_receipt.fingerprint
-            or complete_hf_state_archive.bundle_metadata["fingerprint"] != live_bundle.fingerprint
-            or source_attestation is None
-            or complete_hf_state_archive.source_attestation_metadata["fingerprint"]
-            != source_attestation.fingerprint
-        ):
-            raise ValueError("Validated complete HF state archive does not match the live artifact source")
-        array_files = (complete_archive_path,)
-        interaction_spec, screened_block_bundle, _receipt = typed_source
-        provenance = hf_run.provenance
-        grid_solution = getattr(result, "grid_solution")
-        theta_deg = float(grid_solution.params.dtheta_rad * 180.0 / np.pi)
-        model = _tbg_model_record(
-            grid_solution.params,
-            extra={
-                "theta_deg": theta_deg,
-                "nu": float(provenance.nu),
-                "hf_mode": str(provenance.hf_mode),
-                **_b0_reported_grid_descriptor(result),
-                "lg": int(grid_solution.lg),
-                "overlap_lg": int(screened_block_bundle.overlap_lg),
-                "beta": float(provenance.beta),
-            },
-        )
-        config_payload = {
-            "implementation": "python_b0",
-            "runner_kind": "b0_hf_benchmark",
-            "artifact_mode": "typed_exact_saved_scf_grid_only",
-            "interaction_contract": "typed",
-            "benchmark_id": str(case.benchmark_id),
-            "theta_deg": theta_deg,
-            "nu": float(provenance.nu),
-            "hf_mode": str(provenance.hf_mode),
-            "init_mode": str(provenance.normalized_init_mode),
-            "normalized_init_mode": str(provenance.normalized_init_mode),
-            "seed": int(provenance.seed),
-            **_b0_reported_grid_descriptor(result),
-            "lg": int(grid_solution.lg),
-            "overlap_lg": int(screened_block_bundle.overlap_lg),
-            "beta": float(provenance.beta),
-            "relative_permittivity": float(interaction_spec.epsr),
-            "dsc_nm": float(interaction_spec.dsc_nm),
-            "finite_zero_limit": bool(interaction_spec.finite_zero_limit),
-            "zero_cutoff": float(interaction_spec.zero_cutoff),
-            "include_interaction": True,
-            "precision": float(provenance.precision),
-            "requested_max_iterations": int(provenance.requested_max_iterations),
-        }
-        environment = _typed_runtime_environment_payload(result.runtime)
-    else:
-        path_result = getattr(result, "path_result")
-        model = _tbg_model_record(
-            result.params,
-            extra={
-                "theta_deg": float(case.theta_deg),
-                "nu": int(case.nu),
-                **_b0_reported_grid_descriptor(result),
-                "lg": int(path_result.lg),
-                "overlap_lg": None if path_result.overlap_lg is None else int(path_result.overlap_lg),
-                "beta": float(path_result.beta),
-            },
-        )
-        config_payload = {
-            "implementation": "python_b0",
-            "runner_kind": "b0_hf_benchmark",
-            "benchmark_id": str(case.benchmark_id),
-            "theta_deg": float(case.theta_deg),
-            "nu": int(case.nu),
-            "init_mode": str(path_result.init_mode),
-            "normalized_init_mode": str(path_result.normalized_init_mode),
-            "seed": int(path_result.seed),
-            **_b0_reported_grid_descriptor(result),
-            "lg": int(path_result.lg),
-            "points_per_segment": int(path_result.points_per_segment),
-            "overlap_lg": None if path_result.overlap_lg is None else int(path_result.overlap_lg),
-            "beta": float(path_result.beta),
-            "relative_permittivity": float(path_result.relative_permittivity),
-            "screening_lm": _optional_float(path_result.screening_lm),
-            "finite_zero_limit": bool(path_result.finite_zero_limit),
-            "zero_cutoff": float(path_result.zero_cutoff),
-            "include_interaction": bool(path_result.include_interaction),
-            "precision": float(hf_run.state.precision),
-            "initial_density_override_path": None
-            if getattr(result, "initial_density_override_path", None) is None
-            else str(result.initial_density_override_path),
-        }
-        environment = _runtime_environment_payload(result.runtime)
-
-    return write_contract_artifacts(
-        root,
-        workflow="tbg.zero_field.b0_hf_benchmark",
-        system_name="tbg",
-        model=model,
-        config=config_payload,
-        conventions={
-            "energy_unit": "meV",
-            "momentum_unit": "dimensionless_b0_code",
-            "length_unit": "a_graphene_units",
-            "coordinate_convention": TBG_ZERO_FIELD_B0_COORDINATE_CONVENTION,
-            "physical_coordinate_convention": TBG_ZERO_FIELD_PHYSICAL_COORDINATE_CONVENTION,
-            "graphene_a_nm": TBG_ZERO_FIELD_GRAPHENE_A_NM_SCHEMA_V1,
-            "density_convention": "stored_delta",
-            "density_axis_order": "abk",
-            "hamiltonian_axis_order": "abk",
-            "wavefunction_axis_order": "basis_band_valley_k",
-            "gauge": "tbg_zero_field_b0_projected_system_defined",
-        },
-        environment=environment,
-        validation=_b0_hf_validation_payload(
-            result,
-            artifact_paths=artifact_paths,
-            coverage=coverage,
-            tsv_lineage=tsv_lineage,
-        ),
-        observables=_b0_hf_observables(
-            result,
-            artifact_paths=artifact_paths,
-            coverage=coverage,
-            tsv_lineage=tsv_lineage,
-        ),
-        files=files,
-        metadata={
-            "runner_kind": "b0_hf_benchmark",
-            "benchmark_id": str(case.benchmark_id),
-            "adapter": "mean_field.systems.tbg.zero_field.artifacts",
-            **(
-                {
-                    "validated_complete_hf_state_archive": {
-                        "artifact_key": TBG_ZERO_FIELD_COMPLETE_HF_STATE_ARCHIVE_ARTIFACT_KEY,
-                        "schema": TBG_ZERO_FIELD_COMPLETE_HF_STATE_ARCHIVE_SCHEMA,
-                        "schema_version": TBG_ZERO_FIELD_COMPLETE_HF_STATE_ARCHIVE_SCHEMA_VERSION,
-                        "description": "validated complete HF state archive/checkpoint",
-                        "validation": "strict_round_trip_rehash",
-                        "resume_authority": "none",
-                        "typed_resume_trajectory": "not_implemented_fail_closed",
-                        "evidence_paths": [
-                            "src/mean_field/systems/tbg/zero_field/model.py::BMSolution.source_attestation",
-                            "src/mean_field/systems/tbg/zero_field/_hf_basis_overlap.py::TBGZeroFieldHFSourceReceipt",
-                            "src/mean_field/systems/tbg/zero_field/_hf_basis_overlap.py::TBGZeroFieldScreenedBlockBundle",
-                        ],
-                        "uncertainty": {
-                            "companion_circular_total_q_cutoff_parity": (
-                                "not_established"
-                            ),
-                            "off_grid_reconstruction": "not_included",
-                            "paper_figure_claim": "none",
-                        },
-                    }
-                }
-                if typed_source is not None
-                else {}
-            ),
-        },
-        array_files=array_files,
-    )
-
-
-def write_b0_hf_suite_contract_sidecars(
-    output_dir: str | Path,
-    suite_result: object,
-    *,
-    artifact_paths: Mapping[str, str | Path] | None = None,
-    overwrite: bool = False,
-) -> dict[str, Path]:
-    """Write public contract sidecars for a zero-field B0 HF benchmark suite.
-
-    The suite sidecar is metadata-only. It summarizes case-level scalar metrics
-    and references existing suite/case artifacts without writing numerical
-    arrays or rerunning BM/HF.
-    """
-
-    _reject_typed_b0_hf_suite_outputs(suite_result)
-    root = Path(output_dir)
-    root.mkdir(parents=True, exist_ok=True)
-    _ensure_contract_sidecars_absent(root, overwrite=overwrite)
-    case_results = tuple(getattr(suite_result, "case_results"))
-    config_cases = [
-        {
-            "benchmark_id": str(getattr(result, "case").benchmark_id),
-            "theta_deg": float(getattr(result, "case").theta_deg),
-            "nu": int(getattr(result, "case").nu),
-            "init_mode": str(getattr(result, "path_result").init_mode),
-            "seed": int(getattr(result, "path_result").seed),
-            **_b0_reported_grid_descriptor(result),
-            "lg": int(getattr(result, "path_result").lg),
-        }
-        for result in case_results
-    ]
-    return write_contract_artifacts(
-        root,
-        workflow="tbg.zero_field.b0_hf_suite",
-        system_name="tbg",
-        model=ModelRecord(system_name="tbg", params={"case_count": int(len(case_results))}),
-        config={
-            "implementation": "python_b0",
-            "runner_kind": "b0_hf_suite",
-            "benchmark_ids": [item["benchmark_id"] for item in config_cases],
-            "cases": config_cases,
-        },
-        conventions={
-            "energy_unit": "meV",
-            "momentum_unit": "dimensionless_b0_code",
-            "length_unit": "a_graphene_units",
-            "coordinate_convention": TBG_ZERO_FIELD_B0_COORDINATE_CONVENTION,
-            "physical_coordinate_convention": TBG_ZERO_FIELD_PHYSICAL_COORDINATE_CONVENTION,
-            "graphene_a_nm": TBG_ZERO_FIELD_GRAPHENE_A_NM_SCHEMA_V1,
-            "density_convention": "stored_delta",
-            "density_axis_order": "abk",
-            "hamiltonian_axis_order": "abk",
-            "wavefunction_axis_order": "basis_band_valley_k",
-            "gauge": "tbg_zero_field_b0_projected_system_defined",
-        },
-        environment={},
-        validation=_b0_hf_suite_validation_payload(suite_result),
-        observables=_b0_hf_suite_observables(suite_result),
-        files=_relative_artifact_files(root, artifact_paths),
-        metadata={
-            "runner_kind": "b0_hf_suite",
-            "adapter": "mean_field.systems.tbg.zero_field.artifacts",
-        },
-        array_files=(),
-    )
-
-
 __all__ = [
     "TBGZeroFieldValidatedCompleteHFStateArchive",
-    "TBG_ZERO_FIELD_STORED_DENSITY_DEFINITION",
     "TBG_ZERO_FIELD_COMPLETE_HF_STATE_ARCHIVE_ARTIFACT_KEY",
     "TBG_ZERO_FIELD_COMPLETE_HF_STATE_ARCHIVE_FILENAME",
     "TBG_ZERO_FIELD_COMPLETE_HF_STATE_ARCHIVE_SCHEMA",
     "TBG_ZERO_FIELD_COMPLETE_HF_STATE_ARCHIVE_SCHEMA_VERSION",
-    "complex_to_pair",
+    "TBG_ZERO_FIELD_STORED_DENSITY_DEFINITION",
     "load_tbg_zero_field_complete_hf_state_archive_npz",
-    "write_b0_hf_benchmark_contract_sidecars",
-    "write_b0_hf_suite_contract_sidecars",
-    "write_bm_unstrained_benchmark_contract_sidecars",
     "write_tbg_zero_field_complete_hf_state_archive_npz",
 ]

@@ -9,7 +9,7 @@ from types import FunctionType
 import numpy as np
 import pytest
 
-from mean_field.core.hf import (
+from mean_field.core.hf.tdhf_scalar_functional import (
     TDHF_FULL_PROJECTOR_DF_RESPONSE_MINIMUM,
     TDHFFullProjectorDirection,
     TDHFFullProjectorFunctionalBinding,

@@ -31,24 +31,6 @@ def select_adjacent_m_point(params: TBGParameters) -> complex:
 def build_kpath_from_nodes(nodes: Iterable[complex], labels: Iterable[str], points_per_segment: int) -> KPath:
     return _build_core_kpath_from_nodes(nodes, labels, int(points_per_segment))
 
-def build_kpath_from_reference_nodes(reference_nodes: Iterable[object]) -> KPath:
-    nodes = tuple(reference_nodes)
-    if len(nodes) < 2:
-        raise ValueError("At least two reference nodes are required.")
-
-    labels = tuple(str(node.label) for node in nodes)
-    kvec = tuple(complex(node.kvec) for node in nodes)
-    node_indices = tuple(int(node.index) for node in nodes)
-    segment_lengths = tuple(node_indices[i + 1] - node_indices[i] for i in range(len(node_indices) - 1))
-    if not segment_lengths or any(length <= 0 for length in segment_lengths):
-        raise ValueError(f"Reference node indices must increase strictly, got {node_indices}.")
-    if len(set(segment_lengths)) != 1:
-        raise ValueError(f"Reference node spacing must be uniform, got segment lengths {segment_lengths}.")
-
-    path = build_kpath_from_nodes(kvec, labels, segment_lengths[0])
-    if path.node_indices != node_indices:
-        raise ValueError(f"Reference node indices {node_indices} do not match reconstructed path indices {path.node_indices}.")
-    return path
 
 
 def build_fig6_kpath(params: TBGParameters, points_per_segment: int) -> KPath:
@@ -60,13 +42,6 @@ def build_fig6_kpath(params: TBGParameters, points_per_segment: int) -> KPath:
     )
 
 
-def build_b0_benchmark_kpath(params: TBGParameters, points_per_segment: int) -> KPath:
-    m_point = params.g2 / 2.0
-    return build_kpath_from_nodes(
-        [m_point, params.kt, 0.0 + 0.0j, m_point],
-        ("M", "K", "Gamma", "M"),
-        points_per_segment,
-    )
 
 
 def build_gamma_m_k_gamma_kprime_kpath(params: TBGParameters, points_per_segment: int) -> KPath:
